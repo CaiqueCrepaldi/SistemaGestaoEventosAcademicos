@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { HashRouter, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
@@ -17,7 +17,7 @@ import { TrabalhosPage } from "./pages/Trabalhos/TrabalhosPage";
 
 export function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -38,6 +38,6 @@ export function App() {
           </Route>
         </Routes>
       </AuthProvider>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
