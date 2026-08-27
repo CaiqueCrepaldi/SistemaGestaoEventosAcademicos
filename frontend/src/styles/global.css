@@ -411,6 +411,12 @@ h1, h2, h3 {
   margin: -4px 0 0;
 }
 
+.form-success {
+  color: var(--green-600);
+  font-size: 13px;
+  margin: -4px 0 0;
+}
+
 /* Badges */
 .badge {
   display: inline-block;
@@ -560,6 +566,26 @@ h1, h2, h3 {
   width: 100%;
   max-width: 380px;
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
+}
+
+.login-card.wide {
+  max-width: 460px;
+}
+
+.login-links {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-top: -4px;
+}
+
+.login-links a {
+  color: var(--blue-600);
+  text-decoration: none;
+}
+
+.login-links a:hover {
+  text-decoration: underline;
 }
 
 .login-brand {

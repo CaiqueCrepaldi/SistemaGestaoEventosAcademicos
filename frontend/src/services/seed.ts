@@ -32,6 +32,7 @@ export const usuariosSeed: Usuario[] = [
     senhaHash: "aluno123",
     perfil: "ALUNO",
     rgm: "2024010011",
+    telefone: "(11) 91234-5678",
     participanteId: "pa1",
   },
 ];
