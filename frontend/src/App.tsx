@@ -3,6 +3,7 @@ import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 import { AgendaPage } from "./pages/Agenda/AgendaPage";
+import { CadastroPage } from "./pages/Cadastro/CadastroPage";
 import { CheckinPage } from "./pages/Checkin/CheckinPage";
 import { DashboardPage } from "./pages/Dashboard/DashboardPage";
 import { EventosPage } from "./pages/Eventos/EventosPage";
@@ -21,6 +22,7 @@ export function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/cadastro" element={<CadastroPage />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
               <Route path="/" element={<DashboardPage />} />

@@ -26,7 +26,7 @@ export interface CadastroAlunoInput {
 
 interface AuthService {
   login(emailLogin: string, senha: string): Promise<SessaoUsuario>;
-  registrarAluno(dados: CadastroAlunoInput): Promise<UsuarioPerfil>;
+  cadastrarAluno(dados: CadastroAlunoInput): Promise<void>;
 }
 
 function fakeJwt(usuarioId: string, perfil: Perfil): string {
@@ -56,19 +56,18 @@ const localAuthService: AuthService = {
     );
   },
 
-  async registrarAluno(dados) {
+  async cadastrarAluno(dados) {
     const [usuarios, participantes] = await Promise.all([
       Promise.resolve(loadCollection("usuarios", usuariosSeed)),
       participanteService.list(),
     ]);
 
-    if (usuarios.some((u) => u.emailLogin === dados.emailInstitucional)) {
+    const duplicado =
+      usuarios.some((u) => u.emailLogin === dados.emailInstitucional) ||
+      participantes.some((p) => p.rgm === dados.rgm);
+    if (duplicado) {
       await delay(undefined, 200);
-      throw new ApiError(409, "Já existe um cadastro com este e-mail.", "EMAIL_DUPLICADO");
-    }
-    if (participantes.some((p) => p.rgm === dados.rgm)) {
-      await delay(undefined, 200);
-      throw new ApiError(409, "Já existe um cadastro com este RGM.", "RGM_DUPLICADO");
+      throw new ApiError(409, "RGM ou e-mail já cadastrado", "CADASTRO_DUPLICADO");
     }
 
     const participante = await participanteService.create({
@@ -88,17 +87,7 @@ const localAuthService: AuthService = {
     };
     saveCollection("usuarios", [...usuarios, usuario]);
 
-    return delay(
-      {
-        id: usuario.id,
-        nome: usuario.nome,
-        emailLogin: usuario.emailLogin,
-        perfil: usuario.perfil,
-        rgm: usuario.rgm,
-        participanteId: usuario.participanteId,
-      },
-      300,
-    );
+    await delay(undefined, 300);
   },
 };
 
@@ -114,8 +103,8 @@ const httpAuthService: AuthService = {
     const res = await api.post<LoginResponseDTO>("/auth/login", { emailLogin, senha });
     return { ...res.usuario, token: res.token };
   },
-  registrarAluno(dados) {
-    return api.post<UsuarioPerfil>("/auth/registro", dados);
+  cadastrarAluno(dados) {
+    return api.post<void>("/auth/cadastro", dados);
   },
 };
 

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
 export function LoginPage() {
@@ -55,6 +55,10 @@ export function LoginPage() {
             {carregando ? "Entrando…" : "Entrar"}
           </button>
         </form>
+
+        <p style={{ textAlign: "center", marginTop: 16 }}>
+          <Link to="/cadastro">Criar conta</Link>
+        </p>
 
         <div className="login-hint">
           <strong>Contas de demonstração</strong>
