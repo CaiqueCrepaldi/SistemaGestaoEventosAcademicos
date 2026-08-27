@@ -2,6 +2,8 @@ export * from "./entityServices";
 export { ApiError, api } from "./api";
 export { authService } from "./authService";
 export type { CadastroAlunoInput, SessaoUsuario, UsuarioPerfil } from "./authService";
+export { certificadoService } from "./certificadoService";
+export type { CertificadoDisponivel } from "./certificadoService";
 export { checkinService } from "./checkinService";
 export { emailService } from "./emailService";
 export { inscricaoAlunoService } from "./inscricaoAlunoService";

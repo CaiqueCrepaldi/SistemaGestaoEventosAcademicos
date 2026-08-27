@@ -12,6 +12,7 @@ function formVazio(eventos: Evento[], salas: Sala[]): Omit<Sessao, "id"> {
     salaId: salas[0]?.id ?? "",
     palestranteId: null,
     tema: "",
+    cargaHoraria: 1,
   };
 }
 
@@ -30,6 +31,7 @@ export function SessoesPage() {
     salaId: "",
     palestranteId: null,
     tema: "",
+    cargaHoraria: 1,
   });
 
   useEffect(() => {
@@ -64,6 +66,7 @@ export function SessoesPage() {
       salaId: sessao.salaId,
       palestranteId: sessao.palestranteId ?? null,
       tema: sessao.tema ?? "",
+      cargaHoraria: sessao.cargaHoraria ?? 1,
     });
     setModalAberto(true);
   }
@@ -119,6 +122,7 @@ export function SessoesPage() {
               <th>Horário</th>
               <th>Palestrante</th>
               <th>Tema</th>
+              <th>Carga horária</th>
               <th />
             </tr>
           </thead>
@@ -131,6 +135,7 @@ export function SessoesPage() {
                 <td>{sessao.horario ? new Date(sessao.horario).toLocaleString("pt-BR") : "—"}</td>
                 <td>{palestrantes.find((p) => p.id === sessao.palestranteId)?.nome ?? "—"}</td>
                 <td className="truncate">{sessao.tema || "—"}</td>
+                <td>{sessao.cargaHoraria ? `${sessao.cargaHoraria}h` : "—"}</td>
                 <td className="table-actions">
                   <button className="btn btn-ghost" onClick={() => abrirEdicao(sessao)}>
                     Editar
@@ -143,7 +148,7 @@ export function SessoesPage() {
             ))}
             {listadas.length === 0 && (
               <tr>
-                <td colSpan={7} className="empty-cell">
+                <td colSpan={8} className="empty-cell">
                   Nenhuma sessão cadastrada.
                 </td>
               </tr>
@@ -216,6 +221,17 @@ export function SessoesPage() {
                 <input value={form.tema} onChange={(e) => setForm({ ...form, tema: e.target.value })} />
               </label>
             </div>
+            <label className="field">
+              <span>Carga horária (horas)</span>
+              <input
+                type="number"
+                min={1}
+                step={0.5}
+                value={form.cargaHoraria}
+                onChange={(e) => setForm({ ...form, cargaHoraria: Number(e.target.value) })}
+                required
+              />
+            </label>
             <div className="modal-footer">
               <button type="button" className="btn btn-ghost" onClick={() => setModalAberto(false)}>
                 Cancelar

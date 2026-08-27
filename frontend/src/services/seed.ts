@@ -82,6 +82,7 @@ export const sessoesSeed: Sessao[] = [
     salaId: "s1",
     palestranteId: "p1",
     tema: "Inteligência Artificial aplicada à Educação",
+    cargaHoraria: 2,
   },
   {
     id: "se2",
@@ -91,6 +92,7 @@ export const sessoesSeed: Sessao[] = [
     salaId: "s2",
     palestranteId: "p2",
     tema: "Arquitetura de Microsserviços na prática",
+    cargaHoraria: 4,
   },
   {
     id: "se3",
@@ -100,6 +102,7 @@ export const sessoesSeed: Sessao[] = [
     salaId: "s3",
     palestranteId: "p2",
     tema: "Desenvolvimento front-end com React",
+    cargaHoraria: 4,
   },
   {
     id: "se4",
@@ -109,6 +112,7 @@ export const sessoesSeed: Sessao[] = [
     salaId: "s2",
     palestranteId: "p1",
     tema: "Iniciação Científica: pôsteres e resultados",
+    cargaHoraria: 3,
   },
 ];
 

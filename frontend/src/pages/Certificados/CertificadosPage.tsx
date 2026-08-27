@@ -1,84 +1,151 @@
 import { useEffect, useState } from "react";
-import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { useAuth } from "../../context/AuthContext";
-import { eventoService, inscricaoService, sessaoService } from "../../services";
-import type { Evento } from "../../types";
+import { certificadoService, eventoService, sessaoService, type CertificadoDisponivel } from "../../services";
+import type { Evento, Sessao } from "../../types";
 
 export function CertificadosPage() {
   const { usuario } = useAuth();
+  const isEquipe = usuario?.perfil === "ADMINISTRADOR" || usuario?.perfil === "SECRETARIA";
+
+  const [certificados, setCertificados] = useState<CertificadoDisponivel[]>([]);
   const [eventos, setEventos] = useState<Evento[]>([]);
-  const [certificado, setCertificado] = useState<Evento | null>(null);
+  const [sessoes, setSessoes] = useState<Sessao[]>([]);
+  const [filtroEventoId, setFiltroEventoId] = useState("");
+  const [filtroSessaoId, setFiltroSessaoId] = useState("");
 
   useEffect(() => {
-    if (!usuario?.participanteId) return;
-    void carregar(usuario.participanteId);
-  }, [usuario?.participanteId]);
+    void carregar();
+  }, [usuario?.id]);
 
-  async function carregar(participanteId: string) {
-    const [inscricoes, sessoes, todosEventos] = await Promise.all([
-      inscricaoService.list(),
-      sessaoService.list(),
-      eventoService.list(),
-    ]);
+  async function carregar() {
+    if (isEquipe) {
+      const [c, e, s] = await Promise.all([
+        certificadoService.listarTodosCertificados(),
+        eventoService.list(),
+        sessaoService.list(),
+      ]);
+      setCertificados(c);
+      setEventos(e);
+      setSessoes(s);
+    } else if (usuario?.participanteId) {
+      setCertificados(await certificadoService.listarCertificadosDoParticipante(usuario.participanteId));
+    }
+  }
 
-    const sessoesPresentes = inscricoes
-      .filter((i) => i.participanteId === participanteId && i.statusPresenca === "PRESENTE")
-      .map((i) => sessoes.find((s) => s.id === i.sessaoId))
-      .filter((s): s is NonNullable<typeof s> => Boolean(s));
+  const filtrados = certificados.filter((c) => {
+    if (filtroEventoId && c.eventoId !== filtroEventoId) return false;
+    if (filtroSessaoId && c.sessaoId !== filtroSessaoId) return false;
+    return true;
+  });
 
-    const eventoIds = new Set(sessoesPresentes.map((s) => s.eventoId));
-    setEventos(todosEventos.filter((e) => eventoIds.has(e.id)));
+  const sessoesDoFiltro = sessoes.filter((s) => !filtroEventoId || s.eventoId === filtroEventoId);
+
+  if (!isEquipe) {
+    return (
+      <div>
+        <PageHeader title="Certificados" subtitle="Certificados de participação disponíveis para emissão" />
+        <div className="card">
+          {certificados.length === 0 ? (
+            <p className="empty-cell">
+              Você ainda não possui certificados. Os certificados são liberados após a confirmação de presença.
+            </p>
+          ) : (
+            <ul className="simple-list">
+              {certificados.map((c) => (
+                <li key={c.inscricaoId} className="simple-list-item simple-list-item-row">
+                  <div>
+                    <div className="simple-list-title">{c.eventoNome}</div>
+                    <div className="simple-list-sub">
+                      {c.sessaoTitulo} · {c.data ? new Date(c.data).toLocaleDateString("pt-BR") : "—"}
+                    </div>
+                  </div>
+                  <button className="btn btn-primary" onClick={() => certificadoService.gerarCertificado(c)}>
+                    Emitir certificado
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    );
   }
 
   return (
     <div>
-      <PageHeader title="Certificados" subtitle="Certificados de participação disponíveis para emissão" />
+      <PageHeader title="Certificados" subtitle="Emissão de certificados por evento e sessão" />
 
       <div className="card">
-        <ul className="simple-list">
-          {eventos.map((evento) => (
-            <li key={evento.id} className="simple-list-item simple-list-item-row">
-              <div>
-                <div className="simple-list-title">{evento.nome}</div>
-                <div className="simple-list-sub">
-                  {new Date(evento.data + "T00:00").toLocaleDateString("pt-BR")} · {evento.local}
-                </div>
-              </div>
-              <button className="btn btn-primary" onClick={() => setCertificado(evento)}>
-                Emitir certificado
-              </button>
-            </li>
-          ))}
-        </ul>
-        {eventos.length === 0 && (
-          <p className="empty-cell">
-            Nenhum certificado disponível ainda. Certificados são liberados após check-in confirmado em pelo
-            menos uma sessão do evento.
-          </p>
-        )}
+        <div className="field-row" style={{ flexWrap: "wrap" }}>
+          <label className="field" style={{ minWidth: 200 }}>
+            <span>Evento</span>
+            <select
+              value={filtroEventoId}
+              onChange={(e) => {
+                setFiltroEventoId(e.target.value);
+                setFiltroSessaoId("");
+              }}
+            >
+              <option value="">Todos os eventos</option>
+              {eventos.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.nome}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field" style={{ minWidth: 200 }}>
+            <span>Sessão</span>
+            <select value={filtroSessaoId} onChange={(e) => setFiltroSessaoId(e.target.value)}>
+              <option value="">Todas as sessões</option>
+              {sessoesDoFiltro.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.titulo}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
 
-      {certificado && (
-        <Modal title="Certificado de participação" onClose={() => setCertificado(null)}>
-          <div className="certificate">
-            <p>Certificamos que</p>
-            <h2>{usuario?.nome}</h2>
-            <p>
-              participou do evento <strong>{certificado.nome}</strong>, realizado em{" "}
-              {new Date(certificado.data + "T00:00").toLocaleDateString("pt-BR")} em {certificado.local}.
-            </p>
-          </div>
-          <div className="modal-footer">
-            <button className="btn btn-ghost" onClick={() => setCertificado(null)}>
-              Fechar
-            </button>
-            <button className="btn btn-primary" onClick={() => window.print()}>
-              Imprimir
-            </button>
-          </div>
-        </Modal>
-      )}
+      <div className="card">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Participante</th>
+              <th>RGM</th>
+              <th>Evento</th>
+              <th>Sessão</th>
+              <th>Carga horária</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {filtrados.map((c) => (
+              <tr key={c.inscricaoId}>
+                <td>{c.participanteNome}</td>
+                <td>{c.participanteRgm}</td>
+                <td>{c.eventoNome}</td>
+                <td>{c.sessaoTitulo}</td>
+                <td>{c.cargaHoraria}h</td>
+                <td className="table-actions">
+                  <button className="btn btn-ghost" onClick={() => certificadoService.gerarCertificado(c)}>
+                    Emitir certificado
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {filtrados.length === 0 && (
+              <tr>
+                <td colSpan={6} className="empty-cell">
+                  Nenhum certificado disponível para os filtros aplicados.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

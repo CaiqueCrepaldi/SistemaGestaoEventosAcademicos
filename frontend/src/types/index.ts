@@ -39,6 +39,7 @@ export interface Sessao {
   salaId: string;
   palestranteId: string | null;
   tema: string;
+  cargaHoraria: number;
 }
 
 export interface Participante {
