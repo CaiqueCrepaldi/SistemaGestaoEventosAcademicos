@@ -3,7 +3,16 @@ import { Link, useParams } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { useAuth } from "../../context/AuthContext";
-import { eventoService, inscricaoService, palestranteService, salaService, sessaoService } from "../../services";
+import {
+  ApiError,
+  emailService,
+  eventoService,
+  inscricaoAlunoService,
+  inscricaoService,
+  palestranteService,
+  salaService,
+  sessaoService,
+} from "../../services";
 import type { Evento, Inscricao, Palestrante, Sala, Sessao } from "../../types";
 
 export function EventoDetalhePage() {
@@ -42,30 +51,19 @@ export function EventoDetalhePage() {
       return;
     }
 
-    const jaInscrito = inscricoes.some(
-      (i) => i.participanteId === usuario.participanteId && i.sessaoId === sessao.id,
-    );
-    if (jaInscrito) {
-      setAvisoPorSessao((prev) => ({ ...prev, [sessao.id]: "Você já está inscrito nesta sessão." }));
-      return;
-    }
+    try {
+      const nova = await inscricaoAlunoService.inscrever(usuario.participanteId, sessao.id);
+      setInscricoes((prev) => [...prev, nova]);
 
-    const sala = salas.find((s) => s.id === sessao.salaId);
-    const ocupadas = inscricoes.filter((i) => i.sessaoId === sessao.id).length;
-    if (sala && ocupadas >= sala.capacidade) {
-      setAvisoPorSessao((prev) => ({ ...prev, [sessao.id]: "Sessão sem vagas disponíveis." }));
-      return;
+      const { destinatario } = await emailService.enviarConfirmacaoInscricao(nova);
+      setAvisoPorSessao((prev) => ({
+        ...prev,
+        [sessao.id]: `Inscrição confirmada. E-mail de confirmação enviado para ${destinatario}.`,
+      }));
+    } catch (e) {
+      const mensagem = e instanceof ApiError ? e.message : "Não foi possível concluir a inscrição.";
+      setAvisoPorSessao((prev) => ({ ...prev, [sessao.id]: mensagem }));
     }
-
-    const nova = await inscricaoService.create({
-      participanteId: usuario.participanteId,
-      sessaoId: sessao.id,
-      statusPresenca: "PENDENTE",
-      dataCheckin: null,
-      usuarioId: null,
-    });
-    setInscricoes((prev) => [...prev, nova]);
-    setAvisoPorSessao((prev) => ({ ...prev, [sessao.id]: "Inscrição confirmada." }));
   }
 
   if (evento === undefined) return null;

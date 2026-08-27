@@ -297,8 +297,10 @@ Response `201`:
 }
 ```
 
-Dispara e-mail de confirmação pro `emailLogin` do aluno como efeito
-colateral, assíncrono (a resposta não espera o envio terminar).
+Esse endpoint não dispara e-mail nenhum sozinho. O frontend chama, em
+seguida, o endpoint de confirmação por e-mail (documentado logo abaixo)
+passando o `id` que voltou aqui. Separar os dois dá pra tela mostrar "inscrito,
+mas o e-mail falhou" em vez de um POST monolítico que ou faz tudo ou nada.
 
 Erros:
 | Status | code | Quando |
@@ -308,6 +310,103 @@ Erros:
 | 404 | `EVENTO_NAO_ENCONTRADO` / `SESSAO_NAO_ENCONTRADA` | id inexistente, ou sessão não pertence ao evento da URL |
 | 409 | `JA_INSCRITO` | esse aluno já tá inscrito nessa sessão |
 | 409 | `SESSAO_LOTADA` | capacidade da sala já bateu |
+
+### `POST /api/inscricoes/{id}/confirmacao-email`
+
+Chamado pelo frontend logo depois que a autoinscrição acima retorna `201`.
+Só o dono da inscrição pode disparar (perfil aluno, `participanteId` do
+token tem que bater com o da inscrição). Corpo vazio.
+
+Response `200`:
+```json
+{ "destinatario": "joao.lima@aluno.ifsp.edu.br", "enviadoEm": "2026-08-27T10:00:00-03:00" }
+```
+
+Erros:
+| Status | code | Quando |
+|---|---|---|
+| 401 | `NAO_AUTENTICADO` | sem token / token inválido |
+| 403 | `ACESSO_NEGADO` | a inscrição não pertence ao aluno do token |
+| 404 | `INSCRICAO_NAO_ENCONTRADA` | id inexistente |
+
+O corpo do e-mail junta dados de três lugares (inscrição → sessão → evento
+→ palestrante), então faz sentido resolver tudo isso no service antes de
+montar a mensagem em vez de espalhar query em cada camada. Um jeito direto
+com `JavaMailSender` (já vem pronto no starter `spring-boot-starter-mail`):
+
+```java
+@Service
+public class ConfirmacaoInscricaoEmailService {
+
+    private final JavaMailSender mailSender;
+    private final InscricaoRepository inscricaoRepository;
+
+    public ConfirmacaoInscricaoEmailService(JavaMailSender mailSender, InscricaoRepository inscricaoRepository) {
+        this.mailSender = mailSender;
+        this.inscricaoRepository = inscricaoRepository;
+    }
+
+    public ConfirmacaoEmailResponse enviar(String inscricaoId, String participanteIdDoToken) {
+        Inscricao inscricao = inscricaoRepository.findComSessaoEEventoById(inscricaoId)
+                .orElseThrow(() -> new NaoEncontradoException("INSCRICAO_NAO_ENCONTRADA"));
+
+        if (!inscricao.getParticipante().getId().equals(participanteIdDoToken)) {
+            throw new AcessoNegadoException("ACESSO_NEGADO");
+        }
+
+        String destinatario = inscricao.getParticipante().getEmail();
+        String assunto = "Inscrição confirmada — " + inscricao.getSessao().getEvento().getNome();
+        String corpo = montarCorpoHtml(inscricao);
+
+        MimeMessage mensagem = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(mensagem, "UTF-8");
+        helper.setTo(destinatario);
+        helper.setSubject(assunto);
+        helper.setText(corpo, true); // true = HTML
+        mailSender.send(mensagem);
+
+        return new ConfirmacaoEmailResponse(destinatario, OffsetDateTime.now());
+    }
+
+    private String montarCorpoHtml(Inscricao inscricao) {
+        // se o projeto já usa Thymeleaf, troca isso por
+        // templateEngine.process("email/confirmacao-inscricao", contexto)
+        return """
+            <p>Olá, %s!</p>
+            <p>Sua inscrição em <strong>%s</strong> foi confirmada.</p>
+            <p><strong>Sessão:</strong> %s<br>
+               <strong>Tema:</strong> %s<br>
+               <strong>Palestrante:</strong> %s<br>
+               <strong>Data/horário:</strong> %s</p>
+            <p>Até lá!</p>
+            """.formatted(
+                inscricao.getParticipante().getNome(),
+                inscricao.getSessao().getEvento().getNome(),
+                inscricao.getSessao().getTitulo(),
+                inscricao.getSessao().getTema(),
+                inscricao.getSessao().getPalestrante().getNome(),
+                inscricao.getSessao().getHorarioFormatado()
+        );
+    }
+}
+```
+
+Configuração do `application.properties` pra usar um SMTP de verdade (ou o
+Mailtrap/Ethereal pra testar sem mandar e-mail de verdade em dev):
+
+```properties
+spring.mail.host=smtp.exemplo.com
+spring.mail.port=587
+spring.mail.username=${MAIL_USERNAME}
+spring.mail.password=${MAIL_PASSWORD}
+spring.mail.properties.mail.smtp.auth=true
+spring.mail.properties.mail.smtp.starttls.enable=true
+```
+
+Se o envio falhar (SMTP fora do ar, credencial errada), não precisa
+derrubar a inscrição que já foi criada — devolve `502` ou loga e deixa o
+aluno tentar reenviar depois é uma decisão de produto que fica em aberto,
+mas a inscrição em si já está válida antes desse endpoint ser chamado.
 
 `GET /api/alunos/me/inscricoes` (aluno) lista as próprias inscrições, já
 com sessão/evento juntados — usado tanto na tela de "minhas inscrições"

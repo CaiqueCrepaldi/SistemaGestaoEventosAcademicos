@@ -1,32 +1,29 @@
-import { USE_MOCK } from "./api";
+import type { Inscricao } from "../types";
+import { USE_MOCK, api } from "./api";
+import { participanteService } from "./entityServices";
 import { delay } from "./storage";
 
-const EMAILS_LOG_KEY = "sgea:emails-enviados";
-
-export interface ConfirmacaoInscricaoInput {
+export interface ConfirmacaoEmailResult {
   destinatario: string;
-  eventoNome: string;
-  sessaoTitulo: string;
 }
 
 interface EmailService {
-  enviarConfirmacaoInscricao(dados: ConfirmacaoInscricaoInput): Promise<void>;
+  enviarConfirmacaoInscricao(inscricao: Inscricao): Promise<ConfirmacaoEmailResult>;
 }
 
 const localEmailService: EmailService = {
-  async enviarConfirmacaoInscricao(dados) {
-    const registro = { ...dados, enviadoEm: new Date().toISOString() };
-    const log = JSON.parse(localStorage.getItem(EMAILS_LOG_KEY) ?? "[]") as unknown[];
-    localStorage.setItem(EMAILS_LOG_KEY, JSON.stringify([...log, registro]));
-    console.info(`[mock] e-mail de confirmação enviado para ${dados.destinatario}`, registro);
-    return delay(undefined, 200);
+  async enviarConfirmacaoInscricao(inscricao) {
+    const participante = await participanteService.get(inscricao.participanteId);
+    const destinatario = participante?.email ?? "e-mail não encontrado";
+    console.info(`[mock] e-mail de confirmação da inscrição ${inscricao.id} enviado para ${destinatario}`);
+    await delay(undefined, 200);
+    return { destinatario };
   },
 };
 
-// backend já dispara o e-mail junto com o POST de inscrição, então aqui não tem o que fazer
 const httpEmailService: EmailService = {
-  async enviarConfirmacaoInscricao() {
-    return undefined;
+  enviarConfirmacaoInscricao(inscricao) {
+    return api.post<ConfirmacaoEmailResult>(`/inscricoes/${inscricao.id}/confirmacao-email`, {});
   },
 };
 
