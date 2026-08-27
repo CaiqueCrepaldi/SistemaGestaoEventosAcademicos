@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { useAuth } from "../../context/AuthContext";
 import { palestranteService } from "../../services";
 import type { Palestrante } from "../../types";
 
 const VAZIO: Omit<Palestrante, "id"> = { nome: "", curriculo: "", telefone: "" };
 
 export function PalestrantesPage() {
+  const { usuario } = useAuth();
   const [palestrantes, setPalestrantes] = useState<Palestrante[]>([]);
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<Palestrante | null>(null);
@@ -18,6 +20,26 @@ export function PalestrantesPage() {
 
   async function carregar() {
     setPalestrantes(await palestranteService.list());
+  }
+
+  if (usuario?.perfil === "ALUNO") {
+    return (
+      <div>
+        <PageHeader title="Palestrantes" subtitle="Palestrantes convidados dos eventos" />
+        <div className="card">
+          <ul className="simple-list">
+            {palestrantes.map((palestrante) => (
+              <li key={palestrante.id} className="simple-list-item">
+                <div className="simple-list-title">{palestrante.nome}</div>
+                {/* TODO: backend não deve retornar telefone para perfil ALUNO (ver docs/api-contract.md) */}
+                <div className="simple-list-sub">{palestrante.curriculo}</div>
+              </li>
+            ))}
+            {palestrantes.length === 0 && <p className="empty-cell">Nenhum palestrante cadastrado.</p>}
+          </ul>
+        </div>
+      </div>
+    );
   }
 
   function abrirNovo() {
