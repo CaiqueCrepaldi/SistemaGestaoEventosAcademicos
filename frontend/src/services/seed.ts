@@ -75,10 +75,42 @@ export const palestrantesSeed: Palestrante[] = [
 ];
 
 export const sessoesSeed: Sessao[] = [
-  { id: "se1", eventoId: "e1", titulo: "Abertura e Palestra Magna: IA na Educação", horario: "2026-09-14T09:00", salaId: "s1" },
-  { id: "se2", eventoId: "e1", titulo: "Minicurso: Arquitetura de Microsserviços", horario: "2026-09-14T14:00", salaId: "s2" },
-  { id: "se3", eventoId: "e1", titulo: "Workshop Prático: React na Prática", horario: "2026-09-15T10:00", salaId: "s3" },
-  { id: "se4", eventoId: "e2", titulo: "Sessão de Apresentação de Pôsteres", horario: "2026-10-05T13:30", salaId: "s2" },
+  {
+    id: "se1",
+    eventoId: "e1",
+    titulo: "Abertura e Palestra Magna: IA na Educação",
+    horario: "2026-09-14T09:00",
+    salaId: "s1",
+    palestranteId: "p1",
+    tema: "Inteligência Artificial aplicada à Educação",
+  },
+  {
+    id: "se2",
+    eventoId: "e1",
+    titulo: "Minicurso: Arquitetura de Microsserviços",
+    horario: "2026-09-14T14:00",
+    salaId: "s2",
+    palestranteId: "p2",
+    tema: "Arquitetura de Microsserviços na prática",
+  },
+  {
+    id: "se3",
+    eventoId: "e1",
+    titulo: "Workshop Prático: React na Prática",
+    horario: "2026-09-15T10:00",
+    salaId: "s3",
+    palestranteId: "p2",
+    tema: "Desenvolvimento front-end com React",
+  },
+  {
+    id: "se4",
+    eventoId: "e2",
+    titulo: "Sessão de Apresentação de Pôsteres",
+    horario: "2026-10-05T13:30",
+    salaId: "s2",
+    palestranteId: "p1",
+    tema: "Iniciação Científica: pôsteres e resultados",
+  },
 ];
 
 export const participantesSeed: Participante[] = [
