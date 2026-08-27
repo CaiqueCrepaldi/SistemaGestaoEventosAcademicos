@@ -24,14 +24,31 @@ export interface CadastroAlunoInput {
   senha: string;
 }
 
+export interface SolicitarRecuperacaoResult {
+  codigoDemo?: string;
+}
+
 interface AuthService {
   login(emailLogin: string, senha: string): Promise<SessaoUsuario>;
   cadastrarAluno(dados: CadastroAlunoInput): Promise<void>;
+  solicitarRecuperacaoSenha(identificador: string): Promise<SolicitarRecuperacaoResult>;
+  confirmarRecuperacaoSenha(identificador: string, codigo: string, novaSenha: string): Promise<void>;
 }
 
 function fakeJwt(usuarioId: string, perfil: Perfil): string {
   const payload = btoa(JSON.stringify({ sub: usuarioId, perfil, exp: Date.now() + 1000 * 60 * 60 * 8 }));
   return `mock.${payload}.jwt`;
+}
+
+const RECUPERACAO_KEY = "sgea:recuperacao-senha";
+
+function buscarUsuarioPorIdentificador(identificador: string) {
+  const usuarios = loadCollection("usuarios", usuariosSeed);
+  return usuarios.find((u) => u.emailLogin === identificador || u.rgm === identificador);
+}
+
+function lerCodigosPendentes(): Record<string, { codigo: string; expiraEm: number }> {
+  return JSON.parse(localStorage.getItem(RECUPERACAO_KEY) ?? "{}");
 }
 
 const localAuthService: AuthService = {
@@ -89,6 +106,47 @@ const localAuthService: AuthService = {
 
     await delay(undefined, 300);
   },
+
+  async solicitarRecuperacaoSenha(identificador) {
+    const usuario = buscarUsuarioPorIdentificador(identificador);
+    if (!usuario) {
+      await delay(undefined, 300);
+      throw new ApiError(404, "Não encontramos conta com esse e-mail ou RGM.", "USUARIO_NAO_ENCONTRADO");
+    }
+
+    const codigo = String(Math.floor(100000 + Math.random() * 900000));
+    const pendentes = lerCodigosPendentes();
+    pendentes[usuario.id] = { codigo, expiraEm: Date.now() + 1000 * 60 * 15 };
+    localStorage.setItem(RECUPERACAO_KEY, JSON.stringify(pendentes));
+    console.info(`[mock] código de recuperação para ${usuario.emailLogin}: ${codigo}`);
+
+    return delay({ codigoDemo: codigo }, 300);
+  },
+
+  async confirmarRecuperacaoSenha(identificador, codigo, novaSenha) {
+    const usuario = buscarUsuarioPorIdentificador(identificador);
+    if (!usuario) {
+      await delay(undefined, 200);
+      throw new ApiError(404, "Não encontramos conta com esse e-mail ou RGM.", "USUARIO_NAO_ENCONTRADO");
+    }
+
+    const pendentes = lerCodigosPendentes();
+    const pendente = pendentes[usuario.id];
+    if (!pendente || pendente.codigo !== codigo || pendente.expiraEm < Date.now()) {
+      await delay(undefined, 200);
+      throw new ApiError(422, "Código inválido ou expirado.", "CODIGO_INVALIDO");
+    }
+
+    const usuarios = loadCollection("usuarios", usuariosSeed);
+    saveCollection(
+      "usuarios",
+      usuarios.map((u) => (u.id === usuario.id ? { ...u, senhaHash: novaSenha } : u)),
+    );
+    delete pendentes[usuario.id];
+    localStorage.setItem(RECUPERACAO_KEY, JSON.stringify(pendentes));
+
+    await delay(undefined, 300);
+  },
 };
 
 interface LoginResponseDTO {
@@ -105,6 +163,12 @@ const httpAuthService: AuthService = {
   },
   cadastrarAluno(dados) {
     return api.post<void>("/auth/cadastro", dados);
+  },
+  solicitarRecuperacaoSenha(identificador) {
+    return api.post<SolicitarRecuperacaoResult>("/auth/recuperacao-senha", { identificador });
+  },
+  confirmarRecuperacaoSenha(identificador, codigo, novaSenha) {
+    return api.post<void>("/auth/recuperacao-senha/confirmar", { identificador, codigo, novaSenha });
   },
 };
 

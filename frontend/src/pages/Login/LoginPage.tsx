@@ -56,9 +56,10 @@ export function LoginPage() {
           </button>
         </form>
 
-        <p style={{ textAlign: "center", marginTop: 16 }}>
+        <div className="login-links">
           <Link to="/cadastro">Criar conta</Link>
-        </p>
+          <Link to="/esqueci-senha">Esqueci minha senha</Link>
+        </div>
 
         <div className="login-hint">
           <strong>Contas de demonstração</strong>
