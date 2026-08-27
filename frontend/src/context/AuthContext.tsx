@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { SESSION_KEY } from "../services/api";
 import { authService, type SessaoUsuario } from "../services/authService";
-
-const SESSION_KEY = "sgea:session";
 
 interface AuthContextValue {
   usuario: SessaoUsuario | null;

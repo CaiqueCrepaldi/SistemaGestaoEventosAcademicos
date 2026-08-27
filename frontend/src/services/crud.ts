@@ -1,3 +1,4 @@
+import { ApiError, USE_MOCK, api } from "./api";
 import { delay, loadCollection, newId, saveCollection } from "./storage";
 
 export interface CrudService<T> {
@@ -8,10 +9,7 @@ export interface CrudService<T> {
   remove(id: string): Promise<void>;
 }
 
-export function createCrudService<T extends { id: string }>(
-  key: string,
-  seed: T[],
-): CrudService<T> {
+function createLocalCrudService<T extends { id: string }>(key: string, seed: T[]): CrudService<T> {
   let cache = loadCollection<T>(key, seed);
 
   return {
@@ -40,4 +38,34 @@ export function createCrudService<T extends { id: string }>(
       return delay(undefined);
     },
   };
+}
+
+function createHttpCrudService<T extends { id: string }>(resource: string): CrudService<T> {
+  return {
+    list() {
+      return api.get<T[]>(`/${resource}`);
+    },
+    async get(id) {
+      try {
+        return await api.get<T>(`/${resource}/${id}`);
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 404) return undefined;
+        throw e;
+      }
+    },
+    create(data) {
+      return api.post<T>(`/${resource}`, data);
+    },
+    update(id, data) {
+      return api.put<T>(`/${resource}/${id}`, data);
+    },
+    remove(id) {
+      return api.del<void>(`/${resource}/${id}`);
+    },
+  };
+}
+
+// `key` é a chave do localStorage no modo mock e o path REST no modo integrado (ex: "eventos" -> /eventos).
+export function createCrudService<T extends { id: string }>(key: string, seed: T[]): CrudService<T> {
+  return USE_MOCK ? createLocalCrudService<T>(key, seed) : createHttpCrudService<T>(key);
 }

@@ -1,4 +1,4 @@
-export type Perfil = "ADMINISTRADOR" | "SECRETARIA";
+export type Perfil = "ADMINISTRADOR" | "SECRETARIA" | "ALUNO";
 
 export interface Usuario {
   id: string;
@@ -6,6 +6,10 @@ export interface Usuario {
   emailLogin: string;
   senhaHash: string;
   perfil: Perfil;
+  /** Só preenchido para perfil ALUNO. */
+  rgm?: string | null;
+  /** Só preenchido para perfil ALUNO — vincula ao registro em Participante usado por Inscrição/Check-in. */
+  participanteId?: string | null;
 }
 
 export interface Evento {
