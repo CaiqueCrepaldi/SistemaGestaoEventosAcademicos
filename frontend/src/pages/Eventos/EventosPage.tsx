@@ -3,12 +3,14 @@ import { Link } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
 import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { useAuth } from "../../context/AuthContext";
 import { eventoService } from "../../services";
 import type { Evento } from "../../types";
 
 const VAZIO: Omit<Evento, "id"> = { nome: "", data: "", local: "", descricao: "" };
 
 export function EventosPage() {
+  const { usuario } = useAuth();
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<Evento | null>(null);
@@ -20,6 +22,24 @@ export function EventosPage() {
 
   async function carregar() {
     setEventos(await eventoService.list());
+  }
+
+  if (usuario?.perfil === "ALUNO") {
+    return (
+      <div>
+        <PageHeader title="Eventos" subtitle="Escolha um evento para ver a programação" />
+        <div className="card">
+          <ul className="simple-list">
+            {eventos.map((evento) => (
+              <li key={evento.id} className="simple-list-item">
+                <Link to={`/eventos/${evento.id}`}>{evento.nome}</Link>
+              </li>
+            ))}
+            {eventos.length === 0 && <p className="empty-cell">Nenhum evento cadastrado.</p>}
+          </ul>
+        </div>
+      </div>
+    );
   }
 
   function abrirNovo() {
