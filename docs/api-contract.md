@@ -74,7 +74,6 @@ Request:
   "nomeCompleto": "João Pedro Lima",
   "rgm": "2024010011",
   "emailInstitucional": "joao.lima@aluno.ifsp.edu.br",
-  "telefone": "(11) 91234-5678",
   "senha": "SenhaForte123"
 }
 ```
@@ -87,7 +86,6 @@ Response `201`:
   "emailLogin": "joao.lima@aluno.ifsp.edu.br",
   "perfil": "ALUNO",
   "rgm": "2024010011",
-  "telefone": "(11) 91234-5678",
   "participanteId": "9c1a4d2e-participante-uuid"
 }
 ```
@@ -119,12 +117,11 @@ Response `200`:
     "emailLogin": "joao.lima@aluno.ifsp.edu.br",
     "perfil": "ALUNO",
     "rgm": "2024010011",
-    "telefone": "(11) 91234-5678",
     "participanteId": "9c1a4d2e-participante-uuid"
   }
 }
 ```
-Pra administrador/secretaria, `rgm`, `telefone` e `participanteId` vêm `null`.
+Pra administrador/secretaria, `rgm` e `participanteId` vêm `null`.
 
 Erro: `401 CREDENCIAIS_INVALIDAS` se e-mail ou senha estiverem errados.
 
@@ -134,25 +131,6 @@ Qualquer perfil autenticado. Serve pra restaurar a sessão quando a página
 recarrega (o frontend guarda token + usuário no localStorage, mas precisa
 revalidar contra o backend). Mesmo formato do campo `usuario` do login.
 `401` se o token não for mais válido.
-
-### Recuperação de senha
-
-Duas etapas, dois endpoints. O frontend já tem as telas prontas (pedir
-e-mail/RGM, depois código + nova senha) rodando contra um mock local — o
-envio de e-mail de verdade e a geração do código ficam por conta de quem
-implementar o backend.
-
-`POST /api/auth/recuperacao-senha` — `{ "identificador": "joao.lima@aluno.ifsp.edu.br" }`
-(aceita e-mail ou RGM). Gera um código, manda por e-mail pro aluno, resposta
-`200` com corpo vazio. `404 USUARIO_NAO_ENCONTRADO` se não achar ninguém com
-esse identificador — decidir se vale a pena esconder essa informação por
-segurança fica a critério de quem implementar, esse projeto não tem esse
-requisito.
-
-`POST /api/auth/recuperacao-senha/confirmar` —
-`{ "identificador": "...", "codigo": "123456", "novaSenha": "SenhaNova123" }`.
-`200` se trocar a senha. `422 CODIGO_INVALIDO` se o código estiver errado ou
-expirado, `404 USUARIO_NAO_ENCONTRADO` mesma regra do endpoint anterior.
 
 ## Eventos
 
@@ -471,8 +449,6 @@ Códigos usados neste documento:
 | 409 | `SESSAO_LOTADA` | capacidade da sala esgotada |
 | 409 | `FEEDBACK_JA_ENVIADO` | feedback duplicado pro mesmo evento |
 | 409 | `PRESENCA_NAO_CONFIRMADA` | tentou baixar certificado sem check-in |
-| 404 | `USUARIO_NAO_ENCONTRADO` | recuperação de senha com e-mail/RGM que não existe |
-| 422 | `CODIGO_INVALIDO` | código de recuperação errado ou expirado |
 | 422 | `VALIDACAO` | campo inválido/ausente no corpo |
 
 401 é sempre token ausente/inválido/expirado, antes de qualquer checagem de
@@ -484,7 +460,7 @@ tem permissão — não misturar os dois, e não usar 404 pra esconder um 403
 
 | Entidade | Mudança |
 |---|---|
-| `Usuario` | perfil novo `ALUNO`; campos novos `rgm`, `telefone` e `participanteId` (nullable, só ALUNO) |
+| `Usuario` | perfil novo `ALUNO`; campos novos `rgm` e `participanteId` (nullable, só ALUNO) |
 | `Sessao` | campos novos obrigatórios: `palestranteId`, `tema`, `cargaHoraria` |
 | `Inscricao` | campo novo `dataInscricao` |
 | `Trabalho` | removido — entidade, tabela e endpoints |
@@ -498,4 +474,3 @@ tem permissão — não misturar os dois, e não usar 404 pra esconder um 403
 - Se `mediaNotas` do evento é calculado no backend ou no frontend.
 - Se a exportação de CSV de presença migra pro backend ou continua no cliente.
 - Template/geração do PDF do certificado.
-- Envio de e-mail de verdade e geração do código na recuperação de senha (hoje só existe mockado no frontend).

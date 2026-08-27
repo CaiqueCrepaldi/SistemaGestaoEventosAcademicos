@@ -3,10 +3,8 @@ import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 import { AgendaPage } from "./pages/Agenda/AgendaPage";
-import { CadastroPage } from "./pages/Cadastro/CadastroPage";
 import { CheckinPage } from "./pages/Checkin/CheckinPage";
 import { DashboardPage } from "./pages/Dashboard/DashboardPage";
-import { EsqueciSenhaPage } from "./pages/EsqueciSenha/EsqueciSenhaPage";
 import { EventosPage } from "./pages/Eventos/EventosPage";
 import { FeedbackPage } from "./pages/Feedback/FeedbackPage";
 import { InscricoesPage } from "./pages/Inscricoes/InscricoesPage";
@@ -23,8 +21,6 @@ export function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/cadastro" element={<CadastroPage />} />
-          <Route path="/esqueci-senha" element={<EsqueciSenhaPage />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
               <Route path="/" element={<DashboardPage />} />

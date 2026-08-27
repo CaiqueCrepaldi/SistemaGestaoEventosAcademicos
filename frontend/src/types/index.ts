@@ -7,7 +7,6 @@ export interface Usuario {
   senhaHash: string;
   perfil: Perfil;
   rgm?: string | null; // só ALUNO
-  telefone?: string | null; // só ALUNO
   participanteId?: string | null; // só ALUNO
 }
 
