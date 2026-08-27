@@ -16,7 +16,7 @@ export function LoginPage() {
       await login(email, senha);
       navigate("/");
     } catch {
-      // erro exibido via contexto
+      // já tratado no contexto
     }
   }
 

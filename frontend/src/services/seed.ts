@@ -25,6 +25,15 @@ export const usuariosSeed: Usuario[] = [
     senhaHash: "secretaria123",
     perfil: "SECRETARIA",
   },
+  {
+    id: "u3",
+    nome: "João Pedro Lima",
+    emailLogin: "aluno@aluno.ifsp.edu.br",
+    senhaHash: "aluno123",
+    perfil: "ALUNO",
+    rgm: "2024010011",
+    participanteId: "pa1",
+  },
 ];
 
 export const eventosSeed: Evento[] = [

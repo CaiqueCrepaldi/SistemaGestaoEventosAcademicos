@@ -6,10 +6,8 @@ export interface Usuario {
   emailLogin: string;
   senhaHash: string;
   perfil: Perfil;
-  /** Só preenchido para perfil ALUNO. */
-  rgm?: string | null;
-  /** Só preenchido para perfil ALUNO — vincula ao registro em Participante usado por Inscrição/Check-in. */
-  participanteId?: string | null;
+  rgm?: string | null; // só ALUNO
+  participanteId?: string | null; // só ALUNO
 }
 
 export interface Evento {

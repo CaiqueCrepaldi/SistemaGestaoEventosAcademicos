@@ -1,6 +1,6 @@
 export const SESSION_KEY = "sgea:session";
 
-// Sem .env configurado, o app deve continuar rodando em mock (não depender do backend pra desenvolver).
+// sem .env cai em mock por padrão
 export const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "false";
 
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";

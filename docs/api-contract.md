@@ -1,81 +1,74 @@
 # Contrato de API — Sistema de Gestão de Eventos Acadêmicos
 
-Documento de referência para o desenvolvimento do backend (Java + Spring Boot).
-O frontend (React 19 + TypeScript) já está implementado contra um mock local
-(`localStorage`) que segue exatamente este contrato — trocar o mock por chamadas
-HTTP reais deve ser um swap de uma camada de serviço, sem mudar nada na UI.
+Referência pra quem for implementar o backend (Java + Spring Boot). O
+frontend já roda hoje contra um mock em `localStorage` que segue esse mesmo
+contrato, então trocar por chamadas HTTP reais é só trocar a camada de
+serviço — a UI não muda.
 
-Todos os endpoints estão sob o prefixo `/api`. Corpo de requisição e resposta em
-JSON, `Content-Type: application/json`, exceto onde indicado (download de
-certificado). Nomes de campo em `camelCase` — iguais aos tipos TypeScript do
-frontend, para não exigir nenhuma camada de tradução.
+Prefixo `/api` em tudo. JSON, `camelCase` igual aos tipos do frontend (não
+tem tradução de nome de campo no meio do caminho). A única exceção de
+formato é o download de certificado, que é binário.
 
----
+## Perfis e permissões
 
-## 1. Perfis e matriz de permissões
-
-Três perfis: `ADMINISTRADOR`, `SECRETARIA`, `ALUNO`. Administrador e Secretaria
-têm acesso total e equivalente a tudo que não seja explicitamente de aluno.
-Aluno é um perfil novo, com acesso restrito e auto-cadastro.
+Três perfis: `ADMINISTRADOR`, `SECRETARIA` e `ALUNO`. Os dois primeiros têm
+acesso igual e total a tudo que não for exclusivo de aluno. Aluno é o perfil
+novo, com acesso restrito e auto-cadastro.
 
 | Recurso                              | ADMINISTRADOR | SECRETARIA | ALUNO |
 |---------------------------------------|:---:|:---:|:---:|
 | Eventos — listar / detalhe             | ✅ | ✅ | ✅ |
 | Eventos — criar / editar / excluir     | ✅ | ✅ | ❌ |
-| Palestrantes — listar / detalhe        | ✅ (com telefone) | ✅ (com telefone) | ✅ (**sem** telefone) |
+| Palestrantes — listar / detalhe        | com telefone | com telefone | sem telefone |
 | Palestrantes — criar / editar / excluir| ✅ | ✅ | ❌ |
-| Salas                                  | ✅ | ✅ | ❌ (nenhum acesso, nem leitura) |
+| Salas                                  | ✅ | ✅ | ❌ (nem leitura) |
 | Sessões — CRUD/gestão                  | ✅ | ✅ | ❌ |
-| Agenda (visão derivada de Sessões)     | ✅ | ✅ | ✅ (somente leitura) |
+| Agenda (derivada de Sessões)           | ✅ | ✅ | leitura |
 | Participantes (cadastro avulso)        | ✅ | ✅ | ❌ |
-| Inscrições — gestão (`/api/inscricoes`)| ✅ | ✅ | ❌ |
-| Inscrição — autoinscrição no evento    | ❌* | ❌* | ✅ (apenas a própria) |
+| Inscrições — gestão                    | ✅ | ✅ | ❌ |
+| Autoinscrição no evento                | — | — | ✅ (só a própria) |
 | Check-in                               | ✅ | ✅ | ❌ |
-| Certificados — emissão/consulta própria| — | — | ✅ (apenas os próprios) |
-| Feedback — enviar                      | ❌* | ❌* | ✅ (apenas o próprio) |
-| Feedback — listar/consolidar por evento| ✅ | ✅ | ❌ |
+| Certificados                           | — | — | ✅ (só os próprios) |
+| Feedback — enviar                      | — | — | ✅ (só o próprio) |
+| Feedback — listar por evento           | ✅ | ✅ | ❌ |
 | Dashboard / estatísticas               | ✅ | ✅ | ❌ |
-| Trabalhos                              | **removido do projeto** | **removido** | **removido** |
+| Trabalhos                              | removido do projeto | removido | removido |
 
-`❌*` = não é que seja proibido por regra de negócio, é que o endpoint é
-exclusivo do fluxo de aluno (autoinscrição/feedback são sempre "em nome de
-quem está logado"; administrador/secretaria usam os endpoints de gestão).
+Autoinscrição e feedback aparecem sem admin/secretaria não porque sejam
+proibidos, mas porque esses endpoints são sempre "em nome de quem está
+logado" — administrador e secretaria usam os endpoints de gestão pra isso.
 
-> **Trabalhos foi removido do escopo do projeto.** Não implementar
-> `TrabalhoController`/`TrabalhoService`/tabela `trabalhos`. Se algo já foi
-> gerado no backend a partir do diagrama antigo, pode ser descartado.
+Trabalhos saiu do escopo do projeto. Não implementar
+`TrabalhoController`/`TrabalhoService`/tabela `trabalhos` — se algo já foi
+gerado a partir do diagrama antigo, pode jogar fora.
 
----
+## Autenticação
 
-## 2. Autenticação
+Toda rota exceto `POST /api/auth/login` e `POST /api/auth/registro` exige
+`Authorization: Bearer <token>`.
 
-### 2.1 Convenções
+O token é opaco pro frontend — o React não decodifica o JWT em nenhum
+momento. Nome, perfil, rgm etc. vêm no corpo da resposta de login/registro,
+não do token. O JWT existe só pro backend validar cada requisição.
 
-- Todas as rotas exceto `POST /api/auth/login` e `POST /api/auth/registro`
-  exigem header `Authorization: Bearer <token>`.
-- O token é **opaco para o frontend** — o React nunca decodifica o JWT. Todos
-  os dados de perfil necessários pra UI (nome, perfil, rgm) vêm no **corpo da
-  resposta de login/registro**, não do token. O JWT existe para o backend
-  validar autenticação/autorização a cada requisição (filtro do Spring
-  Security), não para o cliente ler claims.
-- **Toda autorização por perfil deve ser validada no servidor**, em cada
-  endpoint (`@PreAuthorize` / regra equivalente), nunca apenas escondendo
-  botões/rotas na UI. A UI hoje já esconde telas por perfil, mas isso é só
-  cosmético — um `ALUNO` que descobrir a URL de `/api/salas` batendo direto
-  com `curl` **precisa** tomar `403`, mesmo que a tela nunca apareça pra ele.
+E isso é importante: a autorização por perfil tem que ser validada no
+servidor, endpoint por endpoint, nunca só escondendo botão/rota na UI. O
+frontend já esconde as telas certas por perfil, mas isso é cosmético — um
+aluno batendo direto em `/api/salas` via curl precisa tomar 403 mesmo que
+aquela tela nunca apareça pra ele.
 
-### 2.2 `POST /api/auth/registro` — auto-cadastro de ALUNO
+### `POST /api/auth/registro` — auto-cadastro de aluno
 
-Único perfil com auto-cadastro público. Administrador e Secretaria são
-provisionados por outro meio (fora do escopo deste documento — hoje o
-frontend não tem tela para isso).
+É o único perfil com cadastro público. Administrador e secretaria são
+provisionados de outro jeito (o frontend hoje nem tem tela pra isso, fica
+fora do escopo).
 
-Ao registrar, o backend deve criar **dois registros vinculados**: um
-`Usuario` (login) e um `Participante` (usado por inscrição/check-in/agenda,
-que já existiam antes do login de aluno existir). Isso mantém o modelo de
-Inscrição/Check-in inalterado — ele sempre referenciou `participanteId`.
+No registro o backend precisa criar dois registros vinculados: um `Usuario`
+(login) e um `Participante` (o que já existia antes de aluno ter login, e é
+usado por inscrição/check-in/agenda). É assim que o modelo de
+Inscrição/Check-in continua igual — sempre referenciando `participanteId`.
 
-**Request**
+Request:
 ```json
 {
   "nomeCompleto": "João Pedro Lima",
@@ -85,7 +78,7 @@ Inscrição/Check-in inalterado — ele sempre referenciou `participanteId`.
 }
 ```
 
-**Response `201 Created`**
+Response `201`:
 ```json
 {
   "id": "5f2b6e6a-usuario-uuid",
@@ -96,23 +89,23 @@ Inscrição/Check-in inalterado — ele sempre referenciou `participanteId`.
   "participanteId": "9c1a4d2e-participante-uuid"
 }
 ```
-Senha nunca retorna no corpo, em nenhum endpoint.
+Senha não volta no corpo em nenhum endpoint, nunca.
 
-**Erros**
+Erros:
 | Status | code | Quando |
 |---|---|---|
 | 409 | `RGM_DUPLICADO` | já existe usuário/participante com esse RGM |
 | 409 | `EMAIL_DUPLICADO` | já existe usuário com esse e-mail |
-| 422 | `VALIDACAO` | campo obrigatório ausente, e-mail fora do formato institucional, senha fraca (definir política mínima, ex: 8+ caracteres) |
+| 422 | `VALIDACAO` | campo obrigatório faltando, e-mail fora do padrão institucional, senha fraca (pelo menos 8 caracteres como piso) |
 
-### 2.3 `POST /api/auth/login`
+### `POST /api/auth/login`
 
-**Request**
+Request:
 ```json
 { "emailLogin": "joao.lima@aluno.ifsp.edu.br", "senha": "SenhaForte123" }
 ```
 
-**Response `200 OK`**
+Response `200`:
 ```json
 {
   "token": "<jwt assinado pelo backend>",
@@ -128,57 +121,47 @@ Senha nunca retorna no corpo, em nenhum endpoint.
   }
 }
 ```
-Para `ADMINISTRADOR`/`SECRETARIA`, `rgm` e `participanteId` vêm `null`.
+Pra administrador/secretaria, `rgm` e `participanteId` vêm `null`.
 
-**Erros**
-| Status | code | Quando |
-|---|---|---|
-| 401 | `CREDENCIAIS_INVALIDAS` | e-mail ou senha incorretos |
+Erro: `401 CREDENCIAIS_INVALIDAS` se e-mail ou senha estiverem errados.
 
-### 2.4 `GET /api/usuarios/me` (qualquer perfil autenticado)
+### `GET /api/usuarios/me`
 
-Conveniência para restaurar sessão ao recarregar a página (o frontend guarda
-o token e o objeto `usuario` no `localStorage`, mas precisa revalidar).
-Retorna o mesmo formato do campo `usuario` do login. `401` se o token for
-inválido/expirado.
+Qualquer perfil autenticado. Serve pra restaurar a sessão quando a página
+recarrega (o frontend guarda token + usuário no localStorage, mas precisa
+revalidar contra o backend). Mesmo formato do campo `usuario` do login.
+`401` se o token não for mais válido.
 
----
+## Eventos
 
-## 3. Eventos
-
-Sem mudanças no modelo. `ADMINISTRADOR`/`SECRETARIA` fazem CRUD completo;
-`ALUNO` só lê.
+Modelo não muda. Admin/secretaria fazem CRUD completo, aluno só lê.
 
 ```ts
 interface Evento {
   id: string;
   nome: string;
-  data: string;        // "2026-09-14" (ISO date, sem hora)
+  data: string;        // "2026-09-14"
   local: string;
   descricao: string;
 }
 ```
 
-- `GET /api/eventos` — todos os perfis autenticados.
-- `GET /api/eventos/{id}` — todos os perfis autenticados. `404` se não existir.
-- `POST /api/eventos` — ADMINISTRADOR, SECRETARIA. Body = `Evento` sem `id`. `201`.
-- `PUT /api/eventos/{id}` — ADMINISTRADOR, SECRETARIA. Body parcial ou total. `200`.
-- `DELETE /api/eventos/{id}` — ADMINISTRADOR, SECRETARIA. `204`.
+- `GET /api/eventos` e `GET /api/eventos/{id}` — qualquer perfil autenticado (404 se não existir).
+- `POST /api/eventos` — admin/secretaria, `201`.
+- `PUT /api/eventos/{id}` — admin/secretaria, `200`.
+- `DELETE /api/eventos/{id}` — admin/secretaria, `204`.
 
-`ALUNO` chamando `POST`/`PUT`/`DELETE` → `403 ACESSO_NEGADO`.
+Aluno chamando POST/PUT/DELETE cai em `403 ACESSO_NEGADO`.
 
----
+## Palestrantes
 
-## 4. Palestrantes
-
-**Importante:** o campo `telefone` **nunca** deve aparecer no JSON retornado
-para o perfil `ALUNO`. Não mandar `"telefone": null` — omitir a chave. Isso
-precisa ser feito no backend (ex: dois DTOs de resposta, `PalestranteDTO` e
-`PalestrantePublicoDTO`, ou uma `@JsonView`), decidido pelo perfil do
-token — nunca confiar em o frontend simplesmente não exibir o campo.
+O campo `telefone` nunca pode aparecer no JSON pra aluno — nem como
+`"telefone": null`, a chave some inteira. Isso é decisão do backend (dois
+DTOs, `@JsonView`, o que for mais fácil de manter), baseado no perfil do
+token. Não dá pra confiar que o frontend simplesmente não mostra o campo.
 
 ```ts
-// Visão ADMINISTRADOR / SECRETARIA
+// visão admin/secretaria
 interface Palestrante {
   id: string;
   nome: string;
@@ -186,7 +169,7 @@ interface Palestrante {
   telefone: string;
 }
 
-// Visão ALUNO — telefone omitido, não nulo
+// visão aluno — telefone some, não fica null
 interface PalestrantePublico {
   id: string;
   nome: string;
@@ -194,33 +177,24 @@ interface PalestrantePublico {
 }
 ```
 
-**`GET /api/palestrantes`**
-
-Resposta para ADMINISTRADOR/SECRETARIA:
+`GET /api/palestrantes` pra admin/secretaria:
 ```json
-[
-  { "id": "p1", "nome": "Dra. Mariana Costa", "curriculo": "Doutora em IA...", "telefone": "(11) 98888-1111" }
-]
+[{ "id": "p1", "nome": "Dra. Mariana Costa", "curriculo": "Doutora em IA...", "telefone": "(11) 98888-1111" }]
 ```
 
-Resposta para ALUNO (mesmo endpoint, mesmo evento, corpo diferente):
+O mesmo endpoint pra aluno:
 ```json
-[
-  { "id": "p1", "nome": "Dra. Mariana Costa", "curriculo": "Doutora em IA..." }
-]
+[{ "id": "p1", "nome": "Dra. Mariana Costa", "curriculo": "Doutora em IA..." }]
 ```
 
-- `GET /api/palestrantes/{id}` — mesma regra de omissão condicional.
-- `POST /api/palestrantes`, `PUT /api/palestrantes/{id}`, `DELETE /api/palestrantes/{id}`
-  — ADMINISTRADOR, SECRETARIA. `ALUNO` → `403`.
+`GET /api/palestrantes/{id}` segue a mesma regra. POST/PUT/DELETE são
+admin/secretaria only, aluno toma 403.
 
----
+## Salas
 
-## 5. Salas
-
-Sem exposição nenhuma para `ALUNO` — nem leitura (a capacidade da sala é
-usada para calcular vagas, mas isso é resolvido no backend ao processar a
-inscrição; o aluno nunca precisa consultar `/api/salas` diretamente).
+Aluno não tem acesso nenhum, nem leitura — a capacidade da sala entra só no
+cálculo de vagas quando alguém se inscreve, resolvido inteiramente no
+backend. O aluno nunca precisa saber que sala existe.
 
 ```ts
 interface Sala {
@@ -230,57 +204,48 @@ interface Sala {
 }
 ```
 
-- `GET /api/salas`, `GET /api/salas/{id}` — ADMINISTRADOR, SECRETARIA. `ALUNO` → `403`.
-- `POST /api/salas`, `PUT /api/salas/{id}`, `DELETE /api/salas/{id}` — ADMINISTRADOR, SECRETARIA.
+CRUD completo restrito a admin/secretaria; qualquer verbo com aluno é 403.
 
----
+## Sessões
 
-## 6. Sessões
-
-**Campos novos** (não existiam): `palestranteId` (obrigatório), `tema`,
+Campos novos que não existiam antes: `palestranteId` (obrigatório), `tema`,
 `cargaHoraria`.
 
 ```ts
 interface Sessao {
   id: string;
   eventoId: string;
-  titulo: string;         // ex: "Minicurso: Arquitetura de Microsserviços"
-  tema: string;            // ex: "Arquitetura de Software" — assunto/trilha da sessão
+  titulo: string;         // "Minicurso: Arquitetura de Microsserviços"
+  tema: string;            // "Arquitetura de Software" — assunto/trilha
   horario: string;         // ISO-8601 com offset: "2026-09-14T14:00:00-03:00"
   salaId: string;
-  palestranteId: string;   // obrigatório agora
-  cargaHoraria: number;    // horas, aceita decimal (ex: 1.5)
+  palestranteId: string;
+  cargaHoraria: number;    // horas, aceita decimal
 }
 ```
 
-> **Nota de migração para o frontend:** hoje o formulário de sessão usa
-> `<input type="datetime-local">`, que gera string sem timezone
-> (`"2026-09-14T14:00"`). Ao integrar com a API real, o frontend precisa
-> serializar isso com o offset local antes de enviar. Ficar ciente ao
-> revisar o PR de integração — não é responsabilidade do backend normalizar
-> isso.
+Detalhe pro frontend lembrar quando integrar de verdade: hoje o form de
+sessão usa `<input type="datetime-local">`, que gera string sem timezone
+("2026-09-14T14:00"). Isso precisa ser serializado com offset antes de
+mandar pra API — não é conta do backend normalizar isso.
 
-Endpoints de **gestão** (tela "Sessões"), exclusivos de ADMINISTRADOR/SECRETARIA:
-
-- `GET /api/sessoes?eventoId=` (filtro opcional) — lista completa, com todos os campos.
+Endpoints de gestão (tela "Sessões"), só admin/secretaria:
+- `GET /api/sessoes?eventoId=` (filtro opcional)
 - `GET /api/sessoes/{id}`
-- `POST /api/sessoes` — `422` se `palestranteId`/`salaId`/`eventoId` não existirem.
+- `POST /api/sessoes` — 422 se `palestranteId`/`salaId`/`eventoId` não existirem
 - `PUT /api/sessoes/{id}`
 - `DELETE /api/sessoes/{id}`
 
-`ALUNO` não acessa `/api/sessoes` **em nenhum verbo** (nem `GET`) — ele vê
-sessões apenas através da Agenda (§8) e do detalhe do evento, que retornam um
-formato mais enxuto, sem exigir que o aluno tenha visibilidade sobre a
-gestão interna de salas/sessões.
+Aluno não acessa `/api/sessoes` em nenhum verbo, nem GET. Ele vê sessão só
+através da Agenda e do detalhe do evento, que devolvem um formato mais
+enxuto sem expor gestão interna de sala.
 
----
+## Participantes
 
-## 7. Participantes
-
-Cadastro "manual" de participantes avulsos (quem não é aluno com login, ex:
-convidados externos). Continua existindo e sendo gerido só por
-ADMINISTRADOR/SECRETARIA. Todo `ALUNO` autenticado já tem um `Participante`
-criado automaticamente no registro (§2.2) — ele nunca chama estes endpoints.
+Cadastro manual de gente sem login próprio (convidado externo, por
+exemplo) — continua existindo, gerido só por admin/secretaria. Todo aluno
+já ganha um Participante automaticamente no registro, então nunca chama
+esses endpoints diretamente.
 
 ```ts
 interface Participante {
@@ -291,18 +256,14 @@ interface Participante {
 }
 ```
 
-- `GET /api/participantes`, `GET /api/participantes/{id}` — ADMINISTRADOR, SECRETARIA.
-- `POST /api/participantes`, `PUT /api/participantes/{id}`, `DELETE /api/participantes/{id}` — ADMINISTRADOR, SECRETARIA.
-- `ALUNO` → `403` em qualquer verbo.
+CRUD completo pra admin/secretaria, 403 pra aluno em qualquer verbo.
 
----
+## Inscrições
 
-## 8. Inscrições
-
-Dois fluxos completamente separados: **autoinscrição** (aluno) e **gestão**
-(administrador/secretaria). Não é a mesma rota com permissões diferentes —
-são rotas diferentes, porque o corpo da requisição também muda (o aluno
-nunca informa `participanteId`, ele vem do token).
+Dois fluxos separados de propósito: autoinscrição (aluno) e gestão
+(admin/secretaria). Não é a mesma rota com regra de permissão diferente —
+são rotas diferentes mesmo, porque o corpo muda: o aluno nunca manda
+`participanteId`, ele vem do token.
 
 ```ts
 type StatusPresenca = "PENDENTE" | "PRESENTE" | "AUSENTE";
@@ -312,23 +273,18 @@ interface Inscricao {
   participanteId: string;
   sessaoId: string;
   statusPresenca: StatusPresenca;
-  dataCheckin: string | null;   // ISO-8601, setado só no check-in
-  usuarioId: string | null;     // quem fez o check-in (staff), não quem se inscreveu
-  dataInscricao: string;        // ISO-8601, novo campo — quando o aluno se inscreveu
+  dataCheckin: string | null;   // setado só no check-in
+  usuarioId: string | null;     // quem fez o check-in, não quem se inscreveu
+  dataInscricao: string;        // novo campo, data da autoinscrição
 }
 ```
 
-### 8.1 Autoinscrição (ALUNO)
+**Autoinscrição** — `POST /api/eventos/{eventoId}/sessoes/{sessaoId}/inscricoes`,
+corpo vazio. O backend ignora qualquer `participanteId` que vier no corpo,
+sempre usa o do token — não é só conveniência, é o que impede um aluno de
+se inscrever em nome de outro forjando a requisição.
 
-`POST /api/eventos/{eventoId}/sessoes/{sessaoId}/inscricoes`
-
-**Request:** corpo vazio (`{}`). O backend **ignora** qualquer
-`participanteId` que porventura venha no corpo — sempre usa o
-`participanteId` do token autenticado. Isso é uma regra de segurança, não só
-de conveniência: um aluno não pode se inscrever em nome de outro forjando o
-corpo da requisição.
-
-**Response `201 Created`**
+Response `201`:
 ```json
 {
   "id": "i9",
@@ -341,21 +297,21 @@ corpo da requisição.
 }
 ```
 
-Efeito colateral: dispara e-mail de confirmação de inscrição para o
-`emailLogin` do aluno (assíncrono — a resposta HTTP não espera o envio).
+Dispara e-mail de confirmação pro `emailLogin` do aluno como efeito
+colateral, assíncrono (a resposta não espera o envio terminar).
 
-**Erros**
+Erros:
 | Status | code | Quando |
 |---|---|---|
 | 401 | `NAO_AUTENTICADO` | sem token / token inválido |
-| 403 | `ACESSO_NEGADO` | token válido mas perfil ≠ ALUNO |
-| 404 | `EVENTO_NAO_ENCONTRADO` / `SESSAO_NAO_ENCONTRADA` | ids inexistentes, ou `sessaoId` não pertence ao `eventoId` da URL |
-| 409 | `JA_INSCRITO` | já existe inscrição desse aluno nessa sessão |
-| 409 | `SESSAO_LOTADA` | inscritos na sessão já atingiram a capacidade da sala |
+| 403 | `ACESSO_NEGADO` | token válido mas perfil não é aluno |
+| 404 | `EVENTO_NAO_ENCONTRADO` / `SESSAO_NAO_ENCONTRADA` | id inexistente, ou sessão não pertence ao evento da URL |
+| 409 | `JA_INSCRITO` | esse aluno já tá inscrito nessa sessão |
+| 409 | `SESSAO_LOTADA` | capacidade da sala já bateu |
 
-`GET /api/alunos/me/inscricoes` — ALUNO, lista as próprias inscrições
-(join com sessão/evento, para a tela de "minhas inscrições" e para o
-detalhe do evento saber se o aluno já está inscrito em alguma sessão dele):
+`GET /api/alunos/me/inscricoes` (aluno) lista as próprias inscrições, já
+com sessão/evento juntados — usado tanto na tela de "minhas inscrições"
+quanto no detalhe do evento pra saber se o aluno já tá inscrito em algo ali:
 ```json
 [
   {
@@ -370,43 +326,30 @@ detalhe do evento saber se o aluno já está inscrito em alguma sessão dele):
 ]
 ```
 
-### 8.2 Gestão (ADMINISTRADOR, SECRETARIA)
-
-- `GET /api/inscricoes?eventoId=&sessaoId=&participanteId=` — filtros opcionais, sem paginação por ora (igual ao comportamento atual do frontend, que carrega tudo).
-- `POST /api/inscricoes` — inscrição manual feita pela secretaria. Body:
-  ```json
-  { "participanteId": "pa3", "sessaoId": "se2" }
-  ```
-  Mesmas regras de conflito (`JA_INSCRITO`, `SESSAO_LOTADA`) que a autoinscrição.
+**Gestão** (admin/secretaria):
+- `GET /api/inscricoes?eventoId=&sessaoId=&participanteId=` — filtros opcionais, sem paginação (igual o frontend faz hoje, carrega tudo de uma vez).
+- `POST /api/inscricoes` — inscrição manual feita pela secretaria: `{ "participanteId": "pa3", "sessaoId": "se2" }`, mesmas regras de conflito da autoinscrição.
 - `DELETE /api/inscricoes/{id}` — `204`.
 
-`ALUNO` → `403` em todos os verbos desta seção.
+Aluno toma 403 em qualquer verbo dessa parte.
 
----
+## Check-in
 
-## 9. Check-in
+Exclusivo admin/secretaria, aluno toma 403 em tudo — inclusive GET, não é
+só questão de esconder botão.
 
-Exclusivo de ADMINISTRADOR/SECRETARIA. `ALUNO` → `403` em tudo abaixo,
-inclusive `GET` (não é só "não tem botão", o endpoint em si deve recusar).
+- `GET /api/checkin/busca?termo=` — busca por nome/e-mail/RGM.
+- `GET /api/checkin/participantes/{participanteId}/inscricoes` — mesmo formato do endpoint "minhas inscrições", só que a secretaria passa o id de quem ela quer olhar.
+- `POST /api/checkin/inscricoes/{inscricaoId}/confirmar` — corpo vazio, seta `statusPresenca = PRESENTE`, `dataCheckin = now()`, `usuarioId` do token (de quem tá fazendo o check-in, não do corpo). É esse evento que libera o certificado. Retorna `200` com a inscrição atualizada.
+- `POST /api/checkin/inscricoes/{inscricaoId}/ausente` — marca `AUSENTE`, zera `dataCheckin`.
+- `GET /api/checkin/sessoes/{sessaoId}/exportar` — CSV com as mesmas colunas que o frontend já monta hoje (Nome, E-mail, RGM, Sessão, Status, Check-in). Mover isso pro backend é opcional, dá pra continuar montando no cliente a partir da lista de inscrições.
 
-- `GET /api/checkin/busca?termo=` — busca participante por nome/e-mail/RGM.
-  ```json
-  [{ "id": "pa1", "nome": "João Pedro Lima", "email": "joao.lima@aluno.ifsp.edu.br", "rgm": "2024010011" }]
-  ```
-- `GET /api/checkin/participantes/{participanteId}/inscricoes` — inscrições daquele participante, mesmo formato do §8.1 (`GET /api/alunos/me/inscricoes`), mas parametrizado por id porque quem chama é a secretaria olhando qualquer aluno, não "a si mesma".
-- `POST /api/checkin/inscricoes/{inscricaoId}/confirmar` — corpo vazio. Seta `statusPresenca = PRESENTE`, `dataCheckin = now()`, `usuarioId = <id do usuário logado que está fazendo o check-in>` (do token, não do corpo). **É esse evento que libera o certificado** (§10). Resposta `200` com a `Inscricao` atualizada.
-- `POST /api/checkin/inscricoes/{inscricaoId}/ausente` — marca `AUSENTE`, `dataCheckin = null`.
-- `GET /api/checkin/sessoes/{sessaoId}/exportar` — `Content-Type: text/csv`, mesmas colunas que o frontend já monta hoje no cliente (Nome, E-mail, RGM, Sessão, Status, Check-in). Mover essa geração pro backend é opcional — pode continuar sendo montada no frontend a partir do `GET /api/checkin/participantes/{id}/inscricoes` em lote; documentado aqui como o formato esperado caso decidam mover a geração pro servidor.
+## Certificados
 
----
+Regra central: certificado só existe se `statusPresenca == "PRESENTE"` na
+inscrição. Antes disso não tem nada pra baixar.
 
-## 10. Certificados (recurso novo)
-
-Regra de negócio central: **certificado só existe/é liberado se
-`statusPresenca == "PRESENTE"`** na inscrição correspondente. Antes disso, o
-aluno não tem nada pra baixar.
-
-`GET /api/alunos/me/certificados` — ALUNO, lista o que está disponível:
+`GET /api/alunos/me/certificados` (aluno) lista o que já tem disponível:
 ```json
 [
   {
@@ -421,24 +364,20 @@ aluno não tem nada pra baixar.
   }
 ]
 ```
-Inclui também as inscrições `PENDENTE`/`AUSENTE` com `certificadoDisponivel: false`,
-para a tela poder mostrar "presença não confirmada" em vez de simplesmente
-omitir a sessão.
+Inclui também as inscrições PENDENTE/AUSENTE com `certificadoDisponivel:
+false`, pra tela mostrar "presença não confirmada" em vez de simplesmente
+sumir com a sessão da lista.
 
-`GET /api/certificados/{inscricaoId}/download` — ALUNO, apenas se
-`inscricaoId` pertencer ao próprio `participanteId` do token.
-- Resposta `200`: `Content-Type: application/pdf`, corpo binário do certificado.
-- `403 ACESSO_NEGADO` — a inscrição existe mas é de outro participante.
-- `404 INSCRICAO_NAO_ENCONTRADA` — id inexistente.
-- `409 PRESENCA_NAO_CONFIRMADA` — inscrição existe, é do aluno, mas `statusPresenca != PRESENTE`.
+`GET /api/certificados/{inscricaoId}/download` — só se a inscrição for do
+próprio aluno (checado pelo `participanteId` do token). Devolve
+`application/pdf` em `200`. `403` se a inscrição for de outra pessoa, `404`
+se o id não existir, `409 PRESENCA_NAO_CONFIRMADA` se a presença ainda não
+foi confirmada.
 
-Geração do PDF (template, dados institucionais etc.) fica a critério de
-quem implementar — fora do escopo deste contrato, que só define o
-comportamento observável da API.
+Como o PDF é gerado (template, dados institucionais) fica por conta de quem
+implementar — aqui só importa o comportamento observável da API.
 
----
-
-## 11. Feedback
+## Feedback
 
 ```ts
 interface Feedback {
@@ -450,31 +389,15 @@ interface Feedback {
 }
 ```
 
-- `POST /api/eventos/{eventoId}/feedback` — ALUNO. Body:
-  ```json
-  { "nota": 5, "comentario": "Evento muito bem organizado." }
-  ```
-  `participanteId` vem do token, igual à inscrição — nunca do corpo.
-  - `422 VALIDACAO` — `nota` fora do intervalo 1-5, ou ausente.
-  - `409 FEEDBACK_JA_ENVIADO` — esse aluno já avaliou esse evento.
-- `GET /api/eventos/{eventoId}/feedback/me` — ALUNO, retorna o próprio
-  feedback daquele evento (`404` se ainda não enviou) — usado pra tela saber
-  se mostra o formulário ou o feedback já dado.
-- `GET /api/eventos/{eventoId}/feedback` — ADMINISTRADOR, SECRETARIA. Lista
-  todos + é usado para calcular a média (o cálculo pode continuar no
-  frontend a partir da lista, como hoje, ou o backend pode expor um campo
-  `mediaNotas` agregado — a decidir por quem implementar).
+- `POST /api/eventos/{eventoId}/feedback` (aluno) — `{ "nota": 5, "comentario": "..." }`, `participanteId` vem do token igual na inscrição. `422 VALIDACAO` se a nota estiver fora de 1-5, `409 FEEDBACK_JA_ENVIADO` se o aluno já avaliou esse evento.
+- `GET /api/eventos/{eventoId}/feedback/me` (aluno) — o próprio feedback daquele evento, `404` se ainda não mandou. Serve pra tela decidir entre mostrar o form ou o feedback já dado.
+- `GET /api/eventos/{eventoId}/feedback` (admin/secretaria) — lista tudo, usado pra calcular a média (pode ficar no frontend a partir da lista, como é hoje, ou o backend já manda um `mediaNotas` pronto — tanto faz).
 
-`ALUNO` → `403` em `GET /api/eventos/{eventoId}/feedback` (visão agregada é
-só de gestão).
+Aluno toma 403 nessa listagem agregada.
 
----
+## Dashboard
 
-## 12. Dashboard
-
-Exclusivo de ADMINISTRADOR/SECRETARIA. `ALUNO` → `403`.
-
-`GET /api/dashboard/estatisticas`
+`GET /api/dashboard/estatisticas`, admin/secretaria only:
 ```json
 {
   "totalEventos": 2,
@@ -485,12 +408,9 @@ Exclusivo de ADMINISTRADOR/SECRETARIA. `ALUNO` → `403`.
 }
 ```
 
----
+## Formato de erro
 
-## 13. Formato padrão de erro
-
-Todo erro (qualquer status 4xx/5xx) segue o mesmo envelope:
-
+Todo erro segue o mesmo formato:
 ```json
 {
   "timestamp": "2026-08-25T14:32:00-03:00",
@@ -501,8 +421,7 @@ Todo erro (qualquer status 4xx/5xx) segue o mesmo envelope:
 }
 ```
 
-Para `422` (validação de campos), inclui detalhamento por campo:
-
+Pra 422, com detalhe por campo:
 ```json
 {
   "timestamp": "2026-08-25T14:32:00-03:00",
@@ -517,46 +436,41 @@ Para `422` (validação de campos), inclui detalhamento por campo:
 }
 ```
 
-### Códigos usados neste documento
+Códigos usados neste documento:
 
 | Status | code | Significado |
 |---|---|---|
 | 401 | `NAO_AUTENTICADO` | token ausente, inválido ou expirado |
 | 401 | `CREDENCIAIS_INVALIDAS` | login/senha incorretos |
-| 403 | `ACESSO_NEGADO` | autenticado, mas perfil sem permissão para o recurso |
+| 403 | `ACESSO_NEGADO` | autenticado, mas sem permissão pro recurso |
 | 404 | `*_NAO_ENCONTRADO(A)` | id não existe |
 | 409 | `RGM_DUPLICADO` / `EMAIL_DUPLICADO` | conflito de unicidade no cadastro |
 | 409 | `JA_INSCRITO` | inscrição duplicada na mesma sessão |
 | 409 | `SESSAO_LOTADA` | capacidade da sala esgotada |
 | 409 | `FEEDBACK_JA_ENVIADO` | feedback duplicado pro mesmo evento |
-| 409 | `PRESENCA_NAO_CONFIRMADA` | tentativa de baixar certificado sem check-in |
-| 422 | `VALIDACAO` | corpo da requisição com campo inválido/ausente |
+| 409 | `PRESENCA_NAO_CONFIRMADA` | tentou baixar certificado sem check-in |
+| 422 | `VALIDACAO` | campo inválido/ausente no corpo |
 
-`401` sempre que o token estiver ausente/expirado/inválido — antes de
-qualquer verificação de perfil. `403` só depois de confirmar que o token é
-válido mas o perfil não tem permissão. Não misturar os dois (não retornar
-`404` pra esconder um `403` neste projeto — não há esse requisito de
-sigilo de existência de recurso aqui).
+401 é sempre token ausente/inválido/expirado, antes de qualquer checagem de
+perfil. 403 só depois de confirmar que o token é válido mas o perfil não
+tem permissão — não misturar os dois, e não usar 404 pra esconder um 403
+(esse projeto não tem esse tipo de exigência de sigilo).
 
----
-
-## 14. Resumo do que muda no modelo de dados atual
+## O que muda no modelo atual
 
 | Entidade | Mudança |
 |---|---|
-| `Usuario` | novo perfil `ALUNO`; novos campos `rgm` (nullable, só ALUNO) e `participanteId` (nullable, só ALUNO) |
-| `Sessao` | novos campos obrigatórios: `palestranteId`, `tema`, `cargaHoraria` |
-| `Inscricao` | novo campo `dataInscricao` |
-| `Trabalho` | **removido** (entidade, tabela e endpoints) |
-| `Certificado` | recurso novo, não é uma tabela obrigatória — pode ser derivado de `Inscricao` (presença confirmada) + geração sob demanda, ou persistido, a critério de quem implementar |
+| `Usuario` | perfil novo `ALUNO`; campos novos `rgm` e `participanteId` (nullable, só ALUNO) |
+| `Sessao` | campos novos obrigatórios: `palestranteId`, `tema`, `cargaHoraria` |
+| `Inscricao` | campo novo `dataInscricao` |
+| `Trabalho` | removido — entidade, tabela e endpoints |
+| `Certificado` | recurso novo, não precisa ser tabela — pode derivar de Inscrição + presença confirmada, ou ser persistido, como preferir |
 
----
+## Coisa que ainda não decidimos
 
-## 15. Em aberto (decisões de quem implementar o backend)
-
-- Política de força de senha exata (definimos só "mínimo 8 caracteres" como piso).
-- Formato/validação do domínio de e-mail institucional (ex: exigir `@aluno.ifsp.edu.br`?).
-- Provisionamento de contas `ADMINISTRADOR`/`SECRETARIA` (não há tela para isso hoje).
-- Se `mediaNotas` do evento é calculada no backend ou no frontend a partir da lista de feedbacks.
-- Se a geração de CSV de presença migra pro backend ou continua sendo montada no frontend a partir dos dados já retornados pelo check-in.
+- Política exata de senha (só definimos "8 caracteres" como piso).
+- Se o e-mail institucional precisa bater com um domínio específico tipo `@aluno.ifsp.edu.br`.
+- Como fica o provisionamento de conta admin/secretaria (não existe tela pra isso ainda).
+- Se `mediaNotas` do evento é calculado no backend ou no frontend.
+- Se a exportação de CSV de presença migra pro backend ou continua no cliente.
 - Template/geração do PDF do certificado.

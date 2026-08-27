@@ -1,5 +1,12 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import type { Perfil } from "../types";
+
+const PERFIL_LABEL: Record<Perfil, string> = {
+  ADMINISTRADOR: "Administrador",
+  SECRETARIA: "Secretaria",
+  ALUNO: "Aluno",
+};
 
 const NAV_ITEMS = [
   { to: "/", label: "Dashboard", end: true },
@@ -45,7 +52,7 @@ export function Layout() {
           <div className="topbar-user">
             <div className="topbar-user-info">
               <strong>{usuario?.nome}</strong>
-              <span>{usuario?.perfil === "ADMINISTRADOR" ? "Administrador" : "Secretaria"}</span>
+              <span>{usuario ? PERFIL_LABEL[usuario.perfil] : ""}</span>
             </div>
             <button className="btn btn-ghost" onClick={logout}>
               Sair

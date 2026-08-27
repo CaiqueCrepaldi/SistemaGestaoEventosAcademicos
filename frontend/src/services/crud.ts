@@ -65,7 +65,7 @@ function createHttpCrudService<T extends { id: string }>(resource: string): Crud
   };
 }
 
-// `key` é a chave do localStorage no modo mock e o path REST no modo integrado (ex: "eventos" -> /eventos).
+// key dobra de função: chave do localStorage no mock, path do recurso no modo http
 export function createCrudService<T extends { id: string }>(key: string, seed: T[]): CrudService<T> {
   return USE_MOCK ? createLocalCrudService<T>(key, seed) : createHttpCrudService<T>(key);
 }

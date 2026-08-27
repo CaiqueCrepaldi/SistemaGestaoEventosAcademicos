@@ -23,8 +23,7 @@ const localEmailService: EmailService = {
   },
 };
 
-// Modo integrado: o backend já envia o e-mail como efeito colateral do POST de
-// inscrição (docs/api-contract.md §8.1) — o frontend não precisa chamar nada.
+// backend já dispara o e-mail junto com o POST de inscrição, então aqui não tem o que fazer
 const httpEmailService: EmailService = {
   async enviarConfirmacaoInscricao() {
     return undefined;
