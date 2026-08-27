@@ -65,6 +65,7 @@ export function LoginPage() {
           <strong>Contas de demonstração</strong>
           <span>Administrador: admin@ifsp.edu.br / admin123</span>
           <span>Secretaria: secretaria@ifsp.edu.br / secretaria123</span>
+          <span>Aluno: aluno@aluno.ifsp.edu.br / aluno123</span>
         </div>
       </div>
     </div>

@@ -497,6 +497,24 @@ h1, h2, h3 {
   background: var(--blue-50);
 }
 
+.simple-list-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.certificate {
+  text-align: center;
+  padding: 24px 16px;
+  border: 1px solid var(--gray-100);
+  border-radius: 8px;
+}
+
+.certificate h2 {
+  margin: 8px 0;
+}
+
 .simple-list li:not(.simple-list-item) {
   padding: 10px 12px;
   border-bottom: 1px solid var(--gray-100);

@@ -4,9 +4,11 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 import { AgendaPage } from "./pages/Agenda/AgendaPage";
 import { CadastroPage } from "./pages/Cadastro/CadastroPage";
+import { CertificadosPage } from "./pages/Certificados/CertificadosPage";
 import { CheckinPage } from "./pages/Checkin/CheckinPage";
 import { DashboardPage } from "./pages/Dashboard/DashboardPage";
 import { EsqueciSenhaPage } from "./pages/EsqueciSenha/EsqueciSenhaPage";
+import { EventoDetalhePage } from "./pages/Eventos/EventoDetalhePage";
 import { EventosPage } from "./pages/Eventos/EventosPage";
 import { FeedbackPage } from "./pages/Feedback/FeedbackPage";
 import { InscricoesPage } from "./pages/Inscricoes/InscricoesPage";
@@ -27,17 +29,23 @@ export function App() {
           <Route path="/esqueci-senha" element={<EsqueciSenhaPage />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
-              <Route path="/" element={<DashboardPage />} />
-              <Route path="/eventos" element={<EventosPage />} />
-              <Route path="/sessoes" element={<SessoesPage />} />
-              <Route path="/salas" element={<SalasPage />} />
-              <Route path="/palestrantes" element={<PalestrantesPage />} />
-              <Route path="/participantes" element={<ParticipantesPage />} />
-              <Route path="/inscricoes" element={<InscricoesPage />} />
-              <Route path="/checkin" element={<CheckinPage />} />
-              <Route path="/agenda" element={<AgendaPage />} />
-              <Route path="/trabalhos" element={<TrabalhosPage />} />
-              <Route path="/feedback" element={<FeedbackPage />} />
+              <Route element={<ProtectedRoute perfis={["ADMINISTRADOR", "SECRETARIA", "ALUNO"]} />}>
+                <Route path="/eventos" element={<EventosPage />} />
+                <Route path="/eventos/:id" element={<EventoDetalhePage />} />
+                <Route path="/palestrantes" element={<PalestrantesPage />} />
+                <Route path="/agenda" element={<AgendaPage />} />
+                <Route path="/certificados" element={<CertificadosPage />} />
+                <Route path="/feedback" element={<FeedbackPage />} />
+              </Route>
+              <Route element={<ProtectedRoute perfis={["ADMINISTRADOR", "SECRETARIA"]} />}>
+                <Route path="/" element={<DashboardPage />} />
+                <Route path="/sessoes" element={<SessoesPage />} />
+                <Route path="/salas" element={<SalasPage />} />
+                <Route path="/participantes" element={<ParticipantesPage />} />
+                <Route path="/inscricoes" element={<InscricoesPage />} />
+                <Route path="/checkin" element={<CheckinPage />} />
+                <Route path="/trabalhos" element={<TrabalhosPage />} />
+              </Route>
             </Route>
           </Route>
         </Routes>

@@ -8,22 +8,27 @@ const PERFIL_LABEL: Record<Perfil, string> = {
   ALUNO: "Aluno",
 };
 
-const NAV_ITEMS = [
-  { to: "/", label: "Dashboard", end: true },
-  { to: "/eventos", label: "Eventos" },
-  { to: "/sessoes", label: "Sessões" },
-  { to: "/salas", label: "Salas" },
-  { to: "/palestrantes", label: "Palestrantes" },
-  { to: "/participantes", label: "Participantes" },
-  { to: "/inscricoes", label: "Inscrições" },
-  { to: "/checkin", label: "Check-in" },
-  { to: "/agenda", label: "Agenda" },
-  { to: "/trabalhos", label: "Trabalhos" },
-  { to: "/feedback", label: "Feedback" },
+const TODOS_PERFIS: Perfil[] = ["ADMINISTRADOR", "SECRETARIA", "ALUNO"];
+const EQUIPE: Perfil[] = ["ADMINISTRADOR", "SECRETARIA"];
+
+const NAV_ITEMS: { to: string; label: string; end?: boolean; perfis: Perfil[] }[] = [
+  { to: "/", label: "Dashboard", end: true, perfis: EQUIPE },
+  { to: "/eventos", label: "Eventos", perfis: TODOS_PERFIS },
+  { to: "/sessoes", label: "Sessões", perfis: EQUIPE },
+  { to: "/salas", label: "Salas", perfis: EQUIPE },
+  { to: "/palestrantes", label: "Palestrantes", perfis: TODOS_PERFIS },
+  { to: "/participantes", label: "Participantes", perfis: EQUIPE },
+  { to: "/inscricoes", label: "Inscrições", perfis: EQUIPE },
+  { to: "/checkin", label: "Check-in", perfis: EQUIPE },
+  { to: "/agenda", label: "Agenda", perfis: TODOS_PERFIS },
+  { to: "/trabalhos", label: "Trabalhos", perfis: EQUIPE },
+  { to: "/certificados", label: "Certificados", perfis: TODOS_PERFIS },
+  { to: "/feedback", label: "Feedback", perfis: TODOS_PERFIS },
 ];
 
 export function Layout() {
   const { usuario, logout } = useAuth();
+  const menuItens = NAV_ITEMS.filter((item) => !usuario || item.perfis.includes(usuario.perfil));
 
   return (
     <div className="app-shell">
@@ -33,7 +38,7 @@ export function Layout() {
           <span className="sidebar-brand-sub">Gestão de Eventos Acadêmicos</span>
         </div>
         <nav className="sidebar-nav">
-          {NAV_ITEMS.map((item) => (
+          {menuItens.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

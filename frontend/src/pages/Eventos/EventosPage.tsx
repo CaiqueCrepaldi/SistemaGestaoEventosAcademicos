@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
 import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
@@ -88,6 +89,9 @@ export function EventosPage() {
                   )}
                 </td>
                 <td className="table-actions">
+                  <Link className="btn btn-ghost" to={`/eventos/${evento.id}`}>
+                    Ver detalhes
+                  </Link>
                   <button className="btn btn-ghost" onClick={() => abrirEdicao(evento)}>
                     Editar
                   </button>
