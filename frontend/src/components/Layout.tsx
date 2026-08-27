@@ -21,7 +21,6 @@ const NAV_ITEMS: { to: string; label: string; end?: boolean; perfis: Perfil[] }[
   { to: "/inscricoes", label: "Inscrições", perfis: EQUIPE },
   { to: "/checkin", label: "Check-in", perfis: EQUIPE },
   { to: "/agenda", label: "Agenda", perfis: TODOS_PERFIS },
-  { to: "/trabalhos", label: "Trabalhos", perfis: EQUIPE },
   { to: "/certificados", label: "Certificados", perfis: TODOS_PERFIS },
   { to: "/feedback", label: "Feedback", perfis: TODOS_PERFIS },
 ];

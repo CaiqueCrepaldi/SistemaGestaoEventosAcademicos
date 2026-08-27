@@ -59,17 +59,6 @@ export interface Inscricao {
   usuarioId: string | null;
 }
 
-export type StatusTrabalho = "PENDENTE" | "APROVADO" | "REJEITADO";
-
-export interface Trabalho {
-  id: string;
-  titulo: string;
-  resumo: string;
-  arquivo: string;
-  autorId: string;
-  statusAvaliacao: StatusTrabalho;
-}
-
 export interface Feedback {
   id: string;
   eventoId: string;

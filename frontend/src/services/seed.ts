@@ -6,7 +6,6 @@ import type {
   Participante,
   Sala,
   Sessao,
-  Trabalho,
   Usuario,
 } from "../types";
 
@@ -124,25 +123,6 @@ export const inscricoesSeed: Inscricao[] = [
   { id: "i2", participanteId: "pa2", sessaoId: "se1", statusPresenca: "PENDENTE", dataCheckin: null, usuarioId: null },
   { id: "i3", participanteId: "pa3", sessaoId: "se2", statusPresenca: "PENDENTE", dataCheckin: null, usuarioId: null },
   { id: "i4", participanteId: "pa1", sessaoId: "se2", statusPresenca: "AUSENTE", dataCheckin: null, usuarioId: null },
-];
-
-export const trabalhosSeed: Trabalho[] = [
-  {
-    id: "t1",
-    titulo: "Aplicação de Redes Neurais na Predição de Evasão Escolar",
-    resumo: "Estudo sobre o uso de modelos preditivos para identificar risco de evasão escolar.",
-    arquivo: "trabalho-evasao-escolar.pdf",
-    autorId: "pa3",
-    statusAvaliacao: "APROVADO",
-  },
-  {
-    id: "t2",
-    titulo: "Sistema de Recomendação para Bibliotecas Acadêmicas",
-    resumo: "Proposta de sistema de recomendação de acervos baseado em histórico de empréstimos.",
-    arquivo: "trabalho-recomendacao-biblioteca.pdf",
-    autorId: "pa2",
-    statusAvaliacao: "PENDENTE",
-  },
 ];
 
 export const feedbacksSeed: Feedback[] = [

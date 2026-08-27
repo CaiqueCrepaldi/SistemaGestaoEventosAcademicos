@@ -17,7 +17,6 @@ import { PalestrantesPage } from "./pages/Palestrantes/PalestrantesPage";
 import { ParticipantesPage } from "./pages/Participantes/ParticipantesPage";
 import { SalasPage } from "./pages/Salas/SalasPage";
 import { SessoesPage } from "./pages/Sessoes/SessoesPage";
-import { TrabalhosPage } from "./pages/Trabalhos/TrabalhosPage";
 
 export function App() {
   return (
@@ -44,7 +43,6 @@ export function App() {
                 <Route path="/participantes" element={<ParticipantesPage />} />
                 <Route path="/inscricoes" element={<InscricoesPage />} />
                 <Route path="/checkin" element={<CheckinPage />} />
-                <Route path="/trabalhos" element={<TrabalhosPage />} />
               </Route>
             </Route>
           </Route>

@@ -372,19 +372,6 @@ h1, h2, h3 {
   gap: 14px;
 }
 
-.field-row-inline {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.field-row-inline select {
-  border: 1px solid var(--gray-300);
-  border-radius: 6px;
-  padding: 4px 6px;
-  font-size: 12px;
-}
-
 .search-input {
   width: 100%;
   border: 1px solid var(--gray-300);
@@ -445,10 +432,6 @@ h1, h2, h3 {
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 20px 40px rgba(15, 23, 42, 0.25);
-}
-
-.modal-wide {
-  max-width: 600px;
 }
 
 .modal-header {
