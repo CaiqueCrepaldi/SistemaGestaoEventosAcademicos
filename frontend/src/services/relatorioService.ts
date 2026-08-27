@@ -45,7 +45,9 @@ async function estatisticasGerais(): Promise<EstatisticasGerais> {
 export interface SessaoAgenda {
   id: string;
   titulo: string;
+  tema: string;
   horario: string;
+  salaId: string;
   salaNome: string;
   eventoNome: string;
   inscritos: number;
@@ -68,7 +70,9 @@ async function agendaPorEvento(eventoId: string): Promise<SessaoAgenda[]> {
       return {
         id: sessao.id,
         titulo: sessao.titulo,
+        tema: sessao.tema ?? "",
         horario: sessao.horario,
+        salaId: sessao.salaId,
         salaNome: sala?.nome ?? "—",
         eventoNome: evento?.nome ?? "—",
         inscritos: inscricoes.filter((i) => i.sessaoId === sessao.id).length,
