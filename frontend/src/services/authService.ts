@@ -162,7 +162,7 @@ const httpAuthService: AuthService = {
     return { ...res.usuario, token: res.token };
   },
   cadastrarAluno(dados) {
-    return api.post<void>("/auth/cadastro", dados);
+    return api.post<void>("/auth/registro", dados);
   },
   solicitarRecuperacaoSenha(identificador) {
     return api.post<SolicitarRecuperacaoResult>("/auth/recuperacao-senha", { identificador });
