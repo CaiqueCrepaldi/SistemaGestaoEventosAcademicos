@@ -9,6 +9,9 @@ import {
   salasSeed,
 } from "./seed";
 
+// Um serviço CRUD pronto por entidade — é o que toda página importa pra
+// listar/criar/editar/excluir (ex.: eventoService.list(), salaService.create(...)).
+//
 // "eventos", "inscricoes" e "feedbacks" ganharam storageKey com sufixo "-v2":
 // o formato salvo em localStorage mudou de forma incompatível com a versão anterior
 // (fusão de Evento+Sessão e renomeação de sessaoId para eventoId), então usamos uma

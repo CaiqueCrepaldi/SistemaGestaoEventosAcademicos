@@ -1,6 +1,10 @@
 import { ApiError, USE_MOCK, api } from "./api";
 import { delay, loadCollection, newId, saveCollection } from "./storage";
 
+// Contrato genérico de CRUD que toda entidade simples (Evento, Sala,
+// Palestrante, Participante, Inscrição, Feedback) usa. Cada página chama
+// só esses 5 métodos — não importa se por baixo é localStorage ou uma API
+// de verdade.
 export interface CrudService<T> {
   list(): Promise<T[]>;
   get(id: string): Promise<T | undefined>;
@@ -9,6 +13,10 @@ export interface CrudService<T> {
   remove(id: string): Promise<void>;
 }
 
+// Implementação "de mentira" que guarda tudo em localStorage. `cache` é o
+// array em memória — é carregado uma vez (loadCollection) e depois cada
+// operação atualiza tanto o cache quanto o localStorage, pra manter os dois
+// sincronizados.
 function createLocalCrudService<T extends { id: string }>(key: string, seed: T[]): CrudService<T> {
   let cache = loadCollection<T>(key, seed);
 
@@ -40,6 +48,9 @@ function createLocalCrudService<T extends { id: string }>(key: string, seed: T[]
   };
 }
 
+// Implementação real, que fala com o backend Java via HTTP. Cada método é
+// só um espelho de um verbo REST — a lógica de fato (validação, permissão
+// por perfil etc.) mora no servidor, não aqui.
 function createHttpCrudService<T extends { id: string }>(resource: string): CrudService<T> {
   return {
     list() {
@@ -49,6 +60,8 @@ function createHttpCrudService<T extends { id: string }>(resource: string): Crud
       try {
         return await api.get<T>(`/${resource}/${id}`);
       } catch (e) {
+        // 404 aqui não é erro de verdade pra quem chamou — só significa
+        // "não achei esse registro", então vira `undefined` em vez de throw.
         if (e instanceof ApiError && e.status === 404) return undefined;
         throw e;
       }
@@ -74,5 +87,7 @@ export function createCrudService<T extends { id: string }>(
   seed: T[],
   storageKey: string = key,
 ): CrudService<T> {
+  // A troca entre mock e HTTP acontece uma única vez aqui, na criação do
+  // serviço — cada página nem sabe qual dos dois está usando por baixo.
   return USE_MOCK ? createLocalCrudService<T>(storageKey, seed) : createHttpCrudService<T>(key);
 }

@@ -22,6 +22,10 @@ export function PalestrantesPage() {
     setPalestrantes(await palestranteService.list());
   }
 
+  // Aqui é onde a tela se divide por perfil: se for ALUNO, a função já
+  // retorna (return antecipado) uma versão simples e somente-leitura da
+  // tela, sem chegar nas funções de abrir modal/salvar/excluir mais abaixo.
+  // Só ADMINISTRADOR/SECRETARIA chegam até a versão completa com CRUD.
   if (usuario?.perfil === "ALUNO") {
     return (
       <div>
@@ -54,6 +58,8 @@ export function PalestrantesPage() {
     setModalAberto(true);
   }
 
+  // if/else clássico: com `editando` preenchido é edição (update), vazio é
+  // cadastro novo (create) — mesmo formulário e botão pros dois casos.
   async function salvar() {
     if (editando) {
       await palestranteService.update(editando.id, form);

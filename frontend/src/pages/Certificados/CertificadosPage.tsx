@@ -6,6 +6,8 @@ import type { Evento } from "../../types";
 
 export function CertificadosPage() {
   const { usuario } = useAuth();
+  // Boolean calculado uma vez e reaproveitado embaixo — evita repetir a
+  // mesma comparação de perfil várias vezes pela página.
   const isEquipe = usuario?.perfil === "ADMINISTRADOR" || usuario?.perfil === "SECRETARIA";
 
   const [certificados, setCertificados] = useState<CertificadoDisponivel[]>([]);
@@ -16,6 +18,9 @@ export function CertificadosPage() {
     void carregar();
   }, [usuario?.id]);
 
+  // if/else por perfil: equipe carrega TODOS os certificados (de qualquer
+  // participante) mais a lista de eventos pro filtro; aluno carrega só os
+  // certificados dele mesmo (usando o participanteId da própria conta).
   async function carregar() {
     if (isEquipe) {
       const [c, e] = await Promise.all([certificadoService.listarTodosCertificados(), eventoService.list()]);
@@ -28,11 +33,16 @@ export function CertificadosPage() {
 
   const filtrados = certificados.filter((c) => !filtroEventoId || c.eventoId === filtroEventoId);
 
+  // Divisão por perfil na renderização: aluno vê uma lista simples (sem
+  // filtro, sem tabela) com botão de emitir; só quem não é aluno (isEquipe)
+  // chega na versão com filtro por evento e tabela completa, mais abaixo.
   if (!isEquipe) {
     return (
       <div>
         <PageHeader title="Certificados" subtitle="Certificados de participação disponíveis para emissão" />
         <div className="card">
+          {/* Lista vazia → mensagem explicando por que ainda não tem certificado;
+              lista com itens → mostra cada um com o botão de emitir. */}
           {certificados.length === 0 ? (
             <p className="empty-cell">
               Você ainda não possui certificados. Os certificados são liberados após a confirmação de presença.

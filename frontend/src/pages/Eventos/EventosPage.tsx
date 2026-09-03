@@ -53,6 +53,9 @@ export function EventosPage() {
     setInscricoes(i);
   }
 
+  // Chamado pelo botão "Inscrever-se". Guarda de segurança: se por algum
+  // motivo quem clicou não tiver participanteId (não deveria acontecer,
+  // já que só ALUNO vê esse botão), avisa e não deixa continuar.
   async function inscreverSe(evento: Evento) {
     if (!usuario?.participanteId) {
       setAvisoPorEvento((prev) => ({ ...prev, [evento.id]: "Disponível apenas para contas de aluno." }));
@@ -60,6 +63,9 @@ export function EventosPage() {
     }
 
     try {
+      // Passo 1: cria a inscrição. Passo 2: dispara o e-mail de
+      // confirmação. Os dois são chamadas separadas de propósito — se o
+      // e-mail falhar, a inscrição já criada no passo 1 continua valendo.
       const nova = await inscricaoAlunoService.inscrever(usuario.participanteId, evento.id);
       setInscricoes((prev) => [...prev, nova]);
 
@@ -69,11 +75,17 @@ export function EventosPage() {
         [evento.id]: `Inscrição confirmada. E-mail de confirmação enviado para ${destinatario}.`,
       }));
     } catch (e) {
+      // Erros esperados (já inscrito, sem vaga) chegam como ApiError com
+      // mensagem pronta pra mostrar; qualquer outro erro cai numa mensagem genérica.
       const mensagem = e instanceof ApiError ? e.message : "Não foi possível concluir a inscrição.";
       setAvisoPorEvento((prev) => ({ ...prev, [evento.id]: mensagem }));
     }
   }
 
+  // Divisão por perfil: ALUNO recebe aqui embaixo uma lista somente-leitura
+  // com botão de inscrição embutido, e a função já retorna sem chegar nas
+  // funções de cadastro (abrirNovo, salvar, excluir) mais abaixo. Só
+  // ADMINISTRADOR/SECRETARIA passam dessa checagem e veem a tela com CRUD completo.
   if (usuario?.perfil === "ALUNO") {
     return (
       <div>
@@ -83,6 +95,9 @@ export function EventosPage() {
             {eventos.map((evento) => {
               const sala = salas.find((s) => s.id === evento.salaId);
               const palestrante = palestrantes.find((p) => p.id === evento.palestranteId);
+              // Boolean que decide se o botão mostra "Inscrever-se" (ainda
+              // pode) ou "Inscrito"/desabilitado (já está na lista) — true
+              // se já existir uma inscrição desse aluno pra esse evento.
               const jaInscrito = inscricoes.some(
                 (i) => i.participanteId === usuario?.participanteId && i.eventoId === evento.id,
               );
@@ -145,20 +160,29 @@ export function EventosPage() {
     setModalAberto(true);
   }
 
+  // As três funções abaixo mexem na lista de perguntas do questionário
+  // dentro do formulário (form.perguntas é um array de strings).
+
+  // Adiciona uma pergunta em branco no fim da lista, pra digitar.
   function adicionarPergunta() {
     setForm({ ...form, perguntas: [...form.perguntas, ""] });
   }
 
+  // Atualiza só a pergunta do índice digitado, mantendo as outras iguais.
   function atualizarPergunta(indice: number, valor: string) {
     setForm({ ...form, perguntas: form.perguntas.map((p, i) => (i === indice ? valor : p)) });
   }
 
+  // Remove a pergunta daquele índice da lista.
   function removerPergunta(indice: number) {
     setForm({ ...form, perguntas: form.perguntas.filter((_, i) => i !== indice) });
   }
 
   async function salvar() {
+    // Antes de salvar, tira espaços em branco de cada pergunta e descarta
+    // as que ficaram vazias — evita salvar pergunta "em branco" por engano.
     const dados = { ...form, perguntas: form.perguntas.map((p) => p.trim()).filter(Boolean) };
+    // if/else: editando preenchido → update; vazio → create.
     if (editando) {
       await eventoService.update(editando.id, dados);
     } else {

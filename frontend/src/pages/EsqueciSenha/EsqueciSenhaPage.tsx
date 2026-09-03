@@ -2,6 +2,9 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { authService } from "../../services/authService";
 
+// Fluxo em duas etapas: primeiro pede o e-mail/RGM (etapa "identificar"),
+// depois pede o código recebido + a nova senha (etapa "confirmar"). Só uma
+// das duas telas aparece por vez, controlado pelo estado `etapa`.
 export function EsqueciSenhaPage() {
   const navigate = useNavigate();
   const [etapa, setEtapa] = useState<"identificar" | "confirmar">("identificar");
@@ -13,6 +16,9 @@ export function EsqueciSenhaPage() {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
+  // Etapa 1: pede pro backend gerar um código de recuperação. Em modo mock
+  // o código também volta na resposta (codigoDemo) só pra facilitar teste
+  // — em produção isso não existiria, o código só chegaria por e-mail.
   async function solicitarCodigo(e: FormEvent) {
     e.preventDefault();
     setErro(null);
@@ -28,10 +34,13 @@ export function EsqueciSenhaPage() {
     }
   }
 
+  // Etapa 2: confirma o código recebido e troca a senha de uma vez só.
   async function confirmarNovaSenha(e: FormEvent) {
     e.preventDefault();
     setErro(null);
 
+    // Confere localmente antes de gastar uma chamada ao backend — se as
+    // duas senhas digitadas forem diferentes, nem tenta confirmar.
     if (novaSenha !== confirmarSenha) {
       setErro("As senhas não coincidem.");
       return;

@@ -11,6 +11,9 @@ interface EmailService {
   enviarConfirmacaoInscricao(inscricao: Inscricao): Promise<ConfirmacaoEmailResult>;
 }
 
+// Chamado logo depois que a inscrição é criada (ver inscricaoAlunoService.ts
+// e EventosPage.tsx). No mock não existe servidor de e-mail de verdade —
+// só busca o e-mail do participante e escreve no console, pra simular o envio.
 const localEmailService: EmailService = {
   async enviarConfirmacaoInscricao(inscricao) {
     const participante = await participanteService.get(inscricao.participanteId);
@@ -21,6 +24,9 @@ const localEmailService: EmailService = {
   },
 };
 
+// No backend real, quem resolve o e-mail do participante e manda a
+// mensagem (via JavaMailSender) é o servidor — o frontend só avisa qual
+// inscrição confirmar.
 const httpEmailService: EmailService = {
   enviarConfirmacaoInscricao(inscricao) {
     return api.post<ConfirmacaoEmailResult>(`/inscricoes/${inscricao.id}/confirmacao-email`, {});

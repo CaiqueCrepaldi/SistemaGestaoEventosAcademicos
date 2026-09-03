@@ -16,22 +16,29 @@ export function SalasPage() {
     void carregar();
   }, []);
 
+  // Busca a lista atualizada de salas — chamado no carregamento da página
+  // e de novo depois de qualquer criar/editar/excluir.
   async function carregar() {
     setSalas(await salaService.list());
   }
 
+  // Abre o modal em branco, pronto pra cadastrar uma sala nova.
   function abrirNovo() {
     setEditando(null);
     setForm(VAZIO);
     setModalAberto(true);
   }
 
+  // Abre o modal já preenchido com os dados da sala clicada em "Editar".
   function abrirEdicao(sala: Sala) {
     setEditando(sala);
     setForm({ nome: sala.nome, capacidade: sala.capacidade });
     setModalAberto(true);
   }
 
+  // Um botão só de "Salvar" serve tanto pra criar quanto editar: se
+  // `editando` tiver algo, é update; senão, é create. É esse mesmo padrão
+  // if/else que se repete em todas as telas de cadastro do sistema.
   async function salvar() {
     if (editando) {
       await salaService.update(editando.id, form);
@@ -42,6 +49,9 @@ export function SalasPage() {
     await carregar();
   }
 
+  // window.confirm mostra o alerta nativo do navegador pra confirmar a
+  // exclusão; se a pessoa clicar "Cancelar", a função para aqui e nada é
+  // removido.
   async function excluir(id: string) {
     if (!confirm("Remover esta sala?")) return;
     await salaService.remove(id);

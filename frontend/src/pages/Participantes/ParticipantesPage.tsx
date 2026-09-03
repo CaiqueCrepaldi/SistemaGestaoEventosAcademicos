@@ -33,6 +33,7 @@ export function ParticipantesPage() {
     setModalAberto(true);
   }
 
+  // if/else: `editando` preenchido → update; vazio → create.
   async function salvar() {
     if (editando) {
       await participanteService.update(editando.id, form);
@@ -49,6 +50,9 @@ export function ParticipantesPage() {
     await carregar();
   }
 
+  // Filtro de busca aplicado na lista já carregada (não faz nova chamada
+  // ao service a cada tecla) — campo de busca vazio mostra todo mundo;
+  // preenchido, compara com nome, e-mail e RGM ao mesmo tempo.
   const filtrados = participantes.filter((p) => {
     const alvo = busca.trim().toLowerCase();
     if (!alvo) return true;

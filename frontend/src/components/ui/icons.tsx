@@ -1,5 +1,9 @@
 import type { SVGProps } from "react";
 
+// Ícones do menu principal, desenhados à mão em SVG (sem depender de
+// nenhuma biblioteca de ícones externa). `Icon` é a base compartilhada —
+// define tamanho/traço padrão — e cada função abaixo só desenha as formas
+// (retângulos, linhas, círculos) específicas daquele ícone.
 function Icon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg

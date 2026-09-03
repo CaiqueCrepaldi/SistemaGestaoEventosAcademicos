@@ -18,6 +18,10 @@ function badgeLabel(status: StatusPresenca): string {
   return "Pendente";
 }
 
+// Truque padrão pra baixar um arquivo gerado em memória (sem backend):
+// transforma o texto num Blob, cria uma URL temporária pra ele, simula um
+// clique num link invisível apontando pra essa URL, e por fim libera a
+// URL da memória (ela já cumpriu a função).
 function baixarCsv(nomeArquivo: string, conteudo: string) {
   const blob = new Blob([conteudo], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -45,15 +49,22 @@ export function CheckinPage() {
     });
   }, []);
 
+  // Toda vez que `termo` muda (o campo de busca), refaz a busca — é isso
+  // que dá o efeito de "busca em tempo real", a cada tecla digitada.
   useEffect(() => {
     void checkinService.buscarParticipantes(termo).then(setResultados);
   }, [termo]);
 
+  // Clicou num resultado da busca: guarda ele como selecionado e carrega
+  // as inscrições dessa pessoa na tabela ao lado.
   async function selecionar(participante: Participante) {
     setSelecionado(participante);
     setInscricoes(await checkinService.listarInscricoesDoParticipante(participante.id));
   }
 
+  // Confirma presença; `if (!usuario) return` é só uma guarda de
+  // segurança (não deveria acontecer, já que essa tela exige login), e no
+  // fim recarrega a tabela pra já mostrar o status atualizado.
   async function confirmar(inscricaoId: string) {
     if (!usuario) return;
     await checkinService.confirmarPresenca(inscricaoId, usuario.id);

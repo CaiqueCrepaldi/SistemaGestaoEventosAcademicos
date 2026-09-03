@@ -7,8 +7,14 @@ interface ModalProps {
   wide?: boolean;
 }
 
+// Janela modal genérica usada por toda tela de cadastro/edição (Eventos,
+// Salas, Palestrantes etc.) — cada página só passa o formulário como
+// `children`, a estrutura visual (fundo escurecido, cabeçalho com X) é
+// sempre a mesma.
 export function Modal({ title, onClose, children, wide }: ModalProps) {
   return (
+    // onMouseDown no fundo fecha o modal; stopPropagation no conteúdo
+    // impede que um clique dentro do modal feche ele por engano.
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div
         className={"modal" + (wide ? " modal-wide" : "")}

@@ -5,6 +5,8 @@ import { eventoService, inscricaoService, salaService } from "../../services";
 import { relatorioService, type EstatisticasGerais } from "../../services/relatorioService";
 import type { Evento, Sala } from "../../types";
 
+// Formato de cada linha da tabela "Eventos" do dashboard — já com o nome da
+// sala e as contagens prontas, pra não recalcular isso no JSX.
 interface LinhaEvento {
   evento: Evento;
   salaNome: string;
@@ -33,6 +35,8 @@ export function DashboardPage() {
 
     const salaNome = (salaId: string, salasLista: Sala[]) => salasLista.find((s) => s.id === salaId)?.nome ?? "—";
 
+    // Monta uma linha por evento com o total de inscritos e, dentre eles,
+    // quantos já têm presença confirmada.
     setLinhas(
       eventos.map((evento) => {
         const inscricoesDoEvento = inscricoes.filter((i) => i.eventoId === evento.id);
@@ -45,6 +49,8 @@ export function DashboardPage() {
       }),
     );
 
+    // "Próximos eventos" = só os que ainda vão acontecer (horário no futuro),
+    // ordenados do mais próximo pro mais distante, mostrando só os 5 primeiros.
     const agora = new Date().toISOString();
     setProximosEventos(
       eventos
