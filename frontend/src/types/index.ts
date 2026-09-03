@@ -10,14 +10,6 @@ export interface Usuario {
   participanteId?: string | null; // só ALUNO
 }
 
-export interface Evento {
-  id: string;
-  nome: string;
-  data: string;
-  local: string;
-  descricao: string;
-}
-
 export interface Sala {
   id: string;
   nome: string;
@@ -31,15 +23,15 @@ export interface Palestrante {
   telefone: string;
 }
 
-export interface Sessao {
+export interface Evento {
   id: string;
-  eventoId: string;
   titulo: string;
   horario: string;
   salaId: string;
   palestranteId: string | null;
   tema: string;
   cargaHoraria: number;
+  perguntas: string[]; // perguntas do questionário de feedback do evento
 }
 
 export interface Participante {
@@ -54,7 +46,7 @@ export type StatusPresenca = "PENDENTE" | "PRESENTE" | "AUSENTE";
 export interface Inscricao {
   id: string;
   participanteId: string;
-  sessaoId: string;
+  eventoId: string;
   statusPresenca: StatusPresenca;
   dataCheckin: string | null;
   usuarioId: string | null;

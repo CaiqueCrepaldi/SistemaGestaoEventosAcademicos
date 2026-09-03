@@ -1,14 +1,13 @@
 import type { Inscricao } from "../types";
-import { eventoService, inscricaoService, participanteService, sessaoService } from "./entityServices";
+import { eventoService, inscricaoService, participanteService } from "./entityServices";
 
 export interface InscricaoDetalhada {
   inscricao: Inscricao;
   participanteNome: string;
   participanteEmail: string;
   participanteRgm: string;
-  sessaoTitulo: string;
-  sessaoHorario: string;
-  eventoNome: string;
+  eventoTitulo: string;
+  eventoHorario: string;
 }
 
 async function buscarParticipantes(termo: string) {
@@ -24,9 +23,8 @@ async function buscarParticipantes(termo: string) {
 }
 
 async function listarInscricoesDoParticipante(participanteId: string): Promise<InscricaoDetalhada[]> {
-  const [inscricoes, sessoes, eventos, participante] = await Promise.all([
+  const [inscricoes, eventos, participante] = await Promise.all([
     inscricaoService.list(),
-    sessaoService.list(),
     eventoService.list(),
     participanteService.get(participanteId),
   ]);
@@ -34,16 +32,14 @@ async function listarInscricoesDoParticipante(participanteId: string): Promise<I
   return inscricoes
     .filter((i) => i.participanteId === participanteId)
     .map((inscricao) => {
-      const sessao = sessoes.find((s) => s.id === inscricao.sessaoId);
-      const evento = eventos.find((e) => e.id === sessao?.eventoId);
+      const evento = eventos.find((e) => e.id === inscricao.eventoId);
       return {
         inscricao,
         participanteNome: participante?.nome ?? "",
         participanteEmail: participante?.email ?? "",
         participanteRgm: participante?.rgm ?? "",
-        sessaoTitulo: sessao?.titulo ?? "Sessão removida",
-        sessaoHorario: sessao?.horario ?? "",
-        eventoNome: evento?.nome ?? "",
+        eventoTitulo: evento?.titulo ?? "Evento removido",
+        eventoHorario: evento?.horario ?? "",
       };
     });
 }
@@ -63,17 +59,15 @@ async function marcarAusente(inscricaoId: string): Promise<Inscricao> {
   });
 }
 
-async function listarPresencaPorSessao(sessaoId: string): Promise<InscricaoDetalhada[]> {
-  const [inscricoes, participantes, sessao, eventos] = await Promise.all([
+async function listarPresencaPorEvento(eventoId: string): Promise<InscricaoDetalhada[]> {
+  const [inscricoes, participantes, evento] = await Promise.all([
     inscricaoService.list(),
     participanteService.list(),
-    sessaoService.get(sessaoId),
-    eventoService.list(),
+    eventoService.get(eventoId),
   ]);
-  const evento = eventos.find((e) => e.id === sessao?.eventoId);
 
   return inscricoes
-    .filter((i) => i.sessaoId === sessaoId)
+    .filter((i) => i.eventoId === eventoId)
     .map((inscricao) => {
       const participante = participantes.find((p) => p.id === inscricao.participanteId);
       return {
@@ -81,21 +75,20 @@ async function listarPresencaPorSessao(sessaoId: string): Promise<InscricaoDetal
         participanteNome: participante?.nome ?? "",
         participanteEmail: participante?.email ?? "",
         participanteRgm: participante?.rgm ?? "",
-        sessaoTitulo: sessao?.titulo ?? "",
-        sessaoHorario: sessao?.horario ?? "",
-        eventoNome: evento?.nome ?? "",
+        eventoTitulo: evento?.titulo ?? "",
+        eventoHorario: evento?.horario ?? "",
       };
     });
 }
 
 function gerarCsvPresenca(lista: InscricaoDetalhada[]): string {
-  const cabecalho = ["Nome", "E-mail", "RGM", "Sessão", "Status", "Check-in"];
+  const cabecalho = ["Nome", "E-mail", "RGM", "Evento", "Status", "Check-in"];
   const linhas = lista.map((item) =>
     [
       item.participanteNome,
       item.participanteEmail,
       item.participanteRgm,
-      item.sessaoTitulo,
+      item.eventoTitulo,
       item.inscricao.statusPresenca,
       item.inscricao.dataCheckin ?? "",
     ]
@@ -110,6 +103,6 @@ export const checkinService = {
   listarInscricoesDoParticipante,
   confirmarPresenca,
   marcarAusente,
-  listarPresencaPorSessao,
+  listarPresencaPorEvento,
   gerarCsvPresenca,
 };

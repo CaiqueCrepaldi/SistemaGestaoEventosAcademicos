@@ -1,10 +1,4 @@
-import {
-  eventoService,
-  feedbackService,
-  inscricaoService,
-  salaService,
-  sessaoService,
-} from "./entityServices";
+import { eventoService, feedbackService, inscricaoService, salaService } from "./entityServices";
 
 export interface EstatisticasGerais {
   totalEventos: number;
@@ -15,21 +9,20 @@ export interface EstatisticasGerais {
 }
 
 async function estatisticasGerais(): Promise<EstatisticasGerais> {
-  const [eventos, inscricoes, sessoes, salas] = await Promise.all([
+  const [eventos, inscricoes, salas] = await Promise.all([
     eventoService.list(),
     inscricaoService.list(),
-    sessaoService.list(),
     salaService.list(),
   ]);
 
   const totalPresentes = inscricoes.filter((i) => i.statusPresenca === "PRESENTE").length;
   const taxaPresenca = inscricoes.length > 0 ? (totalPresentes / inscricoes.length) * 100 : 0;
 
-  const ocupacoes = sessoes.map((sessao) => {
-    const sala = salas.find((s) => s.id === sessao.salaId);
-    const inscritosNaSessao = inscricoes.filter((i) => i.sessaoId === sessao.id).length;
+  const ocupacoes = eventos.map((evento) => {
+    const sala = salas.find((s) => s.id === evento.salaId);
+    const inscritosNoEvento = inscricoes.filter((i) => i.eventoId === evento.id).length;
     if (!sala || sala.capacidade === 0) return 0;
-    return Math.min(inscritosNaSessao / sala.capacidade, 1) * 100;
+    return Math.min(inscritosNoEvento / sala.capacidade, 1) * 100;
   });
   const ocupacaoMedia = ocupacoes.length > 0 ? ocupacoes.reduce((a, b) => a + b, 0) / ocupacoes.length : 0;
 
@@ -42,40 +35,35 @@ async function estatisticasGerais(): Promise<EstatisticasGerais> {
   };
 }
 
-export interface SessaoAgenda {
+export interface EventoAgenda {
   id: string;
   titulo: string;
   tema: string;
   horario: string;
   salaId: string;
   salaNome: string;
-  eventoNome: string;
   inscritos: number;
   capacidade: number;
 }
 
-async function agendaPorEvento(eventoId: string): Promise<SessaoAgenda[]> {
-  const [sessoes, salas, eventos, inscricoes] = await Promise.all([
-    sessaoService.list(),
-    salaService.list(),
+async function agendaGeral(): Promise<EventoAgenda[]> {
+  const [eventos, salas, inscricoes] = await Promise.all([
     eventoService.list(),
+    salaService.list(),
     inscricaoService.list(),
   ]);
 
-  return sessoes
-    .filter((s) => !eventoId || s.eventoId === eventoId)
-    .map((sessao) => {
-      const sala = salas.find((s) => s.id === sessao.salaId);
-      const evento = eventos.find((e) => e.id === sessao.eventoId);
+  return eventos
+    .map((evento) => {
+      const sala = salas.find((s) => s.id === evento.salaId);
       return {
-        id: sessao.id,
-        titulo: sessao.titulo,
-        tema: sessao.tema ?? "",
-        horario: sessao.horario,
-        salaId: sessao.salaId,
+        id: evento.id,
+        titulo: evento.titulo,
+        tema: evento.tema ?? "",
+        horario: evento.horario,
+        salaId: evento.salaId,
         salaNome: sala?.nome ?? "—",
-        eventoNome: evento?.nome ?? "—",
-        inscritos: inscricoes.filter((i) => i.sessaoId === sessao.id).length,
+        inscritos: inscricoes.filter((i) => i.eventoId === evento.id).length,
         capacidade: sala?.capacidade ?? 0,
       };
     })
@@ -90,6 +78,6 @@ async function mediaFeedbackPorEvento(eventoId: string): Promise<number | null> 
 
 export const relatorioService = {
   estatisticasGerais,
-  agendaPorEvento,
+  agendaGeral,
   mediaFeedbackPorEvento,
 };

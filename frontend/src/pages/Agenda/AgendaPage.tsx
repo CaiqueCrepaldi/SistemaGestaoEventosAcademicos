@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { eventoService, salaService } from "../../services";
-import { relatorioService, type SessaoAgenda } from "../../services/relatorioService";
-import type { Evento, Sala } from "../../types";
+import { salaService } from "../../services";
+import { relatorioService, type EventoAgenda } from "../../services/relatorioService";
+import type { Sala } from "../../types";
 
-function agruparPorDia(sessoes: SessaoAgenda[]): Record<string, SessaoAgenda[]> {
-  return sessoes.reduce<Record<string, SessaoAgenda[]>>((acc, sessao) => {
-    const dia = sessao.horario ? sessao.horario.slice(0, 10) : "Sem data";
+function agruparPorDia(eventos: EventoAgenda[]): Record<string, EventoAgenda[]> {
+  return eventos.reduce<Record<string, EventoAgenda[]>>((acc, evento) => {
+    const dia = evento.horario ? evento.horario.slice(0, 10) : "Sem data";
     acc[dia] = acc[dia] ?? [];
-    acc[dia].push(sessao);
+    acc[dia].push(evento);
     return acc;
   }, {});
 }
@@ -16,62 +16,42 @@ function agruparPorDia(sessoes: SessaoAgenda[]): Record<string, SessaoAgenda[]> 
 const FILTROS_VAZIOS = { dia: "", horaInicio: "", horaFim: "", salaId: "", tema: "" };
 
 export function AgendaPage() {
-  const [eventos, setEventos] = useState<Evento[]>([]);
   const [salas, setSalas] = useState<Sala[]>([]);
-  const [eventoId, setEventoId] = useState("");
-  const [sessoes, setSessoes] = useState<SessaoAgenda[]>([]);
+  const [eventos, setEventos] = useState<EventoAgenda[]>([]);
   const [filtros, setFiltros] = useState(FILTROS_VAZIOS);
 
   useEffect(() => {
-    void eventoService.list().then((e) => {
-      setEventos(e);
-      setEventoId(e[0]?.id ?? "");
-    });
     void salaService.list().then(setSalas);
+    void relatorioService.agendaGeral().then(setEventos);
   }, []);
 
-  useEffect(() => {
-    if (!eventoId) return;
-    void relatorioService.agendaPorEvento(eventoId).then(setSessoes);
-  }, [eventoId]);
-
-  const filtradas = sessoes.filter((sessao) => {
-    if (filtros.dia && sessao.horario.slice(0, 10) !== filtros.dia) return false;
+  const filtrados = eventos.filter((evento) => {
+    if (filtros.dia && evento.horario.slice(0, 10) !== filtros.dia) return false;
 
     if (filtros.horaInicio || filtros.horaFim) {
-      const hora = sessao.horario.slice(11, 16);
+      const hora = evento.horario.slice(11, 16);
       if (filtros.horaInicio && hora < filtros.horaInicio) return false;
       if (filtros.horaFim && hora > filtros.horaFim) return false;
     }
 
-    if (filtros.salaId && sessao.salaId !== filtros.salaId) return false;
+    if (filtros.salaId && evento.salaId !== filtros.salaId) return false;
 
     if (filtros.tema) {
       const termo = filtros.tema.toLowerCase();
-      const noTema = sessao.tema.toLowerCase().includes(termo);
-      const noTitulo = sessao.titulo.toLowerCase().includes(termo);
+      const noTema = evento.tema.toLowerCase().includes(termo);
+      const noTitulo = evento.titulo.toLowerCase().includes(termo);
       if (!noTema && !noTitulo) return false;
     }
 
     return true;
   });
 
-  const grupos = agruparPorDia(filtradas);
+  const grupos = agruparPorDia(filtrados);
   const filtrosAtivos = Object.values(filtros).some(Boolean);
 
   return (
     <div>
-      <PageHeader title="Agenda" subtitle="Programação das sessões por evento" />
-
-      <div className="card">
-        <select className="search-input" value={eventoId} onChange={(e) => setEventoId(e.target.value)}>
-          {eventos.map((e) => (
-            <option key={e.id} value={e.id}>
-              {e.nome}
-            </option>
-          ))}
-        </select>
-      </div>
+      <PageHeader title="Agenda" subtitle="Programação completa de eventos" />
 
       <div className="card">
         <div className="field-row" style={{ flexWrap: "wrap" }}>
@@ -115,7 +95,7 @@ export function AgendaPage() {
             <input
               value={filtros.tema}
               onChange={(e) => setFiltros({ ...filtros, tema: e.target.value })}
-              placeholder="Buscar por tema ou título da sessão"
+              placeholder="Buscar por tema ou título do evento"
             />
           </label>
           <div className="field" style={{ justifyContent: "flex-end" }}>
@@ -141,15 +121,15 @@ export function AgendaPage() {
                 : "Sem data definida"}
             </h3>
             <ul className="agenda-list">
-              {itens.map((sessao) => (
-                <li key={sessao.id} className="agenda-item">
+              {itens.map((evento) => (
+                <li key={evento.id} className="agenda-item">
                   <div className="agenda-time">
-                    {sessao.horario ? new Date(sessao.horario).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—"}
+                    {evento.horario ? new Date(evento.horario).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—"}
                   </div>
                   <div className="agenda-details">
-                    <div className="simple-list-title">{sessao.titulo}</div>
+                    <div className="simple-list-title">{evento.titulo}</div>
                     <div className="simple-list-sub">
-                      {sessao.salaNome} · {sessao.inscritos}/{sessao.capacidade || "—"} inscritos
+                      {evento.salaNome} · {evento.inscritos}/{evento.capacidade || "—"} inscritos
                     </div>
                   </div>
                 </li>
@@ -158,13 +138,13 @@ export function AgendaPage() {
           </div>
         ))}
 
-      {sessoes.length === 0 && eventoId && (
+      {eventos.length === 0 && (
         <div className="card">
-          <p className="empty-cell">Nenhuma sessão cadastrada para este evento.</p>
+          <p className="empty-cell">Nenhum evento cadastrado.</p>
         </div>
       )}
 
-      {sessoes.length > 0 && filtradas.length === 0 && filtrosAtivos && (
+      {eventos.length > 0 && filtrados.length === 0 && filtrosAtivos && (
         <div className="card">
           <p className="empty-cell">Nenhuma sessão encontrada para os filtros aplicados.</p>
         </div>

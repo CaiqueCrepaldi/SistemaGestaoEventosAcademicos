@@ -65,7 +65,14 @@ function createHttpCrudService<T extends { id: string }>(resource: string): Crud
   };
 }
 
-// key dobra de função: chave do localStorage no mock, path do recurso no modo http
-export function createCrudService<T extends { id: string }>(key: string, seed: T[]): CrudService<T> {
-  return USE_MOCK ? createLocalCrudService<T>(key, seed) : createHttpCrudService<T>(key);
+// key dobra de função: chave do localStorage no mock, path do recurso no modo http.
+// storageKey é opcional e só deve ser usado quando o formato dos dados salvos em
+// localStorage mudou de forma incompatível (ex.: campo renomeado/removido) — assim
+// evitamos misturar registros antigos, no formato velho, com o novo seed.
+export function createCrudService<T extends { id: string }>(
+  key: string,
+  seed: T[],
+  storageKey: string = key,
+): CrudService<T> {
+  return USE_MOCK ? createLocalCrudService<T>(storageKey, seed) : createHttpCrudService<T>(key);
 }

@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { Badge } from "../../components/ui/Badge";
 import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { inscricaoService, participanteService, salaService, sessaoService } from "../../services";
-import type { Inscricao, Participante, Sala, Sessao, StatusPresenca } from "../../types";
+import { eventoService, inscricaoService, participanteService, salaService } from "../../services";
+import type { Evento, Inscricao, Participante, Sala, StatusPresenca } from "../../types";
 
 function badgeTone(status: StatusPresenca): "green" | "red" | "orange" {
   if (status === "PRESENTE") return "green";
@@ -20,11 +20,11 @@ function badgeLabel(status: StatusPresenca): string {
 export function InscricoesPage() {
   const [inscricoes, setInscricoes] = useState<Inscricao[]>([]);
   const [participantes, setParticipantes] = useState<Participante[]>([]);
-  const [sessoes, setSessoes] = useState<Sessao[]>([]);
+  const [eventos, setEventos] = useState<Evento[]>([]);
   const [salas, setSalas] = useState<Sala[]>([]);
   const [modalAberto, setModalAberto] = useState(false);
   const [participanteId, setParticipanteId] = useState("");
-  const [sessaoId, setSessaoId] = useState("");
+  const [eventoId, setEventoId] = useState("");
   const [avisoVagas, setAvisoVagas] = useState<string | null>(null);
 
   useEffect(() => {
@@ -32,48 +32,48 @@ export function InscricoesPage() {
   }, []);
 
   async function carregar() {
-    const [i, p, s, sa] = await Promise.all([
+    const [i, p, e, sa] = await Promise.all([
       inscricaoService.list(),
       participanteService.list(),
-      sessaoService.list(),
+      eventoService.list(),
       salaService.list(),
     ]);
     setInscricoes(i);
     setParticipantes(p);
-    setSessoes(s);
+    setEventos(e);
     setSalas(sa);
   }
 
   function abrirNova() {
     setParticipanteId(participantes[0]?.id ?? "");
-    setSessaoId(sessoes[0]?.id ?? "");
+    setEventoId(eventos[0]?.id ?? "");
     setAvisoVagas(null);
     setModalAberto(true);
   }
 
-  function vagasDisponiveis(sessao: Sessao | undefined): number | null {
-    if (!sessao) return null;
-    const sala = salas.find((s) => s.id === sessao.salaId);
+  function vagasDisponiveis(evento: Evento | undefined): number | null {
+    if (!evento) return null;
+    const sala = salas.find((s) => s.id === evento.salaId);
     if (!sala) return null;
-    const ocupadas = inscricoes.filter((i) => i.sessaoId === sessao.id).length;
+    const ocupadas = inscricoes.filter((i) => i.eventoId === evento.id).length;
     return sala.capacidade - ocupadas;
   }
 
   async function salvar() {
-    const jaInscrito = inscricoes.some((i) => i.participanteId === participanteId && i.sessaoId === sessaoId);
+    const jaInscrito = inscricoes.some((i) => i.participanteId === participanteId && i.eventoId === eventoId);
     if (jaInscrito) {
-      setAvisoVagas("Este participante já está inscrito nesta sessão.");
+      setAvisoVagas("Este participante já está inscrito neste evento.");
       return;
     }
-    const sessao = sessoes.find((s) => s.id === sessaoId);
-    const vagas = vagasDisponiveis(sessao);
+    const evento = eventos.find((e) => e.id === eventoId);
+    const vagas = vagasDisponiveis(evento);
     if (vagas !== null && vagas <= 0) {
-      setAvisoVagas("Não há vagas disponíveis para esta sessão.");
+      setAvisoVagas("Não há vagas disponíveis para este evento.");
       return;
     }
     await inscricaoService.create({
       participanteId,
-      sessaoId,
+      eventoId,
       statusPresenca: "PENDENTE",
       dataCheckin: null,
       usuarioId: null,
@@ -88,19 +88,19 @@ export function InscricoesPage() {
     await carregar();
   }
 
-  const sessaoSelecionada = sessoes.find((s) => s.id === sessaoId);
-  const vagas = vagasDisponiveis(sessaoSelecionada);
+  const eventoSelecionado = eventos.find((e) => e.id === eventoId);
+  const vagas = vagasDisponiveis(eventoSelecionado);
 
   return (
     <div>
       <PageHeader
         title="Inscrições"
-        subtitle="Vínculo entre participantes e sessões"
+        subtitle="Vínculo entre participantes e eventos"
         actions={
           <button
             className="btn btn-primary"
             onClick={abrirNova}
-            disabled={participantes.length === 0 || sessoes.length === 0}
+            disabled={participantes.length === 0 || eventos.length === 0}
           >
             + Nova inscrição
           </button>
@@ -112,7 +112,7 @@ export function InscricoesPage() {
           <thead>
             <tr>
               <th>Participante</th>
-              <th>Sessão</th>
+              <th>Evento</th>
               <th>Status</th>
               <th>Check-in</th>
               <th />
@@ -121,11 +121,11 @@ export function InscricoesPage() {
           <tbody>
             {inscricoes.map((inscricao) => {
               const participante = participantes.find((p) => p.id === inscricao.participanteId);
-              const sessao = sessoes.find((s) => s.id === inscricao.sessaoId);
+              const evento = eventos.find((e) => e.id === inscricao.eventoId);
               return (
                 <tr key={inscricao.id}>
                   <td>{participante?.nome ?? "—"}</td>
-                  <td>{sessao?.titulo ?? "—"}</td>
+                  <td>{evento?.titulo ?? "—"}</td>
                   <td>
                     <Badge tone={badgeTone(inscricao.statusPresenca)}>{badgeLabel(inscricao.statusPresenca)}</Badge>
                   </td>
@@ -169,18 +169,18 @@ export function InscricoesPage() {
               </select>
             </label>
             <label className="field">
-              <span>Sessão</span>
-              <select value={sessaoId} onChange={(e) => setSessaoId(e.target.value)} required>
-                {sessoes.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.titulo}
+              <span>Evento</span>
+              <select value={eventoId} onChange={(e) => setEventoId(e.target.value)} required>
+                {eventos.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.titulo}
                   </option>
                 ))}
               </select>
             </label>
             {vagas !== null && (
               <p className={vagas <= 0 ? "form-error" : "form-hint"}>
-                {vagas > 0 ? `${vagas} vaga(s) disponível(is) nesta sessão.` : "Sessão sem vagas disponíveis."}
+                {vagas > 0 ? `${vagas} vaga(s) disponível(is) neste evento.` : "Evento sem vagas disponíveis."}
               </p>
             )}
             {avisoVagas && <p className="form-error">{avisoVagas}</p>}

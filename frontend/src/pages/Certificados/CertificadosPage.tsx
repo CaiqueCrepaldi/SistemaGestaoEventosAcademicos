@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { useAuth } from "../../context/AuthContext";
-import { certificadoService, eventoService, sessaoService, type CertificadoDisponivel } from "../../services";
-import type { Evento, Sessao } from "../../types";
+import { certificadoService, eventoService, type CertificadoDisponivel } from "../../services";
+import type { Evento } from "../../types";
 
 export function CertificadosPage() {
   const { usuario } = useAuth();
@@ -10,9 +10,7 @@ export function CertificadosPage() {
 
   const [certificados, setCertificados] = useState<CertificadoDisponivel[]>([]);
   const [eventos, setEventos] = useState<Evento[]>([]);
-  const [sessoes, setSessoes] = useState<Sessao[]>([]);
   const [filtroEventoId, setFiltroEventoId] = useState("");
-  const [filtroSessaoId, setFiltroSessaoId] = useState("");
 
   useEffect(() => {
     void carregar();
@@ -20,26 +18,15 @@ export function CertificadosPage() {
 
   async function carregar() {
     if (isEquipe) {
-      const [c, e, s] = await Promise.all([
-        certificadoService.listarTodosCertificados(),
-        eventoService.list(),
-        sessaoService.list(),
-      ]);
+      const [c, e] = await Promise.all([certificadoService.listarTodosCertificados(), eventoService.list()]);
       setCertificados(c);
       setEventos(e);
-      setSessoes(s);
     } else if (usuario?.participanteId) {
       setCertificados(await certificadoService.listarCertificadosDoParticipante(usuario.participanteId));
     }
   }
 
-  const filtrados = certificados.filter((c) => {
-    if (filtroEventoId && c.eventoId !== filtroEventoId) return false;
-    if (filtroSessaoId && c.sessaoId !== filtroSessaoId) return false;
-    return true;
-  });
-
-  const sessoesDoFiltro = sessoes.filter((s) => !filtroEventoId || s.eventoId === filtroEventoId);
+  const filtrados = certificados.filter((c) => !filtroEventoId || c.eventoId === filtroEventoId);
 
   if (!isEquipe) {
     return (
@@ -55,9 +42,9 @@ export function CertificadosPage() {
               {certificados.map((c) => (
                 <li key={c.inscricaoId} className="simple-list-item simple-list-item-row">
                   <div>
-                    <div className="simple-list-title">{c.eventoNome}</div>
+                    <div className="simple-list-title">{c.eventoTitulo}</div>
                     <div className="simple-list-sub">
-                      {c.sessaoTitulo} · {c.data ? new Date(c.data).toLocaleDateString("pt-BR") : "—"}
+                      {c.tema} · {c.data ? new Date(c.data).toLocaleDateString("pt-BR") : "—"}
                     </div>
                   </div>
                   <button className="btn btn-primary" onClick={() => certificadoService.gerarCertificado(c)}>
@@ -74,39 +61,17 @@ export function CertificadosPage() {
 
   return (
     <div>
-      <PageHeader title="Certificados" subtitle="Emissão de certificados por evento e sessão" />
+      <PageHeader title="Certificados" subtitle="Emissão de certificados por evento" />
 
       <div className="card">
-        <div className="field-row" style={{ flexWrap: "wrap" }}>
-          <label className="field" style={{ minWidth: 200 }}>
-            <span>Evento</span>
-            <select
-              value={filtroEventoId}
-              onChange={(e) => {
-                setFiltroEventoId(e.target.value);
-                setFiltroSessaoId("");
-              }}
-            >
-              <option value="">Todos os eventos</option>
-              {eventos.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.nome}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field" style={{ minWidth: 200 }}>
-            <span>Sessão</span>
-            <select value={filtroSessaoId} onChange={(e) => setFiltroSessaoId(e.target.value)}>
-              <option value="">Todas as sessões</option>
-              {sessoesDoFiltro.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.titulo}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+        <select className="search-input" value={filtroEventoId} onChange={(e) => setFiltroEventoId(e.target.value)}>
+          <option value="">Todos os eventos</option>
+          {eventos.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.titulo}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="card">
@@ -116,7 +81,6 @@ export function CertificadosPage() {
               <th>Participante</th>
               <th>RGM</th>
               <th>Evento</th>
-              <th>Sessão</th>
               <th>Carga horária</th>
               <th />
             </tr>
@@ -126,8 +90,7 @@ export function CertificadosPage() {
               <tr key={c.inscricaoId}>
                 <td>{c.participanteNome}</td>
                 <td>{c.participanteRgm}</td>
-                <td>{c.eventoNome}</td>
-                <td>{c.sessaoTitulo}</td>
+                <td>{c.eventoTitulo}</td>
                 <td>{c.cargaHoraria}h</td>
                 <td className="table-actions">
                   <button className="btn btn-ghost" onClick={() => certificadoService.gerarCertificado(c)}>
@@ -138,7 +101,7 @@ export function CertificadosPage() {
             ))}
             {filtrados.length === 0 && (
               <tr>
-                <td colSpan={6} className="empty-cell">
+                <td colSpan={5} className="empty-cell">
                   Nenhum certificado disponível para os filtros aplicados.
                 </td>
               </tr>

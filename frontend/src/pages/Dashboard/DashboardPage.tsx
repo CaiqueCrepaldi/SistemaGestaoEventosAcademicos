@@ -1,57 +1,56 @@
 import { useEffect, useState } from "react";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
-import { eventoService, inscricaoService, sessaoService } from "../../services";
+import { eventoService, inscricaoService, salaService } from "../../services";
 import { relatorioService, type EstatisticasGerais } from "../../services/relatorioService";
-import type { Evento, Sessao } from "../../types";
+import type { Evento, Sala } from "../../types";
 
 interface LinhaEvento {
   evento: Evento;
+  salaNome: string;
   inscritos: number;
   presentes: number;
-  sessoesCount: number;
 }
 
 export function DashboardPage() {
   const [stats, setStats] = useState<EstatisticasGerais | null>(null);
   const [linhas, setLinhas] = useState<LinhaEvento[]>([]);
-  const [proximasSessoes, setProximasSessoes] = useState<(Sessao & { eventoNome: string })[]>([]);
+  const [proximosEventos, setProximosEventos] = useState<Evento[]>([]);
 
   useEffect(() => {
     void carregar();
   }, []);
 
   async function carregar() {
-    const [gerais, eventos, sessoes, inscricoes] = await Promise.all([
+    const [gerais, eventos, salas, inscricoes] = await Promise.all([
       relatorioService.estatisticasGerais(),
       eventoService.list(),
-      sessaoService.list(),
+      salaService.list(),
       inscricaoService.list(),
     ]);
 
     setStats(gerais);
 
+    const salaNome = (salaId: string, salasLista: Sala[]) => salasLista.find((s) => s.id === salaId)?.nome ?? "—";
+
     setLinhas(
       eventos.map((evento) => {
-        const sessoesDoEvento = sessoes.filter((s) => s.eventoId === evento.id);
-        const idsSessoes = new Set(sessoesDoEvento.map((s) => s.id));
-        const inscricoesDoEvento = inscricoes.filter((i) => idsSessoes.has(i.sessaoId));
+        const inscricoesDoEvento = inscricoes.filter((i) => i.eventoId === evento.id);
         return {
           evento,
+          salaNome: salaNome(evento.salaId, salas),
           inscritos: inscricoesDoEvento.length,
           presentes: inscricoesDoEvento.filter((i) => i.statusPresenca === "PRESENTE").length,
-          sessoesCount: sessoesDoEvento.length,
         };
       }),
     );
 
     const agora = new Date().toISOString();
-    setProximasSessoes(
-      sessoes
-        .filter((s) => s.horario >= agora)
+    setProximosEventos(
+      eventos
+        .filter((e) => e.horario >= agora)
         .sort((a, b) => a.horario.localeCompare(b.horario))
-        .slice(0, 5)
-        .map((s) => ({ ...s, eventoNome: eventos.find((e) => e.id === s.eventoId)?.nome ?? "—" })),
+        .slice(0, 5),
     );
   }
 
@@ -80,16 +79,16 @@ export function DashboardPage() {
             <thead>
               <tr>
                 <th>Evento</th>
-                <th>Sessões</th>
+                <th>Sala</th>
                 <th>Inscritos</th>
                 <th>Presentes</th>
               </tr>
             </thead>
             <tbody>
-              {linhas.map(({ evento, inscritos, presentes, sessoesCount }) => (
+              {linhas.map(({ evento, salaNome, inscritos, presentes }) => (
                 <tr key={evento.id}>
-                  <td>{evento.nome}</td>
-                  <td>{sessoesCount}</td>
+                  <td>{evento.titulo}</td>
+                  <td>{salaNome}</td>
                   <td>{inscritos}</td>
                   <td>{presentes}</td>
                 </tr>
@@ -106,17 +105,17 @@ export function DashboardPage() {
         </div>
 
         <div className="card">
-          <h3>Próximas sessões</h3>
+          <h3>Próximos eventos</h3>
           <ul className="simple-list">
-            {proximasSessoes.map((s) => (
-              <li key={s.id}>
-                <div className="simple-list-title">{s.titulo}</div>
+            {proximosEventos.map((evento) => (
+              <li key={evento.id}>
+                <div className="simple-list-title">{evento.titulo}</div>
                 <div className="simple-list-sub">
-                  {s.eventoNome} · {new Date(s.horario).toLocaleString("pt-BR")}
+                  {evento.tema || "—"} · {new Date(evento.horario).toLocaleString("pt-BR")}
                 </div>
               </li>
             ))}
-            {proximasSessoes.length === 0 && <li className="empty-cell">Nenhuma sessão futura cadastrada.</li>}
+            {proximosEventos.length === 0 && <li className="empty-cell">Nenhum evento futuro cadastrado.</li>}
           </ul>
         </div>
       </div>

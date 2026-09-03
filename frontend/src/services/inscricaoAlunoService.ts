@@ -1,33 +1,33 @@
 import type { Inscricao } from "../types";
 import { ApiError, USE_MOCK, api } from "./api";
-import { inscricaoService, salaService, sessaoService } from "./entityServices";
+import { eventoService, inscricaoService, salaService } from "./entityServices";
 
 interface InscricaoAlunoService {
-  inscrever(participanteId: string, sessaoId: string): Promise<Inscricao>;
+  inscrever(participanteId: string, eventoId: string): Promise<Inscricao>;
 }
 
 const localInscricaoAlunoService: InscricaoAlunoService = {
-  async inscrever(participanteId, sessaoId) {
-    const [inscricoes, sessao, salas] = await Promise.all([
+  async inscrever(participanteId, eventoId) {
+    const [inscricoes, evento, salas] = await Promise.all([
       inscricaoService.list(),
-      sessaoService.get(sessaoId),
+      eventoService.get(eventoId),
       salaService.list(),
     ]);
 
-    const jaInscrito = inscricoes.some((i) => i.participanteId === participanteId && i.sessaoId === sessaoId);
+    const jaInscrito = inscricoes.some((i) => i.participanteId === participanteId && i.eventoId === eventoId);
     if (jaInscrito) {
-      throw new ApiError(409, "Você já está inscrito nesta sessão.", "JA_INSCRITO");
+      throw new ApiError(409, "Você já está inscrito neste evento.", "JA_INSCRITO");
     }
 
-    const sala = sessao ? salas.find((s) => s.id === sessao.salaId) : undefined;
-    const ocupadas = inscricoes.filter((i) => i.sessaoId === sessaoId).length;
+    const sala = evento ? salas.find((s) => s.id === evento.salaId) : undefined;
+    const ocupadas = inscricoes.filter((i) => i.eventoId === eventoId).length;
     if (sala && ocupadas >= sala.capacidade) {
-      throw new ApiError(409, "Sessão sem vagas disponíveis.", "SESSAO_LOTADA");
+      throw new ApiError(409, "Evento sem vagas disponíveis.", "EVENTO_LOTADO");
     }
 
     return inscricaoService.create({
       participanteId,
-      sessaoId,
+      eventoId,
       statusPresenca: "PENDENTE",
       dataCheckin: null,
       usuarioId: null,
@@ -36,10 +36,8 @@ const localInscricaoAlunoService: InscricaoAlunoService = {
 };
 
 const httpInscricaoAlunoService: InscricaoAlunoService = {
-  async inscrever(_participanteId, sessaoId) {
-    const sessao = await sessaoService.get(sessaoId);
-    if (!sessao) throw new ApiError(404, "Sessão não encontrada.", "SESSAO_NAO_ENCONTRADA");
-    return api.post<Inscricao>(`/eventos/${sessao.eventoId}/sessoes/${sessaoId}/inscricoes`, {});
+  async inscrever(_participanteId, eventoId) {
+    return api.post<Inscricao>(`/eventos/${eventoId}/inscricoes`, {});
   },
 };
 

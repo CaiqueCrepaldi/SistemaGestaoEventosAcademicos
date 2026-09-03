@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import type { Inscricao } from "../types";
 import { USE_MOCK, api } from "./api";
-import { eventoService, inscricaoService, palestranteService, participanteService, sessaoService } from "./entityServices";
+import { eventoService, inscricaoService, palestranteService, participanteService } from "./entityServices";
 
 export interface CertificadoDisponivel {
   inscricaoId: string;
@@ -9,9 +9,7 @@ export interface CertificadoDisponivel {
   participanteNome: string;
   participanteRgm: string;
   eventoId: string;
-  eventoNome: string;
-  sessaoId: string;
-  sessaoTitulo: string;
+  eventoTitulo: string;
   tema: string;
   palestranteNome: string;
   data: string;
@@ -30,8 +28,7 @@ function gerarCodigoValidacao(inscricaoId: string): string {
 }
 
 async function enriquecer(inscricoes: Inscricao[]): Promise<CertificadoDisponivel[]> {
-  const [sessoes, eventos, palestrantes, participantes] = await Promise.all([
-    sessaoService.list(),
+  const [eventos, palestrantes, participantes] = await Promise.all([
     eventoService.list(),
     palestranteService.list(),
     participanteService.list(),
@@ -39,12 +36,10 @@ async function enriquecer(inscricoes: Inscricao[]): Promise<CertificadoDisponive
 
   const certificados: CertificadoDisponivel[] = [];
   for (const inscricao of inscricoes) {
-    const sessao = sessoes.find((s) => s.id === inscricao.sessaoId);
+    const evento = eventos.find((e) => e.id === inscricao.eventoId);
     const participante = participantes.find((p) => p.id === inscricao.participanteId);
-    if (!sessao || !participante) continue;
-    const evento = eventos.find((e) => e.id === sessao.eventoId);
-    if (!evento) continue;
-    const palestrante = palestrantes.find((p) => p.id === sessao.palestranteId);
+    if (!evento || !participante) continue;
+    const palestrante = palestrantes.find((p) => p.id === evento.palestranteId);
 
     certificados.push({
       inscricaoId: inscricao.id,
@@ -52,13 +47,11 @@ async function enriquecer(inscricoes: Inscricao[]): Promise<CertificadoDisponive
       participanteNome: participante.nome,
       participanteRgm: participante.rgm,
       eventoId: evento.id,
-      eventoNome: evento.nome,
-      sessaoId: sessao.id,
-      sessaoTitulo: sessao.titulo,
-      tema: sessao.tema || sessao.titulo,
+      eventoTitulo: evento.titulo,
+      tema: evento.tema || evento.titulo,
       palestranteNome: palestrante?.nome ?? "—",
-      data: sessao.horario || evento.data,
-      cargaHoraria: sessao.cargaHoraria ?? 0,
+      data: evento.horario,
+      cargaHoraria: evento.cargaHoraria ?? 0,
       codigoValidacao: gerarCodigoValidacao(inscricao.id),
     });
   }
@@ -76,16 +69,16 @@ function gerarPdf(dados: CertificadoDisponivel): void {
 
   doc.setFontSize(13);
   const corpo =
-    `Certificamos que ${dados.participanteNome} (RGM ${dados.participanteRgm}) participou da sessão ` +
-    `"${dados.sessaoTitulo}", com tema "${dados.tema}", ministrada por ${dados.palestranteNome}, ` +
-    `no evento ${dados.eventoNome}, realizado em ${dataFormatada}, com carga horária de ${dados.cargaHoraria}h.`;
+    `Certificamos que ${dados.participanteNome} (RGM ${dados.participanteRgm}) participou do evento ` +
+    `"${dados.eventoTitulo}", com tema "${dados.tema}", ministrado por ${dados.palestranteNome}, ` +
+    `realizado em ${dataFormatada}, com carga horária de ${dados.cargaHoraria}h.`;
   const linhas = doc.splitTextToSize(corpo, largura - 70);
   doc.text(linhas, meio, 75, { align: "center" });
 
   doc.setFontSize(10);
   doc.text(`Código de validação: ${dados.codigoValidacao}`, meio, 130, { align: "center" });
 
-  doc.save(`certificado-${dados.sessaoId}-${dados.participanteId}.pdf`);
+  doc.save(`certificado-${dados.eventoId}-${dados.participanteId}.pdf`);
 }
 
 interface CertificadoService {

@@ -12,7 +12,6 @@ import {
   PalestranteIcon,
   ParticipanteIcon,
   SalaIcon,
-  SessaoIcon,
 } from "./ui/icons";
 import type { Perfil } from "../types";
 
@@ -36,7 +35,6 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Principal", end: true, perfis: EQUIPE, icon: DashboardIcon },
   { to: "/eventos", label: "Eventos", perfis: TODOS_PERFIS, icon: EventoIcon },
-  { to: "/sessoes", label: "Sessões", perfis: EQUIPE, icon: SessaoIcon },
   { to: "/salas", label: "Salas", perfis: EQUIPE, icon: SalaIcon },
   { to: "/palestrantes", label: "Palestrantes", perfis: TODOS_PERFIS, icon: PalestranteIcon },
   { to: "/participantes", label: "Participantes", perfis: EQUIPE, icon: ParticipanteIcon },
@@ -51,8 +49,11 @@ function useMigalhas(menuItens: NavItem[]) {
   const location = useLocation();
   const partes = location.pathname.split("/").filter(Boolean);
 
+  // Na tela principal (dashboard) o próprio menu já destaca "Principal" como
+  // ativo — repetir o texto na migalha logo abaixo era redundante, então aqui
+  // não exibimos migalha nenhuma.
   if (partes.length === 0) {
-    return ["Principal"];
+    return [];
   }
 
   const atual = menuItens.find((item) => item.to === `/${partes[0]}`);
@@ -103,14 +104,16 @@ export function Layout() {
         })}
       </nav>
 
-      <div className="breadcrumb-bar">
-        {migalhas.map((parte, i) => (
-          <span key={i}>
-            {i > 0 && <span className="breadcrumb-sep">/</span>}
-            {parte}
-          </span>
-        ))}
-      </div>
+      {migalhas.length > 0 && (
+        <div className="breadcrumb-bar">
+          {migalhas.map((parte, i) => (
+            <span key={i}>
+              {i > 0 && <span className="breadcrumb-sep">/</span>}
+              {parte}
+            </span>
+          ))}
+        </div>
+      )}
 
       <main className="content">
         <Outlet />

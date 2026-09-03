@@ -56,7 +56,7 @@ export function FeedbackPage() {
           <option value="">Todos os eventos</option>
           {eventos.map((e) => (
             <option key={e.id} value={e.id}>
-              {e.nome}
+              {e.titulo}
             </option>
           ))}
         </select>
@@ -81,7 +81,7 @@ export function FeedbackPage() {
             {filtrados.map((f) => (
               <tr key={f.id}>
                 <td>{participantes.find((p) => p.id === f.participanteId)?.nome ?? "—"}</td>
-                <td>{eventos.find((e) => e.id === f.eventoId)?.nome ?? "—"}</td>
+                <td>{eventos.find((e) => e.id === f.eventoId)?.titulo ?? "—"}</td>
                 <td>{"★".repeat(f.nota)}</td>
                 <td>{f.comentario}</td>
               </tr>
@@ -111,7 +111,7 @@ export function FeedbackPage() {
               <select value={form.eventoId} onChange={(e) => setForm({ ...form, eventoId: e.target.value })} required>
                 {eventos.map((e) => (
                   <option key={e.id} value={e.id}>
-                    {e.nome}
+                    {e.titulo}
                   </option>
                 ))}
               </select>

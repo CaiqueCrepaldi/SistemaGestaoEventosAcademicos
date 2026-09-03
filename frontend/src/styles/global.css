@@ -400,6 +400,28 @@ h1, h2, h3 {
   gap: 14px;
 }
 
+.pergunta-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pergunta-item input {
+  flex: 1;
+  border: 1px solid var(--gray-300);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--gray-900);
+}
+
+.pergunta-item input:focus {
+  outline: none;
+  border-color: var(--yellow-600);
+  box-shadow: 0 0 0 3px var(--yellow-50);
+}
+
 .search-input {
   width: 100%;
   border: 1px solid var(--gray-300);

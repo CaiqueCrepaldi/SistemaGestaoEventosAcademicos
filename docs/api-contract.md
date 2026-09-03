@@ -8,7 +8,7 @@ serviço — a UI não muda.
 Prefixo `/api` em tudo. JSON, `camelCase` igual aos tipos do frontend.
 
 **Como ler este documento**: a maior parte dos recursos (eventos, salas,
-palestrantes, sessões, participantes, inscrições, feedbacks) é CRUD REST
+palestrantes, participantes, inscrições, feedbacks) é CRUD REST
 simples — `GET /api/{recurso}`, `GET /api/{recurso}/{id}`, `POST`,
 `PUT /api/{recurso}/{id}`, `DELETE /api/{recurso}/{id}`. O frontend usa
 literalmente essas mesmas rotas tanto pras telas de gestão (admin/secretaria)
@@ -32,10 +32,8 @@ auto-cadastro.
 | Eventos — criar / editar / excluir       | ✅ | ✅ | ❌ |
 | Palestrantes — listar / detalhe          | com telefone | com telefone | sem telefone |
 | Palestrantes — criar / editar / excluir  | ✅ | ✅ | ❌ |
-| Salas — listar / detalhe                 | ✅ | ✅ | ✅ (só nome/capacidade, pra Agenda e detalhe do evento) |
+| Salas — listar / detalhe                 | ✅ | ✅ | ✅ (só nome/capacidade, pra Agenda e listagem de eventos) |
 | Salas — criar / editar / excluir         | ✅ | ✅ | ❌ |
-| Sessões — listar / detalhe               | ✅ | ✅ | ✅ |
-| Sessões — criar / editar / excluir       | ✅ | ✅ | ❌ |
 | Participantes (cadastro avulso)          | ✅ | ✅ | ❌ |
 | Inscrições — listar                      | ✅ (todas) | ✅ (todas) | ✅ (só as próprias) |
 | Inscrições — criar/excluir manualmente   | ✅ | ✅ | ❌ |
@@ -174,20 +172,49 @@ não algo que quebra o fluxo hoje.
 
 ## Eventos
 
-Modelo não muda. Admin/secretaria fazem CRUD completo, aluno só lê.
+`Evento` e `Sessão` eram duas entidades separadas (um "Evento" guarda-chuva
+com várias "Sessões" dentro) numa versão anterior deste documento. Isso foi
+fundido numa entidade só: cada palestra/minicurso/workshop **é** um Evento,
+sem contêiner pai. Motivo: as duas telas de gestão eram praticamente
+idênticas (mesmas ações de CRUD) e o aluno tinha que navegar por dois
+níveis (lista de eventos → detalhe → lista de sessões) pra chegar em algo
+que, na prática, é um item só. Se o projeto precisar agrupar vários eventos
+sob um "evento guarda-chuva" no futuro (ex: uma semana acadêmica com várias
+palestras), isso volta como um campo opcional de agrupamento, não como a
+estrutura obrigatória de antes.
 
 ```ts
 interface Evento {
   id: string;
-  nome: string;
-  data: string;        // "2026-09-14"
-  local: string;
-  descricao: string;
+  titulo: string;           // "Minicurso: Arquitetura de Microsserviços"
+  tema: string;              // "Arquitetura de Software" — assunto do evento
+  horario: string;           // ISO-8601 com offset: "2026-09-14T14:00:00-03:00"
+  salaId: string;
+  palestranteId: string | null;
+  cargaHoraria: number;      // horas, aceita decimal — usado no certificado
+  perguntas: string[];       // perguntas do questionário de feedback, definidas na criação do evento
 }
 ```
 
-- `GET /api/eventos` e `GET /api/eventos/{id}` — qualquer perfil autenticado (404 se não existir).
-- `POST /api/eventos` — admin/secretaria, `201`.
+Detalhe pro frontend lembrar quando integrar de verdade: hoje o form de
+evento usa `<input type="datetime-local">`, que gera string sem timezone
+("2026-09-14T14:00"). Isso precisa ser serializado com offset antes de
+mandar pra API — não é conta do backend normalizar isso.
+
+`perguntas` é só a lista de enunciados (`string[]`) cadastrada pelo
+admin/secretaria ao criar ou editar o evento — o frontend hoje só oferece a
+tela de cadastro dessas perguntas; ele ainda não usa esse campo pra montar
+um formulário de resposta na tela de Feedback (ver "Lacunas conhecidas" no
+fim deste documento).
+
+- `GET /api/eventos` e `GET /api/eventos/{id}` — qualquer perfil
+  autenticado (404 se não existir). É a mesma rota usada pela tela de
+  gestão (admin/secretaria) e pela Agenda/listagem de eventos (aluno) — não
+  tem uma rota "enxuta" separada pro aluno, ele recebe o objeto `Evento`
+  completo (menos o que já é escondido em `Palestrante`, se o frontend um
+  dia parar de expandir isso client-side).
+- `POST /api/eventos` — admin/secretaria, `201`, `422` se
+  `palestranteId`/`salaId` não existirem.
 - `PUT /api/eventos/{id}` — admin/secretaria, `200`.
 - `DELETE /api/eventos/{id}` — admin/secretaria, `204`.
 
@@ -239,39 +266,6 @@ interface Sala {
   mostram o nome da sala de cada sessão, então precisam poder ler a lista.
 - `POST` / `PUT /api/salas/{id}` / `DELETE /api/salas/{id}` — admin/secretaria only, `403` pra aluno.
 
-## Sessões
-
-Campos novos que não existiam antes: `palestranteId`, `tema`, `cargaHoraria`.
-
-```ts
-interface Sessao {
-  id: string;
-  eventoId: string;
-  titulo: string;          // "Minicurso: Arquitetura de Microsserviços"
-  tema: string;             // "Arquitetura de Software" — assunto da sessão
-  horario: string;          // ISO-8601 com offset: "2026-09-14T14:00:00-03:00"
-  salaId: string;
-  palestranteId: string | null;
-  cargaHoraria: number;     // horas, aceita decimal — usado no certificado
-}
-```
-
-Detalhe pro frontend lembrar quando integrar de verdade: hoje o form de
-sessão usa `<input type="datetime-local">`, que gera string sem timezone
-("2026-09-14T14:00"). Isso precisa ser serializado com offset antes de
-mandar pra API — não é conta do backend normalizar isso.
-
-- `GET /api/sessoes?eventoId=` (filtro opcional) e `GET /api/sessoes/{id}` —
-  qualquer perfil autenticado. É a mesma rota usada pela tela de gestão
-  (admin/secretaria) e pela Agenda/detalhe do evento (aluno) — não tem uma
-  rota "enxuta" separada pro aluno, ele recebe o objeto `Sessao` completo
-  (menos o que já é escondido em `Palestrante`, se o frontend um dia parar
-  de expandir isso client-side).
-- `POST /api/sessoes` — admin/secretaria, `422` se `palestranteId`/`salaId`/`eventoId` não existirem.
-- `PUT /api/sessoes/{id}` e `DELETE /api/sessoes/{id}` — admin/secretaria.
-
-Aluno chamando POST/PUT/DELETE cai em `403 ACESSO_NEGADO`.
-
 ## Participantes
 
 Cadastro manual de gente sem login próprio (convidado externo, por
@@ -300,7 +294,7 @@ type StatusPresenca = "PENDENTE" | "PRESENTE" | "AUSENTE";
 interface Inscricao {
   id: string;
   participanteId: string;
-  sessaoId: string;
+  eventoId: string;
   statusPresenca: StatusPresenca;
   dataCheckin: string | null;   // setado só no check-in
   usuarioId: string | null;     // quem fez o check-in, não quem se inscreveu
@@ -308,12 +302,12 @@ interface Inscricao {
 }
 ```
 
-### `GET /api/inscricoes?eventoId=&sessaoId=&participanteId=&status=`
+### `GET /api/inscricoes?eventoId=&participanteId=&status=`
 
 Todos os filtros são opcionais, sem paginação (carrega tudo de uma vez,
 igual o frontend faz hoje). Usado em vários lugares: tela de gestão de
 Inscrições, contagem de inscritos na Agenda, checar "já estou inscrito
-nessa sessão?" no detalhe do evento, e listar certificados disponíveis
+nesse evento?" na listagem de eventos, e listar certificados disponíveis
 (`status=PRESENTE`).
 
 - **Admin/secretaria**: veem qualquer combinação de filtros, qualquer participante.
@@ -325,8 +319,8 @@ nessa sessão?" no detalhe do evento, e listar certificados disponíveis
 
 ### `POST /api/inscricoes` — inscrição manual (admin/secretaria)
 
-`{ "participanteId": "pa3", "sessaoId": "se2" }`, mesmas regras de conflito
-da autoinscrição (`409 JA_INSCRITO` / `409 SESSAO_LOTADA`). Aluno toma
+`{ "participanteId": "pa3", "eventoId": "se2" }`, mesmas regras de conflito
+da autoinscrição (`409 JA_INSCRITO` / `409 EVENTO_LOTADO`). Aluno toma
 `403` — ele usa o endpoint de autoinscrição abaixo, não esse.
 
 ### `PUT /api/inscricoes/{id}` — atualização parcial (admin/secretaria)
@@ -358,7 +352,7 @@ carregada, não bate em endpoint nenhum pra isso.
 `204`. Aluno toma `403` — não existe fluxo de cancelamento de inscrição
 pelo próprio aluno hoje.
 
-### `POST /api/eventos/{eventoId}/sessoes/{sessaoId}/inscricoes` — autoinscrição (endpoint dedicado, aluno)
+### `POST /api/eventos/{eventoId}/inscricoes` — autoinscrição (endpoint dedicado, aluno)
 
 Corpo vazio. O backend ignora qualquer `participanteId` que vier no corpo,
 sempre usa o do token — não é só conveniência, é o que impede um aluno de
@@ -369,7 +363,7 @@ Response `201`:
 {
   "id": "i9",
   "participanteId": "9c1a4d2e-participante-uuid",
-  "sessaoId": "se2",
+  "eventoId": "se2",
   "statusPresenca": "PENDENTE",
   "dataCheckin": null,
   "usuarioId": null,
@@ -388,9 +382,9 @@ Erros:
 |---|---|---|
 | 401 | `NAO_AUTENTICADO` | sem token / token inválido |
 | 403 | `ACESSO_NEGADO` | token válido mas perfil não é aluno |
-| 404 | `EVENTO_NAO_ENCONTRADO` / `SESSAO_NAO_ENCONTRADA` | id inexistente, ou sessão não pertence ao evento da URL |
-| 409 | `JA_INSCRITO` | esse aluno já tá inscrito nessa sessão |
-| 409 | `SESSAO_LOTADA` | capacidade da sala já bateu |
+| 404 | `EVENTO_NAO_ENCONTRADO` | id inexistente |
+| 409 | `JA_INSCRITO` | esse aluno já tá inscrito nesse evento |
+| 409 | `EVENTO_LOTADO` | capacidade da sala já bateu |
 
 ### `POST /api/inscricoes/{id}/confirmacao-email` (endpoint dedicado)
 
@@ -410,8 +404,8 @@ Erros:
 | 403 | `ACESSO_NEGADO` | a inscrição não pertence ao aluno do token |
 | 404 | `INSCRICAO_NAO_ENCONTRADA` | id inexistente |
 
-O corpo do e-mail junta dados de três lugares (inscrição → sessão → evento
-→ palestrante), então faz sentido resolver tudo isso no service antes de
+O corpo do e-mail junta dados de três lugares (inscrição → evento →
+palestrante), então faz sentido resolver tudo isso no service antes de
 montar a mensagem em vez de espalhar query em cada camada. Um jeito direto
 com `JavaMailSender` (já vem pronto no starter `spring-boot-starter-mail`):
 
@@ -428,7 +422,7 @@ public class ConfirmacaoInscricaoEmailService {
     }
 
     public ConfirmacaoEmailResponse enviar(String inscricaoId, String participanteIdDoToken) {
-        Inscricao inscricao = inscricaoRepository.findComSessaoEEventoById(inscricaoId)
+        Inscricao inscricao = inscricaoRepository.findComEventoById(inscricaoId)
                 .orElseThrow(() -> new NaoEncontradoException("INSCRICAO_NAO_ENCONTRADA"));
 
         if (!inscricao.getParticipante().getId().equals(participanteIdDoToken)) {
@@ -436,7 +430,7 @@ public class ConfirmacaoInscricaoEmailService {
         }
 
         String destinatario = inscricao.getParticipante().getEmail();
-        String assunto = "Inscrição confirmada — " + inscricao.getSessao().getEvento().getNome();
+        String assunto = "Inscrição confirmada — " + inscricao.getEvento().getTitulo();
         String corpo = montarCorpoHtml(inscricao);
 
         MimeMessage mensagem = mailSender.createMimeMessage();
@@ -455,18 +449,16 @@ public class ConfirmacaoInscricaoEmailService {
         return """
             <p>Olá, %s!</p>
             <p>Sua inscrição em <strong>%s</strong> foi confirmada.</p>
-            <p><strong>Sessão:</strong> %s<br>
-               <strong>Tema:</strong> %s<br>
+            <p><strong>Tema:</strong> %s<br>
                <strong>Palestrante:</strong> %s<br>
                <strong>Data/horário:</strong> %s</p>
             <p>Até lá!</p>
             """.formatted(
                 inscricao.getParticipante().getNome(),
-                inscricao.getSessao().getEvento().getNome(),
-                inscricao.getSessao().getTitulo(),
-                inscricao.getSessao().getTema(),
-                inscricao.getSessao().getPalestrante().getNome(),
-                inscricao.getSessao().getHorarioFormatado()
+                inscricao.getEvento().getTitulo(),
+                inscricao.getEvento().getTema(),
+                inscricao.getEvento().getPalestrante().getNome(),
+                inscricao.getEvento().getHorarioFormatado()
         );
     }
 }
@@ -501,12 +493,12 @@ de cima:
   seção de Inscrições, então na prática o aluno só descobre os certificados
   dele mesmo.
 - **Admin/secretaria**: `GET /api/inscricoes?status=PRESENTE` (com
-  `eventoId`/`sessaoId` opcionais pra filtrar), pra emitir certificado de
-  qualquer participante presente.
+  `eventoId` opcional pra filtrar), pra emitir certificado de qualquer
+  participante presente.
 
-O frontend junta `Inscricao` + `Sessao` + `Evento` + `Palestrante` +
-`Participante` no cliente pra montar o certificado (nome, RGM, evento,
-tema, palestrante, data, carga horária) e calcula um "código de validação"
+O frontend junta `Inscricao` + `Evento` + `Palestrante` + `Participante` no
+cliente pra montar o certificado (nome, RGM, evento, tema, palestrante,
+data, carga horária) e calcula um "código de validação"
 determinístico a partir do `id` da inscrição — isso é só uma referência
 impressa no PDF, não existe endpoint pra validar esse código de volta. Se
 no futuro quiserem uma verificação de autenticidade de verdade, precisa de
@@ -548,8 +540,8 @@ ainda não pedindo:
 ## Dashboard
 
 Não existe endpoint dedicado — `DashboardPage.tsx` calcula tudo no cliente
-a partir de `GET /api/eventos`, `GET /api/sessoes`, `GET /api/inscricoes` e
-`GET /api/salas` (pra ocupação média). Funciona, mas belisca performance se
+a partir de `GET /api/eventos`, `GET /api/inscricoes` e `GET /api/salas`
+(pra ocupação média). Funciona, mas belisca performance se
 o volume de dados crescer bastante; um `GET /api/dashboard/estatisticas`
 agregando isso no servidor é uma otimização futura razoável, não um
 requisito pra este contrato funcionar.
@@ -591,8 +583,8 @@ Códigos usados neste documento:
 | 403 | `ACESSO_NEGADO` | autenticado, mas sem permissão pro recurso |
 | 404 | `*_NAO_ENCONTRADO(A)` | id não existe |
 | 409 | `RGM_DUPLICADO` / `EMAIL_DUPLICADO` | conflito de unicidade no cadastro |
-| 409 | `JA_INSCRITO` | inscrição duplicada na mesma sessão |
-| 409 | `SESSAO_LOTADA` | capacidade da sala esgotada |
+| 409 | `JA_INSCRITO` | inscrição duplicada no mesmo evento |
+| 409 | `EVENTO_LOTADO` | capacidade da sala esgotada |
 | 409 | `FEEDBACK_JA_ENVIADO` | feedback duplicado pro mesmo evento |
 | 422 | `CODIGO_INVALIDO` | código de recuperação de senha errado/expirado |
 | 422 | `VALIDACAO` | campo inválido/ausente no corpo |
@@ -607,8 +599,8 @@ tem permissão — não misturar os dois, e não usar 404 pra esconder um 403
 | Entidade | Mudança |
 |---|---|
 | `Usuario` | perfil novo `ALUNO`; campos novos `rgm` e `participanteId` (nullable, só ALUNO) |
-| `Sessao` | campos novos: `palestranteId` (nullable), `tema`, `cargaHoraria` |
-| `Inscricao` | campo novo `dataInscricao` |
+| `Evento` | fundido com a antiga entidade `Sessao` — ver seção **Eventos**; campos novos: `palestranteId` (nullable), `tema`, `cargaHoraria`, `perguntas` (`string[]`) |
+| `Inscricao` | campo `sessaoId` renomeado pra `eventoId` (reflete a fusão acima); campo novo `dataInscricao` |
 | `Feedback` | continua flat (`/api/feedbacks`), sem aninhar em `/eventos/{id}/feedback` como uma versão anterior deste documento sugeria |
 | `Trabalho` | removido — entidade, tabela e endpoints |
 | `Certificado` | não é entidade nem tabela — deriva de Inscrição + presença confirmada, PDF montado no cliente |
@@ -624,6 +616,9 @@ tem permissão — não misturar os dois, e não usar 404 pra esconder um 403
   navegador) — funciona, mas não escala pra uma base grande de dados.
 - Sem endpoint de validação de código de certificado (o código impresso no
   PDF é só uma referência visual por enquanto).
+- O campo `perguntas` do Evento só tem tela de cadastro (admin/secretaria
+  define as perguntas ao criar o evento); ainda não existe tela de resposta
+  do questionário nem vínculo entre `perguntas` e o `Feedback` registrado.
 
 ## Coisa que ainda não decidimos
 

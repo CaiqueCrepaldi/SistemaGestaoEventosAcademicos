@@ -8,7 +8,6 @@ import { CertificadosPage } from "./pages/Certificados/CertificadosPage";
 import { CheckinPage } from "./pages/Checkin/CheckinPage";
 import { DashboardPage } from "./pages/Dashboard/DashboardPage";
 import { EsqueciSenhaPage } from "./pages/EsqueciSenha/EsqueciSenhaPage";
-import { EventoDetalhePage } from "./pages/Eventos/EventoDetalhePage";
 import { EventosPage } from "./pages/Eventos/EventosPage";
 import { FeedbackPage } from "./pages/Feedback/FeedbackPage";
 import { InscricoesPage } from "./pages/Inscricoes/InscricoesPage";
@@ -16,7 +15,6 @@ import { LoginPage } from "./pages/Login/LoginPage";
 import { PalestrantesPage } from "./pages/Palestrantes/PalestrantesPage";
 import { ParticipantesPage } from "./pages/Participantes/ParticipantesPage";
 import { SalasPage } from "./pages/Salas/SalasPage";
-import { SessoesPage } from "./pages/Sessoes/SessoesPage";
 
 export function App() {
   return (
@@ -30,7 +28,6 @@ export function App() {
             <Route element={<Layout />}>
               <Route element={<ProtectedRoute perfis={["ADMINISTRADOR", "SECRETARIA", "ALUNO"]} />}>
                 <Route path="/eventos" element={<EventosPage />} />
-                <Route path="/eventos/:id" element={<EventoDetalhePage />} />
                 <Route path="/palestrantes" element={<PalestrantesPage />} />
                 <Route path="/agenda" element={<AgendaPage />} />
                 <Route path="/certificados" element={<CertificadosPage />} />
@@ -38,7 +35,6 @@ export function App() {
               </Route>
               <Route element={<ProtectedRoute perfis={["ADMINISTRADOR", "SECRETARIA"]} />}>
                 <Route path="/" element={<DashboardPage />} />
-                <Route path="/sessoes" element={<SessoesPage />} />
                 <Route path="/salas" element={<SalasPage />} />
                 <Route path="/participantes" element={<ParticipantesPage />} />
                 <Route path="/inscricoes" element={<InscricoesPage />} />

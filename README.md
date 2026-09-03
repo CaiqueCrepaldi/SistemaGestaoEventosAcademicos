@@ -1,9 +1,8 @@
 # SGEA — Sistema de Gestão de Eventos Acadêmicos
 
-Projeto de TCC/PFC: um sistema pra gerenciar eventos acadêmicos (semanas
-de tecnologia, congressos, etc.) — cadastro de eventos, sessões, salas e
-palestrantes, inscrição e check-in de participantes, emissão de
-certificado e feedback.
+Projeto de TCC/PFC: um sistema pra gerenciar eventos acadêmicos (palestras,
+minicursos, workshops, etc.) — cadastro de eventos, salas e palestrantes,
+inscrição e check-in de participantes, emissão de certificado e feedback.
 
 Frontend em React + TypeScript, feito aqui. Backend em Java/Spring Boot,
 feito à parte por outra pessoa, em outra IDE — o contrato entre os dois
@@ -24,17 +23,22 @@ docs/       contrato de API entre os dois lados
 Três perfis de usuário:
 
 - **Administrador** e **Secretaria** — acesso igual, total: CRUD de
-  eventos, sessões, salas, palestrantes e participantes; gestão de
-  inscrições; check-in (confirmar presença/ausência e exportar lista);
-  emissão de certificado de qualquer participante; dashboard com
-  estatísticas gerais.
+  eventos, salas, palestrantes e participantes; gestão de inscrições;
+  check-in (confirmar presença/ausência e exportar lista); emissão de
+  certificado de qualquer participante; dashboard com estatísticas gerais.
 - **Aluno** — perfil com cadastro público (`/cadastro`, sem precisar de
-  admin criar a conta). Só lê eventos, sessões, agenda e palestrantes (sem
-  ver telefone do palestrante); se inscreve sozinho nas sessões que quiser
+  admin criar a conta). Só lê eventos, agenda e palestrantes (sem ver
+  telefone do palestrante); se inscreve sozinho nos eventos que quiser
   (com verificação de vaga e de inscrição duplicada); recebe e-mail de
   confirmação; vê e emite os próprios certificados, liberados só depois
   que a presença é confirmada por um administrador/secretaria no check-in.
   Não acessa telas de gestão, participantes ou check-in.
+
+Cada evento (palestra, minicurso ou workshop) é cadastrado como um item só
+— não existe mais um "evento guarda-chuva" com várias sessões dentro,
+como em versões anteriores deste projeto. Ao criar um evento, admin/
+secretaria também podem cadastrar as perguntas do questionário de feedback
+que será associado a ele.
 
 O detalhe completo — endpoint por endpoint, o que cada perfil pode chamar
 e quais erros esperar — está em

@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { Badge } from "../../components/ui/Badge";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { useAuth } from "../../context/AuthContext";
-import { checkinService, sessaoService } from "../../services";
+import { checkinService, eventoService } from "../../services";
 import type { InscricaoDetalhada } from "../../services/checkinService";
-import type { Participante, Sessao, StatusPresenca } from "../../types";
+import type { Evento, Participante, StatusPresenca } from "../../types";
 
 function badgeTone(status: StatusPresenca): "green" | "red" | "orange" {
   if (status === "PRESENTE") return "green";
@@ -35,13 +35,13 @@ export function CheckinPage() {
   const [selecionado, setSelecionado] = useState<Participante | null>(null);
   const [inscricoes, setInscricoes] = useState<InscricaoDetalhada[]>([]);
 
-  const [sessoes, setSessoes] = useState<Sessao[]>([]);
-  const [sessaoExportar, setSessaoExportar] = useState("");
+  const [eventos, setEventos] = useState<Evento[]>([]);
+  const [eventoExportar, setEventoExportar] = useState("");
 
   useEffect(() => {
-    void sessaoService.list().then((s) => {
-      setSessoes(s);
-      setSessaoExportar(s[0]?.id ?? "");
+    void eventoService.list().then((e) => {
+      setEventos(e);
+      setEventoExportar(e[0]?.id ?? "");
     });
   }, []);
 
@@ -66,10 +66,10 @@ export function CheckinPage() {
   }
 
   async function exportar() {
-    const lista = await checkinService.listarPresencaPorSessao(sessaoExportar);
-    const sessao = sessoes.find((s) => s.id === sessaoExportar);
+    const lista = await checkinService.listarPresencaPorEvento(eventoExportar);
+    const evento = eventos.find((e) => e.id === eventoExportar);
     const csv = checkinService.gerarCsvPresenca(lista);
-    baixarCsv(`presenca-${sessao?.titulo ?? "sessao"}.csv`, csv);
+    baixarCsv(`presenca-${evento?.titulo ?? "evento"}.csv`, csv);
   }
 
   return (
@@ -109,7 +109,7 @@ export function CheckinPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Sessão</th>
+                  <th>Evento</th>
                   <th>Status</th>
                   <th />
                 </tr>
@@ -117,10 +117,7 @@ export function CheckinPage() {
               <tbody>
                 {inscricoes.map((item) => (
                   <tr key={item.inscricao.id}>
-                    <td>
-                      <div>{item.sessaoTitulo}</div>
-                      <div className="simple-list-sub">{item.eventoNome}</div>
-                    </td>
+                    <td>{item.eventoTitulo}</td>
                     <td>
                       <Badge tone={badgeTone(item.inscricao.statusPresenca)}>
                         {badgeLabel(item.inscricao.statusPresenca)}
@@ -152,14 +149,14 @@ export function CheckinPage() {
       <div className="card">
         <h3>Exportar lista de presença</h3>
         <div className="field-row">
-          <select className="search-input" value={sessaoExportar} onChange={(e) => setSessaoExportar(e.target.value)}>
-            {sessoes.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.titulo}
+          <select className="search-input" value={eventoExportar} onChange={(e) => setEventoExportar(e.target.value)}>
+            {eventos.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.titulo}
               </option>
             ))}
           </select>
-          <button className="btn btn-primary" onClick={() => void exportar()} disabled={!sessaoExportar}>
+          <button className="btn btn-primary" onClick={() => void exportar()} disabled={!eventoExportar}>
             Exportar CSV
           </button>
         </div>
