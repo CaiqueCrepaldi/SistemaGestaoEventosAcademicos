@@ -69,7 +69,6 @@ export function CadastroPage() {
     <div className="login-screen">
       <div className="login-card">
         <div className="login-brand">
-          <span className="brand-mark">SGEA</span>
           <p>Criar conta de aluno</p>
         </div>
 
