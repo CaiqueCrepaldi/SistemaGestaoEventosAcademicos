@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { eventosStore, feedbacksStore, inscricoesStore, palestrantesStore, salasStore } from "../../db/store";
+import { eventosStore, feedbacksStore, inscricoesStore, palestrantesStore, salasStore, tentativasStore } from "../../db/store";
 import { AppError } from "../../errors/AppError";
 import type { EventoInput, EventoUpdateInput } from "./eventos.schemas";
 
@@ -37,7 +37,6 @@ async function criar(dados: EventoInput) {
   return eventosStore.criar({
     id: randomUUID(),
     ...dados,
-    palestranteId: dados.palestranteId ?? null,
     criadoEm: new Date().toISOString(),
   });
 }
@@ -58,6 +57,9 @@ async function remover(id: string) {
   }
   for (const feedback of feedbacksStore.listarComFiltro((f) => f.eventoId === id)) {
     feedbacksStore.remover(feedback.id);
+  }
+  for (const tentativa of tentativasStore.listarComFiltro((t) => t.eventoId === id)) {
+    tentativasStore.remover(tentativa.id);
   }
   eventosStore.remover(id);
 }

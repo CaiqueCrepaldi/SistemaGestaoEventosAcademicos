@@ -2,8 +2,10 @@ import { Router } from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { autenticar, autorizar } from "../../middleware/auth";
 import { validarCorpo } from "../../middleware/validate";
-import { eventoParaDTO, inscricaoParaDTO } from "../../utils/dto";
+import { eventoParaDTO, inscricaoParaDTO, tentativaParaDTO } from "../../utils/dto";
 import { AppError } from "../../errors/AppError";
+import { questionarioService } from "../questionario/questionario.service";
+import { respostasQuestionarioSchema } from "../questionario/questionario.schemas";
 import { eventosService } from "./eventos.service";
 import { eventoSchema, eventoUpdateSchema } from "./eventos.schemas";
 
@@ -15,9 +17,10 @@ export const eventosRouter = Router();
 eventosRouter.get(
   "/",
   autenticar,
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
     const eventos = await eventosService.listar();
-    res.json(eventos.map(eventoParaDTO));
+    const paraAluno = req.usuario!.perfil === "ALUNO";
+    res.json(eventos.map((e) => eventoParaDTO(e, paraAluno)));
   }),
 );
 
@@ -26,7 +29,8 @@ eventosRouter.get(
   autenticar,
   asyncHandler(async (req, res) => {
     const evento = await eventosService.buscarOuFalhar(req.params.id);
-    res.json(eventoParaDTO(evento));
+    const paraAluno = req.usuario!.perfil === "ALUNO";
+    res.json(eventoParaDTO(evento, paraAluno));
   }),
 );
 
@@ -37,7 +41,8 @@ eventosRouter.post(
   validarCorpo(eventoSchema),
   asyncHandler(async (req, res) => {
     const evento = await eventosService.criar(req.body);
-    res.status(201).json(eventoParaDTO(evento));
+    // Quem cria é sempre admin/secretaria, então devolve com o gabarito.
+    res.status(201).json(eventoParaDTO(evento, false));
   }),
 );
 
@@ -48,7 +53,7 @@ eventosRouter.put(
   validarCorpo(eventoUpdateSchema),
   asyncHandler(async (req, res) => {
     const evento = await eventosService.atualizar(req.params.id, req.body);
-    res.json(eventoParaDTO(evento));
+    res.json(eventoParaDTO(evento, false));
   }),
 );
 
@@ -79,5 +84,52 @@ eventosRouter.post(
     }
     const inscricao = await eventosService.autoinscrever(req.params.eventoId, participanteId);
     res.status(201).json(inscricaoParaDTO(inscricao));
+  }),
+);
+
+// Perguntas do questionário desse evento, sem o gabarito — é o que o aluno
+// carrega na tela de responder (o time de gestão já recebe o gabarito
+// completo pela rota GET /:id acima).
+eventosRouter.get(
+  "/:eventoId/questionario",
+  autenticar,
+  asyncHandler(async (req, res) => {
+    const evento = await eventosService.buscarOuFalhar(req.params.eventoId);
+    res.json(eventoParaDTO(evento, true).questionario);
+  }),
+);
+
+// Envio das respostas — só ALUNO, e sempre em nome do próprio participante
+// do token (mesma proteção da autoinscrição acima: ninguém responde em
+// nome de outra pessoa forjando participanteId no corpo).
+eventosRouter.post(
+  "/:eventoId/questionario/respostas",
+  autenticar,
+  autorizar("ALUNO"),
+  validarCorpo(respostasQuestionarioSchema),
+  asyncHandler(async (req, res) => {
+    const participanteId = req.usuario!.participanteId;
+    if (!participanteId) {
+      throw AppError.acessoNegado("Esta conta não está vinculada a um participante.");
+    }
+    const tentativa = await questionarioService.responder(req.params.eventoId, participanteId, req.body);
+    res.status(201).json(tentativaParaDTO(tentativa));
+  }),
+);
+
+// Tentativas do PRÓPRIO aluno nesse evento — usado pra decidir se o botão
+// de emitir certificado já pode ser liberado (ver certificadoService.ts no
+// frontend).
+eventosRouter.get(
+  "/:eventoId/questionario/tentativas",
+  autenticar,
+  autorizar("ALUNO"),
+  asyncHandler(async (req, res) => {
+    const participanteId = req.usuario!.participanteId;
+    if (!participanteId) {
+      throw AppError.acessoNegado("Esta conta não está vinculada a um participante.");
+    }
+    const tentativas = await questionarioService.listarTentativas(req.params.eventoId, participanteId);
+    res.json(tentativas.map(tentativaParaDTO));
   }),
 );

@@ -10,6 +10,7 @@ import { palestrantesRouter } from "./modules/palestrantes/palestrantes.routes";
 import { participantesRouter } from "./modules/participantes/participantes.routes";
 import { inscricoesRouter } from "./modules/inscricoes/inscricoes.routes";
 import { feedbacksRouter } from "./modules/feedbacks/feedbacks.routes";
+import { questionarioRouter } from "./modules/questionario/questionario.routes";
 
 // Monta o app do Express: middlewares globais, todas as rotas sob /api
 // (prefixo documentado em docs/api-contract.md) e por último o
@@ -34,6 +35,7 @@ export function criarApp() {
   apiRouter.use("/participantes", participantesRouter);
   apiRouter.use("/inscricoes", inscricoesRouter);
   apiRouter.use("/feedbacks", feedbacksRouter);
+  apiRouter.use("/questionario-tentativas", questionarioRouter);
   app.use("/api", apiRouter);
 
   // Qualquer rota não mapeada acima cai aqui — devolve 404 no mesmo

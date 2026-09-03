@@ -24,11 +24,12 @@ async function atualizar(id: string, dados: PalestranteUpdateInput) {
 
 async function remover(id: string) {
   await buscarOuFalhar(id);
-  // Palestrante é opcional num evento, então remover um que já está
-  // vinculado não bloqueia — só desvincula (palestranteId vira null nos
-  // eventos afetados), igual seria com ON DELETE SET NULL num banco de verdade.
-  for (const evento of eventosStore.listarComFiltro((e) => e.palestranteId === id)) {
-    eventosStore.atualizar(evento.id, { palestranteId: null });
+  // Palestrante é obrigatório num evento (ON DELETE RESTRICT, não SET
+  // NULL) — bloqueia a exclusão enquanto houver evento vinculado, em vez de
+  // deixar o evento sem palestrante.
+  const emUso = eventosStore.contar((e) => e.palestranteId === id) > 0;
+  if (emUso) {
+    throw AppError.conflito("PALESTRANTE_EM_USO", "Não é possível remover: há eventos vinculados a este palestrante.");
   }
   palestrantesStore.remover(id);
 }

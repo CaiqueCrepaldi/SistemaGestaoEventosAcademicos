@@ -1,14 +1,19 @@
 import { z } from "zod";
+import { REGEX_NOME, REGEX_RGM, normalizarRgm } from "../../utils/validacao";
 
-const DOMINIO_INSTITUCIONAL = "@aluno.ifsp.edu.br";
+const DOMINIO_INSTITUCIONAL = "@aluno.umc.br";
 
 // Regras de validação de cada endpoint de autenticação. Ficam centralizadas
 // aqui (em vez de espalhadas no controller) pra serem fáceis de achar e
 // testar isoladamente. Mensagens em português, já que é o que a tela do
 // frontend mostra direto pro usuário quando o erro é 422.
 export const registroSchema = z.object({
-  nomeCompleto: z.string().trim().min(1, "Nome completo é obrigatório."),
-  rgm: z.string().regex(/^\d{8,}$/, "RGM deve conter só números, com no mínimo 8 dígitos."),
+  nomeCompleto: z.string().trim().regex(REGEX_NOME, "Nome deve conter apenas letras."),
+  rgm: z
+    .string()
+    .trim()
+    .transform(normalizarRgm)
+    .refine((valor) => REGEX_RGM.test(valor), "RGM deve ter exatamente 11 caracteres, sem espaços."),
   emailInstitucional: z
     .string()
     .email("E-mail institucional inválido.")

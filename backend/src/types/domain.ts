@@ -40,8 +40,19 @@ export interface Sala {
 export interface Palestrante {
   id: string;
   nome: string;
-  curriculo: string;
+  email: string;
   telefone: string;
+}
+
+export interface AlternativaQuestionario {
+  texto: string;
+  correta: boolean;
+}
+
+export interface PerguntaQuestionario {
+  id: string;
+  enunciado: string;
+  alternativas: AlternativaQuestionario[]; // sempre 4, exatamente 1 correta
 }
 
 export interface Evento {
@@ -49,10 +60,27 @@ export interface Evento {
   titulo: string;
   horario: string; // ISO-8601
   salaId: string;
-  palestranteId: string | null;
+  palestranteId: string;
   tema: string;
   cargaHoraria: number;
-  perguntas: string[];
+  // Questionário obrigatório de múltipla escolha definido pelo palestrante e
+  // cadastrado por administrador/secretaria — sempre 10 perguntas. O aluno
+  // só emite certificado depois de acertar pelo menos 60% dele.
+  questionario: PerguntaQuestionario[];
+  criadoEm: string;
+}
+
+// Uma tentativa de um participante respondendo o questionário de um evento.
+// `respostas[i]` é o índice da alternativa escolhida na pergunta i (mesma
+// ordem de Evento.questionario).
+export interface TentativaQuestionario {
+  id: string;
+  participanteId: string;
+  eventoId: string;
+  respostas: number[];
+  acertos: number;
+  totalPerguntas: number;
+  percentual: number;
   criadoEm: string;
 }
 

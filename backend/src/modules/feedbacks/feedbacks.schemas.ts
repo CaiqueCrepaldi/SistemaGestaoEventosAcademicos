@@ -8,7 +8,7 @@ export const feedbackSchema = z.object({
   eventoId: z.string().uuid("eventoId inválido."),
   participanteId: z.string().uuid("participanteId inválido.").optional(),
   nota: z.number().int().min(1, "Nota deve ser entre 1 e 5.").max(5, "Nota deve ser entre 1 e 5."),
-  comentario: z.string().trim().default(""),
+  comentario: z.string().trim().min(1, "Comentário é obrigatório."),
 });
 export type FeedbackInput = z.infer<typeof feedbackSchema>;
 

@@ -8,7 +8,17 @@ import {
   salasSeed,
   usuariosSeed,
 } from "./seedData";
-import type { Evento, Feedback, Inscricao, Palestrante, Participante, RecuperacaoSenha, Sala, Usuario } from "../types/domain";
+import type {
+  Evento,
+  Feedback,
+  Inscricao,
+  Palestrante,
+  Participante,
+  RecuperacaoSenha,
+  Sala,
+  TentativaQuestionario,
+  Usuario,
+} from "../types/domain";
 
 // Um repositório em memória por entidade — é isso que cada service em
 // src/modules/*/*.service.ts importa e usa. Ver repositorio.ts pro porquê
@@ -21,3 +31,4 @@ export const eventosStore = criarRepositorio<Evento>(eventosSeed);
 export const inscricoesStore = criarRepositorio<Inscricao>(inscricoesSeed);
 export const feedbacksStore = criarRepositorio<Feedback>(feedbacksSeed);
 export const recuperacoesStore = criarRepositorio<RecuperacaoSenha>([]);
+export const tentativasStore = criarRepositorio<TentativaQuestionario>([]);

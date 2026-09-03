@@ -1,4 +1,13 @@
-import type { Evento, Feedback, Inscricao, Palestrante, Participante, Sala, Usuario } from "../types/domain";
+import type {
+  Evento,
+  Feedback,
+  Inscricao,
+  Palestrante,
+  Participante,
+  Sala,
+  TentativaQuestionario,
+  Usuario,
+} from "../types/domain";
 
 // Funções puras que convertem o registro guardado internamente (que pode
 // ter campos de controle, como criadoEm) no formato exato que
@@ -30,7 +39,7 @@ export function salaParaDTO(sala: Sala) {
 // aparece no JSON) — é a regra documentada pro perfil ALUNO nunca ver
 // telefone de palestrante.
 export function palestranteParaDTO(palestrante: Palestrante, paraAluno: boolean) {
-  const base = { id: palestrante.id, nome: palestrante.nome, curriculo: palestrante.curriculo };
+  const base = { id: palestrante.id, nome: palestrante.nome, email: palestrante.email };
   return paraAluno ? base : { ...base, telefone: palestrante.telefone };
 }
 
@@ -43,7 +52,10 @@ export function participanteParaDTO(participante: Participante) {
   };
 }
 
-export function eventoParaDTO(evento: Evento) {
+// `paraAluno=true` remove o campo `correta` de cada alternativa — o aluno
+// não pode ver o gabarito antes de responder (ver módulo questionario, que
+// usa a mesma regra pro endpoint dedicado de perguntas).
+export function eventoParaDTO(evento: Evento, paraAluno: boolean) {
   return {
     id: evento.id,
     titulo: evento.titulo,
@@ -52,7 +64,26 @@ export function eventoParaDTO(evento: Evento) {
     palestranteId: evento.palestranteId,
     tema: evento.tema,
     cargaHoraria: evento.cargaHoraria,
-    perguntas: evento.perguntas,
+    questionario: paraAluno
+      ? evento.questionario.map((p) => ({
+          id: p.id,
+          enunciado: p.enunciado,
+          alternativas: p.alternativas.map((a) => ({ texto: a.texto })),
+        }))
+      : evento.questionario,
+  };
+}
+
+export function tentativaParaDTO(tentativa: TentativaQuestionario) {
+  return {
+    id: tentativa.id,
+    participanteId: tentativa.participanteId,
+    eventoId: tentativa.eventoId,
+    respostas: tentativa.respostas,
+    acertos: tentativa.acertos,
+    totalPerguntas: tentativa.totalPerguntas,
+    percentual: tentativa.percentual,
+    criadoEm: tentativa.criadoEm,
   };
 }
 
