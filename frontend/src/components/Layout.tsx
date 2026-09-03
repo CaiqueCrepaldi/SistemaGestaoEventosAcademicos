@@ -1,5 +1,19 @@
-import { NavLink, Outlet } from "react-router-dom";
+import type { ComponentType } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import {
+  AgendaIcon,
+  CertificadoIcon,
+  CheckinIcon,
+  DashboardIcon,
+  EventoIcon,
+  FeedbackIcon,
+  InscricaoIcon,
+  PalestranteIcon,
+  ParticipanteIcon,
+  SalaIcon,
+  SessaoIcon,
+} from "./ui/icons";
 import type { Perfil } from "../types";
 
 const PERFIL_LABEL: Record<Perfil, string> = {
@@ -11,62 +25,97 @@ const PERFIL_LABEL: Record<Perfil, string> = {
 const TODOS_PERFIS: Perfil[] = ["ADMINISTRADOR", "SECRETARIA", "ALUNO"];
 const EQUIPE: Perfil[] = ["ADMINISTRADOR", "SECRETARIA"];
 
-const NAV_ITEMS: { to: string; label: string; end?: boolean; perfis: Perfil[] }[] = [
-  { to: "/", label: "Dashboard", end: true, perfis: EQUIPE },
-  { to: "/eventos", label: "Eventos", perfis: TODOS_PERFIS },
-  { to: "/sessoes", label: "Sessões", perfis: EQUIPE },
-  { to: "/salas", label: "Salas", perfis: EQUIPE },
-  { to: "/palestrantes", label: "Palestrantes", perfis: TODOS_PERFIS },
-  { to: "/participantes", label: "Participantes", perfis: EQUIPE },
-  { to: "/inscricoes", label: "Inscrições", perfis: EQUIPE },
-  { to: "/checkin", label: "Check-in", perfis: EQUIPE },
-  { to: "/agenda", label: "Agenda", perfis: TODOS_PERFIS },
-  { to: "/certificados", label: "Certificados", perfis: TODOS_PERFIS },
-  { to: "/feedback", label: "Feedback", perfis: TODOS_PERFIS },
+interface NavItem {
+  to: string;
+  label: string;
+  end?: boolean;
+  perfis: Perfil[];
+  icon: ComponentType<{ className?: string }>;
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { to: "/", label: "Principal", end: true, perfis: EQUIPE, icon: DashboardIcon },
+  { to: "/eventos", label: "Eventos", perfis: TODOS_PERFIS, icon: EventoIcon },
+  { to: "/sessoes", label: "Sessões", perfis: EQUIPE, icon: SessaoIcon },
+  { to: "/salas", label: "Salas", perfis: EQUIPE, icon: SalaIcon },
+  { to: "/palestrantes", label: "Palestrantes", perfis: TODOS_PERFIS, icon: PalestranteIcon },
+  { to: "/participantes", label: "Participantes", perfis: EQUIPE, icon: ParticipanteIcon },
+  { to: "/inscricoes", label: "Inscrições", perfis: EQUIPE, icon: InscricaoIcon },
+  { to: "/checkin", label: "Check-in", perfis: EQUIPE, icon: CheckinIcon },
+  { to: "/agenda", label: "Agenda", perfis: TODOS_PERFIS, icon: AgendaIcon },
+  { to: "/certificados", label: "Certificados", perfis: TODOS_PERFIS, icon: CertificadoIcon },
+  { to: "/feedback", label: "Feedback", perfis: TODOS_PERFIS, icon: FeedbackIcon },
 ];
+
+function useMigalhas(menuItens: NavItem[]) {
+  const location = useLocation();
+  const partes = location.pathname.split("/").filter(Boolean);
+
+  if (partes.length === 0) {
+    return ["Principal"];
+  }
+
+  const atual = menuItens.find((item) => item.to === `/${partes[0]}`);
+  const secao = atual?.label ?? partes[0];
+
+  if (partes.length > 1) {
+    return [secao, "Detalhe"];
+  }
+  return [secao];
+}
 
 export function Layout() {
   const { usuario, logout } = useAuth();
   const menuItens = NAV_ITEMS.filter((item) => !usuario || item.perfis.includes(usuario.perfil));
+  const migalhas = useMigalhas(menuItens);
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="sidebar-brand">
-          <span className="sidebar-brand-mark">SGEA</span>
-          <span className="sidebar-brand-sub">Gestão de Eventos Acadêmicos</span>
+      <header className="topbar">
+        <div className="brand">
+          <span className="brand-mark">SGEA</span>
+          <span className="brand-sub">Gestão de Eventos Acadêmicos</span>
         </div>
-        <nav className="sidebar-nav">
-          {menuItens.map((item) => (
+        <div className="topbar-user">
+          <div className="topbar-user-info">
+            <strong>{usuario?.nome}</strong>
+            <span>{usuario ? PERFIL_LABEL[usuario.perfil] : ""}</span>
+          </div>
+          <button className="btn btn-ghost" onClick={logout}>
+            Sair
+          </button>
+        </div>
+      </header>
+
+      <nav className="main-nav">
+        {menuItens.map((item) => {
+          const IconeItem = item.icon;
+          return (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.end}
-              className={({ isActive }) => "sidebar-link" + (isActive ? " active" : "")}
+              className={({ isActive }) => "nav-link" + (isActive ? " active" : "")}
             >
-              {item.label}
+              <IconeItem />
+              <span>{item.label}</span>
             </NavLink>
-          ))}
-        </nav>
-      </aside>
+          );
+        })}
+      </nav>
 
-      <div className="app-main">
-        <header className="topbar">
-          <div />
-          <div className="topbar-user">
-            <div className="topbar-user-info">
-              <strong>{usuario?.nome}</strong>
-              <span>{usuario ? PERFIL_LABEL[usuario.perfil] : ""}</span>
-            </div>
-            <button className="btn btn-ghost" onClick={logout}>
-              Sair
-            </button>
-          </div>
-        </header>
-        <main className="content">
-          <Outlet />
-        </main>
+      <div className="breadcrumb-bar">
+        {migalhas.map((parte, i) => (
+          <span key={i}>
+            {i > 0 && <span className="breadcrumb-sep">/</span>}
+            {parte}
+          </span>
+        ))}
       </div>
+
+      <main className="content">
+        <Outlet />
+      </main>
     </div>
   );
 }

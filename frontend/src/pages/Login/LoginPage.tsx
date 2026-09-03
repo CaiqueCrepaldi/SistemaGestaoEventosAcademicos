@@ -24,7 +24,7 @@ export function LoginPage() {
     <div className="login-screen">
       <div className="login-card">
         <div className="login-brand">
-          <span className="sidebar-brand-mark">SGEA</span>
+          <span className="brand-mark">SGEA</span>
           <p>Sistema de Gestão de Eventos Acadêmicos</p>
         </div>
 

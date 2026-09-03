@@ -52,7 +52,7 @@ export function EsqueciSenhaPage() {
     <div className="login-screen">
       <div className="login-card">
         <div className="login-brand">
-          <span className="sidebar-brand-mark">SGEA</span>
+          <span className="brand-mark">SGEA</span>
           <p>Recuperar senha</p>
         </div>
 
