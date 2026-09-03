@@ -32,10 +32,30 @@ tem lá dentro — nenhuma rota, controller ou regra de negócio dos módulos
 
 ## Passo a passo pra rodar localmente
 
+Crie um arquivo `backend/.env` (não é versionado, ver `.gitignore`) com:
+
+```
+PORT=8080
+NODE_ENV=development
+CORS_ORIGIN=http://localhost:5173
+JWT_SECRET=troque-este-valor-por-um-segredo-longo-e-aleatorio
+JWT_EXPIRES_IN=8h
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM=Gestão de Eventos Acadêmicos <no-reply@sgea.local>
+```
+
+Só `JWT_SECRET` é obrigatório pra o servidor subir (troque por um valor
+aleatório e longo em qualquer ambiente real — quem souber esse segredo
+consegue forjar token de admin). Deixe as variáveis de `SMTP_*` em branco
+em dev: sem SMTP configurado, o backend só imprime o e-mail no console em
+vez de enviar de verdade.
+
 ```bash
 cd backend
 npm install
-cp .env.example .env
 npm run dev
 ```
 

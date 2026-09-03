@@ -448,7 +448,7 @@ enquanto o banco de verdade não é ligado, ver `backend/README.md`.)
 
 `emailService` (`backend/src/modules/email/email.service.ts`) usa um
 transporte `nodemailer` configurado por variável de ambiente (`SMTP_HOST`,
-`SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — ver `.env.example`).
+`SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — ver `backend/README.md`).
 **Sem `SMTP_HOST` configurado, o e-mail não é enviado de verdade — só
 impresso no console** (`[e-mail simulado] ...`), o que é o padrão em
 desenvolvimento local e evita precisar de uma conta SMTP só pra testar o

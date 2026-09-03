@@ -73,8 +73,8 @@ o sistema inteiro sem o backend rodando.
 
 ### Modo mock vs. modo integrado
 
-Duas variáveis de ambiente controlam isso (copia `frontend/.env.example`
-pra `frontend/.env.local`, que não é versionado):
+Duas variáveis de ambiente controlam isso (cria `frontend/.env.local`, que
+não é versionado, com as duas variáveis abaixo):
 
 | Variável | mock (padrão) | integrado |
 |---|---|---|

@@ -1,20 +1,22 @@
 # Frontend — Sistema de Gestão de Eventos Acadêmicos
 
-React 19 + TypeScript + Vite. O backend (Java/Spring Boot) é feito à parte,
+React 19 + TypeScript + Vite. O backend (Node.js + Express) é feito à parte,
 o contrato entre os dois tá em [`../docs/api-contract.md`](../docs/api-contract.md).
 
 ## Rodando
 
 ```bash
 npm install
-cp .env.example .env.local   # ajusta os valores se precisar
 npm run dev
 ```
 
+Sem nenhum `.env.local` configurado, o app já sobe em modo mock (ver
+abaixo). Pra ligar no backend de verdade, crie `frontend/.env.local` (não é
+versionado) com o conteúdo da tabela da próxima seção.
+
 ## Mock vs. integrado
 
-Duas variáveis controlam isso, em `.env.local` (não versionado, copia do
-`.env.example`):
+Duas variáveis controlam isso, em `.env.local` (não versionado):
 
 | Variável | mock (padrão) | integrado |
 |---|---|---|
@@ -29,8 +31,8 @@ servidor de e-mail nenhum aqui.
 
 No modo integrado cada chamada de serviço vira request HTTP de verdade pra
 `VITE_API_URL`, com `Authorization: Bearer <token>` (token vem da sessão
-salva em `localStorage["sgea:session"]` no login). Precisa do Spring Boot
-rodando e seguindo o contrato do `docs/api-contract.md`.
+salva em `localStorage["sgea:session"]` no login). Precisa do backend
+(`../backend`) rodando e seguindo o contrato do `docs/api-contract.md`.
 
 Pra trocar, edita o `.env.local` e reinicia o `npm run dev` (env var não
 recarrega sozinha). Sem `.env` nenhum configurado o app cai em mock por
