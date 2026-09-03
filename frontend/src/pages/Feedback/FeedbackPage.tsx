@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
+import { toast } from "../../components/ui/Toast";
 import { eventoService, feedbackService, participanteService } from "../../services";
 import type { Evento, Feedback, Participante } from "../../types";
 
@@ -37,7 +38,12 @@ export function FeedbackPage() {
   }
 
   async function salvar() {
+    if (!form.comentario.trim()) {
+      toast.error("Preencha o comentário — todos os campos são obrigatórios.");
+      return;
+    }
     await feedbackService.create(form);
+    toast.success("Feedback registrado.");
     setModalAberto(false);
     await carregar();
   }
@@ -53,7 +59,6 @@ export function FeedbackPage() {
     <div>
       <PageHeader
         title="Feedback"
-        subtitle="Avaliações dos participantes após os eventos"
         actions={
           <button className="btn btn-primary" onClick={abrirNovo} disabled={eventos.length === 0 || participantes.length === 0}>
             + Novo feedback
@@ -157,6 +162,7 @@ export function FeedbackPage() {
                 value={form.comentario}
                 onChange={(e) => setForm({ ...form, comentario: e.target.value })}
                 rows={3}
+                required
               />
             </label>
             <div className="modal-footer">

@@ -1,6 +1,7 @@
 import { HashRouter, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { ToastViewport } from "./components/ui/Toast";
 import { AuthProvider } from "./context/AuthContext";
 import { AgendaPage } from "./pages/Agenda/AgendaPage";
 import { CadastroPage } from "./pages/Cadastro/CadastroPage";
@@ -14,6 +15,7 @@ import { InscricoesPage } from "./pages/Inscricoes/InscricoesPage";
 import { LoginPage } from "./pages/Login/LoginPage";
 import { PalestrantesPage } from "./pages/Palestrantes/PalestrantesPage";
 import { ParticipantesPage } from "./pages/Participantes/ParticipantesPage";
+import { QuestionarioPage } from "./pages/Questionario/QuestionarioPage";
 import { SalasPage } from "./pages/Salas/SalasPage";
 
 // Define todas as rotas da aplicação e organiza a autorização por perfil em
@@ -30,6 +32,7 @@ export function App() {
   return (
     <HashRouter>
       <AuthProvider>
+        <ToastViewport />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/cadastro" element={<CadastroPage />} />
@@ -39,6 +42,7 @@ export function App() {
               {/* Rotas que ADMINISTRADOR, SECRETARIA e ALUNO acessam */}
               <Route element={<ProtectedRoute perfis={["ADMINISTRADOR", "SECRETARIA", "ALUNO"]} />}>
                 <Route path="/eventos" element={<EventosPage />} />
+                <Route path="/eventos/:eventoId/questionario" element={<QuestionarioPage />} />
                 <Route path="/palestrantes" element={<PalestrantesPage />} />
                 <Route path="/agenda" element={<AgendaPage />} />
                 <Route path="/certificados" element={<CertificadosPage />} />

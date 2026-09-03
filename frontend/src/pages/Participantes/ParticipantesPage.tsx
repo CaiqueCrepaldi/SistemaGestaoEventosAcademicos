@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { toast } from "../../components/ui/Toast";
 import { participanteService } from "../../services";
 import type { Participante } from "../../types";
+import { normalizarRgm, validarEmail, validarNome, validarRgm } from "../../utils/validacao";
 
 const VAZIO: Omit<Participante, "id"> = { nome: "", email: "", rgm: "" };
 
@@ -12,6 +15,8 @@ export function ParticipantesPage() {
   const [editando, setEditando] = useState<Participante | null>(null);
   const [form, setForm] = useState(VAZIO);
   const [busca, setBusca] = useState("");
+  const [confirmandoSalvar, setConfirmandoSalvar] = useState(false);
+  const [excluindo, setExcluindo] = useState<Participante | null>(null);
 
   useEffect(() => {
     void carregar();
@@ -33,20 +38,46 @@ export function ParticipantesPage() {
     setModalAberto(true);
   }
 
-  // if/else: `editando` preenchido → update; vazio → create.
+  function validar(): string | null {
+    if (!validarNome(form.nome)) return "Nome deve conter apenas letras.";
+    if (!validarEmail(form.email)) return "E-mail em formato inválido.";
+    if (!validarRgm(form.rgm)) return "RGM deve ter exatamente 11 caracteres, sem espaços.";
+    return null;
+  }
+
+  // if/else: `editando` preenchido → update; vazio → create. Editar pede
+  // confirmação antes de gravar; criar não.
+  function pedirSalvar() {
+    const erro = validar();
+    if (erro) {
+      toast.error(erro);
+      return;
+    }
+    if (editando) {
+      setConfirmandoSalvar(true);
+    } else {
+      void salvar();
+    }
+  }
+
   async function salvar() {
     if (editando) {
       await participanteService.update(editando.id, form);
+      toast.success("Participante atualizado.");
     } else {
       await participanteService.create(form);
+      toast.success("Participante cadastrado.");
     }
+    setConfirmandoSalvar(false);
     setModalAberto(false);
     await carregar();
   }
 
-  async function excluir(id: string) {
-    if (!confirm("Remover este participante?")) return;
-    await participanteService.remove(id);
+  async function excluir() {
+    if (!excluindo) return;
+    await participanteService.remove(excluindo.id);
+    toast.success("Participante removido.");
+    setExcluindo(null);
     await carregar();
   }
 
@@ -56,14 +87,13 @@ export function ParticipantesPage() {
   const filtrados = participantes.filter((p) => {
     const alvo = busca.trim().toLowerCase();
     if (!alvo) return true;
-    return p.nome.toLowerCase().includes(alvo) || p.email.toLowerCase().includes(alvo) || p.rgm.includes(alvo);
+    return p.nome.toLowerCase().includes(alvo) || p.email.toLowerCase().includes(alvo) || p.rgm.toLowerCase().includes(alvo);
   });
 
   return (
     <div>
       <PageHeader
         title="Participantes"
-        subtitle="Alunos e demais inscritos nos eventos"
         actions={
           <button className="btn btn-primary" onClick={abrirNovo}>
             + Novo participante
@@ -97,7 +127,7 @@ export function ParticipantesPage() {
                   <button className="btn btn-ghost" onClick={() => abrirEdicao(participante)}>
                     Editar
                   </button>
-                  <button className="btn btn-ghost btn-danger" onClick={() => excluir(participante.id)}>
+                  <button className="btn btn-ghost btn-danger" onClick={() => setExcluindo(participante)}>
                     Excluir
                   </button>
                 </td>
@@ -120,7 +150,7 @@ export function ParticipantesPage() {
             className="form"
             onSubmit={(e) => {
               e.preventDefault();
-              void salvar();
+              pedirSalvar();
             }}
           >
             <label className="field">
@@ -138,7 +168,13 @@ export function ParticipantesPage() {
             </label>
             <label className="field">
               <span>RGM</span>
-              <input value={form.rgm} onChange={(e) => setForm({ ...form, rgm: e.target.value })} required />
+              <input
+                value={form.rgm}
+                onChange={(e) => setForm({ ...form, rgm: normalizarRgm(e.target.value) })}
+                placeholder="11 caracteres, sem espaços"
+                maxLength={11}
+                required
+              />
             </label>
             <div className="modal-footer">
               <button type="button" className="btn btn-ghost" onClick={() => setModalAberto(false)}>
@@ -150,6 +186,26 @@ export function ParticipantesPage() {
             </div>
           </form>
         </Modal>
+      )}
+
+      {confirmandoSalvar && (
+        <ConfirmDialog
+          title="Confirmar alteração"
+          message={`Salvar as alterações de "${form.nome}"?`}
+          onConfirm={() => void salvar()}
+          onCancel={() => setConfirmandoSalvar(false)}
+        />
+      )}
+
+      {excluindo && (
+        <ConfirmDialog
+          title="Remover participante"
+          message={`Tem certeza que deseja remover "${excluindo.nome}"? Essa ação não pode ser desfeita.`}
+          confirmLabel="Remover"
+          tone="danger"
+          onConfirm={() => void excluir()}
+          onCancel={() => setExcluindo(null)}
+        />
       )}
     </div>
   );

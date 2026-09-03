@@ -65,7 +65,7 @@ export function AgendaPage() {
 
   return (
     <div>
-      <PageHeader title="Agenda" subtitle="Programação completa de eventos" />
+      <PageHeader title="Agenda" />
 
       <div className="card">
         <div className="field-row" style={{ flexWrap: "wrap" }}>

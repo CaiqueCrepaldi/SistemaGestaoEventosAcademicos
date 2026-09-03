@@ -5,7 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 export function LoginPage() {
   const { usuario, login, carregando, erro } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("admin@ifsp.edu.br");
+  const [email, setEmail] = useState("admin@umc.br");
   const [senha, setSenha] = useState("admin123");
 
   // Se já tiver sessão ativa (ex.: voltou pro /login por engano), nem
@@ -27,7 +27,10 @@ export function LoginPage() {
     <div className="login-screen">
       <div className="login-card">
         <div className="login-brand">
-          <p>Sistema de Gestão de Eventos Acadêmicos</p>
+          <p>Universidade de Mogi das Cruzes — UMC</p>
+          <p style={{ fontSize: 14, fontWeight: 400, color: "var(--gray-500)", margin: "4px 0 0" }}>
+            Sistema de Gestão de Eventos Acadêmicos
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="form">
@@ -65,9 +68,9 @@ export function LoginPage() {
 
         <div className="login-hint">
           <strong>Contas de demonstração</strong>
-          <span>Administrador: admin@ifsp.edu.br / admin123</span>
-          <span>Secretaria: secretaria@ifsp.edu.br / secretaria123</span>
-          <span>Aluno: aluno@aluno.ifsp.edu.br / aluno123</span>
+          <span>Administrador: admin@umc.br / admin123</span>
+          <span>Secretaria: secretaria@umc.br / secretaria123</span>
+          <span>Aluno: aluno@aluno.umc.br / aluno123</span>
         </div>
       </div>
     </div>

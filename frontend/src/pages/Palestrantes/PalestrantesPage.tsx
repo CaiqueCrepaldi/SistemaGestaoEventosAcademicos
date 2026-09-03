@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
-import { palestranteService } from "../../services";
+import { eventoService, palestranteService } from "../../services";
 import type { Palestrante } from "../../types";
+import { maskTelefone, validarEmail, validarNome, validarTelefone } from "../../utils/validacao";
 
-const VAZIO: Omit<Palestrante, "id"> = { nome: "", curriculo: "", telefone: "" };
+const VAZIO: Omit<Palestrante, "id"> = { nome: "", email: "", telefone: "" };
 
 export function PalestrantesPage() {
   const { usuario } = useAuth();
@@ -13,6 +16,8 @@ export function PalestrantesPage() {
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<Palestrante | null>(null);
   const [form, setForm] = useState(VAZIO);
+  const [confirmandoSalvar, setConfirmandoSalvar] = useState(false);
+  const [excluindo, setExcluindo] = useState<Palestrante | null>(null);
 
   useEffect(() => {
     void carregar();
@@ -29,14 +34,14 @@ export function PalestrantesPage() {
   if (usuario?.perfil === "ALUNO") {
     return (
       <div>
-        <PageHeader title="Palestrantes" subtitle="Palestrantes convidados dos eventos" />
+        <PageHeader title="Palestrantes" />
         <div className="card">
           <ul className="simple-list">
             {palestrantes.map((palestrante) => (
               <li key={palestrante.id} className="simple-list-item">
                 <div className="simple-list-title">{palestrante.nome}</div>
-                {/* TODO: backend não deve retornar telefone para perfil ALUNO (ver docs/api-contract.md) */}
-                <div className="simple-list-sub">{palestrante.curriculo}</div>
+                {/* Telefone não aparece pro perfil ALUNO (ver docs/api-contract.md). */}
+                <div className="simple-list-sub">{palestrante.email}</div>
               </li>
             ))}
             {palestrantes.length === 0 && <p className="empty-cell">Nenhum palestrante cadastrado.</p>}
@@ -54,25 +59,63 @@ export function PalestrantesPage() {
 
   function abrirEdicao(palestrante: Palestrante) {
     setEditando(palestrante);
-    setForm({ nome: palestrante.nome, curriculo: palestrante.curriculo, telefone: palestrante.telefone });
+    setForm({ nome: palestrante.nome, email: palestrante.email, telefone: palestrante.telefone });
     setModalAberto(true);
+  }
+
+  // Valida formatação de cada campo antes de deixar salvar; se algo estiver
+  // errado, mostra um único aviso "bonitinho" (toast) explicando o quê, em
+  // vez de deixar o formulário falhar silenciosamente.
+  function validar(): string | null {
+    if (!validarNome(form.nome)) return "Nome deve conter apenas letras.";
+    if (!validarEmail(form.email)) return "E-mail em formato inválido.";
+    if (!validarTelefone(form.telefone)) return "Telefone deve estar no formato (00) 00000-0000.";
+    return null;
   }
 
   // if/else clássico: com `editando` preenchido é edição (update), vazio é
   // cadastro novo (create) — mesmo formulário e botão pros dois casos.
+  // Editar pede confirmação antes de gravar; criar não.
+  function pedirSalvar() {
+    const erro = validar();
+    if (erro) {
+      toast.error(erro);
+      return;
+    }
+    if (editando) {
+      setConfirmandoSalvar(true);
+    } else {
+      void salvar();
+    }
+  }
+
   async function salvar() {
     if (editando) {
       await palestranteService.update(editando.id, form);
+      toast.success("Palestrante atualizado.");
     } else {
       await palestranteService.create(form);
+      toast.success("Palestrante cadastrado.");
     }
+    setConfirmandoSalvar(false);
     setModalAberto(false);
     await carregar();
   }
 
-  async function excluir(id: string) {
-    if (!confirm("Remover este palestrante?")) return;
-    await palestranteService.remove(id);
+  async function excluir() {
+    if (!excluindo) return;
+    // Todo evento precisa ter um palestrante (campo obrigatório) — em vez de
+    // desvincular silenciosamente, bloqueia a exclusão enquanto houver
+    // evento apontando pra este palestrante.
+    const eventos = await eventoService.list();
+    if (eventos.some((e) => e.palestranteId === excluindo.id)) {
+      toast.error("Não é possível remover: há eventos vinculados a este palestrante.");
+      setExcluindo(null);
+      return;
+    }
+    await palestranteService.remove(excluindo.id);
+    toast.success("Palestrante removido.");
+    setExcluindo(null);
     await carregar();
   }
 
@@ -80,7 +123,6 @@ export function PalestrantesPage() {
     <div>
       <PageHeader
         title="Palestrantes"
-        subtitle="Cadastro de palestrantes convidados"
         actions={
           <button className="btn btn-primary" onClick={abrirNovo}>
             + Novo palestrante
@@ -93,7 +135,7 @@ export function PalestrantesPage() {
           <thead>
             <tr>
               <th>Nome</th>
-              <th>Currículo</th>
+              <th>E-mail</th>
               <th>Telefone</th>
               <th />
             </tr>
@@ -102,13 +144,13 @@ export function PalestrantesPage() {
             {palestrantes.map((palestrante) => (
               <tr key={palestrante.id}>
                 <td>{palestrante.nome}</td>
-                <td className="truncate">{palestrante.curriculo}</td>
+                <td>{palestrante.email}</td>
                 <td>{palestrante.telefone}</td>
                 <td className="table-actions">
                   <button className="btn btn-ghost" onClick={() => abrirEdicao(palestrante)}>
                     Editar
                   </button>
-                  <button className="btn btn-ghost btn-danger" onClick={() => excluir(palestrante.id)}>
+                  <button className="btn btn-ghost btn-danger" onClick={() => setExcluindo(palestrante)}>
                     Excluir
                   </button>
                 </td>
@@ -131,7 +173,7 @@ export function PalestrantesPage() {
             className="form"
             onSubmit={(e) => {
               e.preventDefault();
-              void salvar();
+              pedirSalvar();
             }}
           >
             <label className="field">
@@ -139,16 +181,22 @@ export function PalestrantesPage() {
               <input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} required />
             </label>
             <label className="field">
-              <span>Currículo</span>
-              <textarea
-                value={form.curriculo}
-                onChange={(e) => setForm({ ...form, curriculo: e.target.value })}
-                rows={3}
+              <span>E-mail</span>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                required
               />
             </label>
             <label className="field">
               <span>Telefone</span>
-              <input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} />
+              <input
+                value={form.telefone}
+                onChange={(e) => setForm({ ...form, telefone: maskTelefone(e.target.value) })}
+                placeholder="(00) 00000-0000"
+                required
+              />
             </label>
             <div className="modal-footer">
               <button type="button" className="btn btn-ghost" onClick={() => setModalAberto(false)}>
@@ -160,6 +208,26 @@ export function PalestrantesPage() {
             </div>
           </form>
         </Modal>
+      )}
+
+      {confirmandoSalvar && (
+        <ConfirmDialog
+          title="Confirmar alteração"
+          message={`Salvar as alterações do palestrante "${form.nome}"?`}
+          onConfirm={() => void salvar()}
+          onCancel={() => setConfirmandoSalvar(false)}
+        />
+      )}
+
+      {excluindo && (
+        <ConfirmDialog
+          title="Remover palestrante"
+          message={`Tem certeza que deseja remover "${excluindo.nome}"? Essa ação não pode ser desfeita.`}
+          confirmLabel="Remover"
+          tone="danger"
+          onConfirm={() => void excluir()}
+          onCancel={() => setExcluindo(null)}
+        />
       )}
     </div>
   );

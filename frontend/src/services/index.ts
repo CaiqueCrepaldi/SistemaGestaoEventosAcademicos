@@ -7,4 +7,6 @@ export type { CertificadoDisponivel } from "./certificadoService";
 export { checkinService } from "./checkinService";
 export { emailService } from "./emailService";
 export { inscricaoAlunoService } from "./inscricaoAlunoService";
+export { questionarioService } from "./questionarioService";
+export type { PerguntaSemGabarito } from "./questionarioService";
 export { relatorioService } from "./relatorioService";

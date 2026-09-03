@@ -62,7 +62,7 @@ export function DashboardPage() {
 
   return (
     <div>
-      <PageHeader title="Dashboard" subtitle="Visão geral dos eventos, inscrições e ocupação de salas" />
+      <PageHeader title="Dashboard" />
 
       {stats && (
         <div className="stat-grid">

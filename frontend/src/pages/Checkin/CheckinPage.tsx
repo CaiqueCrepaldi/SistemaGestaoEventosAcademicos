@@ -85,7 +85,7 @@ export function CheckinPage() {
 
   return (
     <div>
-      <PageHeader title="Check-in" subtitle="Busca de inscritos e confirmação de presença" />
+      <PageHeader title="Check-in" />
 
       <div className="grid-2">
         <div className="card">

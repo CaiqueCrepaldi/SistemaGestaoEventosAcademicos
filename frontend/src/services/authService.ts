@@ -1,4 +1,5 @@
 import type { Perfil } from "../types";
+import { toast } from "../components/ui/Toast";
 import { ApiError, USE_MOCK, api } from "./api";
 import { participanteService } from "./entityServices";
 import { usuariosSeed } from "./seed";
@@ -53,7 +54,7 @@ const RECUPERACAO_KEY = "sgea:recuperacao-senha";
 // Acha um usuário tanto por e-mail quanto por RGM — usado no fluxo de
 // "esqueci minha senha", que aceita os dois como identificador.
 function buscarUsuarioPorIdentificador(identificador: string) {
-  const usuarios = loadCollection("usuarios", usuariosSeed);
+  const usuarios = loadCollection("usuarios-v2", usuariosSeed);
   return usuarios.find((u) => u.emailLogin === identificador || u.rgm === identificador);
 }
 
@@ -66,7 +67,7 @@ function lerCodigosPendentes(): Record<string, { codigo: string; expiraEm: numbe
 
 const localAuthService: AuthService = {
   async login(emailLogin, senha) {
-    const usuarios = loadCollection("usuarios", usuariosSeed);
+    const usuarios = loadCollection("usuarios-v2", usuariosSeed);
     const usuario = usuarios.find((u) => u.emailLogin === emailLogin && u.senhaHash === senha);
     // Se não achou ninguém com esse par e-mail/senha, é credencial errada —
     // devolve o mesmo erro genérico tanto pra e-mail inexistente quanto pra
@@ -91,7 +92,7 @@ const localAuthService: AuthService = {
 
   async cadastrarAluno(dados) {
     const [usuarios, participantes] = await Promise.all([
-      Promise.resolve(loadCollection("usuarios", usuariosSeed)),
+      Promise.resolve(loadCollection("usuarios-v2", usuariosSeed)),
       participanteService.list(),
     ]);
 
@@ -125,7 +126,7 @@ const localAuthService: AuthService = {
       rgm: dados.rgm,
       participanteId: participante.id,
     };
-    saveCollection("usuarios", [...usuarios, usuario]);
+    saveCollection("usuarios-v2",[...usuarios, usuario]);
 
     await delay(undefined, 300);
   },
@@ -144,10 +145,11 @@ const localAuthService: AuthService = {
     const pendentes = lerCodigosPendentes();
     pendentes[usuario.id] = { codigo, expiraEm: Date.now() + 1000 * 60 * 15 };
     localStorage.setItem(RECUPERACAO_KEY, JSON.stringify(pendentes));
-    // Sem servidor de e-mail no mock, o código só vai pro console — e
-    // também volta no corpo da resposta (codigoDemo), pra tela mostrar
-    // direto. Isso não existiria em produção.
-    console.info(`[mock] código de recuperação para ${usuario.emailLogin}: ${codigo}`);
+    // Sem servidor de e-mail no mock, o código aparece num aviso na tela — e
+    // também volta no corpo da resposta (codigoDemo), pra tela de recuperação
+    // mostrar direto. Isso não existiria em produção (o código só chegaria
+    // por e-mail de verdade).
+    toast.info(`Código de recuperação (demonstração) para ${usuario.emailLogin}: ${codigo}`);
 
     return delay({ codigoDemo: codigo }, 300);
   },
@@ -171,7 +173,7 @@ const localAuthService: AuthService = {
 
     // Código certo: troca a senha do usuário e descarta o código (não dá
     // pra reusar o mesmo código duas vezes).
-    const usuarios = loadCollection("usuarios", usuariosSeed);
+    const usuarios = loadCollection("usuarios-v2", usuariosSeed);
     saveCollection(
       "usuarios",
       usuarios.map((u) => (u.id === usuario.id ? { ...u, senhaHash: novaSenha } : u)),

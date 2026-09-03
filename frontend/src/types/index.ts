@@ -28,8 +28,24 @@ export interface Sala {
 export interface Palestrante {
   id: string;
   nome: string;
-  curriculo: string;
+  email: string;
   telefone: string;
+}
+
+// Uma alternativa de resposta de uma pergunta do questionário obrigatório.
+// Só uma alternativa por pergunta tem `correta: true`.
+export interface AlternativaQuestionario {
+  texto: string;
+  correta: boolean;
+}
+
+// Uma pergunta de múltipla escolha do questionário do evento — sempre com
+// exatamente 4 alternativas (ver PerguntaQuestionario/QUESTIONARIO_TAMANHO
+// em utils/questionario.ts).
+export interface PerguntaQuestionario {
+  id: string;
+  enunciado: string;
+  alternativas: AlternativaQuestionario[];
 }
 
 // Uma palestra/minicurso/workshop — o item principal do sistema. Não existe
@@ -40,10 +56,13 @@ export interface Evento {
   titulo: string;
   horario: string;
   salaId: string;
-  palestranteId: string | null;
+  palestranteId: string;
   tema: string;
   cargaHoraria: number;
-  perguntas: string[]; // perguntas do questionário de feedback do evento
+  // Questionário obrigatório definido pelo palestrante (inserido no sistema
+  // por administrador/secretaria) — sempre 10 perguntas de múltipla escolha.
+  // O aluno só emite certificado depois de acertar pelo menos 60% dele.
+  questionario: PerguntaQuestionario[];
 }
 
 // Pessoa que participa de eventos (pode ou não ter login — participante
@@ -77,4 +96,19 @@ export interface Feedback {
   participanteId: string;
   nota: number;
   comentario: string;
+}
+
+// Uma tentativa de um participante respondendo o questionário de um evento.
+// `respostas[i]` é o índice da alternativa escolhida na pergunta i (mesma
+// ordem de Evento.questionario). Pode haver mais de uma tentativa por par
+// participante/evento — a elegibilidade de certificado usa a melhor.
+export interface TentativaQuestionario {
+  id: string;
+  participanteId: string;
+  eventoId: string;
+  respostas: number[];
+  acertos: number;
+  totalPerguntas: number;
+  percentual: number;
+  criadoEm: string;
 }

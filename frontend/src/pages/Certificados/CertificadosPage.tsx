@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { useAuth } from "../../context/AuthContext";
 import { certificadoService, eventoService, type CertificadoDisponivel } from "../../services";
 import type { Evento } from "../../types";
+import { PERCENTUAL_APROVACAO } from "../../utils/questionario";
 
 export function CertificadosPage() {
   const { usuario } = useAuth();
@@ -39,10 +41,10 @@ export function CertificadosPage() {
   if (!isEquipe) {
     return (
       <div>
-        <PageHeader title="Certificados" subtitle="Certificados de participação disponíveis para emissão" />
+        <PageHeader title="Certificados" />
         <div className="card">
           {/* Lista vazia → mensagem explicando por que ainda não tem certificado;
-              lista com itens → mostra cada um com o botão de emitir. */}
+              lista com itens → mostra cada um com os botões de questionário/emitir. */}
           {certificados.length === 0 ? (
             <p className="empty-cell">
               Você ainda não possui certificados. Os certificados são liberados após a confirmação de presença.
@@ -56,10 +58,26 @@ export function CertificadosPage() {
                     <div className="simple-list-sub">
                       {c.tema} · {c.data ? new Date(c.data).toLocaleDateString("pt-BR") : "—"}
                     </div>
+                    <div className="simple-list-sub">
+                      {c.melhorPercentual === null
+                        ? `Responda o questionário (mínimo ${PERCENTUAL_APROVACAO}% de acertos) para liberar o certificado.`
+                        : c.questionarioAprovado
+                          ? `Questionário aprovado: ${c.melhorPercentual}% de acertos.`
+                          : `Última tentativa: ${c.melhorPercentual}% de acertos — mínimo de ${PERCENTUAL_APROVACAO}% necessário.`}
+                    </div>
                   </div>
-                  <button className="btn btn-primary" onClick={() => certificadoService.gerarCertificado(c)}>
-                    Emitir certificado
-                  </button>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <Link className="btn btn-ghost" to={`/eventos/${c.eventoId}/questionario`}>
+                      {c.questionarioAprovado ? "Refazer questionário" : "Questionário"}
+                    </Link>
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => certificadoService.gerarCertificado(c)}
+                      disabled={!c.questionarioAprovado}
+                    >
+                      Emitir certificado
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -71,7 +89,7 @@ export function CertificadosPage() {
 
   return (
     <div>
-      <PageHeader title="Certificados" subtitle="Emissão de certificados por evento" />
+      <PageHeader title="Certificados" />
 
       <div className="card">
         <select className="search-input" value={filtroEventoId} onChange={(e) => setFiltroEventoId(e.target.value)}>
@@ -92,6 +110,7 @@ export function CertificadosPage() {
               <th>RGM</th>
               <th>Evento</th>
               <th>Carga horária</th>
+              <th>Nota do questionário</th>
               <th />
             </tr>
           </thead>
@@ -102,6 +121,7 @@ export function CertificadosPage() {
                 <td>{c.participanteRgm}</td>
                 <td>{c.eventoTitulo}</td>
                 <td>{c.cargaHoraria}h</td>
+                <td>{c.melhorPercentual === null ? "—" : `${c.melhorPercentual}%`}</td>
                 <td className="table-actions">
                   <button className="btn btn-ghost" onClick={() => certificadoService.gerarCertificado(c)}>
                     Emitir certificado
@@ -111,7 +131,7 @@ export function CertificadosPage() {
             ))}
             {filtrados.length === 0 && (
               <tr>
-                <td colSpan={5} className="empty-cell">
+                <td colSpan={6} className="empty-cell">
                   Nenhum certificado disponível para os filtros aplicados.
                 </td>
               </tr>

@@ -12,13 +12,13 @@ interface EmailService {
 }
 
 // Chamado logo depois que a inscrição é criada (ver inscricaoAlunoService.ts
-// e EventosPage.tsx). No mock não existe servidor de e-mail de verdade —
-// só busca o e-mail do participante e escreve no console, pra simular o envio.
+// e EventosPage.tsx). No mock não existe servidor de e-mail de verdade — só
+// busca o e-mail do participante; o aviso de confirmação pro usuário é
+// responsabilidade de quem chama (ver EventosPage.tsx), não deste service.
 const localEmailService: EmailService = {
   async enviarConfirmacaoInscricao(inscricao) {
     const participante = await participanteService.get(inscricao.participanteId);
     const destinatario = participante?.email ?? "e-mail não encontrado";
-    console.info(`[mock] e-mail de confirmação da inscrição ${inscricao.id} enviado para ${destinatario}`);
     await delay(undefined, 200);
     return { destinatario };
   },

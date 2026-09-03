@@ -1,7 +1,9 @@
 import { jsPDF } from "jspdf";
-import type { Inscricao } from "../types";
+import type { Inscricao, TentativaQuestionario } from "../types";
+import { PERCENTUAL_APROVACAO } from "../utils/questionario";
 import { USE_MOCK, api } from "./api";
 import { eventoService, inscricaoService, palestranteService, participanteService } from "./entityServices";
+import { questionarioService } from "./questionarioService";
 
 // Tudo que o PDF do certificado precisa pra ser desenhado — já vem "achatado"
 // (sem precisar cruzar Inscricao/Evento/Participante de novo na tela).
@@ -17,6 +19,11 @@ export interface CertificadoDisponivel {
   data: string;
   cargaHoraria: number;
   codigoValidacao: string;
+  // Melhor percentual de acerto do aluno no questionário desse evento (null
+  // se ele ainda não respondeu nenhuma vez) e se isso já basta pra liberar
+  // o certificado (>= PERCENTUAL_APROVACAO).
+  melhorPercentual: number | null;
+  questionarioAprovado: boolean;
 }
 
 // Gera um código curto e determinístico (sempre o mesmo código pro mesmo
@@ -38,7 +45,17 @@ function gerarCodigoValidacao(inscricaoId: string): string {
 // Evento/Palestrante/Participante correspondentes, montando a lista de
 // certificados que a pessoa pode emitir. Pula silenciosamente qualquer
 // inscrição cujo evento ou participante não exista mais (dado órfão).
-async function enriquecer(inscricoes: Inscricao[]): Promise<CertificadoDisponivel[]> {
+//
+// `todasTentativas`: quando informado (visão de equipe, que cruza vários
+// alunos de uma vez), usa essa lista já carregada e filtra localmente — a
+// rota HTTP por evento/aluno (`questionarioService.listarTentativas`) é
+// restrita a ALUNO respondendo por si mesmo, então a equipe não pode
+// chamá-la aluno por aluno; sem o parâmetro (visão do próprio aluno), busca
+// direto pela rota própria de cada evento.
+async function enriquecer(
+  inscricoes: Inscricao[],
+  todasTentativas?: TentativaQuestionario[],
+): Promise<CertificadoDisponivel[]> {
   const [eventos, palestrantes, participantes] = await Promise.all([
     eventoService.list(),
     palestranteService.list(),
@@ -52,6 +69,13 @@ async function enriquecer(inscricoes: Inscricao[]): Promise<CertificadoDisponive
     if (!evento || !participante) continue;
     const palestrante = palestrantes.find((p) => p.id === evento.palestranteId);
 
+    // Melhor percentual entre todas as tentativas do aluno nesse
+    // questionário — é o que decide se o certificado já pode ser emitido.
+    const tentativas = todasTentativas
+      ? todasTentativas.filter((t) => t.eventoId === evento.id && t.participanteId === participante.id)
+      : await questionarioService.listarTentativas(evento.id, participante.id);
+    const melhorPercentual = tentativas.length > 0 ? Math.max(...tentativas.map((t) => t.percentual)) : null;
+
     certificados.push({
       inscricaoId: inscricao.id,
       participanteId: participante.id,
@@ -64,6 +88,8 @@ async function enriquecer(inscricoes: Inscricao[]): Promise<CertificadoDisponive
       data: evento.horario,
       cargaHoraria: evento.cargaHoraria ?? 0,
       codigoValidacao: gerarCodigoValidacao(inscricao.id),
+      melhorPercentual,
+      questionarioAprovado: melhorPercentual !== null && melhorPercentual >= PERCENTUAL_APROVACAO,
     });
   }
   return certificados;
@@ -77,6 +103,9 @@ function gerarPdf(dados: CertificadoDisponivel): void {
   const largura = doc.internal.pageSize.getWidth();
   const meio = largura / 2;
   const dataFormatada = dados.data ? new Date(dados.data).toLocaleDateString("pt-BR") : "—";
+
+  doc.setFontSize(12);
+  doc.text("Universidade de Mogi das Cruzes — UMC", meio, 25, { align: "center" });
 
   doc.setFontSize(26);
   doc.text("Certificado de Participação", meio, 45, { align: "center" });
@@ -114,8 +143,14 @@ const localCertificadoService: CertificadoService = {
     return enriquecer(inscricoes);
   },
   async listarTodosCertificados() {
-    const inscricoes = (await inscricaoService.list()).filter((i) => i.statusPresenca === "PRESENTE");
-    return enriquecer(inscricoes);
+    const [inscricoes, todasTentativas] = await Promise.all([
+      inscricaoService.list(),
+      questionarioService.listarTodasTentativas(),
+    ]);
+    return enriquecer(
+      inscricoes.filter((i) => i.statusPresenca === "PRESENTE"),
+      todasTentativas,
+    );
   },
   gerarCertificado(dados) {
     gerarPdf(dados);
@@ -131,8 +166,14 @@ const httpCertificadoService: CertificadoService = {
     return enriquecer(inscricoes);
   },
   async listarTodosCertificados() {
-    const inscricoes = (await api.get<Inscricao[]>("/inscricoes")).filter((i) => i.statusPresenca === "PRESENTE");
-    return enriquecer(inscricoes);
+    const [inscricoes, todasTentativas] = await Promise.all([
+      api.get<Inscricao[]>("/inscricoes"),
+      questionarioService.listarTodasTentativas(),
+    ]);
+    return enriquecer(
+      inscricoes.filter((i) => i.statusPresenca === "PRESENTE"),
+      todasTentativas,
+    );
   },
   gerarCertificado(dados) {
     // O PDF é sempre montado no navegador, mock ou não — não existe

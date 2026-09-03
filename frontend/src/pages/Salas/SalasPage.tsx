@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { toast } from "../../components/ui/Toast";
 import { salaService } from "../../services";
 import type { Sala } from "../../types";
 
@@ -11,6 +13,8 @@ export function SalasPage() {
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<Sala | null>(null);
   const [form, setForm] = useState(VAZIO);
+  const [confirmandoSalvar, setConfirmandoSalvar] = useState(false);
+  const [excluindo, setExcluindo] = useState<Sala | null>(null);
 
   useEffect(() => {
     void carregar();
@@ -39,22 +43,38 @@ export function SalasPage() {
   // Um botão só de "Salvar" serve tanto pra criar quanto editar: se
   // `editando` tiver algo, é update; senão, é create. É esse mesmo padrão
   // if/else que se repete em todas as telas de cadastro do sistema.
+  // Editar um registro existente pede confirmação antes de gravar; criar um
+  // novo, não.
+  function pedirSalvar() {
+    if (!form.nome.trim() || !form.capacidade) {
+      toast.error("Preencha nome e capacidade — todos os campos são obrigatórios.");
+      return;
+    }
+    if (editando) {
+      setConfirmandoSalvar(true);
+    } else {
+      void salvar();
+    }
+  }
+
   async function salvar() {
     if (editando) {
       await salaService.update(editando.id, form);
+      toast.success("Sala atualizada.");
     } else {
       await salaService.create(form);
+      toast.success("Sala cadastrada.");
     }
+    setConfirmandoSalvar(false);
     setModalAberto(false);
     await carregar();
   }
 
-  // window.confirm mostra o alerta nativo do navegador pra confirmar a
-  // exclusão; se a pessoa clicar "Cancelar", a função para aqui e nada é
-  // removido.
-  async function excluir(id: string) {
-    if (!confirm("Remover esta sala?")) return;
-    await salaService.remove(id);
+  async function excluir() {
+    if (!excluindo) return;
+    await salaService.remove(excluindo.id);
+    toast.success("Sala removida.");
+    setExcluindo(null);
     await carregar();
   }
 
@@ -62,7 +82,6 @@ export function SalasPage() {
     <div>
       <PageHeader
         title="Salas"
-        subtitle="Espaços disponíveis para sessões"
         actions={
           <button className="btn btn-primary" onClick={abrirNovo}>
             + Nova sala
@@ -88,7 +107,7 @@ export function SalasPage() {
                   <button className="btn btn-ghost" onClick={() => abrirEdicao(sala)}>
                     Editar
                   </button>
-                  <button className="btn btn-ghost btn-danger" onClick={() => excluir(sala.id)}>
+                  <button className="btn btn-ghost btn-danger" onClick={() => setExcluindo(sala)}>
                     Excluir
                   </button>
                 </td>
@@ -111,7 +130,7 @@ export function SalasPage() {
             className="form"
             onSubmit={(e) => {
               e.preventDefault();
-              void salvar();
+              pedirSalvar();
             }}
           >
             <label className="field">
@@ -138,6 +157,26 @@ export function SalasPage() {
             </div>
           </form>
         </Modal>
+      )}
+
+      {confirmandoSalvar && (
+        <ConfirmDialog
+          title="Confirmar alteração"
+          message={`Salvar as alterações da sala "${form.nome}"?`}
+          onConfirm={() => void salvar()}
+          onCancel={() => setConfirmandoSalvar(false)}
+        />
+      )}
+
+      {excluindo && (
+        <ConfirmDialog
+          title="Remover sala"
+          message={`Tem certeza que deseja remover a sala "${excluindo.nome}"? Essa ação não pode ser desfeita.`}
+          confirmLabel="Remover"
+          tone="danger"
+          onConfirm={() => void excluir()}
+          onCancel={() => setExcluindo(null)}
+        />
       )}
     </div>
   );

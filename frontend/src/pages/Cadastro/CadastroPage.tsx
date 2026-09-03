@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
 import { ApiError } from "../../services/api";
 import { authService } from "../../services/authService";
+import { normalizarRgm, validarEmail, validarNome, validarRgm } from "../../utils/validacao";
 
-const DOMINIO_INSTITUCIONAL = "@aluno.ifsp.edu.br";
+const DOMINIO_INSTITUCIONAL = "@aluno.umc.br";
 
 const VAZIO = { nomeCompleto: "", rgm: "", emailInstitucional: "", senha: "" };
 
@@ -17,15 +19,20 @@ const VAZIO = { nomeCompleto: "", rgm: "", emailInstitucional: "", senha: "" };
 function validarCliente(form: typeof VAZIO, confirmarSenha: string): Record<string, string> {
   const erros: Record<string, string> = {};
 
-  // Regra 1: e-mail precisa terminar com o domínio institucional do aluno.
-  if (!form.emailInstitucional.toLowerCase().endsWith(DOMINIO_INSTITUCIONAL)) {
+  // Regra 1: nome só com letras (sem número).
+  if (!validarNome(form.nomeCompleto)) {
+    erros.nomeCompleto = "Nome deve conter apenas letras.";
+  }
+  // Regra 2: e-mail precisa ser válido E terminar com o domínio institucional do aluno.
+  if (!validarEmail(form.emailInstitucional) || !form.emailInstitucional.toLowerCase().endsWith(DOMINIO_INSTITUCIONAL)) {
     erros.emailInstitucional = `E-mail precisa ser institucional (termina com ${DOMINIO_INSTITUCIONAL})`;
   }
-  // Regra 2: RGM só com números, mínimo 8 dígitos.
-  if (!/^\d{8,}$/.test(form.rgm)) {
-    erros.rgm = "RGM deve conter só números, com no mínimo 8 dígitos";
+  // Regra 3: RGM com exatamente 11 caracteres alfanuméricos (já normalizado
+  // pra maiúsculo/sem espaço no onChange do campo).
+  if (!validarRgm(form.rgm)) {
+    erros.rgm = "RGM deve ter exatamente 11 caracteres, sem espaços.";
   }
-  // Regra 3: senha tem duas condições encadeadas com if/else — só faz
+  // Regra 4: senha tem duas condições encadeadas com if/else — só faz
   // sentido checar se as duas senhas coincidem depois de já confirmar que
   // a senha em si tem tamanho mínimo válido.
   if (form.senha.length < 6) {
@@ -54,7 +61,10 @@ export function CadastroPage() {
     // chamar o backend — só mostra os erros e para por aqui.
     const erros = validarCliente(form, confirmarSenha);
     setErrosCampo(erros);
-    if (Object.keys(erros).length > 0) return;
+    if (Object.keys(erros).length > 0) {
+      toast.error("Corrija os campos destacados antes de continuar.");
+      return;
+    }
 
     setCarregando(true);
     try {
@@ -106,7 +116,13 @@ export function CadastroPage() {
           <div className="field">
             <label className="field">
               <span>RGM</span>
-              <input value={form.rgm} onChange={(e) => setForm({ ...form, rgm: e.target.value })} required />
+              <input
+                value={form.rgm}
+                onChange={(e) => setForm({ ...form, rgm: normalizarRgm(e.target.value) })}
+                placeholder="11 caracteres, sem espaços"
+                maxLength={11}
+                required
+              />
             </label>
             {errosCampo.rgm && <p className="form-error">{errosCampo.rgm}</p>}
           </div>

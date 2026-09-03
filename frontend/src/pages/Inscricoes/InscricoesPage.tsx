@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Badge } from "../../components/ui/Badge";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { toast } from "../../components/ui/Toast";
 import { eventoService, inscricaoService, participanteService, salaService } from "../../services";
 import type { Evento, Inscricao, Participante, Sala, StatusPresenca } from "../../types";
 
@@ -26,9 +28,10 @@ export function InscricoesPage() {
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [salas, setSalas] = useState<Sala[]>([]);
   const [modalAberto, setModalAberto] = useState(false);
-  const [participanteId, setParticipanteId] = useState("");
+  const [buscaParticipante, setBuscaParticipante] = useState("");
+  const [participanteSelecionado, setParticipanteSelecionado] = useState<Participante | null>(null);
   const [eventoId, setEventoId] = useState("");
-  const [avisoVagas, setAvisoVagas] = useState<string | null>(null);
+  const [excluindo, setExcluindo] = useState<Inscricao | null>(null);
 
   useEffect(() => {
     void carregar();
@@ -48,9 +51,9 @@ export function InscricoesPage() {
   }
 
   function abrirNova() {
-    setParticipanteId(participantes[0]?.id ?? "");
+    setBuscaParticipante("");
+    setParticipanteSelecionado(null);
     setEventoId(eventos[0]?.id ?? "");
-    setAvisoVagas(null);
     setModalAberto(true);
   }
 
@@ -66,45 +69,70 @@ export function InscricoesPage() {
   }
 
   async function salvar() {
+    if (!participanteSelecionado) {
+      toast.error("Busque e selecione um aluno por nome, e-mail ou RGM.");
+      return;
+    }
+    if (!eventoId) {
+      toast.error("Selecione um evento.");
+      return;
+    }
     // Duas checagens em sequência, cada uma com seu próprio "return" se
     // falhar: 1) esse participante já está inscrito nesse evento? 2) ainda
     // tem vaga? Só se passar nas duas é que a inscrição é criada de fato.
-    const jaInscrito = inscricoes.some((i) => i.participanteId === participanteId && i.eventoId === eventoId);
+    const jaInscrito = inscricoes.some(
+      (i) => i.participanteId === participanteSelecionado.id && i.eventoId === eventoId,
+    );
     if (jaInscrito) {
-      setAvisoVagas("Este participante já está inscrito neste evento.");
+      toast.error("Este participante já está inscrito neste evento.");
       return;
     }
     const evento = eventos.find((e) => e.id === eventoId);
     const vagas = vagasDisponiveis(evento);
     if (vagas !== null && vagas <= 0) {
-      setAvisoVagas("Não há vagas disponíveis para este evento.");
+      toast.error("Não há vagas disponíveis para este evento.");
       return;
     }
     await inscricaoService.create({
-      participanteId,
+      participanteId: participanteSelecionado.id,
       eventoId,
       statusPresenca: "PENDENTE",
       dataCheckin: null,
       usuarioId: null,
     });
+    toast.success("Inscrição registrada.");
     setModalAberto(false);
     await carregar();
   }
 
-  async function excluir(id: string) {
-    if (!confirm("Remover esta inscrição?")) return;
-    await inscricaoService.remove(id);
+  async function excluir() {
+    if (!excluindo) return;
+    await inscricaoService.remove(excluindo.id);
+    toast.success("Inscrição removida.");
+    setExcluindo(null);
     await carregar();
   }
 
   const eventoSelecionado = eventos.find((e) => e.id === eventoId);
   const vagas = vagasDisponiveis(eventoSelecionado);
 
+  // Resultados da busca por nome/e-mail/RGM — mesma lógica usada no Check-in
+  // (checkinService.buscarParticipantes), só que aqui direto na tela porque
+  // a lista de participantes já está carregada.
+  const alvoBusca = buscaParticipante.trim().toLowerCase();
+  const resultadosBusca = alvoBusca
+    ? participantes.filter(
+        (p) =>
+          p.nome.toLowerCase().includes(alvoBusca) ||
+          p.email.toLowerCase().includes(alvoBusca) ||
+          p.rgm.toLowerCase().includes(alvoBusca),
+      )
+    : [];
+
   return (
     <div>
       <PageHeader
         title="Inscrições"
-        subtitle="Vínculo entre participantes e eventos"
         actions={
           <button
             className="btn btn-primary"
@@ -140,7 +168,7 @@ export function InscricoesPage() {
                   </td>
                   <td>{inscricao.dataCheckin ? new Date(inscricao.dataCheckin).toLocaleString("pt-BR") : "—"}</td>
                   <td className="table-actions">
-                    <button className="btn btn-ghost btn-danger" onClick={() => excluir(inscricao.id)}>
+                    <button className="btn btn-ghost btn-danger" onClick={() => setExcluindo(inscricao)}>
                       Excluir
                     </button>
                   </td>
@@ -167,16 +195,43 @@ export function InscricoesPage() {
               void salvar();
             }}
           >
-            <label className="field">
-              <span>Participante</span>
-              <select value={participanteId} onChange={(e) => setParticipanteId(e.target.value)} required>
-                {participantes.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nome} — {p.rgm}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="field">
+              <span>Aluno (busque por nome, e-mail ou RGM)</span>
+              <input
+                className="search-input"
+                style={{ marginBottom: 0 }}
+                value={participanteSelecionado ? `${participanteSelecionado.nome} — ${participanteSelecionado.rgm}` : buscaParticipante}
+                onChange={(e) => {
+                  setParticipanteSelecionado(null);
+                  setBuscaParticipante(e.target.value);
+                }}
+                placeholder="Nome, e-mail ou RGM…"
+                autoFocus
+                required
+              />
+              {!participanteSelecionado && resultadosBusca.length > 0 && (
+                <ul className="simple-list">
+                  {resultadosBusca.map((p) => (
+                    <li
+                      key={p.id}
+                      className="simple-list-item clickable"
+                      onClick={() => {
+                        setParticipanteSelecionado(p);
+                        setBuscaParticipante("");
+                      }}
+                    >
+                      <div className="simple-list-title">{p.nome}</div>
+                      <div className="simple-list-sub">
+                        {p.email} · RGM {p.rgm}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {!participanteSelecionado && alvoBusca && resultadosBusca.length === 0 && (
+                <p className="form-hint">Nenhum participante encontrado.</p>
+              )}
+            </div>
             <label className="field">
               <span>Evento</span>
               <select value={eventoId} onChange={(e) => setEventoId(e.target.value)} required>
@@ -192,7 +247,6 @@ export function InscricoesPage() {
                 {vagas > 0 ? `${vagas} vaga(s) disponível(is) neste evento.` : "Evento sem vagas disponíveis."}
               </p>
             )}
-            {avisoVagas && <p className="form-error">{avisoVagas}</p>}
             <div className="modal-footer">
               <button type="button" className="btn btn-ghost" onClick={() => setModalAberto(false)}>
                 Cancelar
@@ -203,6 +257,17 @@ export function InscricoesPage() {
             </div>
           </form>
         </Modal>
+      )}
+
+      {excluindo && (
+        <ConfirmDialog
+          title="Remover inscrição"
+          message="Tem certeza que deseja remover esta inscrição? Essa ação não pode ser desfeita."
+          confirmLabel="Remover"
+          tone="danger"
+          onConfirm={() => void excluir()}
+          onCancel={() => setExcluindo(null)}
+        />
       )}
     </div>
   );
