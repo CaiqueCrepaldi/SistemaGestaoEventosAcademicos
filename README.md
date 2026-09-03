@@ -4,17 +4,20 @@ Projeto de TCC/PFC: um sistema pra gerenciar eventos acadêmicos (palestras,
 minicursos, workshops, etc.) — cadastro de eventos, salas e palestrantes,
 inscrição e check-in de participantes, emissão de certificado e feedback.
 
-Frontend em React + TypeScript, feito aqui. Backend em Java/Spring Boot,
-feito à parte por outra pessoa, em outra IDE — o contrato entre os dois
-está em [`docs/api-contract.md`](docs/api-contract.md).
+Frontend em React + TypeScript. Backend em Node.js + TypeScript + Express
+— o contrato entre os dois está em
+[`docs/api-contract.md`](docs/api-contract.md). O banco de dados
+(PostgreSQL) é administrado à parte, em outra ferramenta/projeto; por
+enquanto o backend guarda os dados em memória (ver
+[`backend/README.md`](backend/README.md)).
 
 Demo publicada: https://caiquecrepaldi.github.io/SistemaGestaoEventosAcademicos/#/
 
 ## Estrutura do repositório
 
 ```
-frontend/   React + TypeScript + Vite — único que roda hoje
-backend/    Java + Spring Boot — em desenvolvimento separado
+frontend/   React + TypeScript + Vite
+backend/    Node.js + TypeScript + Express (dados em memória por enquanto)
 docs/       contrato de API entre os dois lados
 ```
 
@@ -87,8 +90,9 @@ no navegador com `jsPDF`, também sem precisar do backend.
 
 **Integrado**: cada chamada de serviço vira request HTTP de verdade pra
 `VITE_API_URL`, com `Authorization: Bearer <token>` (token salvo em
-`localStorage["sgea:session"]` depois do login). Precisa do Spring Boot
-rodando e implementando o contrato descrito em `docs/api-contract.md`.
+`localStorage["sgea:session"]` depois do login). Precisa do backend
+(`backend/`) rodando — ver [`backend/README.md`](backend/README.md) pra
+como subir ele.
 
 Pra trocar, edita `frontend/.env.local` e reinicia o `npm run dev` (env
 var não recarrega sozinha). Por baixo do capô, os services que fazem
@@ -102,8 +106,10 @@ Mais detalhe de scripts e deploy em [`frontend/README.md`](frontend/README.md).
 
 ## Backend
 
-Ainda em desenvolvimento, feito separadamente (ver
-[`backend/README.md`](backend/README.md)). O contrato que ele precisa
-implementar pra o frontend funcionar em modo integrado está todo descrito
-em [`docs/api-contract.md`](docs/api-contract.md), incluindo o que ainda é
-mockado no frontend e as lacunas conhecidas.
+Node.js + TypeScript + Express, implementando exatamente o contrato de
+[`docs/api-contract.md`](docs/api-contract.md) (rotas, formatos,
+autorização por perfil). O banco de dados (PostgreSQL) é administrado à
+parte, em outra ferramenta/projeto — por enquanto os dados ficam em
+memória no próprio processo (resetam a cada reinício), com as mesmas
+contas de demonstração da tabela acima. Passo a passo completo pra rodar
+localmente em [`backend/README.md`](backend/README.md).

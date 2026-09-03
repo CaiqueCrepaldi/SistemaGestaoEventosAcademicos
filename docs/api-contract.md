@@ -1,9 +1,15 @@
 # Contrato de API — Sistema de Gestão de Eventos Acadêmicos
 
-Referência pra quem for implementar o backend (Java + Spring Boot). O
-frontend já roda hoje contra um mock em `localStorage` que segue esse mesmo
-contrato, então trocar por chamadas HTTP reais é só trocar a camada de
-serviço — a UI não muda.
+Referência de rotas, formatos e regras de autorização entre frontend e
+backend (Node.js + TypeScript + Express, implementado em `backend/` — ver
+[`../backend/README.md`](../backend/README.md) pra como rodar). O banco de
+dados (PostgreSQL) é administrado à parte, em outra ferramenta/projeto —
+por enquanto o backend guarda os dados em memória, isolado em
+`backend/src/db/`, sem afetar nada do que está documentado aqui (rota,
+formato de request/response e regra de autorização continuam os mesmos,
+não importa o que tem por trás guardando o dado). O frontend já roda hoje
+contra um mock em `localStorage` que segue esse mesmo contrato, então
+trocar por chamadas HTTP reais é só trocar a camada de serviço — a UI não muda.
 
 Prefixo `/api` em tudo. JSON, `camelCase` igual aos tipos do frontend.
 
@@ -406,80 +412,49 @@ Erros:
 
 O corpo do e-mail junta dados de três lugares (inscrição → evento →
 palestrante), então faz sentido resolver tudo isso no service antes de
-montar a mensagem em vez de espalhar query em cada camada. Um jeito direto
-com `JavaMailSender` (já vem pronto no starter `spring-boot-starter-mail`):
+montar a mensagem em vez de espalhar query em cada camada. Implementação
+real em `backend/src/modules/inscricoes/inscricoes.service.ts` (função
+`confirmarEmail`) usando `nodemailer`:
 
-```java
-@Service
-public class ConfirmacaoInscricaoEmailService {
+```ts
+async function confirmarEmail(id: string, participanteIdDoToken: string) {
+  const inscricao = await buscarOuFalhar(id);
+  if (inscricao.participanteId !== participanteIdDoToken) {
+    throw AppError.acessoNegado("Esta inscrição não pertence a você.");
+  }
 
-    private final JavaMailSender mailSender;
-    private final InscricaoRepository inscricaoRepository;
+  const participante = participantesStore.buscarPorId(inscricao.participanteId);
+  const evento = eventosStore.buscarPorId(inscricao.eventoId);
+  if (!participante || !evento) {
+    throw AppError.naoEncontrado("INSCRICAO_NAO_ENCONTRADA", "Inscrição não encontrada.");
+  }
+  const palestrante = evento.palestranteId ? palestrantesStore.buscarPorId(evento.palestranteId) : undefined;
 
-    public ConfirmacaoInscricaoEmailService(JavaMailSender mailSender, InscricaoRepository inscricaoRepository) {
-        this.mailSender = mailSender;
-        this.inscricaoRepository = inscricaoRepository;
-    }
+  await emailService.enviarConfirmacaoInscricao(participante.email, {
+    participanteNome: participante.nome,
+    eventoTitulo: evento.titulo,
+    eventoTema: evento.tema,
+    palestranteNome: palestrante?.nome ?? "—",
+    eventoHorario: new Date(evento.horario),
+  });
 
-    public ConfirmacaoEmailResponse enviar(String inscricaoId, String participanteIdDoToken) {
-        Inscricao inscricao = inscricaoRepository.findComEventoById(inscricaoId)
-                .orElseThrow(() -> new NaoEncontradoException("INSCRICAO_NAO_ENCONTRADA"));
-
-        if (!inscricao.getParticipante().getId().equals(participanteIdDoToken)) {
-            throw new AcessoNegadoException("ACESSO_NEGADO");
-        }
-
-        String destinatario = inscricao.getParticipante().getEmail();
-        String assunto = "Inscrição confirmada — " + inscricao.getEvento().getTitulo();
-        String corpo = montarCorpoHtml(inscricao);
-
-        MimeMessage mensagem = mailSender.createMimeMessage();
-        MimeMessageHelper helper = new MimeMessageHelper(mensagem, "UTF-8");
-        helper.setTo(destinatario);
-        helper.setSubject(assunto);
-        helper.setText(corpo, true); // true = HTML
-        mailSender.send(mensagem);
-
-        return new ConfirmacaoEmailResponse(destinatario, OffsetDateTime.now());
-    }
-
-    private String montarCorpoHtml(Inscricao inscricao) {
-        // se o projeto já usa Thymeleaf, troca isso por
-        // templateEngine.process("email/confirmacao-inscricao", contexto)
-        return """
-            <p>Olá, %s!</p>
-            <p>Sua inscrição em <strong>%s</strong> foi confirmada.</p>
-            <p><strong>Tema:</strong> %s<br>
-               <strong>Palestrante:</strong> %s<br>
-               <strong>Data/horário:</strong> %s</p>
-            <p>Até lá!</p>
-            """.formatted(
-                inscricao.getParticipante().getNome(),
-                inscricao.getEvento().getTitulo(),
-                inscricao.getEvento().getTema(),
-                inscricao.getEvento().getPalestrante().getNome(),
-                inscricao.getEvento().getHorarioFormatado()
-        );
-    }
+  return { destinatario: participante.email, enviadoEm: new Date().toISOString() };
 }
 ```
 
-Configuração do `application.properties` pra usar um SMTP de verdade (ou o
-Mailtrap/Ethereal pra testar sem mandar e-mail de verdade em dev):
+(`buscarOuFalhar`, `participantesStore` e `eventosStore` vêm de
+`backend/src/db/store.ts` — o repositório em memória que guarda os dados
+enquanto o banco de verdade não é ligado, ver `backend/README.md`.)
 
-```properties
-spring.mail.host=smtp.exemplo.com
-spring.mail.port=587
-spring.mail.username=${MAIL_USERNAME}
-spring.mail.password=${MAIL_PASSWORD}
-spring.mail.properties.mail.smtp.auth=true
-spring.mail.properties.mail.smtp.starttls.enable=true
-```
-
-Se o envio falhar (SMTP fora do ar, credencial errada), não precisa
-derrubar a inscrição que já foi criada — devolver `502` ou logar e deixar o
-aluno tentar reenviar depois é uma decisão de produto que fica em aberto,
-mas a inscrição em si já está válida antes desse endpoint ser chamado.
+`emailService` (`backend/src/modules/email/email.service.ts`) usa um
+transporte `nodemailer` configurado por variável de ambiente (`SMTP_HOST`,
+`SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — ver `.env.example`).
+**Sem `SMTP_HOST` configurado, o e-mail não é enviado de verdade — só
+impresso no console** (`[e-mail simulado] ...`), o que é o padrão em
+desenvolvimento local e evita precisar de uma conta SMTP só pra testar o
+fluxo. Se o envio falhar (SMTP fora do ar, credencial errada), a exceção
+sobe como erro 500 padrão — não derruba a inscrição, que já foi criada e
+persistida antes desse endpoint ser chamado.
 
 ## Certificados
 
@@ -620,9 +595,27 @@ tem permissão — não misturar os dois, e não usar 404 pra esconder um 403
   define as perguntas ao criar o evento); ainda não existe tela de resposta
   do questionário nem vínculo entre `perguntas` e o `Feedback` registrado.
 
+## Decisões tomadas na implementação do backend
+
+Estas questões estavam em aberto neste documento e foram resolvidas ao
+implementar `backend/` de verdade — registrado aqui pra não ficar só na
+cabeça de quem escreveu o código:
+
+- **Política de senha**: mínimo de 8 caracteres, sem outra exigência
+  (maiúscula/número/símbolo). Validado em `auth.schemas.ts` tanto no
+  registro quanto na redefinição de senha.
+- **Domínio do e-mail institucional**: sim, precisa terminar com
+  `@aluno.ifsp.edu.br` — mesma regra que já existia no frontend
+  (`CadastroPage.tsx`), agora também validada no backend.
+- **Atenção**: o formulário de cadastro do frontend (`CadastroPage.tsx`)
+  ainda valida só 6 caracteres no cliente — um usuário pode digitar uma
+  senha de 6 ou 7 caracteres, passar na validação da tela, e só descobrir
+  que não serve quando o backend devolver `422`. Funciona (o erro aparece
+  na tela), mas não é a experiência ideal; ajustar o mínimo do frontend pra
+  8 fecha essa inconsistência.
+
 ## Coisa que ainda não decidimos
 
-- Política exata de senha (só definimos "8 caracteres" como piso).
-- Se o e-mail institucional precisa bater com um domínio específico tipo `@aluno.ifsp.edu.br`.
-- Como fica o provisionamento de conta admin/secretaria (não existe tela pra isso ainda).
+- Como fica o provisionamento de conta admin/secretaria (não existe tela
+  nem endpoint pra isso — hoje só existem via `backend/src/db/seedData.ts`).
 - Se a exportação de CSV de presença migra pro backend ou continua no cliente.
