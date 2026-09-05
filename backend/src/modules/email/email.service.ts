@@ -1,10 +1,7 @@
 import nodemailer, { type Transporter } from "nodemailer";
 import { env } from "../../config/env";
 
-// Se SMTP_HOST não estiver configurado (padrão em desenvolvimento local),
-// não existe transporte de e-mail nenhum — as funções abaixo caem no
-// fallback de só imprimir no console, sem quebrar o fluxo. É o mesmo
-// comportamento que o mock do frontend tinha, só que do lado do servidor.
+// sem SMTP_HOST configurado (padrao em dev local) cai no fallback de so logar no console
 let transporter: Transporter | null = null;
 if (env.smtp.host) {
   transporter = nodemailer.createTransport({
@@ -31,8 +28,6 @@ interface DadosConfirmacaoInscricao {
   eventoHorario: Date;
 }
 
-// E-mail enviado depois que o aluno se inscreve num evento (ver
-// docs/api-contract.md, seção "POST /api/inscricoes/{id}/confirmacao-email").
 async function enviarConfirmacaoInscricao(destinatario: string, dados: DadosConfirmacaoInscricao): Promise<void> {
   const dataFormatada = dados.eventoHorario.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
   const assunto = `Inscrição confirmada — ${dados.eventoTitulo}`;
@@ -49,7 +44,6 @@ async function enviarConfirmacaoInscricao(destinatario: string, dados: DadosConf
   await enviar(destinatario, assunto, html);
 }
 
-// E-mail (ou log) do código de recuperação de senha.
 async function enviarCodigoRecuperacao(destinatario: string, codigo: string): Promise<void> {
   const assunto = "Código de recuperação de senha";
   const html = `

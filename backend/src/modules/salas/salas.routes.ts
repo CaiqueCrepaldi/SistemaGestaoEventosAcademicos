@@ -8,8 +8,6 @@ import { salaSchema, salaUpdateSchema } from "./salas.schemas";
 
 export const salasRouter = Router();
 
-// Leitura é liberada pra qualquer perfil autenticado — o aluno não gerencia
-// sala nenhuma, mas Agenda/listagem de eventos precisam mostrar o nome dela.
 salasRouter.get(
   "/",
   autenticar,
@@ -28,7 +26,7 @@ salasRouter.get(
   }),
 );
 
-// Daqui pra baixo, só admin/secretaria — aluno toma 403 em qualquer verbo de escrita.
+// daqui pra baixo so admin/secretaria
 salasRouter.post(
   "/",
   autenticar,

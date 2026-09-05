@@ -7,10 +7,7 @@ import { usuarioParaDTO } from "../../utils/dto";
 
 export const usuariosRouter = Router();
 
-// Devolve os dados do usuário do token — usado (no futuro, ver "Lacunas
-// conhecidas" em docs/api-contract.md) pra revalidar a sessão quando a
-// página recarrega. Busca fresco no "banco" em vez de só reaproveitar o
-// payload do token, pra pegar qualquer mudança feita depois do login.
+// dados do usuario do token, busca fresco no store pra pegar mudanca recente
 usuariosRouter.get(
   "/me",
   autenticar,

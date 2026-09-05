@@ -28,9 +28,6 @@ async function buscarOuFalhar(id: string) {
   return inscricao;
 }
 
-// Inscrição manual (admin/secretaria criando em nome de alguém) — mesmas
-// regras de conflito da autoinscrição do aluno (ver eventos.service.ts),
-// só que aqui quem está inscrevendo escolhe livremente o participante.
 async function criarManual(dados: InscricaoInput) {
   const participante = participantesStore.buscarPorId(dados.participanteId);
   const evento = eventosStore.buscarPorId(dados.eventoId);
@@ -62,17 +59,11 @@ async function criarManual(dados: InscricaoInput) {
   });
 }
 
-// Patch de check-in — usado tanto pra confirmar presença quanto marcar
-// ausência (não existe rota /checkin separada, é a mesma PUT genérica de
-// Inscrições, ver docs/api-contract.md).
 async function atualizarCheckin(id: string, dados: InscricaoCheckinInput, usuarioIdDoToken: string) {
   await buscarOuFalhar(id);
 
   if (dados.statusPresenca === "PRESENTE") {
-    // Por segurança, ignora qualquer dataCheckin/usuarioId que o cliente
-    // tenha mandado (o schema nem repassa esses campos, ver
-    // inscricoes.schemas.ts) e usa sempre o horário do servidor e o id de
-    // quem está autenticado fazendo o check-in.
+    // ignora qualquer dataCheckin/usuarioId vindo do cliente, sempre usa horario do servidor
     return inscricoesStore.atualizar(id, {
       statusPresenca: "PRESENTE",
       dataCheckin: new Date().toISOString(),
@@ -84,7 +75,6 @@ async function atualizarCheckin(id: string, dados: InscricaoCheckinInput, usuari
     return inscricoesStore.atualizar(id, { statusPresenca: "AUSENTE", dataCheckin: null })!;
   }
 
-  // PENDENTE (reverter um check-in feito por engano, por exemplo).
   return inscricoesStore.atualizar(id, { statusPresenca: "PENDENTE", dataCheckin: null })!;
 }
 
@@ -93,9 +83,6 @@ async function remover(id: string) {
   inscricoesStore.remover(id);
 }
 
-// Dispara o e-mail de confirmação da inscrição. Só o dono da inscrição
-// (participanteId do token igual ao da inscrição) pode chamar — é assim
-// que um aluno não consegue reenviar/curiosar o e-mail de outra pessoa.
 async function confirmarEmail(id: string, participanteIdDoToken: string) {
   const inscricao = await buscarOuFalhar(id);
   if (inscricao.participanteId !== participanteIdDoToken) {

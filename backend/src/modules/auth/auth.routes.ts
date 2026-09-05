@@ -9,8 +9,7 @@ import {
   solicitarRecuperacaoSchema,
 } from "./auth.schemas";
 
-// Único módulo cujas rotas são públicas (sem autenticar()) — faz sentido,
-// já que é justamente aqui que o token é obtido.
+// unico modulo com rotas publicas, sem autenticar() - eh aqui que o token nasce
 export const authRouter = Router();
 
 authRouter.post("/registro", validarCorpo(registroSchema), asyncHandler(authController.registrar));

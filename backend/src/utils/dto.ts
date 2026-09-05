@@ -9,12 +9,8 @@ import type {
   Usuario,
 } from "../types/domain";
 
-// Funções puras que convertem o registro guardado internamente (que pode
-// ter campos de controle, como criadoEm) no formato exato que
-// docs/api-contract.md documenta pro JSON de resposta. Mantemos isso
-// separado do tipo de armazenamento interno de propósito: por baixo pode
-// mudar de "array em memória" pra um banco de verdade sem que isso vaze
-// campo nenhum novo pra API por acidente.
+// converte o registro interno pro formato de resposta da api
+// separado do tipo interno pra nao vazar campo de controle (tipo criadoEm) sem querer
 
 export function usuarioParaDTO(usuario: Usuario) {
   return {
@@ -35,9 +31,7 @@ export function salaParaDTO(sala: Sala) {
   };
 }
 
-// `paraAluno=true` remove o telefone inteiro da resposta (a chave nem
-// aparece no JSON) — é a regra documentada pro perfil ALUNO nunca ver
-// telefone de palestrante.
+// paraAluno=true tira o telefone da resposta
 export function palestranteParaDTO(palestrante: Palestrante, paraAluno: boolean) {
   const base = { id: palestrante.id, nome: palestrante.nome, email: palestrante.email };
   return paraAluno ? base : { ...base, telefone: palestrante.telefone };
@@ -52,9 +46,7 @@ export function participanteParaDTO(participante: Participante) {
   };
 }
 
-// `paraAluno=true` remove o campo `correta` de cada alternativa — o aluno
-// não pode ver o gabarito antes de responder (ver módulo questionario, que
-// usa a mesma regra pro endpoint dedicado de perguntas).
+// paraAluno=true tira o campo correta de cada alternativa, aluno nao ve gabarito antes de responder
 export function eventoParaDTO(evento: Evento, paraAluno: boolean) {
   return {
     id: evento.id,

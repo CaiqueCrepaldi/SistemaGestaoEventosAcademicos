@@ -24,9 +24,7 @@ async function atualizar(id: string, dados: PalestranteUpdateInput) {
 
 async function remover(id: string) {
   await buscarOuFalhar(id);
-  // Palestrante é obrigatório num evento (ON DELETE RESTRICT, não SET
-  // NULL) — bloqueia a exclusão enquanto houver evento vinculado, em vez de
-  // deixar o evento sem palestrante.
+  // palestrante eh obrigatorio no evento, bloqueia exclusao se tiver vinculo
   const emUso = eventosStore.contar((e) => e.palestranteId === id) > 0;
   if (emUso) {
     throw AppError.conflito("PALESTRANTE_EM_USO", "Não é possível remover: há eventos vinculados a este palestrante.");

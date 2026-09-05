@@ -9,10 +9,6 @@ import { feedbackSchema, feedbackUpdateSchema } from "./feedbacks.schemas";
 
 export const feedbacksRouter = Router();
 
-// Esta é a implementação "correta" descrita em docs/api-contract.md —
-// mesmo o frontend hoje ainda mostrando a mesma tela pros três perfis, o
-// backend já aplica a regra certa: aluno só vê/edita o próprio feedback,
-// admin/secretaria continuam vendo tudo.
 function ehEquipe(perfil: string) {
   return perfil === "ADMINISTRADOR" || perfil === "SECRETARIA";
 }
@@ -24,7 +20,7 @@ feedbacksRouter.get(
     const eventoId = typeof req.query.eventoId === "string" ? req.query.eventoId : undefined;
     const participanteIdQuery = typeof req.query.participanteId === "string" ? req.query.participanteId : undefined;
 
-    // Aluno nunca vê feedback de outra pessoa, mesmo pedindo por query param.
+    // aluno nunca ve feedback de outra pessoa mesmo pedindo por query param
     const participanteId = ehEquipe(req.usuario!.perfil) ? participanteIdQuery : req.usuario!.participanteId ?? undefined;
 
     const feedbacks = await feedbacksService.listar({ eventoId, participanteId });
@@ -49,8 +45,7 @@ feedbacksRouter.post(
   autenticar,
   validarCorpo(feedbackSchema),
   asyncHandler(async (req, res) => {
-    // Aluno só cria feedback em nome dele mesmo — participanteId do corpo é
-    // ignorado nesse caso. Admin/secretaria escolhe livremente pra quem é.
+    // aluno so cria feedback em nome dele mesmo, participanteId do corpo eh ignorado nesse caso
     const participanteId = ehEquipe(req.usuario!.perfil)
       ? req.body.participanteId
       : req.usuario!.participanteId;

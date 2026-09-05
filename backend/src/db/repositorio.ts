@@ -1,16 +1,6 @@
-// Repositório genérico em memória — o "banco de dados" temporário deste
-// backend enquanto o banco de verdade (PostgreSQL) é administrado à parte,
-// em outra ferramenta. Guarda os itens num array dentro da própria
-// aplicação: funciona pra rodar e testar a API inteira sem precisar de
-// nenhum banco configurado, mas os dados **somem a cada reinício do
-// servidor** — não é persistência de verdade.
-//
-// De propósito, cada função de service (em src/modules/*/. service.ts)
-// só conversa com o repositório por esta interface (listar/buscar/criar/
-// atualizar/remover), nunca manipula o array direto. Assim, quando alguém
-// for ligar isso num banco de verdade, a troca é só reimplementar este
-// arquivo (ou trocar cada `criarRepositorio<T>()` por uma versão que fala
-// com o banco) — nenhum controller/rota precisa mudar.
+// repositorio generico em memoria, o "banco" enquanto nao pluga um de verdade
+// os dados somem a cada restart do servidor
+// services so falam com isso por essa interface, nunca mexem no array direto
 export interface Repositorio<T extends { id: string }> {
   listar(): T[];
   listarComFiltro(predicado: (item: T) => boolean): T[];

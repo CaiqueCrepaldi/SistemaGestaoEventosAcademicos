@@ -6,6 +6,5 @@ export const salaSchema = z.object({
 });
 export type SalaInput = z.infer<typeof salaSchema>;
 
-// PUT aceita atualização parcial — todos os campos viram opcionais.
 export const salaUpdateSchema = salaSchema.partial();
 export type SalaUpdateInput = z.infer<typeof salaUpdateSchema>;

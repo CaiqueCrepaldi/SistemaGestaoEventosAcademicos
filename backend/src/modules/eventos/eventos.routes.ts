@@ -11,9 +11,6 @@ import { eventoSchema, eventoUpdateSchema } from "./eventos.schemas";
 
 export const eventosRouter = Router();
 
-// Leitura liberada pra qualquer perfil autenticado — é a mesma rota usada
-// tanto pela tela de gestão (admin/secretaria) quanto pela Agenda/listagem
-// de eventos do aluno.
 eventosRouter.get(
   "/",
   autenticar,
@@ -41,7 +38,6 @@ eventosRouter.post(
   validarCorpo(eventoSchema),
   asyncHandler(async (req, res) => {
     const evento = await eventosService.criar(req.body);
-    // Quem cria é sempre admin/secretaria, então devolve com o gabarito.
     res.status(201).json(eventoParaDTO(evento, false));
   }),
 );
@@ -67,10 +63,7 @@ eventosRouter.delete(
   }),
 );
 
-// Autoinscrição — endpoint dedicado, só ALUNO. Ignora de propósito qualquer
-// participanteId que viesse no corpo (nem aceita corpo: usa sempre o
-// participanteId do PRÓPRIO token), pra impedir um aluno se inscrever em
-// nome de outra pessoa forjando a requisição.
+// autoinscricao, so ALUNO, sempre usa o participanteId do proprio token
 eventosRouter.post(
   "/:eventoId/inscricoes",
   autenticar,
@@ -78,8 +71,6 @@ eventosRouter.post(
   asyncHandler(async (req, res) => {
     const participanteId = req.usuario!.participanteId;
     if (!participanteId) {
-      // Defensivo: não deveria acontecer (todo ALUNO ganha um Participante
-      // no cadastro), mas evita um erro 500 confuso se acontecer.
       throw AppError.acessoNegado("Esta conta não está vinculada a um participante.");
     }
     const inscricao = await eventosService.autoinscrever(req.params.eventoId, participanteId);
@@ -87,9 +78,7 @@ eventosRouter.post(
   }),
 );
 
-// Perguntas do questionário desse evento, sem o gabarito — é o que o aluno
-// carrega na tela de responder (o time de gestão já recebe o gabarito
-// completo pela rota GET /:id acima).
+// perguntas do questionario sem gabarito, pra tela do aluno
 eventosRouter.get(
   "/:eventoId/questionario",
   autenticar,
@@ -99,9 +88,6 @@ eventosRouter.get(
   }),
 );
 
-// Envio das respostas — só ALUNO, e sempre em nome do próprio participante
-// do token (mesma proteção da autoinscrição acima: ninguém responde em
-// nome de outra pessoa forjando participanteId no corpo).
 eventosRouter.post(
   "/:eventoId/questionario/respostas",
   autenticar,
@@ -117,9 +103,7 @@ eventosRouter.post(
   }),
 );
 
-// Tentativas do PRÓPRIO aluno nesse evento — usado pra decidir se o botão
-// de emitir certificado já pode ser liberado (ver certificadoService.ts no
-// frontend).
+// tentativas do proprio aluno nesse evento, usado pra liberar o certificado
 eventosRouter.get(
   "/:eventoId/questionario/tentativas",
   autenticar,

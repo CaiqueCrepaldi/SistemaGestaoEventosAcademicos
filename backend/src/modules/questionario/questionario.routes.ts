@@ -4,11 +4,8 @@ import { autenticar, autorizar } from "../../middleware/auth";
 import { tentativaParaDTO } from "../../utils/dto";
 import { questionarioService } from "./questionario.service";
 
-// Endpoint "achatado" (fora de /eventos/:eventoId) usado só pela tela de
-// Certificados da equipe, que precisa da nota do questionário de TODOS os
-// alunos em TODOS os eventos de uma vez (as rotas aninhadas em
-// eventos.routes.ts atendem o caso "minhas tentativas neste evento", que é
-// o que o próprio aluno usa).
+// rota separada de /eventos/:eventoId, usada so pela tela de certificados da
+// equipe que precisa da nota de todo mundo em todo evento de uma vez
 export const questionarioRouter = Router();
 
 questionarioRouter.get(

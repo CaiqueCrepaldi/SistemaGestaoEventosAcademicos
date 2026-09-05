@@ -9,19 +9,14 @@ import { inscricaoCheckinSchema, inscricaoSchema } from "./inscricoes.schemas";
 
 export const inscricoesRouter = Router();
 
-// GET /api/inscricoes?eventoId=&participanteId=&status= — a mesma rota
-// serve a tela de gestão (admin/secretaria, vê tudo) e o aluno (só as
-// próprias inscrições). A distinção é feita aqui dentro, não em rotas
-// separadas — ver docs/api-contract.md, seção Inscrições.
+// GET /api/inscricoes?eventoId=&participanteId=&status=, serve gestao e aluno junto
 inscricoesRouter.get(
   "/",
   autenticar,
   asyncHandler(async (req, res) => {
     const participanteIdQuery = typeof req.query.participanteId === "string" ? req.query.participanteId : undefined;
 
-    // Se for ALUNO, ignora QUALQUER participanteId vindo pela URL e força
-    // o do próprio token — impede consultar inscrição de outra pessoa
-    // simplesmente forjando o query param.
+    // ALUNO nunca consulta inscricao de outra pessoa, mesmo forjando o query param
     const participanteId = req.usuario!.perfil === "ALUNO" ? req.usuario!.participanteId ?? undefined : participanteIdQuery;
 
     const inscricoes = await inscricoesService.listar({
@@ -33,9 +28,7 @@ inscricoesRouter.get(
   }),
 );
 
-// Inscrição manual — admin/secretaria escolhendo o participante (o aluno
-// usa o endpoint dedicado em /eventos/{id}/inscricoes, que sempre usa o
-// participanteId do próprio token).
+// inscricao manual, admin/secretaria escolhe o participante (aluno usa /eventos/{id}/inscricoes)
 inscricoesRouter.post(
   "/",
   autenticar,
@@ -47,8 +40,7 @@ inscricoesRouter.post(
   }),
 );
 
-// Patch de check-in (confirmar presença / marcar ausente) — é essa mesma
-// rota genérica que a tela de Check-in usa, não existe /checkin/... à parte.
+// mesma rota generica pra confirmar presenca ou marcar ausente
 inscricoesRouter.put(
   "/:id",
   autenticar,
@@ -70,9 +62,6 @@ inscricoesRouter.delete(
   }),
 );
 
-// Endpoint dedicado chamado pelo frontend logo depois que a autoinscrição
-// retorna 201 — qualquer perfil autenticado pode chamar, mas o service
-// confere que a inscrição pertence a quem está chamando.
 inscricoesRouter.post(
   "/:id/confirmacao-email",
   autenticar,

@@ -12,18 +12,13 @@ import { inscricoesRouter } from "./modules/inscricoes/inscricoes.routes";
 import { feedbacksRouter } from "./modules/feedbacks/feedbacks.routes";
 import { questionarioRouter } from "./modules/questionario/questionario.routes";
 
-// Monta o app do Express: middlewares globais, todas as rotas sob /api
-// (prefixo documentado em docs/api-contract.md) e por último o
-// errorHandler, que precisa ser sempre o último `use()` da cadeia.
 export function criarApp() {
   const app = express();
 
   app.use(cors({ origin: env.corsOrigin }));
   app.use(express.json());
 
-  // Fora do prefixo /api de propósito — é só pra ferramentas de infra
-  // (load balancer, Docker healthcheck) confirmarem que o processo está de
-  // pé, sem precisar de token nem seguir o formato de erro da API.
+  // fora do prefixo /api, healthcheck de infra nao precisa de token
   app.get("/health", (_req, res) => res.json({ status: "ok" }));
 
   const apiRouter = express.Router();
@@ -38,8 +33,6 @@ export function criarApp() {
   apiRouter.use("/questionario-tentativas", questionarioRouter);
   app.use("/api", apiRouter);
 
-  // Qualquer rota não mapeada acima cai aqui — devolve 404 no mesmo
-  // formato de erro do resto da API, em vez do HTML padrão do Express.
   app.use((req, res) => {
     res.status(404).json({
       timestamp: new Date().toISOString(),

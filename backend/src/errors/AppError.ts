@@ -3,12 +3,8 @@ export interface ErroDeCampo {
   mensagem: string;
 }
 
-// Erro padrão de toda a API — o mesmo formato documentado em
-// docs/api-contract.md (timestamp/status/code/message/path, com `erros`
-// opcional pra validação por campo). Toda rota que precisa recusar uma
-// requisição por um motivo esperado (não achou, sem permissão, duplicado
-// etc.) lança um AppError; o middleware de erro (errorHandler.ts) é quem
-// transforma isso na resposta HTTP de verdade.
+// erro padrao da api, formato timestamp/status/code/message/path
+// os services lançam isso quando precisam recusar uma requisição
 export class AppError extends Error {
   status: number;
   code: string;
@@ -22,8 +18,6 @@ export class AppError extends Error {
     this.errors = errors;
   }
 
-  // Atalhos pros erros mais comuns, pra não repetir "new AppError(401, ...)"
-  // com os mesmos três primeiros argumentos em toda rota.
   static naoAutenticado(mensagem = "Token ausente, inválido ou expirado."): AppError {
     return new AppError(401, "NAO_AUTENTICADO", mensagem);
   }

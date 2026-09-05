@@ -20,9 +20,7 @@ import type {
   Usuario,
 } from "../types/domain";
 
-// Um repositório em memória por entidade — é isso que cada service em
-// src/modules/*/*.service.ts importa e usa. Ver repositorio.ts pro porquê
-// disso existir (banco de verdade administrado à parte, fora deste projeto).
+// um repositorio por entidade, cada service usa o dele
 export const usuariosStore = criarRepositorio<Usuario>(usuariosSeed);
 export const participantesStore = criarRepositorio<Participante>(participantesSeed);
 export const salasStore = criarRepositorio<Sala>(salasSeed);

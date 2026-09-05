@@ -41,10 +41,7 @@ async function atualizar(id: string, dados: ParticipanteUpdateInput) {
 
 async function remover(id: string) {
   await buscarOuFalhar(id);
-  // Sem banco de dados enforçando foreign key, replicamos à mão as mesmas
-  // regras que o schema tinha: inscrição/feedback vinculado bloqueia a
-  // exclusão (era ON DELETE RESTRICT); já a conta de usuário vinculada só
-  // perde a referência (era ON DELETE SET NULL).
+  // sem fk de banco: inscricao/feedback vinculado bloqueia exclusao, conta de usuario so perde a referencia
   const temVinculo =
     inscricoesStore.contar((i) => i.participanteId === id) > 0 || feedbacksStore.contar((f) => f.participanteId === id) > 0;
   if (temVinculo) {

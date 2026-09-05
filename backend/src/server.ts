@@ -8,9 +8,6 @@ const server = app.listen(env.port, () => {
   console.log("[sgea-backend] dados guardados em memória — reiniciar o processo volta ao estado inicial (ver src/db/).");
 });
 
-// Encerramento gracioso: ao receber um sinal de término (ex.: Ctrl+C, ou o
-// Docker/PM2 parando o processo), fecha o servidor HTTP em vez de
-// simplesmente matar o processo na marra.
 function desligar() {
   console.log("[sgea-backend] encerrando...");
   server.close(() => process.exit(0));

@@ -3,10 +3,6 @@ import { REGEX_NOME, REGEX_RGM, normalizarRgm } from "../../utils/validacao";
 
 const DOMINIO_INSTITUCIONAL = "@aluno.umc.br";
 
-// Regras de validação de cada endpoint de autenticação. Ficam centralizadas
-// aqui (em vez de espalhadas no controller) pra serem fáceis de achar e
-// testar isoladamente. Mensagens em português, já que é o que a tela do
-// frontend mostra direto pro usuário quando o erro é 422.
 export const registroSchema = z.object({
   nomeCompleto: z.string().trim().regex(REGEX_NOME, "Nome deve conter apenas letras."),
   rgm: z

@@ -8,9 +8,7 @@ import { palestranteSchema, palestranteUpdateSchema } from "./palestrantes.schem
 
 export const palestrantesRouter = Router();
 
-// Igual em Salas, leitura é liberada a qualquer perfil — mas aqui o DTO
-// muda de formato dependendo de quem está perguntando: pro ALUNO, o campo
-// telefone é removido do objeto (não fica null, a chave some de vez).
+// leitura liberada pra qualquer perfil, mas telefone some do DTO pro ALUNO
 palestrantesRouter.get(
   "/",
   autenticar,
@@ -38,7 +36,6 @@ palestrantesRouter.post(
   validarCorpo(palestranteSchema),
   asyncHandler(async (req, res) => {
     const palestrante = await palestrantesService.criar(req.body);
-    // Quem cria é sempre admin/secretaria, então devolve com telefone.
     res.status(201).json(palestranteParaDTO(palestrante, false));
   }),
 );

@@ -13,10 +13,6 @@ async function buscarOuFalhar(id: string) {
   return evento;
 }
 
-// Confere se sala/palestrante informados realmente existem antes de
-// criar/editar um evento. Sem um banco por trás garantindo isso via
-// foreign key, essa validação manual é a única linha de defesa contra um
-// evento apontando pra uma sala/palestrante que não existe.
 function validarReferencias(dados: Partial<Pick<EventoInput, "salaId" | "palestranteId">>) {
   const erros: { campo: string; mensagem: string }[] = [];
 
@@ -49,9 +45,7 @@ async function atualizar(id: string, dados: EventoUpdateInput) {
 
 async function remover(id: string) {
   await buscarOuFalhar(id);
-  // Sem banco de dados fazendo isso via ON DELETE CASCADE, precisamos
-  // limpar à mão inscrições e feedbacks desse evento antes de excluí-lo —
-  // senão eles ficariam "órfãos", apontando pra um eventoId inexistente.
+  // sem fk de banco, limpa a mao inscricao/feedback/tentativa vinculados
   for (const inscricao of inscricoesStore.listarComFiltro((i) => i.eventoId === id)) {
     inscricoesStore.remover(inscricao.id);
   }
@@ -64,12 +58,6 @@ async function remover(id: string) {
   eventosStore.remover(id);
 }
 
-// Autoinscrição do aluno (POST /api/eventos/{eventoId}/inscricoes). As
-// duas regras de negócio (não duplicar, respeitar capacidade da sala) são
-// checadas em sequência síncrona — sem `await` entre a checagem e a
-// escrita, então não tem brecha pra duas requisições simultâneas do mesmo
-// aluno criarem duas inscrições (o event loop do Node não interrompe um
-// bloco síncrono no meio).
 async function autoinscrever(eventoId: string, participanteId: string) {
   const evento = eventosStore.buscarPorId(eventoId);
   if (!evento) throw AppError.naoEncontrado("EVENTO_NAO_ENCONTRADO", "Evento não encontrado.");

@@ -1,8 +1,5 @@
 import "dotenv/config";
 
-// Lê e valida as variáveis de ambiente uma única vez, no boot da aplicação.
-// Se faltar alguma variável obrigatória, o servidor nem sobe — é melhor
-// falhar na inicialização do que só na primeira requisição que precisar dela.
 function obrigatoria(nome: string): string {
   const valor = process.env[nome];
   if (!valor) {

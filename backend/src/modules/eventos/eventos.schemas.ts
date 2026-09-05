@@ -1,8 +1,6 @@
 import { z } from "zod";
 
-// Uma pergunta de múltipla escolha: 4 alternativas, exatamente 1 correta.
-// O `.refine` no nível da pergunta garante essa contagem — não dá pra
-// expressar "exatamente 1 true" só com tipos do zod.
+// 4 alternativas por pergunta, exatamente 1 correta
 const alternativaSchema = z.object({
   texto: z.string().trim().min(1, "Texto da alternativa é obrigatório."),
   correta: z.boolean(),
@@ -19,16 +17,10 @@ const perguntaSchema = z
     path: ["alternativas"],
   });
 
-// O questionário obrigatório do evento: sempre 10 perguntas, definidas pelo
-// palestrante e cadastradas por administrador/secretaria.
 export const questionarioSchema = z.array(perguntaSchema).length(10, "O questionário precisa ter exatamente 10 perguntas.");
 
 export const eventoSchema = z.object({
   titulo: z.string().trim().min(1, "Título é obrigatório."),
-  // z.coerce.date() aceita tanto uma string ISO-8601 (com ou sem offset)
-  // quanto um timestamp e valida que é uma data de verdade; o .transform
-  // devolve isso já como string ISO-8601, que é o formato guardado
-  // internamente (ver types/domain.ts) e devolvido pela API.
   horario: z.coerce.date({ message: "Horário inválido." }).transform((data) => data.toISOString()),
   salaId: z.string().uuid("salaId inválido."),
   palestranteId: z.string().uuid("Palestrante é obrigatório."),

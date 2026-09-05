@@ -9,9 +9,8 @@ function buscarEventoOuFalhar(eventoId: string) {
   return evento;
 }
 
-// Corrige as respostas do aluno contra o gabarito do evento e persiste a
-// tentativa. Pode haver mais de uma tentativa por par aluno/evento — quem
-// decide elegibilidade de certificado (fora deste módulo) usa a melhor.
+// corrige contra o gabarito do evento e salva a tentativa
+// pode ter mais de uma tentativa por aluno/evento, quem decide elegibilidade de certificado usa a melhor
 async function responder(eventoId: string, participanteId: string, dados: RespostasQuestionarioInput) {
   const evento = buscarEventoOuFalhar(eventoId);
   if (dados.respostas.length !== evento.questionario.length) {

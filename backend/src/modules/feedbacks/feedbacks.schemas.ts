@@ -1,9 +1,6 @@
 import { z } from "zod";
 
-// participanteId é opcional aqui de propósito: quando quem está criando é
-// ALUNO, o valor é sempre sobrescrito pelo do token (ver feedbacks.routes.ts)
-// e nem precisa vir no corpo; só admin/secretaria realmente usa esse campo,
-// pra registrar feedback em nome de um participante qualquer.
+// participanteId opcional aqui: quando eh ALUNO criando, o valor vem do token (ver feedbacks.routes.ts)
 export const feedbackSchema = z.object({
   eventoId: z.string().uuid("eventoId inválido."),
   participanteId: z.string().uuid("participanteId inválido.").optional(),

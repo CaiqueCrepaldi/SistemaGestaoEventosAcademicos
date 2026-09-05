@@ -8,9 +8,7 @@ import { participanteSchema, participanteUpdateSchema } from "./participantes.sc
 
 export const participantesRouter = Router();
 
-// Diferente de Salas/Palestrantes: aqui NENHUM verbo é liberado pro
-// ALUNO, nem leitura — por isso autorizar() já entra em toda a rota do
-// router de uma vez (não só nos POST/PUT/DELETE).
+// nenhum verbo liberado pro ALUNO aqui, nem leitura
 participantesRouter.use(autenticar, autorizar("ADMINISTRADOR", "SECRETARIA"));
 
 participantesRouter.get(

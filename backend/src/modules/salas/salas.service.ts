@@ -24,9 +24,7 @@ async function atualizar(id: string, dados: SalaUpdateInput) {
 
 async function remover(id: string) {
   await buscarOuFalhar(id);
-  // Sem banco de dados enforçando foreign key, essa checagem precisa ser
-  // feita à mão: uma sala com evento vinculado não pode ser excluída (isso
-  // era ON DELETE RESTRICT quando o projeto tinha Postgres/Prisma).
+  // sem fk de banco, checa a mao se tem evento vinculado antes de excluir
   const temEventoVinculado = eventosStore.contar((e) => e.salaId === id) > 0;
   if (temEventoVinculado) {
     throw AppError.conflito("CONFLITO_DEPENDENCIA", "Não é possível remover: existem eventos vinculados a esta sala.");

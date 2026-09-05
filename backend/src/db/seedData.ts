@@ -1,24 +1,19 @@
-// Dados de demonstração carregados em memória quando o servidor sobe —
-// os mesmos usados no mock do frontend (frontend/src/services/seed.ts),
-// pra logar com as mesmas contas dos dois lados. Como o "banco" aqui é só
-// em memória (ver repositorio.ts), isso é recriado do zero a cada reinício
-// do servidor.
+// dados de demo carregados em memoria quando o servidor sobe
+// mesmas contas do mock do frontend (frontend/src/services/seed.ts)
+// some tudo a cada restart, o "banco" eh so em memoria (ver repositorio.ts)
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import type { Evento, Feedback, Inscricao, Palestrante, Participante, PerguntaQuestionario, Sala, Usuario } from "../types/domain";
 
 const agora = new Date().toISOString();
 
-// hashSync (em vez do gerarHashSenha async de utils/password.ts) só
-// porque isso roda uma vez, de forma síncrona, no carregamento do módulo —
-// não vale a pena complicar com top-level await por causa de 3 senhas fixas.
+// hashSync em vez do gerarHashSenha async, roda uma vez so no carregamento do modulo
 function hashSincrono(senha: string): string {
   return bcrypt.hashSync(senha, 10);
 }
 
-// Monta as 10 perguntas de um questionário a partir de uma lista compacta
-// (enunciado + 4 alternativas + índice da correta) — mesma estrutura usada
-// no seed do frontend, pra as duas demos ficarem idênticas.
+// monta as 10 perguntas a partir de uma lista compacta (enunciado + 4 alternativas + indice da correta)
+// mesma estrutura do seed do frontend
 function montarQuestionario(
   itens: { enunciado: string; alternativas: [string, string, string, string]; correta: 0 | 1 | 2 | 3 }[],
 ): PerguntaQuestionario[] {
