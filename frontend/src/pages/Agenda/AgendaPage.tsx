@@ -4,9 +4,7 @@ import { salaService } from "../../services";
 import { relatorioService, type EventoAgenda } from "../../services/relatorioService";
 import type { Sala } from "../../types";
 
-// Agrupa a lista "achatada" de eventos num objeto por dia (ex.: "2026-09-14"
-// → [evento1, evento2]), pra tela poder desenhar um bloco por dia com seus
-// eventos dentro. Eventos sem horário caem todos juntos em "Sem data".
+// agrupa a lista de eventos por dia, sem horario cai em "Sem data"
 function agruparPorDia(eventos: EventoAgenda[]): Record<string, EventoAgenda[]> {
   return eventos.reduce<Record<string, EventoAgenda[]>>((acc, evento) => {
     const dia = evento.horario ? evento.horario.slice(0, 10) : "Sem data";
@@ -28,16 +26,9 @@ export function AgendaPage() {
     void relatorioService.agendaGeral().then(setEventos);
   }, []);
 
-  // Filtros combináveis: cada `if` abaixo é uma condição independente que,
-  // se o filtro estiver preenchido e o evento não bater com ele, já
-  // descarta o evento (return false) sem checar os filtros seguintes. Um
-  // filtro vazio ("") nunca elimina nada — só entra em ação quando a
-  // pessoa preenche ele.
   const filtrados = eventos.filter((evento) => {
     if (filtros.dia && evento.horario.slice(0, 10) !== filtros.dia) return false;
 
-    // Faixa de horário: só entra em ação se pelo menos um dos dois campos
-    // (início ou fim) estiver preenchido; dentro dela, cada lado é opcional.
     if (filtros.horaInicio || filtros.horaFim) {
       const hora = evento.horario.slice(11, 16);
       if (filtros.horaInicio && hora < filtros.horaInicio) return false;
@@ -46,8 +37,6 @@ export function AgendaPage() {
 
     if (filtros.salaId && evento.salaId !== filtros.salaId) return false;
 
-    // Busca por texto: considera "bateu" se o termo aparecer no tema OU no
-    // título — só descarta se não aparecer em nenhum dos dois.
     if (filtros.tema) {
       const termo = filtros.tema.toLowerCase();
       const noTema = evento.tema.toLowerCase().includes(termo);
@@ -59,8 +48,6 @@ export function AgendaPage() {
   });
 
   const grupos = agruparPorDia(filtrados);
-  // true se qualquer um dos filtros tiver valor — usado só pra decidir se
-  // mostra a mensagem de "nenhum resultado pros filtros aplicados".
   const filtrosAtivos = Object.values(filtros).some(Boolean);
 
   return (

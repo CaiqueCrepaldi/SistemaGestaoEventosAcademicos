@@ -45,8 +45,6 @@ export function ParticipantesPage() {
     return null;
   }
 
-  // if/else: `editando` preenchido → update; vazio → create. Editar pede
-  // confirmação antes de gravar; criar não.
   function pedirSalvar() {
     const erro = validar();
     if (erro) {
@@ -81,13 +79,10 @@ export function ParticipantesPage() {
     await carregar();
   }
 
-  // Filtro de busca aplicado na lista já carregada (não faz nova chamada
-  // ao service a cada tecla) — campo de busca vazio mostra todo mundo;
-  // preenchido, compara com nome, e-mail e RGM ao mesmo tempo.
   const filtrados = participantes.filter((p) => {
     const alvo = busca.trim().toLowerCase();
     if (!alvo) return true;
-    return p.nome.toLowerCase().includes(alvo) || p.email.toLowerCase().includes(alvo) || p.rgm.toLowerCase().includes(alvo);
+    return p.nome.toLowerCase().includes(alvo) || p.email.toLowerCase().includes(alvo) || p.rgm.includes(alvo);
   });
 
   return (

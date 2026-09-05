@@ -9,13 +9,9 @@ import type {
   Usuario,
 } from "../types";
 
-// Dados de demonstração de cada entidade. É o que aparece quando o site é
-// aberto pela primeira vez (localStorage vazio) — ver loadCollection em
-// storage.ts, que grava isso no navegador na primeira visita.
+// dados de demo, aparece quando o localStorage ta vazio (ver loadCollection em storage.ts)
 
-// Monta as 10 perguntas de um questionário a partir de uma lista compacta
-// (enunciado + 4 alternativas + índice da correta) — só pra não repetir a
-// estrutura de AlternativaQuestionario nas 4 listas abaixo.
+// monta as 10 perguntas a partir de uma lista compacta (enunciado + 4 alternativas + indice da correta)
 function montarQuestionario(
   itens: { enunciado: string; alternativas: [string, string, string, string]; correta: 0 | 1 | 2 | 3 }[],
 ): PerguntaQuestionario[] {
@@ -26,7 +22,7 @@ function montarQuestionario(
   }));
 }
 
-// Uma conta por perfil, pra dar pra testar os três fluxos direto na tela de login.
+// uma conta por perfil pra testar os 3 fluxos direto no login
 export const usuariosSeed: Usuario[] = [
   {
     id: "u1",
@@ -54,14 +50,12 @@ export const usuariosSeed: Usuario[] = [
 ];
 
 export const salasSeed: Sala[] = [
-  // nome + capacidade, usados no cálculo de vagas disponíveis
   { id: "s1", nome: "Auditório A", capacidade: 120 },
   { id: "s2", nome: "Sala 204", capacidade: 40 },
   { id: "s3", nome: "Laboratório de Informática 1", capacidade: 30 },
 ];
 
 export const palestrantesSeed: Palestrante[] = [
-  // telefone aqui é só pra demonstração — não deve ir pro perfil ALUNO
   {
     id: "p1",
     nome: "Dra. Mariana Costa",
@@ -128,8 +122,6 @@ const questionarioPosteres = montarQuestionario([
   { enunciado: "Por que perguntas da plateia durante a sessão de pôsteres são importantes?", alternativas: ["Ajudam o autor a esclarecer pontos e aprimorar a pesquisa", "Servem apenas para constranger o apresentador", "Não têm nenhuma utilidade acadêmica", "São proibidas nesse tipo de evento"], correta: 0 },
 ]);
 
-// Cada item já é o evento "final" (sem contêiner pai) — id prefixado "se"
-// porque essa entidade nasceu da antiga "Sessão", fundida com Evento.
 export const eventosSeed: Evento[] = [
   {
     id: "se1",
@@ -173,15 +165,14 @@ export const eventosSeed: Evento[] = [
   },
 ];
 
-// pa1 é o participante ligado ao usuário de demonstração do aluno (u3 acima)
+// pa1 eh o participante ligado ao usuario aluno (u3 acima)
 export const participantesSeed: Participante[] = [
   { id: "pa1", nome: "João Pedro Lima", email: "joao.lima@aluno.umc.br", rgm: "20240100111" },
   { id: "pa2", nome: "Beatriz Fernandes", email: "beatriz.fernandes@aluno.umc.br", rgm: "20240100222" },
   { id: "pa3", nome: "Lucas Martins", email: "lucas.martins@aluno.umc.br", rgm: "20230100333" },
 ];
 
-// Já vem com uma presença confirmada (i1) e uma ausência (i4), pra dar pra
-// testar a tela de Certificados sem precisar fazer check-in manual antes.
+// i1 ja vem com presenca confirmada, i4 ausente, pra testar Certificados sem checkin manual
 export const inscricoesSeed: Inscricao[] = [
   { id: "i1", participanteId: "pa1", eventoId: "se1", statusPresenca: "PRESENTE", dataCheckin: "2026-09-14T09:05", usuarioId: "u2" },
   { id: "i2", participanteId: "pa2", eventoId: "se1", statusPresenca: "PENDENTE", dataCheckin: null, usuarioId: null },
@@ -190,7 +181,6 @@ export const inscricoesSeed: Inscricao[] = [
 ];
 
 export const feedbacksSeed: Feedback[] = [
-  // notas de 1 a 5, ambas pro mesmo evento (se1) pra já mostrar uma média na tela
   { id: "f1", eventoId: "se1", participanteId: "pa1", nota: 5, comentario: "Evento muito bem organizado, ótimas palestras." },
   { id: "f2", eventoId: "se1", participanteId: "pa2", nota: 4, comentario: "Gostei bastante, só achei o intervalo curto." },
 ];

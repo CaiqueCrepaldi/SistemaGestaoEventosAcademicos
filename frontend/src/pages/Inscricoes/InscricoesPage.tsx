@@ -7,9 +7,6 @@ import { toast } from "../../components/ui/Toast";
 import { eventoService, inscricaoService, participanteService, salaService } from "../../services";
 import type { Evento, Inscricao, Participante, Sala, StatusPresenca } from "../../types";
 
-// Duas funções pequenas que só traduzem o status em cor/texto pra Badge —
-// PENDENTE cai no `return` final de cada uma (não precisa de `if` próprio
-// porque é o único caso que sobra depois de checar os outros dois).
 function badgeTone(status: StatusPresenca): "green" | "red" | "orange" {
   if (status === "PRESENTE") return "green";
   if (status === "AUSENTE") return "red";
@@ -57,9 +54,6 @@ export function InscricoesPage() {
     setModalAberto(true);
   }
 
-  // Vagas = capacidade da sala menos quantas inscrições esse evento já tem.
-  // Devolve null (em vez de um número) quando não dá pra calcular — evento
-  // ou sala inexistente — pra tela saber que não deve mostrar aviso de vaga.
   function vagasDisponiveis(evento: Evento | undefined): number | null {
     if (!evento) return null;
     const sala = salas.find((s) => s.id === evento.salaId);
@@ -77,9 +71,6 @@ export function InscricoesPage() {
       toast.error("Selecione um evento.");
       return;
     }
-    // Duas checagens em sequência, cada uma com seu próprio "return" se
-    // falhar: 1) esse participante já está inscrito nesse evento? 2) ainda
-    // tem vaga? Só se passar nas duas é que a inscrição é criada de fato.
     const jaInscrito = inscricoes.some(
       (i) => i.participanteId === participanteSelecionado.id && i.eventoId === eventoId,
     );
@@ -116,9 +107,7 @@ export function InscricoesPage() {
   const eventoSelecionado = eventos.find((e) => e.id === eventoId);
   const vagas = vagasDisponiveis(eventoSelecionado);
 
-  // Resultados da busca por nome/e-mail/RGM — mesma lógica usada no Check-in
-  // (checkinService.buscarParticipantes), só que aqui direto na tela porque
-  // a lista de participantes já está carregada.
+  // busca por nome/email/rgm, mesma logica do checkinService.buscarParticipantes
   const alvoBusca = buscaParticipante.trim().toLowerCase();
   const resultadosBusca = alvoBusca
     ? participantes.filter(

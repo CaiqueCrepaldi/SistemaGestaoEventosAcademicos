@@ -10,31 +10,19 @@ const DOMINIO_INSTITUCIONAL = "@aluno.umc.br";
 
 const VAZIO = { nomeCompleto: "", rgm: "", emailInstitucional: "", senha: "" };
 
-// Validação feita no navegador, ANTES de mandar pro backend — serve só pra
-// dar feedback rápido pro usuário (o backend valida tudo de novo, então
-// aqui é só uma conveniência de UX, não a validação "de verdade").
-// Cada `if` abaixo verifica uma regra independente e, se falhar, guarda a
-// mensagem de erro no campo correspondente; no fim, `erros` só tem chave
-// pros campos que realmente falharam.
+// validacao no navegador, so pra feedback rapido - o backend valida tudo de novo
 function validarCliente(form: typeof VAZIO, confirmarSenha: string): Record<string, string> {
   const erros: Record<string, string> = {};
 
-  // Regra 1: nome só com letras (sem número).
   if (!validarNome(form.nomeCompleto)) {
     erros.nomeCompleto = "Nome deve conter apenas letras.";
   }
-  // Regra 2: e-mail precisa ser válido E terminar com o domínio institucional do aluno.
   if (!validarEmail(form.emailInstitucional) || !form.emailInstitucional.toLowerCase().endsWith(DOMINIO_INSTITUCIONAL)) {
     erros.emailInstitucional = `E-mail precisa ser institucional (termina com ${DOMINIO_INSTITUCIONAL})`;
   }
-  // Regra 3: RGM com exatamente 11 caracteres alfanuméricos (já normalizado
-  // pra maiúsculo/sem espaço no onChange do campo).
   if (!validarRgm(form.rgm)) {
     erros.rgm = "RGM deve ter exatamente 11 caracteres, sem espaços.";
   }
-  // Regra 4: senha tem duas condições encadeadas com if/else — só faz
-  // sentido checar se as duas senhas coincidem depois de já confirmar que
-  // a senha em si tem tamanho mínimo válido.
   if (form.senha.length < 6) {
     erros.senha = "Senha deve ter no mínimo 6 caracteres";
   } else if (form.senha !== confirmarSenha) {
@@ -57,8 +45,6 @@ export function CadastroPage() {
     e.preventDefault();
     setErroGeral(null);
 
-    // Primeiro roda a validação local; se tiver qualquer erro, nem chega a
-    // chamar o backend — só mostra os erros e para por aqui.
     const erros = validarCliente(form, confirmarSenha);
     setErrosCampo(erros);
     if (Object.keys(erros).length > 0) {
@@ -68,17 +54,11 @@ export function CadastroPage() {
 
     setCarregando(true);
     try {
-      // Cadastro e login são dois passos separados: cria a conta e, se deu
-      // certo, já loga automaticamente com a senha que acabou de escolher.
       await authService.cadastrarAluno(form);
       await login(form.emailInstitucional, form.senha);
       navigate("/eventos");
     } catch (erro) {
-      // Cada tipo de erro do backend cai num tratamento diferente:
-      // 409 = RGM/e-mail duplicado (mensagem genérica no topo do form);
-      // 422 = erro de validação por campo (backend manda campo + mensagem,
-      //   e aqui isso é convertido pro mesmo formato que erro local usa);
-      // qualquer outro caso = mensagem genérica de erro.
+      // 409 = rgm/email duplicado, 422 = erro de campo vindo do backend
       if (erro instanceof ApiError && erro.status === 409) {
         setErroGeral("RGM ou e-mail já cadastrado");
       } else if (erro instanceof ApiError && erro.status === 422 && erro.errors) {

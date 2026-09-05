@@ -27,10 +27,7 @@ export function PalestrantesPage() {
     setPalestrantes(await palestranteService.list());
   }
 
-  // Aqui é onde a tela se divide por perfil: se for ALUNO, a função já
-  // retorna (return antecipado) uma versão simples e somente-leitura da
-  // tela, sem chegar nas funções de abrir modal/salvar/excluir mais abaixo.
-  // Só ADMINISTRADOR/SECRETARIA chegam até a versão completa com CRUD.
+  // ALUNO ve uma versao read-only, sem chegar nas funcoes de CRUD abaixo
   if (usuario?.perfil === "ALUNO") {
     return (
       <div>
@@ -40,7 +37,6 @@ export function PalestrantesPage() {
             {palestrantes.map((palestrante) => (
               <li key={palestrante.id} className="simple-list-item">
                 <div className="simple-list-title">{palestrante.nome}</div>
-                {/* Telefone não aparece pro perfil ALUNO (ver docs/api-contract.md). */}
                 <div className="simple-list-sub">{palestrante.email}</div>
               </li>
             ))}
@@ -63,9 +59,6 @@ export function PalestrantesPage() {
     setModalAberto(true);
   }
 
-  // Valida formatação de cada campo antes de deixar salvar; se algo estiver
-  // errado, mostra um único aviso "bonitinho" (toast) explicando o quê, em
-  // vez de deixar o formulário falhar silenciosamente.
   function validar(): string | null {
     if (!validarNome(form.nome)) return "Nome deve conter apenas letras.";
     if (!validarEmail(form.email)) return "E-mail em formato inválido.";
@@ -73,9 +66,6 @@ export function PalestrantesPage() {
     return null;
   }
 
-  // if/else clássico: com `editando` preenchido é edição (update), vazio é
-  // cadastro novo (create) — mesmo formulário e botão pros dois casos.
-  // Editar pede confirmação antes de gravar; criar não.
   function pedirSalvar() {
     const erro = validar();
     if (erro) {
@@ -104,9 +94,7 @@ export function PalestrantesPage() {
 
   async function excluir() {
     if (!excluindo) return;
-    // Todo evento precisa ter um palestrante (campo obrigatório) — em vez de
-    // desvincular silenciosamente, bloqueia a exclusão enquanto houver
-    // evento apontando pra este palestrante.
+    // evento sempre precisa de palestrante, entao bloqueia se tiver vinculo
     const eventos = await eventoService.list();
     if (eventos.some((e) => e.palestranteId === excluindo.id)) {
       toast.error("Não é possível remover: há eventos vinculados a este palestrante.");

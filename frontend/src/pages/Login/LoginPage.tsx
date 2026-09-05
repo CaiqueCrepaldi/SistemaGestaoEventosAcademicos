@@ -8,8 +8,6 @@ export function LoginPage() {
   const [email, setEmail] = useState("admin@umc.br");
   const [senha, setSenha] = useState("admin123");
 
-  // Se já tiver sessão ativa (ex.: voltou pro /login por engano), nem
-  // mostra o formulário — manda direto pra tela principal.
   if (usuario) return <Navigate to="/" replace />;
 
   async function handleSubmit(e: FormEvent) {
@@ -18,8 +16,7 @@ export function LoginPage() {
       await login(email, senha);
       navigate("/");
     } catch {
-      // Erro já vira mensagem exibida na tela (variável `erro`, vinda do
-      // AuthContext) — aqui só evita que a exception suba e quebre a página.
+      // erro ja vira mensagem na tela via AuthContext
     }
   }
 

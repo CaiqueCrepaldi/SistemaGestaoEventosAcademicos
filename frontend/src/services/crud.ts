@@ -1,10 +1,7 @@
 import { ApiError, USE_MOCK, api } from "./api";
 import { delay, loadCollection, newId, saveCollection } from "./storage";
 
-// Contrato genérico de CRUD que toda entidade simples (Evento, Sala,
-// Palestrante, Participante, Inscrição, Feedback) usa. Cada página chama
-// só esses 5 métodos — não importa se por baixo é localStorage ou uma API
-// de verdade.
+// contrato generico de CRUD, cada pagina so chama esses 5 metodos
 export interface CrudService<T> {
   list(): Promise<T[]>;
   get(id: string): Promise<T | undefined>;
@@ -13,10 +10,7 @@ export interface CrudService<T> {
   remove(id: string): Promise<void>;
 }
 
-// Implementação "de mentira" que guarda tudo em localStorage. `cache` é o
-// array em memória — é carregado uma vez (loadCollection) e depois cada
-// operação atualiza tanto o cache quanto o localStorage, pra manter os dois
-// sincronizados.
+// implementacao mock, guarda tudo em localStorage
 function createLocalCrudService<T extends { id: string }>(key: string, seed: T[]): CrudService<T> {
   let cache = loadCollection<T>(key, seed);
 
@@ -48,9 +42,7 @@ function createLocalCrudService<T extends { id: string }>(key: string, seed: T[]
   };
 }
 
-// Implementação real, que fala com o backend Java via HTTP. Cada método é
-// só um espelho de um verbo REST — a lógica de fato (validação, permissão
-// por perfil etc.) mora no servidor, não aqui.
+// implementacao real, fala com o backend
 function createHttpCrudService<T extends { id: string }>(resource: string): CrudService<T> {
   return {
     list() {
@@ -60,8 +52,7 @@ function createHttpCrudService<T extends { id: string }>(resource: string): Crud
       try {
         return await api.get<T>(`/${resource}/${id}`);
       } catch (e) {
-        // 404 aqui não é erro de verdade pra quem chamou — só significa
-        // "não achei esse registro", então vira `undefined` em vez de throw.
+        // 404 aqui nao eh erro de verdade, so significa "nao achei"
         if (e instanceof ApiError && e.status === 404) return undefined;
         throw e;
       }
@@ -78,16 +69,12 @@ function createHttpCrudService<T extends { id: string }>(resource: string): Crud
   };
 }
 
-// key dobra de função: chave do localStorage no mock, path do recurso no modo http.
-// storageKey é opcional e só deve ser usado quando o formato dos dados salvos em
-// localStorage mudou de forma incompatível (ex.: campo renomeado/removido) — assim
-// evitamos misturar registros antigos, no formato velho, com o novo seed.
+// key dobra de funcao: chave do localStorage no mock, path do recurso no http
+// storageKey opcional, usar so quando o formato salvo mudou de forma incompativel
 export function createCrudService<T extends { id: string }>(
   key: string,
   seed: T[],
   storageKey: string = key,
 ): CrudService<T> {
-  // A troca entre mock e HTTP acontece uma única vez aqui, na criação do
-  // serviço — cada página nem sabe qual dos dois está usando por baixo.
   return USE_MOCK ? createLocalCrudService<T>(storageKey, seed) : createHttpCrudService<T>(key);
 }

@@ -6,10 +6,7 @@ import { delay, loadCollection, newId, saveCollection } from "./storage";
 
 const TENTATIVAS_KEY = "tentativas-questionario";
 
-// Pergunta sem revelar qual alternativa é a correta — é o formato que o
-// aluno recebe pra responder (o gabarito só é usado na hora de corrigir).
-// Mesmo formato devolvido pelo backend em GET /eventos/:id/questionario
-// (ver eventoParaDTO em backend/src/utils/dto.ts).
+// pergunta sem revelar a correta, formato que o aluno recebe pra responder
 export interface PerguntaSemGabarito {
   id: string;
   enunciado: string;
@@ -37,9 +34,7 @@ async function buscarEventoOuFalhar(eventoId: string): Promise<Evento> {
   return evento;
 }
 
-// Mock: guarda as tentativas numa coleção própria em localStorage (fora do
-// createCrudService genérico, porque enviar resposta não é um CRUD comum —
-// precisa corrigir contra o gabarito do evento antes de gravar).
+// mock guarda as tentativas numa colecao propria, fora do createCrudService generico
 const localQuestionarioService: QuestionarioService = {
   async obterQuestionario(eventoId) {
     const evento = await buscarEventoOuFalhar(eventoId);
@@ -79,9 +74,7 @@ const localQuestionarioService: QuestionarioService = {
   },
 };
 
-// HTTP: perguntas e correção vivem no backend (ver
-// backend/src/modules/questionario) — o servidor nunca manda o gabarito pro
-// aluno antes de ele responder.
+// http: perguntas e correcao vivem no backend, servidor nunca manda o gabarito antes do aluno responder
 const httpQuestionarioService: QuestionarioService = {
   obterQuestionario(eventoId) {
     return api.get<PerguntaSemGabarito[]>(`/eventos/${eventoId}/questionario`);

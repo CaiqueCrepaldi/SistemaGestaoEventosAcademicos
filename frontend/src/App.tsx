@@ -18,16 +18,6 @@ import { ParticipantesPage } from "./pages/Participantes/ParticipantesPage";
 import { QuestionarioPage } from "./pages/Questionario/QuestionarioPage";
 import { SalasPage } from "./pages/Salas/SalasPage";
 
-// Define todas as rotas da aplicação e organiza a autorização por perfil em
-// camadas (de fora pra dentro):
-//   1. /login, /cadastro e /esqueci-senha — públicas, sem checagem nenhuma.
-//   2. <ProtectedRoute /> (sem `perfis`) — só exige estar logado; quem não
-//      está, é mandado pro /login. Envolve o Layout (menu + topo) inteiro.
-//   3. Dentro do Layout, as rotas são agrupadas em dois blocos, cada um
-//      com seu próprio <ProtectedRoute perfis={[...]} /> — um pro que
-//      ALUNO também acessa, outro só pra ADMINISTRADOR/SECRETARIA. Isso
-//      garante que digitar a URL na mão (não só clicar no menu) também
-//      respeita a permissão do perfil.
 export function App() {
   return (
     <HashRouter>
@@ -39,7 +29,7 @@ export function App() {
           <Route path="/esqueci-senha" element={<EsqueciSenhaPage />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
-              {/* Rotas que ADMINISTRADOR, SECRETARIA e ALUNO acessam */}
+              {/* rotas que ADMINISTRADOR, SECRETARIA e ALUNO acessam */}
               <Route element={<ProtectedRoute perfis={["ADMINISTRADOR", "SECRETARIA", "ALUNO"]} />}>
                 <Route path="/eventos" element={<EventosPage />} />
                 <Route path="/eventos/:eventoId/questionario" element={<QuestionarioPage />} />
@@ -48,7 +38,7 @@ export function App() {
                 <Route path="/certificados" element={<CertificadosPage />} />
                 <Route path="/feedback" element={<FeedbackPage />} />
               </Route>
-              {/* Rotas exclusivas de ADMINISTRADOR/SECRETARIA (equipe de gestão) */}
+              {/* rotas exclusivas de ADMINISTRADOR/SECRETARIA */}
               <Route element={<ProtectedRoute perfis={["ADMINISTRADOR", "SECRETARIA"]} />}>
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/salas" element={<SalasPage />} />

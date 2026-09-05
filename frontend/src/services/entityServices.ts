@@ -9,15 +9,9 @@ import {
   salasSeed,
 } from "./seed";
 
-// Um serviço CRUD pronto por entidade — é o que toda página importa pra
-// listar/criar/editar/excluir (ex.: eventoService.list(), salaService.create(...)).
-//
-// "eventos", "palestrantes", "inscricoes" e "feedbacks" ganharam storageKey
-// versionado: o formato salvo em localStorage mudou de forma incompatível
-// com a versão anterior (eventos: perguntas texto → questionario de múltipla
-// escolha + palestrante obrigatório; palestrantes: currículo → e-mail), então
-// usamos uma chave nova pra não misturar dados antigos, no formato velho,
-// com o seed atual.
+// um servico CRUD pronto por entidade, importado direto nas paginas
+// eventos/palestrantes/inscricoes/feedbacks tem storageKey versionada porque
+// o formato salvo no localStorage mudou de forma incompativel com versoes antigas
 export const eventoService = createCrudService<Evento>("eventos", eventosSeed, "eventos-v3");
 export const salaService = createCrudService<Sala>("salas", salasSeed);
 export const palestranteService = createCrudService<Palestrante>("palestrantes", palestrantesSeed, "palestrantes-v2");

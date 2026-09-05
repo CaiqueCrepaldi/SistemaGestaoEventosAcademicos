@@ -5,8 +5,6 @@ import { participanteService } from "./entityServices";
 import { usuariosSeed } from "./seed";
 import { delay, loadCollection, newId, saveCollection } from "./storage";
 
-// Dados do usuário sem o token — é o formato que vem dentro da resposta de
-// login/registro.
 export interface UsuarioPerfil {
   id: string;
   nome: string;
@@ -16,8 +14,7 @@ export interface UsuarioPerfil {
   participanteId: string | null;
 }
 
-// O que fica salvo em localStorage["sgea:session"] depois do login — os
-// dados do usuário mais o token, usado em toda chamada autenticada.
+// o que fica salvo em localStorage["sgea:session"] depois do login
 export interface SessaoUsuario extends UsuarioPerfil {
   token: string;
 }
@@ -40,10 +37,7 @@ interface AuthService {
   confirmarRecuperacaoSenha(identificador: string, codigo: string, novaSenha: string): Promise<void>;
 }
 
-// Gera um "token" falso só pra ter alguma string no lugar de um JWT de
-// verdade (que só existiria com backend real assinando). Não tem
-// assinatura nem validação nenhuma — é só cosmético, pro modo mock imitar
-// o formato Bearer <token>.
+// token falso so pra ter uma string no lugar de jwt de verdade, sem assinatura nenhuma
 function fakeJwt(usuarioId: string, perfil: Perfil): string {
   const payload = btoa(JSON.stringify({ sub: usuarioId, perfil, exp: Date.now() + 1000 * 60 * 60 * 8 }));
   return `mock.${payload}.jwt`;
@@ -51,16 +45,11 @@ function fakeJwt(usuarioId: string, perfil: Perfil): string {
 
 const RECUPERACAO_KEY = "sgea:recuperacao-senha";
 
-// Acha um usuário tanto por e-mail quanto por RGM — usado no fluxo de
-// "esqueci minha senha", que aceita os dois como identificador.
 function buscarUsuarioPorIdentificador(identificador: string) {
   const usuarios = loadCollection("usuarios-v2", usuariosSeed);
   return usuarios.find((u) => u.emailLogin === identificador || u.rgm === identificador);
 }
 
-// Lê o "banco" de códigos de recuperação de senha pendentes (um por
-// usuário) guardado em localStorage. Se ainda não existir nada, devolve um
-// objeto vazio em vez de quebrar.
 function lerCodigosPendentes(): Record<string, { codigo: string; expiraEm: number }> {
   return JSON.parse(localStorage.getItem(RECUPERACAO_KEY) ?? "{}");
 }
@@ -69,9 +58,6 @@ const localAuthService: AuthService = {
   async login(emailLogin, senha) {
     const usuarios = loadCollection("usuarios-v2", usuariosSeed);
     const usuario = usuarios.find((u) => u.emailLogin === emailLogin && u.senhaHash === senha);
-    // Se não achou ninguém com esse par e-mail/senha, é credencial errada —
-    // devolve o mesmo erro genérico tanto pra e-mail inexistente quanto pra
-    // senha errada, pra não dar dica de qual dos dois está incorreto.
     if (!usuario) {
       await delay(undefined, 300);
       throw new ApiError(401, "E-mail ou senha inválidos", "CREDENCIAIS_INVALIDAS");
@@ -96,9 +82,6 @@ const localAuthService: AuthService = {
       participanteService.list(),
     ]);
 
-    // Bloqueia cadastro duplicado: e-mail já usado como login OU RGM já
-    // existente na lista de participantes (mesmo que seja de alguém sem
-    // conta, cadastrado manualmente pelo admin).
     const duplicado =
       usuarios.some((u) => u.emailLogin === dados.emailInstitucional) ||
       participantes.some((p) => p.rgm === dados.rgm);
@@ -107,16 +90,12 @@ const localAuthService: AuthService = {
       throw new ApiError(409, "RGM ou e-mail já cadastrado", "CADASTRO_DUPLICADO");
     }
 
-    // Todo aluno precisa de dois registros vinculados: primeiro cria o
-    // Participante (usado depois por inscrição/check-in/certificado)...
     const participante = await participanteService.create({
       nome: dados.nomeCompleto,
       email: dados.emailInstitucional,
       rgm: dados.rgm,
     });
 
-    // ...e só depois o Usuario de login, já apontando pro id do
-    // participante recém-criado.
     const usuario = {
       id: newId(),
       nome: dados.nomeCompleto,
@@ -126,7 +105,7 @@ const localAuthService: AuthService = {
       rgm: dados.rgm,
       participanteId: participante.id,
     };
-    saveCollection("usuarios-v2",[...usuarios, usuario]);
+    saveCollection("usuarios-v2", [...usuarios, usuario]);
 
     await delay(undefined, 300);
   },
@@ -138,17 +117,11 @@ const localAuthService: AuthService = {
       throw new ApiError(404, "Não encontramos conta com esse e-mail ou RGM.", "USUARIO_NAO_ENCONTRADO");
     }
 
-    // Gera um código de 6 dígitos, válido por 15 minutos, e guarda
-    // associado ao id do usuário (sobrescreve qualquer código anterior
-    // ainda pendente pra ele).
     const codigo = String(Math.floor(100000 + Math.random() * 900000));
     const pendentes = lerCodigosPendentes();
     pendentes[usuario.id] = { codigo, expiraEm: Date.now() + 1000 * 60 * 15 };
     localStorage.setItem(RECUPERACAO_KEY, JSON.stringify(pendentes));
-    // Sem servidor de e-mail no mock, o código aparece num aviso na tela — e
-    // também volta no corpo da resposta (codigoDemo), pra tela de recuperação
-    // mostrar direto. Isso não existiria em produção (o código só chegaria
-    // por e-mail de verdade).
+    // sem servidor de email no mock, o codigo aparece num aviso na tela
     toast.info(`Código de recuperação (demonstração) para ${usuario.emailLogin}: ${codigo}`);
 
     return delay({ codigoDemo: codigo }, 300);
@@ -161,9 +134,6 @@ const localAuthService: AuthService = {
       throw new ApiError(404, "Não encontramos conta com esse e-mail ou RGM.", "USUARIO_NAO_ENCONTRADO");
     }
 
-    // O código só é válido se existir, bater com o que foi digitado E
-    // ainda não ter passado do prazo de expiração — qualquer uma dessas
-    // três condições falhando já é código inválido.
     const pendentes = lerCodigosPendentes();
     const pendente = pendentes[usuario.id];
     if (!pendente || pendente.codigo !== codigo || pendente.expiraEm < Date.now()) {
@@ -171,11 +141,9 @@ const localAuthService: AuthService = {
       throw new ApiError(422, "Código inválido ou expirado.", "CODIGO_INVALIDO");
     }
 
-    // Código certo: troca a senha do usuário e descarta o código (não dá
-    // pra reusar o mesmo código duas vezes).
     const usuarios = loadCollection("usuarios-v2", usuariosSeed);
     saveCollection(
-      "usuarios",
+      "usuarios-v2",
       usuarios.map((u) => (u.id === usuario.id ? { ...u, senhaHash: novaSenha } : u)),
     );
     delete pendentes[usuario.id];
@@ -192,8 +160,6 @@ interface LoginResponseDTO {
   usuario: UsuarioPerfil;
 }
 
-// Versão que fala com o backend Java de verdade — cada método é só um POST
-// pra rota correspondente (ver docs/api-contract.md pra formato de request/response).
 const httpAuthService: AuthService = {
   async login(emailLogin, senha) {
     const res = await api.post<LoginResponseDTO>("/auth/login", { emailLogin, senha });
@@ -210,6 +176,4 @@ const httpAuthService: AuthService = {
   },
 };
 
-// Troca entre mock e backend real conforme a variável de ambiente
-// VITE_USE_MOCK — o resto do app usa `authService` sem saber qual dos dois é.
 export const authService: AuthService = USE_MOCK ? localAuthService : httpAuthService;

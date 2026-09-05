@@ -8,11 +8,7 @@ interface ToastItem {
   mensagem: string;
 }
 
-// Pub/sub bem simples em módulo (sem Context) — qualquer arquivo, seja
-// componente React ou um service puro (authService, emailService), pode
-// chamar `toast.error("...")` sem precisar estar dentro da árvore do React.
-// É o substituto de `alert()`/`console.log` pedido pra todo aviso automático
-// do site.
+// pub/sub simples, sem context - da pra chamar toast.error() de dentro de um service tambem
 let proximoId = 1;
 let ouvintes: Array<(item: ToastItem) => void> = [];
 
@@ -29,9 +25,7 @@ export const toast = {
 
 const DURACAO_MS = 5000;
 
-// Monte um único <ToastViewport /> por árvore de rotas (Layout, pra telas
-// autenticadas, e o wrapper de rotas públicas em App.tsx, pra Login/Cadastro/
-// Esqueci senha) — todo `toast.*()` chamado em qualquer lugar aparece nele.
+// um <ToastViewport /> montado na raiz ja cobre qualquer toast.*() chamado em qualquer lugar
 export function ToastViewport() {
   const [itens, setItens] = useState<ToastItem[]>([]);
 

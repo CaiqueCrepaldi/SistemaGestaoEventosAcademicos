@@ -32,11 +32,7 @@ interface NavItem {
   icon: ComponentType<{ className?: string }>;
 }
 
-// Todo item que existe no menu, com a lista de perfis que podem vê-lo. É a
-// fonte única de verdade do menu — a mesma lista é usada tanto pra desenhar
-// os links quanto pra calcular a migalha de pão (useMigalhas abaixo). Não
-// controla acesso por si só (isso é o ProtectedRoute em App.tsx); aqui só
-// decide o que aparece ou não no menu pra cada perfil.
+// fonte unica do menu, usada tanto pros links quanto pra migalha de pao abaixo
 const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Principal", end: true, perfis: EQUIPE, icon: DashboardIcon },
   { to: "/eventos", label: "Eventos", perfis: TODOS_PERFIS, icon: EventoIcon },
@@ -50,26 +46,17 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/feedback", label: "Feedback", perfis: TODOS_PERFIS, icon: FeedbackIcon },
 ];
 
-// Calcula o texto da barra de "migalha de pão" (breadcrumb) a partir da URL
-// atual — ex.: "/eventos/xyz" vira ["Eventos", "Detalhe"].
 function useMigalhas(menuItens: NavItem[]) {
   const location = useLocation();
   const partes = location.pathname.split("/").filter(Boolean);
 
-  // Na tela principal (dashboard) o próprio menu já destaca "Principal" como
-  // ativo — repetir o texto na migalha logo abaixo era redundante, então aqui
-  // não exibimos migalha nenhuma.
   if (partes.length === 0) {
     return [];
   }
 
-  // Acha o item de menu correspondente ao primeiro pedaço da URL, pra usar
-  // o label bonito (ex.: "Eventos") em vez do path cru.
   const atual = menuItens.find((item) => item.to === `/${partes[0]}`);
   const secao = atual?.label ?? partes[0];
 
-  // Se a URL tiver mais de um pedaço (ex.: "/eventos/xyz"), é uma tela de
-  // detalhe — mostra "Eventos / Detalhe". Senão é só a seção mesmo.
   if (partes.length > 1) {
     return [secao, "Detalhe"];
   }
@@ -78,8 +65,6 @@ function useMigalhas(menuItens: NavItem[]) {
 
 export function Layout() {
   const { usuario, logout } = useAuth();
-  // Filtra o menu pelo perfil de quem está logado — é aqui que o aluno
-  // deixa de ver "Salas", "Participantes" etc.
   const menuItens = NAV_ITEMS.filter((item) => !usuario || item.perfis.includes(usuario.perfil));
   const migalhas = useMigalhas(menuItens);
 

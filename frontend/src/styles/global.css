@@ -1,7 +1,5 @@
 :root {
-  /* Marca — amarelo sobre preto. Amarelo puro só entra como FUNDO (botão,
-     item ativo, chip); em cima de fundo claro usamos --yellow-text, uma
-     versão escurecida, pra manter contraste de leitura. */
+  /* marca: amarelo so como fundo, --yellow-text pra texto sobre fundo claro */
   --yellow-500: #ffc400;
   --yellow-600: #e0a800;
   --yellow-50: #fff8e1;
@@ -10,9 +8,7 @@
   --black-800: #1f1f1f;
   --on-yellow: #121212;
 
-  /* Tons semânticos — não fazem parte da marca, então continuam como
-     estavam (verde = presente/ok, vermelho = ausente/erro, laranja =
-     pendente, azul = variedade decorativa no dashboard). */
+  /* tons semanticos: verde ok, vermelho erro/ausente, laranja pendente, azul decorativo */
   --blue-600: #2563eb;
   --blue-500: #3b82f6;
   --green-600: #16a34a;
@@ -57,8 +53,7 @@ h1, h2, h3 {
   font-weight: 700;
 }
 
-/* App shell — barra de marca (preta) + navegação (branca, ícone+label) +
-   trilha de navegação, empilhadas no topo; conteúdo rolando abaixo. */
+/* app shell: topbar + nav + breadcrumb empilhados, conteudo rola embaixo */
 .app-shell {
   display: flex;
   flex-direction: column;
@@ -667,8 +662,7 @@ h1, h2, h3 {
   font-size: 12px;
 }
 
-/* Toasts — avisos automáticos do site (sucesso/erro/validação), sempre no
-   lugar de alert()/console.log. */
+/* Toasts */
 .toast-viewport {
   position: fixed;
   top: 20px;

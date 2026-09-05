@@ -6,9 +6,6 @@ import { toast } from "../../components/ui/Toast";
 import { eventoService, feedbackService, participanteService } from "../../services";
 import type { Evento, Feedback, Participante } from "../../types";
 
-// TODO: esta tela ainda é igual pros três perfis (não restringe aluno a
-// ver/criar só o próprio feedback) — ver "Lacunas conhecidas" em
-// docs/api-contract.md.
 export function FeedbackPage() {
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [eventos, setEventos] = useState<Evento[]>([]);
@@ -26,9 +23,6 @@ export function FeedbackPage() {
     setFeedbacks(f);
     setEventos(e);
     setParticipantes(p);
-    // Só define um evento padrão no filtro se ainda não tiver nenhum
-    // selecionado (`atual ||`) — evita resetar a escolha da pessoa toda vez
-    // que a lista é recarregada depois de salvar um feedback novo.
     setEventoId((atual) => atual || e[0]?.id || "");
   }
 
@@ -48,11 +42,7 @@ export function FeedbackPage() {
     await carregar();
   }
 
-  // "" no select significa "Todos os eventos" — nesse caso o filtro não
-  // elimina nada; com um evento escolhido, só passam os feedbacks dele.
   const filtrados = feedbacks.filter((f) => !eventoId || f.eventoId === eventoId);
-  // Média das notas filtradas; null (em vez de 0) quando não tem nenhuma,
-  // pra mostrar "—" em vez de uma média falsa.
   const media = filtrados.length > 0 ? filtrados.reduce((acc, f) => acc + f.nota, 0) / filtrados.length : null;
 
   return (

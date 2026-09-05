@@ -9,9 +9,7 @@ interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
-// Confirmação "bonitinha" (usa o mesmo Modal do resto do site) no lugar do
-// confirm() nativo do navegador — usada antes de excluir ou de salvar uma
-// edição em qualquer tela de cadastro.
+// confirmacao usando o Modal padrao, no lugar do confirm() nativo
 export function ConfirmDialog({ title, message, confirmLabel = "Confirmar", tone = "default", onConfirm, onCancel }: ConfirmDialogProps) {
   return (
     <Modal title={title} onClose={onCancel}>

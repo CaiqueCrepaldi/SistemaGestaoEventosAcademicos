@@ -9,10 +9,7 @@ import { questionarioService } from "../../services/questionarioService";
 import type { Evento, TentativaQuestionario } from "../../types";
 import { PERCENTUAL_APROVACAO } from "../../utils/questionario";
 
-// Página que o aluno acessa a partir do botão "Questionário" em
-// Certificados — responde as 10 perguntas de múltipla escolha daquele
-// evento específico e, ao enviar, já vê o resultado (e se atingiu os 60%
-// necessários pra liberar o certificado).
+// pagina que o aluno acessa a partir do botao "Questionário" em Certificados
 export function QuestionarioPage() {
   const { eventoId } = useParams<{ eventoId: string }>();
   const { usuario } = useAuth();

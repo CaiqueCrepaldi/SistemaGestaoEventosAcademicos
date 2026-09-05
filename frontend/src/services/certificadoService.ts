@@ -5,8 +5,7 @@ import { USE_MOCK, api } from "./api";
 import { eventoService, inscricaoService, palestranteService, participanteService } from "./entityServices";
 import { questionarioService } from "./questionarioService";
 
-// Tudo que o PDF do certificado precisa pra ser desenhado — já vem "achatado"
-// (sem precisar cruzar Inscricao/Evento/Participante de novo na tela).
+// tudo que o pdf do certificado precisa, ja "achatado"
 export interface CertificadoDisponivel {
   inscricaoId: string;
   participanteId: string;
@@ -19,18 +18,12 @@ export interface CertificadoDisponivel {
   data: string;
   cargaHoraria: number;
   codigoValidacao: string;
-  // Melhor percentual de acerto do aluno no questionário desse evento (null
-  // se ele ainda não respondeu nenhuma vez) e se isso já basta pra liberar
-  // o certificado (>= PERCENTUAL_APROVACAO).
+  // melhor percentual do aluno no questionario desse evento, null se ainda nao respondeu
   melhorPercentual: number | null;
   questionarioAprovado: boolean;
 }
 
-// Gera um código curto e determinístico (sempre o mesmo código pro mesmo
-// id de inscrição) pra imprimir no certificado como referência visual.
-// Não é uma assinatura criptográfica de verdade — é só um hash simples
-// (soma ponderada dos códigos de caractere, base 31) convertido pra base36,
-// só pra não repetir/ser previsível demais entre inscrições diferentes.
+// hash simples pra gerar um codigo curto e consistente por inscricao, so decorativo
 function gerarCodigoValidacao(inscricaoId: string): string {
   let hash = 0;
   for (let i = 0; i < inscricaoId.length; i++) {
@@ -41,17 +34,9 @@ function gerarCodigoValidacao(inscricaoId: string): string {
   return `SGEA-${prefixo}-${sufixo}`;
 }
 
-// Junta cada Inscricao (já filtrada por "presente") com os dados do
-// Evento/Palestrante/Participante correspondentes, montando a lista de
-// certificados que a pessoa pode emitir. Pula silenciosamente qualquer
-// inscrição cujo evento ou participante não exista mais (dado órfão).
-//
-// `todasTentativas`: quando informado (visão de equipe, que cruza vários
-// alunos de uma vez), usa essa lista já carregada e filtra localmente — a
-// rota HTTP por evento/aluno (`questionarioService.listarTentativas`) é
-// restrita a ALUNO respondendo por si mesmo, então a equipe não pode
-// chamá-la aluno por aluno; sem o parâmetro (visão do próprio aluno), busca
-// direto pela rota própria de cada evento.
+// junta cada Inscricao com Evento/Palestrante/Participante, pula dado orfao
+// todasTentativas: quando informado (visao de equipe, varios alunos de uma vez), filtra localmente
+// porque a rota por evento/aluno eh restrita ao proprio aluno respondendo
 async function enriquecer(
   inscricoes: Inscricao[],
   todasTentativas?: TentativaQuestionario[],
@@ -69,8 +54,6 @@ async function enriquecer(
     if (!evento || !participante) continue;
     const palestrante = palestrantes.find((p) => p.id === evento.palestranteId);
 
-    // Melhor percentual entre todas as tentativas do aluno nesse
-    // questionário — é o que decide se o certificado já pode ser emitido.
     const tentativas = todasTentativas
       ? todasTentativas.filter((t) => t.eventoId === evento.id && t.participanteId === participante.id)
       : await questionarioService.listarTentativas(evento.id, participante.id);
@@ -95,9 +78,7 @@ async function enriquecer(
   return certificados;
 }
 
-// Monta o PDF do certificado inteiramente no navegador com jsPDF (não existe
-// endpoint de backend pra isso) e já dispara o download. Página A4 deitada,
-// texto centralizado.
+// pdf montado no navegador com jspdf, nao existe endpoint de backend pra isso
 function gerarPdf(dados: CertificadoDisponivel): void {
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const largura = doc.internal.pageSize.getWidth();
@@ -115,8 +96,6 @@ function gerarPdf(dados: CertificadoDisponivel): void {
     `Certificamos que ${dados.participanteNome} (RGM ${dados.participanteRgm}) participou do evento ` +
     `"${dados.eventoTitulo}", com tema "${dados.tema}", ministrado por ${dados.palestranteNome}, ` +
     `realizado em ${dataFormatada}, com carga horária de ${dados.cargaHoraria}h.`;
-  // splitTextToSize quebra o texto em várias linhas que cabem na largura da
-  // página, senão o parágrafo inteiro tentaria caber numa linha só.
   const linhas = doc.splitTextToSize(corpo, largura - 70);
   doc.text(linhas, meio, 75, { align: "center" });
 
@@ -132,9 +111,7 @@ interface CertificadoService {
   gerarCertificado(dados: CertificadoDisponivel): void;
 }
 
-// Versão mock: um certificado só "existe" se a inscrição estiver com
-// statusPresenca === "PRESENTE" — é essa checagem que impede alguém de
-// emitir certificado sem ter feito check-in.
+// mock: certificado so existe se a inscricao estiver PRESENTE
 const localCertificadoService: CertificadoService = {
   async listarCertificadosDoParticipante(participanteId) {
     const inscricoes = (await inscricaoService.list()).filter(
@@ -157,9 +134,6 @@ const localCertificadoService: CertificadoService = {
   },
 };
 
-// Versão HTTP: a mesma regra de "só presente vira certificado" é aplicada
-// aqui do lado do cliente (filter), já que o backend não tem endpoint
-// dedicado — só devolve a lista de inscrições filtrada por status na query.
 const httpCertificadoService: CertificadoService = {
   async listarCertificadosDoParticipante(participanteId) {
     const inscricoes = await api.get<Inscricao[]>(`/inscricoes?participanteId=${participanteId}&status=PRESENTE`);
@@ -176,8 +150,6 @@ const httpCertificadoService: CertificadoService = {
     );
   },
   gerarCertificado(dados) {
-    // O PDF é sempre montado no navegador, mock ou não — não existe
-    // endpoint de download de certificado no backend.
     gerarPdf(dados);
   },
 };

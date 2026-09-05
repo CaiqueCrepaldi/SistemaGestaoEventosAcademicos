@@ -20,31 +20,23 @@ export function SalasPage() {
     void carregar();
   }, []);
 
-  // Busca a lista atualizada de salas — chamado no carregamento da página
-  // e de novo depois de qualquer criar/editar/excluir.
   async function carregar() {
     setSalas(await salaService.list());
   }
 
-  // Abre o modal em branco, pronto pra cadastrar uma sala nova.
   function abrirNovo() {
     setEditando(null);
     setForm(VAZIO);
     setModalAberto(true);
   }
 
-  // Abre o modal já preenchido com os dados da sala clicada em "Editar".
   function abrirEdicao(sala: Sala) {
     setEditando(sala);
     setForm({ nome: sala.nome, capacidade: sala.capacidade });
     setModalAberto(true);
   }
 
-  // Um botão só de "Salvar" serve tanto pra criar quanto editar: se
-  // `editando` tiver algo, é update; senão, é create. É esse mesmo padrão
-  // if/else que se repete em todas as telas de cadastro do sistema.
-  // Editar um registro existente pede confirmação antes de gravar; criar um
-  // novo, não.
+  // editar pede confirmacao antes de gravar, criar nao
   function pedirSalvar() {
     if (!form.nome.trim() || !form.capacidade) {
       toast.error("Preencha nome e capacidade — todos os campos são obrigatórios.");

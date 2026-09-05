@@ -5,9 +5,6 @@ interface PageHeaderProps {
   actions?: ReactNode;
 }
 
-// Cabeçalho padrão do topo de cada página (título + botão(ões) de ação,
-// como "+ Novo evento"). Repetido em toda tela pra manter o mesmo
-// espaçamento/tipografia sem copiar o HTML cada vez.
 export function PageHeader({ title, actions }: PageHeaderProps) {
   return (
     <div className="page-header">
