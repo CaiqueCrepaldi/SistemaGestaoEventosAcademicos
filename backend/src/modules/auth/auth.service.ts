@@ -10,6 +10,7 @@ import type { ConfirmarRecuperacaoInput, LoginInput, RegistroInput, SolicitarRec
 
 const CODIGO_VALIDADE_MS = 15 * 60 * 1000; // 15 min
 
+// cria o Participante e o Usuario ALUNO vinculado, checa duplicidade de email/rgm antes
 async function registrarAluno(dados: RegistroInput) {
   const emailDuplicado = usuariosStore.buscarUm((u) => u.emailLogin === dados.emailInstitucional);
   if (emailDuplicado) {
@@ -46,6 +47,7 @@ async function registrarAluno(dados: RegistroInput) {
   return usuarioParaDTO(usuario);
 }
 
+// confere email+senha e devolve o token assinado
 async function login(dados: LoginInput) {
   const usuario = usuariosStore.buscarUm((u) => u.emailLogin === dados.emailLogin);
   // mensagem generica pra nao dar dica se foi email ou senha que errou
@@ -64,14 +66,17 @@ async function login(dados: LoginInput) {
   };
 }
 
+// acha usuario por email de login ou por rgm, usado na recuperacao de senha
 function buscarUsuarioPorIdentificador(identificador: string) {
   return usuariosStore.buscarUm((u) => u.emailLogin === identificador || u.rgm === identificador);
 }
 
+// gera um codigo numerico de 6 digitos
 function gerarCodigoNumerico(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
+// gera o codigo de recuperacao, salva com validade de 15min e dispara o email
 async function solicitarRecuperacaoSenha(dados: SolicitarRecuperacaoInput) {
   const usuario = buscarUsuarioPorIdentificador(dados.identificador);
   if (!usuario) {
@@ -95,6 +100,7 @@ async function solicitarRecuperacaoSenha(dados: SolicitarRecuperacaoInput) {
   return env.isProduction ? {} : { codigoDemo: codigo };
 }
 
+// confere o codigo e troca a senha
 async function confirmarRecuperacaoSenha(dados: ConfirmarRecuperacaoInput) {
   const usuario = buscarUsuarioPorIdentificador(dados.identificador);
   if (!usuario) {

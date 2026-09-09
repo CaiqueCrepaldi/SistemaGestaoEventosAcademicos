@@ -11,6 +11,7 @@ export const participantesRouter = Router();
 // nenhum verbo liberado pro ALUNO aqui, nem leitura
 participantesRouter.use(autenticar, autorizar("ADMINISTRADOR", "SECRETARIA"));
 
+// lista todos os participantes
 participantesRouter.get(
   "/",
   asyncHandler(async (_req, res) => {
@@ -19,6 +20,7 @@ participantesRouter.get(
   }),
 );
 
+// busca um participante pelo id
 participantesRouter.get(
   "/:id",
   asyncHandler(async (req, res) => {
@@ -27,6 +29,7 @@ participantesRouter.get(
   }),
 );
 
+// cadastra um participante novo
 participantesRouter.post(
   "/",
   validarCorpo(participanteSchema),
@@ -36,6 +39,7 @@ participantesRouter.post(
   }),
 );
 
+// edita um participante existente
 participantesRouter.put(
   "/:id",
   validarCorpo(participanteUpdateSchema),
@@ -45,6 +49,7 @@ participantesRouter.put(
   }),
 );
 
+// remove um participante
 participantesRouter.delete(
   "/:id",
   asyncHandler(async (req, res) => {

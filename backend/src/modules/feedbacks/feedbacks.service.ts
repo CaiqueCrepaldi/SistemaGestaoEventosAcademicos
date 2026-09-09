@@ -8,6 +8,7 @@ interface FiltrosListagem {
   participanteId?: string;
 }
 
+// lista feedbacks filtrados, mais recente primeiro
 async function listar(filtros: FiltrosListagem) {
   return feedbacksStore
     .listarComFiltro(
@@ -18,12 +19,14 @@ async function listar(filtros: FiltrosListagem) {
     .sort((a, b) => b.criadoEm.localeCompare(a.criadoEm));
 }
 
+// busca um feedback pelo id, 404 se nao existir
 async function buscarOuFalhar(id: string) {
   const feedback = feedbacksStore.buscarPorId(id);
   if (!feedback) throw AppError.naoEncontrado("FEEDBACK_NAO_ENCONTRADO", "Feedback não encontrado.");
   return feedback;
 }
 
+// cria um feedback novo, bloqueia duplicidade e evento/participante inexistente
 async function criar(eventoId: string, participanteId: string, nota: number, comentario: string) {
   const evento = eventosStore.buscarPorId(eventoId);
   const participante = participantesStore.buscarPorId(participanteId);
@@ -47,11 +50,13 @@ async function criar(eventoId: string, participanteId: string, nota: number, com
   });
 }
 
+// edita nota/comentario de um feedback existente
 async function atualizar(id: string, dados: FeedbackUpdateInput) {
   await buscarOuFalhar(id);
   return feedbacksStore.atualizar(id, dados)!;
 }
 
+// remove um feedback
 async function remover(id: string) {
   await buscarOuFalhar(id);
   feedbacksStore.remover(id);

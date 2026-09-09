@@ -3,16 +3,19 @@ import { feedbacksStore, inscricoesStore, participantesStore, usuariosStore } fr
 import { AppError } from "../../errors/AppError";
 import type { ParticipanteInput, ParticipanteUpdateInput } from "./participantes.schemas";
 
+// lista participantes ordenados por nome
 async function listar() {
   return [...participantesStore.listar()].sort((a, b) => a.nome.localeCompare(b.nome));
 }
 
+// busca um participante pelo id, 404 se nao existir
 async function buscarOuFalhar(id: string) {
   const participante = participantesStore.buscarPorId(id);
   if (!participante) throw AppError.naoEncontrado("PARTICIPANTE_NAO_ENCONTRADO", "Participante não encontrado.");
   return participante;
 }
 
+// bloqueia email/rgm repetido, ignorando o proprio registro quando eh update
 function garantirEmailERgmUnicos(dados: { email?: string; rgm?: string }, ignorarId?: string) {
   if (dados.email) {
     const existente = participantesStore.buscarUm((p) => p.email === dados.email);
@@ -28,17 +31,20 @@ function garantirEmailERgmUnicos(dados: { email?: string; rgm?: string }, ignora
   }
 }
 
+// cadastra um participante novo
 async function criar(dados: ParticipanteInput) {
   garantirEmailERgmUnicos(dados);
   return participantesStore.criar({ id: randomUUID(), ...dados, criadoEm: new Date().toISOString() });
 }
 
+// edita um participante existente
 async function atualizar(id: string, dados: ParticipanteUpdateInput) {
   await buscarOuFalhar(id);
   garantirEmailERgmUnicos(dados, id);
   return participantesStore.atualizar(id, dados)!;
 }
 
+// remove um participante, bloqueia se tiver inscricao/feedback vinculado
 async function remover(id: string) {
   await buscarOuFalhar(id);
   // sem fk de banco: inscricao/feedback vinculado bloqueia exclusao, conta de usuario so perde a referencia

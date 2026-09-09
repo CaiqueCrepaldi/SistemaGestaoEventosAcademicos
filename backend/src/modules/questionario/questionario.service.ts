@@ -3,6 +3,7 @@ import { eventosStore, tentativasStore } from "../../db/store";
 import { AppError } from "../../errors/AppError";
 import type { RespostasQuestionarioInput } from "./questionario.schemas";
 
+// busca o evento pelo id, 404 se nao existir
 function buscarEventoOuFalhar(eventoId: string) {
   const evento = eventosStore.buscarPorId(eventoId);
   if (!evento) throw AppError.naoEncontrado("EVENTO_NAO_ENCONTRADO", "Evento não encontrado.");
@@ -36,11 +37,13 @@ async function responder(eventoId: string, participanteId: string, dados: Respos
   });
 }
 
+// lista as tentativas de um aluno especifico num evento especifico
 async function listarTentativas(eventoId: string, participanteId: string) {
   buscarEventoOuFalhar(eventoId);
   return tentativasStore.listarComFiltro((t) => t.eventoId === eventoId && t.participanteId === participanteId);
 }
 
+// lista todas as tentativas de todo mundo, usado na tela de certificados da equipe
 async function listarTodas() {
   return tentativasStore.listar();
 }

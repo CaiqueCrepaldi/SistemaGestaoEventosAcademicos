@@ -11,6 +11,7 @@ interface FiltrosListagem {
   status?: StatusPresenca;
 }
 
+// lista inscricoes filtradas, mais recente primeiro
 async function listar(filtros: FiltrosListagem) {
   return inscricoesStore
     .listarComFiltro(
@@ -22,12 +23,14 @@ async function listar(filtros: FiltrosListagem) {
     .sort((a, b) => b.dataInscricao.localeCompare(a.dataInscricao));
 }
 
+// busca uma inscricao pelo id, 404 se nao existir
 async function buscarOuFalhar(id: string) {
   const inscricao = inscricoesStore.buscarPorId(id);
   if (!inscricao) throw AppError.naoEncontrado("INSCRICAO_NAO_ENCONTRADA", "Inscrição não encontrada.");
   return inscricao;
 }
 
+// inscricao manual feita por admin/secretaria, checa duplicidade e vaga
 async function criarManual(dados: InscricaoInput) {
   const participante = participantesStore.buscarPorId(dados.participanteId);
   const evento = eventosStore.buscarPorId(dados.eventoId);
@@ -59,6 +62,7 @@ async function criarManual(dados: InscricaoInput) {
   });
 }
 
+// muda o status de presenca (confirma, marca ausente ou reverte pra pendente)
 async function atualizarCheckin(id: string, dados: InscricaoCheckinInput, usuarioIdDoToken: string) {
   await buscarOuFalhar(id);
 
@@ -78,11 +82,13 @@ async function atualizarCheckin(id: string, dados: InscricaoCheckinInput, usuari
   return inscricoesStore.atualizar(id, { statusPresenca: "PENDENTE", dataCheckin: null })!;
 }
 
+// remove uma inscricao
 async function remover(id: string) {
   await buscarOuFalhar(id);
   inscricoesStore.remover(id);
 }
 
+// dispara o email de confirmacao, so pro proprio dono da inscricao
 async function confirmarEmail(id: string, participanteIdDoToken: string) {
   const inscricao = await buscarOuFalhar(id);
   if (inscricao.participanteId !== participanteIdDoToken) {

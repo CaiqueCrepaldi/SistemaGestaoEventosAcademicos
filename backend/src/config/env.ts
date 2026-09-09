@@ -1,5 +1,6 @@
 import "dotenv/config";
 
+// le uma variavel de ambiente obrigatoria, derruba o servidor se nao tiver
 function obrigatoria(nome: string): string {
   const valor = process.env[nome];
   if (!valor) {

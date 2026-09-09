@@ -3,16 +3,19 @@ import { eventosStore, feedbacksStore, inscricoesStore, palestrantesStore, salas
 import { AppError } from "../../errors/AppError";
 import type { EventoInput, EventoUpdateInput } from "./eventos.schemas";
 
+// lista todos os eventos ordenados por horario
 async function listar() {
   return [...eventosStore.listar()].sort((a, b) => a.horario.localeCompare(b.horario));
 }
 
+// busca um evento pelo id, 404 se nao existir
 async function buscarOuFalhar(id: string) {
   const evento = eventosStore.buscarPorId(id);
   if (!evento) throw AppError.naoEncontrado("EVENTO_NAO_ENCONTRADO", "Evento não encontrado.");
   return evento;
 }
 
+// confere se sala/palestrante informados existem de verdade
 function validarReferencias(dados: Partial<Pick<EventoInput, "salaId" | "palestranteId">>) {
   const erros: { campo: string; mensagem: string }[] = [];
 
@@ -28,6 +31,7 @@ function validarReferencias(dados: Partial<Pick<EventoInput, "salaId" | "palestr
   }
 }
 
+// cadastra um evento novo
 async function criar(dados: EventoInput) {
   validarReferencias(dados);
   return eventosStore.criar({
@@ -37,12 +41,14 @@ async function criar(dados: EventoInput) {
   });
 }
 
+// edita um evento existente
 async function atualizar(id: string, dados: EventoUpdateInput) {
   await buscarOuFalhar(id);
   validarReferencias(dados);
   return eventosStore.atualizar(id, dados)!;
 }
 
+// remove o evento e tudo que depende dele (inscricao, feedback, tentativa)
 async function remover(id: string) {
   await buscarOuFalhar(id);
   // sem fk de banco, limpa a mao inscricao/feedback/tentativa vinculados
@@ -58,6 +64,7 @@ async function remover(id: string) {
   eventosStore.remover(id);
 }
 
+// autoinscricao do aluno logado: checa duplicidade e vaga antes de criar
 async function autoinscrever(eventoId: string, participanteId: string) {
   const evento = eventosStore.buscarPorId(eventoId);
   if (!evento) throw AppError.naoEncontrado("EVENTO_NAO_ENCONTRADO", "Evento não encontrado.");

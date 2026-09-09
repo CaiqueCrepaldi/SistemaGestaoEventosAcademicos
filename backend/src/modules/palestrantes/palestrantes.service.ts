@@ -3,25 +3,30 @@ import { eventosStore, palestrantesStore } from "../../db/store";
 import { AppError } from "../../errors/AppError";
 import type { PalestranteInput, PalestranteUpdateInput } from "./palestrantes.schemas";
 
+// lista palestrantes ordenados por nome
 async function listar() {
   return [...palestrantesStore.listar()].sort((a, b) => a.nome.localeCompare(b.nome));
 }
 
+// busca um palestrante pelo id, 404 se nao existir
 async function buscarOuFalhar(id: string) {
   const palestrante = palestrantesStore.buscarPorId(id);
   if (!palestrante) throw AppError.naoEncontrado("PALESTRANTE_NAO_ENCONTRADO", "Palestrante não encontrado.");
   return palestrante;
 }
 
+// cadastra um palestrante novo
 async function criar(dados: PalestranteInput) {
   return palestrantesStore.criar({ id: randomUUID(), ...dados });
 }
 
+// edita um palestrante existente
 async function atualizar(id: string, dados: PalestranteUpdateInput) {
   await buscarOuFalhar(id);
   return palestrantesStore.atualizar(id, dados)!;
 }
 
+// remove um palestrante, bloqueia se tiver evento vinculado
 async function remover(id: string) {
   await buscarOuFalhar(id);
   // palestrante eh obrigatorio no evento, bloqueia exclusao se tiver vinculo

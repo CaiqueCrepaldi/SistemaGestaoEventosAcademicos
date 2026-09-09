@@ -6,6 +6,7 @@ type RotaAsync = (req: Request, res: Response, next: NextFunction) => Promise<un
 // vira promise solta e nunca chega no errorHandler
 // esse wrapper joga o catch pro next() automaticamente
 export function asyncHandler(fn: RotaAsync) {
+  // devolve a rota "embrulhada", captura rejeicao e manda pro proximo middleware
   return (req: Request, res: Response, next: NextFunction) => {
     fn(req, res, next).catch(next);
   };

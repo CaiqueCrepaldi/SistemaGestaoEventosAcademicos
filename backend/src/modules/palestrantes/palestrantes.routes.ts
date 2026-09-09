@@ -19,6 +19,7 @@ palestrantesRouter.get(
   }),
 );
 
+// busca um palestrante pelo id
 palestrantesRouter.get(
   "/:id",
   autenticar,
@@ -29,6 +30,7 @@ palestrantesRouter.get(
   }),
 );
 
+// cadastra um palestrante novo, so admin/secretaria
 palestrantesRouter.post(
   "/",
   autenticar,
@@ -40,6 +42,7 @@ palestrantesRouter.post(
   }),
 );
 
+// edita um palestrante, so admin/secretaria
 palestrantesRouter.put(
   "/:id",
   autenticar,
@@ -51,6 +54,7 @@ palestrantesRouter.put(
   }),
 );
 
+// remove um palestrante, so admin/secretaria
 palestrantesRouter.delete(
   "/:id",
   autenticar,

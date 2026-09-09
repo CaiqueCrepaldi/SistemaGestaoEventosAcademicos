@@ -12,6 +12,7 @@ import type {
 // converte o registro interno pro formato de resposta da api
 // separado do tipo interno pra nao vazar campo de controle (tipo criadoEm) sem querer
 
+// dados do usuario do token, sem senhaHash
 export function usuarioParaDTO(usuario: Usuario) {
   return {
     id: usuario.id,
@@ -23,6 +24,7 @@ export function usuarioParaDTO(usuario: Usuario) {
   };
 }
 
+// sala tal como esta, sem campo de controle
 export function salaParaDTO(sala: Sala) {
   return {
     id: sala.id,
@@ -37,6 +39,7 @@ export function palestranteParaDTO(palestrante: Palestrante, paraAluno: boolean)
   return paraAluno ? base : { ...base, telefone: palestrante.telefone };
 }
 
+// participante tal como esta, sem campo de controle
 export function participanteParaDTO(participante: Participante) {
   return {
     id: participante.id,
@@ -66,6 +69,7 @@ export function eventoParaDTO(evento: Evento, paraAluno: boolean) {
   };
 }
 
+// resultado de uma tentativa de questionario, tal como esta
 export function tentativaParaDTO(tentativa: TentativaQuestionario) {
   return {
     id: tentativa.id,
@@ -79,6 +83,7 @@ export function tentativaParaDTO(tentativa: TentativaQuestionario) {
   };
 }
 
+// inscricao tal como esta, sem campo de controle
 export function inscricaoParaDTO(inscricao: Inscricao) {
   return {
     id: inscricao.id,
@@ -91,6 +96,7 @@ export function inscricaoParaDTO(inscricao: Inscricao) {
   };
 }
 
+// feedback tal como esta, sem campo de controle
 export function feedbackParaDTO(feedback: Feedback) {
   return {
     id: feedback.id,

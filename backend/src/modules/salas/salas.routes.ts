@@ -8,6 +8,7 @@ import { salaSchema, salaUpdateSchema } from "./salas.schemas";
 
 export const salasRouter = Router();
 
+// lista todas as salas
 salasRouter.get(
   "/",
   autenticar,
@@ -17,6 +18,7 @@ salasRouter.get(
   }),
 );
 
+// busca uma sala pelo id
 salasRouter.get(
   "/:id",
   autenticar,
@@ -27,6 +29,7 @@ salasRouter.get(
 );
 
 // daqui pra baixo so admin/secretaria
+// cadastra uma sala nova
 salasRouter.post(
   "/",
   autenticar,
@@ -38,6 +41,7 @@ salasRouter.post(
   }),
 );
 
+// edita uma sala existente
 salasRouter.put(
   "/:id",
   autenticar,
@@ -49,6 +53,7 @@ salasRouter.put(
   }),
 );
 
+// remove uma sala
 salasRouter.delete(
   "/:id",
   autenticar,

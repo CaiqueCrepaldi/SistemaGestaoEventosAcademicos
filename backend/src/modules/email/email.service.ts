@@ -12,6 +12,7 @@ if (env.smtp.host) {
   });
 }
 
+// manda o email de verdade ou so loga, dependendo se o SMTP ta configurado
 async function enviar(destinatario: string, assunto: string, html: string): Promise<void> {
   if (!transporter) {
     console.info(`[e-mail simulado] Para: ${destinatario} | Assunto: ${assunto}\n${html}\n`);
@@ -28,6 +29,7 @@ interface DadosConfirmacaoInscricao {
   eventoHorario: Date;
 }
 
+// monta e envia o email de confirmacao depois que a inscricao eh criada
 async function enviarConfirmacaoInscricao(destinatario: string, dados: DadosConfirmacaoInscricao): Promise<void> {
   const dataFormatada = dados.eventoHorario.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
   const assunto = `Inscrição confirmada — ${dados.eventoTitulo}`;
@@ -44,6 +46,7 @@ async function enviarConfirmacaoInscricao(destinatario: string, dados: DadosConf
   await enviar(destinatario, assunto, html);
 }
 
+// monta e envia o email com o codigo de recuperacao de senha
 async function enviarCodigoRecuperacao(destinatario: string, codigo: string): Promise<void> {
   const assunto = "Código de recuperação de senha";
   const html = `

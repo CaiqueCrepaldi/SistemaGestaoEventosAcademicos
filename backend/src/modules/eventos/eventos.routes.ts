@@ -11,6 +11,7 @@ import { eventoSchema, eventoUpdateSchema } from "./eventos.schemas";
 
 export const eventosRouter = Router();
 
+// lista todos os eventos, questionario redigido se for ALUNO
 eventosRouter.get(
   "/",
   autenticar,
@@ -21,6 +22,7 @@ eventosRouter.get(
   }),
 );
 
+// busca um evento pelo id
 eventosRouter.get(
   "/:id",
   autenticar,
@@ -31,6 +33,7 @@ eventosRouter.get(
   }),
 );
 
+// cadastra um evento novo, so admin/secretaria
 eventosRouter.post(
   "/",
   autenticar,
@@ -42,6 +45,7 @@ eventosRouter.post(
   }),
 );
 
+// edita um evento existente, so admin/secretaria
 eventosRouter.put(
   "/:id",
   autenticar,
@@ -53,6 +57,7 @@ eventosRouter.put(
   }),
 );
 
+// remove um evento e o que depende dele, so admin/secretaria
 eventosRouter.delete(
   "/:id",
   autenticar,
@@ -88,6 +93,7 @@ eventosRouter.get(
   }),
 );
 
+// recebe as respostas do aluno, corrige e salva a tentativa
 eventosRouter.post(
   "/:eventoId/questionario/respostas",
   autenticar,

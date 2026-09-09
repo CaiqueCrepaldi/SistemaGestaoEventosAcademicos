@@ -9,10 +9,12 @@ import { feedbackSchema, feedbackUpdateSchema } from "./feedbacks.schemas";
 
 export const feedbacksRouter = Router();
 
+// admin/secretaria veem tudo, aluno so o proprio
 function ehEquipe(perfil: string) {
   return perfil === "ADMINISTRADOR" || perfil === "SECRETARIA";
 }
 
+// lista feedbacks, filtrado por evento/participante (aluno so ve o dele)
 feedbacksRouter.get(
   "/",
   autenticar,
@@ -28,6 +30,7 @@ feedbacksRouter.get(
   }),
 );
 
+// busca um feedback pelo id, bloqueia se nao for da equipe nem dono
 feedbacksRouter.get(
   "/:id",
   autenticar,
@@ -40,6 +43,7 @@ feedbacksRouter.get(
   }),
 );
 
+// cria um feedback novo, aluno so em nome dele mesmo
 feedbacksRouter.post(
   "/",
   autenticar,
@@ -61,6 +65,7 @@ feedbacksRouter.post(
   }),
 );
 
+// edita um feedback, bloqueia se nao for da equipe nem dono
 feedbacksRouter.put(
   "/:id",
   autenticar,
@@ -75,6 +80,7 @@ feedbacksRouter.put(
   }),
 );
 
+// remove um feedback, bloqueia se nao for da equipe nem dono
 feedbacksRouter.delete(
   "/:id",
   autenticar,

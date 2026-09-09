@@ -52,6 +52,7 @@ inscricoesRouter.put(
   }),
 );
 
+// remove uma inscricao
 inscricoesRouter.delete(
   "/:id",
   autenticar,
@@ -62,6 +63,7 @@ inscricoesRouter.delete(
   }),
 );
 
+// dispara o email de confirmacao da inscricao pro proprio dono dela
 inscricoesRouter.post(
   "/:id/confirmacao-email",
   autenticar,

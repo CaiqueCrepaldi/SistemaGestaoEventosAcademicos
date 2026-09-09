@@ -4,6 +4,7 @@ import { env } from "../config/env";
 
 // tem que ser o ultimo middleware registrado (assinatura de 4 parametros
 // eh o que faz o express reconhecer como error handler)
+// pega qualquer erro lançado nas rotas e devolve no formato padrao da api
 export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction) {
   const timestamp = new Date().toISOString();
   const path = req.originalUrl;

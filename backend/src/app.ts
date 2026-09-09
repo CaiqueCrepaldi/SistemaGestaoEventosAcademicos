@@ -12,6 +12,7 @@ import { inscricoesRouter } from "./modules/inscricoes/inscricoes.routes";
 import { feedbacksRouter } from "./modules/feedbacks/feedbacks.routes";
 import { questionarioRouter } from "./modules/questionario/questionario.routes";
 
+// monta a instancia do express com todos os middlewares e rotas
 export function criarApp() {
   const app = express();
 
@@ -33,6 +34,7 @@ export function criarApp() {
   apiRouter.use("/questionario-tentativas", questionarioRouter);
   app.use("/api", apiRouter);
 
+  // qualquer rota nao mapeada cai aqui, 404 no formato padrao
   app.use((req, res) => {
     res.status(404).json({
       timestamp: new Date().toISOString(),

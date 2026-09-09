@@ -21,6 +21,7 @@ export function autenticar(req: Request, _res: Response, next: NextFunction) {
 
 // restringe a rota a um ou mais perfis, roda depois do autenticar
 export function autorizar(...perfis: Perfil[]) {
+  // middleware que checa se o perfil do token ta na lista permitida
   return (req: Request, _res: Response, next: NextFunction) => {
     if (!req.usuario || !perfis.includes(req.usuario.perfil)) {
       throw AppError.acessoNegado();

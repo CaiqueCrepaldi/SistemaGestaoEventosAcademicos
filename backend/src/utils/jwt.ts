@@ -12,10 +12,12 @@ export function duracaoEmSegundos(duracao: string): number {
   return valor * multiplicadores[unidade];
 }
 
+// assina um jwt novo pro usuario, expira conforme env.jwtExpiresIn
 export function assinarToken(payload: UsuarioAutenticado): string {
   return jwt.sign(payload, env.jwtSecret, { expiresIn: duracaoEmSegundos(env.jwtExpiresIn) });
 }
 
+// valida assinatura/expiracao e devolve o payload decodificado
 export function verificarToken(token: string): UsuarioAutenticado {
   return jwt.verify(token, env.jwtSecret) as UsuarioAutenticado;
 }
