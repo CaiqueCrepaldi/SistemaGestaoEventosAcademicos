@@ -8,6 +8,7 @@ import type { Sala } from "../../types";
 
 const VAZIO: Omit<Sala, "id"> = { nome: "", capacidade: 0 };
 
+// crud de salas
 export function SalasPage() {
   const [salas, setSalas] = useState<Sala[]>([]);
   const [modalAberto, setModalAberto] = useState(false);
@@ -20,16 +21,19 @@ export function SalasPage() {
     void carregar();
   }, []);
 
+  // busca a lista atualizada de salas
   async function carregar() {
     setSalas(await salaService.list());
   }
 
+  // abre o modal em branco
   function abrirNovo() {
     setEditando(null);
     setForm(VAZIO);
     setModalAberto(true);
   }
 
+  // abre o modal ja preenchido com os dados da sala clicada
   function abrirEdicao(sala: Sala) {
     setEditando(sala);
     setForm({ nome: sala.nome, capacidade: sala.capacidade });
@@ -49,6 +53,7 @@ export function SalasPage() {
     }
   }
 
+  // cria ou atualiza dependendo se ta editando
   async function salvar() {
     if (editando) {
       await salaService.update(editando.id, form);
@@ -62,6 +67,7 @@ export function SalasPage() {
     await carregar();
   }
 
+  // remove a sala marcada pra exclusao
   async function excluir() {
     if (!excluindo) return;
     await salaService.remove(excluindo.id);

@@ -16,6 +16,7 @@ function agruparPorDia(eventos: EventoAgenda[]): Record<string, EventoAgenda[]> 
 
 const FILTROS_VAZIOS = { dia: "", horaInicio: "", horaFim: "", salaId: "", tema: "" };
 
+// programacao completa com filtro por dia/horario/sala/tema
 export function AgendaPage() {
   const [salas, setSalas] = useState<Sala[]>([]);
   const [eventos, setEventos] = useState<EventoAgenda[]>([]);

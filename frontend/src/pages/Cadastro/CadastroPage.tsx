@@ -32,6 +32,7 @@ function validarCliente(form: typeof VAZIO, confirmarSenha: string): Record<stri
   return erros;
 }
 
+// cadastro publico de aluno, cria conta e ja loga em seguida
 export function CadastroPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -41,6 +42,7 @@ export function CadastroPage() {
   const [erroGeral, setErroGeral] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
 
+  // valida no cliente, manda pro backend e trata os erros possiveis
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setErroGeral(null);

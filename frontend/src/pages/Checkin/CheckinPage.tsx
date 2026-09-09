@@ -6,18 +6,21 @@ import { checkinService, eventoService } from "../../services";
 import type { InscricaoDetalhada } from "../../services/checkinService";
 import type { Evento, Participante, StatusPresenca } from "../../types";
 
+// traduz o status em cor pra Badge
 function badgeTone(status: StatusPresenca): "green" | "red" | "orange" {
   if (status === "PRESENTE") return "green";
   if (status === "AUSENTE") return "red";
   return "orange";
 }
 
+// traduz o status em texto pra Badge
 function badgeLabel(status: StatusPresenca): string {
   if (status === "PRESENTE") return "Presente";
   if (status === "AUSENTE") return "Ausente";
   return "Pendente";
 }
 
+// forca o download de um arquivo gerado em memoria, sem endpoint de backend
 function baixarCsv(nomeArquivo: string, conteudo: string) {
   const blob = new Blob([conteudo], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -28,6 +31,7 @@ function baixarCsv(nomeArquivo: string, conteudo: string) {
   URL.revokeObjectURL(url);
 }
 
+// busca de participante por nome/email/rgm e confirmacao de presenca
 export function CheckinPage() {
   const { usuario } = useAuth();
   const [termo, setTermo] = useState("");
@@ -49,22 +53,26 @@ export function CheckinPage() {
     void checkinService.buscarParticipantes(termo).then(setResultados);
   }, [termo]);
 
+  // guarda o participante clicado e carrega as inscricoes dele
   async function selecionar(participante: Participante) {
     setSelecionado(participante);
     setInscricoes(await checkinService.listarInscricoesDoParticipante(participante.id));
   }
 
+  // confirma presenca e recarrega a lista pra atualizar o status na tela
   async function confirmar(inscricaoId: string) {
     if (!usuario) return;
     await checkinService.confirmarPresenca(inscricaoId, usuario.id);
     if (selecionado) setInscricoes(await checkinService.listarInscricoesDoParticipante(selecionado.id));
   }
 
+  // marca ausente e recarrega a lista
   async function marcarAusente(inscricaoId: string) {
     await checkinService.marcarAusente(inscricaoId);
     if (selecionado) setInscricoes(await checkinService.listarInscricoesDoParticipante(selecionado.id));
   }
 
+  // gera o csv de presenca do evento escolhido e baixa
   async function exportar() {
     const lista = await checkinService.listarPresencaPorEvento(eventoExportar);
     const evento = eventos.find((e) => e.id === eventoExportar);

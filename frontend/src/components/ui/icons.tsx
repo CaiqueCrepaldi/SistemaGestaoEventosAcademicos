@@ -18,6 +18,7 @@ function Icon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+// icone de grade, usado no Dashboard
 export function DashboardIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...props}>
@@ -29,6 +30,7 @@ export function DashboardIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+// icone de calendario, usado em Eventos
 export function EventoIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...props}>
@@ -40,6 +42,7 @@ export function EventoIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+// icone de slide/apresentacao, sem uso atual no menu
 export function SessaoIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...props}>
@@ -51,6 +54,7 @@ export function SessaoIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+// icone de predio, usado em Salas
 export function SalaIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...props}>
@@ -62,6 +66,7 @@ export function SalaIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+// icone de pessoa com microfone, usado em Palestrantes
 export function PalestranteIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...props}>
@@ -73,6 +78,7 @@ export function PalestranteIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+// icone de duas pessoas, usado em Participantes
 export function ParticipanteIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...props}>
@@ -84,6 +90,7 @@ export function ParticipanteIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+// icone de ficha com check, usado em Inscricoes
 export function InscricaoIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...props}>
@@ -95,6 +102,7 @@ export function InscricaoIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+// icone de circulo com check, usado em Check-in
 export function CheckinIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...props}>
@@ -104,6 +112,7 @@ export function CheckinIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+// icone de relogio, usado em Agenda
 export function AgendaIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...props}>
@@ -114,6 +123,7 @@ export function AgendaIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+// icone de medalha, usado em Certificados
 export function CertificadoIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...props}>
@@ -124,6 +134,7 @@ export function CertificadoIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+// icone de balao de fala, usado em Feedback
 export function FeedbackIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...props}>

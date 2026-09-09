@@ -16,6 +16,7 @@ import {
 import type { Evento, Inscricao, Palestrante, Sala } from "../../types";
 import { questionarioVazio, validarQuestionario } from "../../utils/questionario";
 
+// formulario em branco pra "novo evento", ja com questionario de 10 perguntas vazias
 function formVazio(salas: Sala[], palestrantes: Palestrante[]): Omit<Evento, "id"> {
   return {
     titulo: "",
@@ -28,6 +29,7 @@ function formVazio(salas: Sala[], palestrantes: Palestrante[]): Omit<Evento, "id
   };
 }
 
+// crud de eventos pra equipe, lista + inscricao pro aluno
 export function EventosPage() {
   const { usuario } = useAuth();
   const [eventos, setEventos] = useState<Evento[]>([]);
@@ -45,6 +47,7 @@ export function EventosPage() {
     void carregar();
   }, []);
 
+  // busca eventos/salas/palestrantes/inscricoes de uma vez
   async function carregar() {
     const [e, sa, p, i] = await Promise.all([
       eventoService.list(),
@@ -58,6 +61,7 @@ export function EventosPage() {
     setInscricoes(i);
   }
 
+  // aluno se inscreve no evento e ja dispara o email de confirmacao
   async function inscreverSe(evento: Evento) {
     if (!usuario?.participanteId) {
       toast.error("Disponível apenas para contas de aluno.");
@@ -131,12 +135,14 @@ export function EventosPage() {
     );
   }
 
+  // abre o modal em branco
   function abrirNovo() {
     setEditando(null);
     setForm(formVazio(salas, palestrantes));
     setModalAberto(true);
   }
 
+  // abre o modal ja preenchido com os dados do evento clicado
   function abrirEdicao(evento: Evento) {
     setEditando(evento);
     setForm({
@@ -151,6 +157,7 @@ export function EventosPage() {
     setModalAberto(true);
   }
 
+  // atualiza o enunciado de uma pergunta especifica
   function atualizarEnunciado(indicePergunta: number, valor: string) {
     setForm({
       ...form,
@@ -158,6 +165,7 @@ export function EventosPage() {
     });
   }
 
+  // atualiza o texto de uma alternativa especifica
   function atualizarAlternativa(indicePergunta: number, indiceAlternativa: number, valor: string) {
     setForm({
       ...form,
@@ -181,6 +189,7 @@ export function EventosPage() {
     });
   }
 
+  // checa titulo/tema/palestrante e valida o questionario inteiro
   function validar(): string | null {
     if (!form.titulo.trim()) return "Preencha o título do evento.";
     if (!form.tema.trim()) return "Preencha o tema do evento.";
@@ -192,6 +201,7 @@ export function EventosPage() {
     return null;
   }
 
+  // valida, e se for edicao pede confirmacao antes de gravar
   function pedirSalvar() {
     const erro = validar();
     if (erro) {
@@ -205,6 +215,7 @@ export function EventosPage() {
     }
   }
 
+  // cria ou atualiza dependendo se ta editando
   async function salvar() {
     if (editando) {
       await eventoService.update(editando.id, form);
@@ -218,6 +229,7 @@ export function EventosPage() {
     await carregar();
   }
 
+  // remove o evento marcado pra exclusao
   async function excluir() {
     if (!excluindo) return;
     await eventoService.remove(excluindo.id);

@@ -45,16 +45,19 @@ function fakeJwt(usuarioId: string, perfil: Perfil): string {
 
 const RECUPERACAO_KEY = "sgea:recuperacao-senha";
 
+// acha usuario por email de login ou por rgm, usado na recuperacao de senha
 function buscarUsuarioPorIdentificador(identificador: string) {
   const usuarios = loadCollection("usuarios-v2", usuariosSeed);
   return usuarios.find((u) => u.emailLogin === identificador || u.rgm === identificador);
 }
 
+// le do localStorage os codigos de recuperacao ainda pendentes
 function lerCodigosPendentes(): Record<string, { codigo: string; expiraEm: number }> {
   return JSON.parse(localStorage.getItem(RECUPERACAO_KEY) ?? "{}");
 }
 
 const localAuthService: AuthService = {
+  // confere email+senha contra o seed e devolve uma sessao com token falso
   async login(emailLogin, senha) {
     const usuarios = loadCollection("usuarios-v2", usuariosSeed);
     const usuario = usuarios.find((u) => u.emailLogin === emailLogin && u.senhaHash === senha);
@@ -76,6 +79,7 @@ const localAuthService: AuthService = {
     );
   },
 
+  // cria o Participante e o Usuario ALUNO vinculado, bloqueia email/rgm duplicado
   async cadastrarAluno(dados) {
     const [usuarios, participantes] = await Promise.all([
       Promise.resolve(loadCollection("usuarios-v2", usuariosSeed)),
@@ -110,6 +114,7 @@ const localAuthService: AuthService = {
     await delay(undefined, 300);
   },
 
+  // gera o codigo, guarda com validade de 15min e avisa na tela (modo demo)
   async solicitarRecuperacaoSenha(identificador) {
     const usuario = buscarUsuarioPorIdentificador(identificador);
     if (!usuario) {
@@ -127,6 +132,7 @@ const localAuthService: AuthService = {
     return delay({ codigoDemo: codigo }, 300);
   },
 
+  // confere o codigo e troca a senha
   async confirmarRecuperacaoSenha(identificador, codigo, novaSenha) {
     const usuario = buscarUsuarioPorIdentificador(identificador);
     if (!usuario) {

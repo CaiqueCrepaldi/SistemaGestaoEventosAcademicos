@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { authService } from "../../services/authService";
 
+// fluxo de 2 etapas: pedir codigo, depois confirmar codigo + nova senha
 export function EsqueciSenhaPage() {
   const navigate = useNavigate();
   const [etapa, setEtapa] = useState<"identificar" | "confirmar">("identificar");
@@ -13,6 +14,7 @@ export function EsqueciSenhaPage() {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
+  // pede o codigo de recuperacao e avanca pra etapa de confirmacao
   async function solicitarCodigo(e: FormEvent) {
     e.preventDefault();
     setErro(null);
@@ -28,6 +30,7 @@ export function EsqueciSenhaPage() {
     }
   }
 
+  // confere codigo + senha e troca a senha de fato
   async function confirmarNovaSenha(e: FormEvent) {
     e.preventDefault();
     setErro(null);

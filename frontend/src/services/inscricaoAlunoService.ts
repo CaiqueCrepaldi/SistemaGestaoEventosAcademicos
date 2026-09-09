@@ -8,6 +8,7 @@ interface InscricaoAlunoService {
 }
 
 const localInscricaoAlunoService: InscricaoAlunoService = {
+  // bloqueia duplicidade e falta de vaga antes de criar a inscricao
   async inscrever(participanteId, eventoId) {
     const [inscricoes, evento, salas] = await Promise.all([
       inscricaoService.list(),

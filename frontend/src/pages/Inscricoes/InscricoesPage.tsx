@@ -7,18 +7,21 @@ import { toast } from "../../components/ui/Toast";
 import { eventoService, inscricaoService, participanteService, salaService } from "../../services";
 import type { Evento, Inscricao, Participante, Sala, StatusPresenca } from "../../types";
 
+// traduz o status em cor pra Badge
 function badgeTone(status: StatusPresenca): "green" | "red" | "orange" {
   if (status === "PRESENTE") return "green";
   if (status === "AUSENTE") return "red";
   return "orange";
 }
 
+// traduz o status em texto pra Badge
 function badgeLabel(status: StatusPresenca): string {
   if (status === "PRESENTE") return "Presente";
   if (status === "AUSENTE") return "Ausente";
   return "Pendente";
 }
 
+// crud de inscricoes, com busca de aluno por nome/email/rgm no modal
 export function InscricoesPage() {
   const [inscricoes, setInscricoes] = useState<Inscricao[]>([]);
   const [participantes, setParticipantes] = useState<Participante[]>([]);
@@ -34,6 +37,7 @@ export function InscricoesPage() {
     void carregar();
   }, []);
 
+  // busca inscricoes/participantes/eventos/salas de uma vez
   async function carregar() {
     const [i, p, e, sa] = await Promise.all([
       inscricaoService.list(),
@@ -47,6 +51,7 @@ export function InscricoesPage() {
     setSalas(sa);
   }
 
+  // abre o modal de nova inscricao ja com o primeiro evento selecionado
   function abrirNova() {
     setBuscaParticipante("");
     setParticipanteSelecionado(null);
@@ -54,6 +59,7 @@ export function InscricoesPage() {
     setModalAberto(true);
   }
 
+  // capacidade da sala menos quantas inscricoes o evento ja tem
   function vagasDisponiveis(evento: Evento | undefined): number | null {
     if (!evento) return null;
     const sala = salas.find((s) => s.id === evento.salaId);
@@ -62,6 +68,7 @@ export function InscricoesPage() {
     return sala.capacidade - ocupadas;
   }
 
+  // valida selecao/vaga/duplicidade e cria a inscricao
   async function salvar() {
     if (!participanteSelecionado) {
       toast.error("Busque e selecione um aluno por nome, e-mail ou RGM.");
@@ -96,6 +103,7 @@ export function InscricoesPage() {
     await carregar();
   }
 
+  // remove a inscricao marcada pra exclusao
   async function excluir() {
     if (!excluindo) return;
     await inscricaoService.remove(excluindo.id);

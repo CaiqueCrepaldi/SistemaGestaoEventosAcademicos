@@ -13,6 +13,7 @@ interface EmailService {
 
 // no mock nao tem servidor de email de verdade, aviso pro usuario fica por conta de quem chama (EventosPage.tsx)
 const localEmailService: EmailService = {
+  // busca o email do participante, o aviso pro usuario fica por conta de quem chama
   async enviarConfirmacaoInscricao(inscricao) {
     const participante = await participanteService.get(inscricao.participanteId);
     const destinatario = participante?.email ?? "e-mail não encontrado";

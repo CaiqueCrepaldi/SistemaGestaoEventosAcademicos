@@ -19,10 +19,12 @@ export function loadCollection<T extends { id: string }>(key: string, seed: T[])
   return atualizado;
 }
 
+// sobrescreve a colecao inteira no localStorage
 export function saveCollection<T>(key: string, data: T[]): void {
   localStorage.setItem(`${PREFIX}:${key}`, JSON.stringify(data));
 }
 
+// gera um id novo pro mock (no backend real isso seria o banco)
 export function newId(): string {
   return crypto.randomUUID();
 }

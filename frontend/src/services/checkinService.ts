@@ -24,6 +24,7 @@ async function buscarParticipantes(termo: string) {
   );
 }
 
+// todas as inscricoes de UM participante, com o titulo do evento ja junto
 async function listarInscricoesDoParticipante(participanteId: string): Promise<InscricaoDetalhada[]> {
   const [inscricoes, eventos, participante] = await Promise.all([
     inscricaoService.list(),
@@ -55,6 +56,7 @@ async function confirmarPresenca(inscricaoId: string, usuarioId: string): Promis
   });
 }
 
+// marca ausente, nao conta como presenca nem libera certificado
 async function marcarAusente(inscricaoId: string): Promise<Inscricao> {
   return inscricaoService.update(inscricaoId, {
     statusPresenca: "AUSENTE",
@@ -85,6 +87,7 @@ async function listarPresencaPorEvento(eventoId: string): Promise<InscricaoDetal
     });
 }
 
+// monta o conteudo do csv de presenca, linha por inscrito
 function gerarCsvPresenca(lista: InscricaoDetalhada[]): string {
   const cabecalho = ["Nome", "E-mail", "RGM", "Evento", "Status", "Check-in"];
   const linhas = lista.map((item) =>

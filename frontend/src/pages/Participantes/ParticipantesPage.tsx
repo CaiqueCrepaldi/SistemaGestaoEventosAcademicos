@@ -9,6 +9,7 @@ import { normalizarRgm, validarEmail, validarNome, validarRgm } from "../../util
 
 const VAZIO: Omit<Participante, "id"> = { nome: "", email: "", rgm: "" };
 
+// crud de participantes, com busca por nome/email/rgm
 export function ParticipantesPage() {
   const [participantes, setParticipantes] = useState<Participante[]>([]);
   const [modalAberto, setModalAberto] = useState(false);
@@ -22,22 +23,26 @@ export function ParticipantesPage() {
     void carregar();
   }, []);
 
+  // busca a lista atualizada de participantes
   async function carregar() {
     setParticipantes(await participanteService.list());
   }
 
+  // abre o modal em branco
   function abrirNovo() {
     setEditando(null);
     setForm(VAZIO);
     setModalAberto(true);
   }
 
+  // abre o modal ja preenchido com os dados do participante clicado
   function abrirEdicao(participante: Participante) {
     setEditando(participante);
     setForm({ nome: participante.nome, email: participante.email, rgm: participante.rgm });
     setModalAberto(true);
   }
 
+  // checa formato de nome/email/rgm
   function validar(): string | null {
     if (!validarNome(form.nome)) return "Nome deve conter apenas letras.";
     if (!validarEmail(form.email)) return "E-mail em formato inválido.";
@@ -45,6 +50,7 @@ export function ParticipantesPage() {
     return null;
   }
 
+  // valida, e se for edicao pede confirmacao antes de gravar
   function pedirSalvar() {
     const erro = validar();
     if (erro) {
@@ -58,6 +64,7 @@ export function ParticipantesPage() {
     }
   }
 
+  // cria ou atualiza dependendo se ta editando
   async function salvar() {
     if (editando) {
       await participanteService.update(editando.id, form);
@@ -71,6 +78,7 @@ export function ParticipantesPage() {
     await carregar();
   }
 
+  // remove o participante marcado pra exclusao
   async function excluir() {
     if (!excluindo) return;
     await participanteService.remove(excluindo.id);

@@ -8,6 +8,7 @@ export interface EstatisticasGerais {
   ocupacaoMedia: number;
 }
 
+// numeros exibidos nos cartoes do topo do Dashboard
 async function estatisticasGerais(): Promise<EstatisticasGerais> {
   const [eventos, inscricoes, salas] = await Promise.all([
     eventoService.list(),
@@ -46,6 +47,7 @@ export interface EventoAgenda {
   capacidade: number;
 }
 
+// todos os eventos com nome da sala e contagem de inscritos, pra tela de Agenda
 async function agendaGeral(): Promise<EventoAgenda[]> {
   const [eventos, salas, inscricoes] = await Promise.all([
     eventoService.list(),
@@ -70,6 +72,7 @@ async function agendaGeral(): Promise<EventoAgenda[]> {
     .sort((a, b) => a.horario.localeCompare(b.horario));
 }
 
+// media das notas de feedback de um evento, null se ainda nao tem nenhuma
 async function mediaFeedbackPorEvento(eventoId: string): Promise<number | null> {
   const feedbacks = (await feedbackService.list()).filter((f) => f.eventoId === eventoId);
   if (feedbacks.length === 0) return null;

@@ -18,6 +18,7 @@ import { ParticipantesPage } from "./pages/Participantes/ParticipantesPage";
 import { QuestionarioPage } from "./pages/Questionario/QuestionarioPage";
 import { SalasPage } from "./pages/Salas/SalasPage";
 
+// raiz da aplicacao: define todas as rotas e onde cada perfil pode entrar
 export function App() {
   return (
     <HashRouter>

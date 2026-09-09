@@ -7,6 +7,7 @@ interface ModalProps {
   wide?: boolean;
 }
 
+// janela modal generica, usada em todo formulario de cadastro/edicao
 export function Modal({ title, onClose, children, wide }: ModalProps) {
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>

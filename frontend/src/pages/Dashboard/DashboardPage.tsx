@@ -12,6 +12,7 @@ interface LinhaEvento {
   presentes: number;
 }
 
+// visao geral: estatisticas, tabela de eventos e proximos eventos
 export function DashboardPage() {
   const [stats, setStats] = useState<EstatisticasGerais | null>(null);
   const [linhas, setLinhas] = useState<LinhaEvento[]>([]);
@@ -21,6 +22,7 @@ export function DashboardPage() {
     void carregar();
   }, []);
 
+  // busca estatisticas e monta as linhas da tabela e a lista de proximos eventos
   async function carregar() {
     const [gerais, eventos, salas, inscricoes] = await Promise.all([
       relatorioService.estatisticasGerais(),

@@ -8,10 +8,12 @@ const REGEX_TELEFONE = /^\(\d{2}\) \d{4,5}-\d{4}$/;
 
 export const RGM_TAMANHO = 11;
 
+// confere formato basico de email (algo@algo.algo)
 export function validarEmail(valor: string): boolean {
   return REGEX_EMAIL.test(valor.trim());
 }
 
+// so letras/acento/espaco/hifen, sem numero
 export function validarNome(valor: string): boolean {
   return REGEX_NOME.test(valor.trim());
 }
@@ -21,10 +23,12 @@ export function normalizarRgm(valor: string): string {
   return valor.toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
+// exatamente 11 caracteres alfanumericos maiusculos
 export function validarRgm(valor: string): boolean {
   return REGEX_RGM.test(valor);
 }
 
+// confere o formato (00) 00000-0000
 export function validarTelefone(valor: string): boolean {
   return REGEX_TELEFONE.test(valor.trim());
 }

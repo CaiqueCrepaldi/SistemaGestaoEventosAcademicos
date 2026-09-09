@@ -113,12 +113,14 @@ interface CertificadoService {
 
 // mock: certificado so existe se a inscricao estiver PRESENTE
 const localCertificadoService: CertificadoService = {
+  // certificados de UM aluno, so os eventos onde ele tem PRESENTE
   async listarCertificadosDoParticipante(participanteId) {
     const inscricoes = (await inscricaoService.list()).filter(
       (i) => i.participanteId === participanteId && i.statusPresenca === "PRESENTE",
     );
     return enriquecer(inscricoes);
   },
+  // certificados de todo mundo, usado na tela de gestao
   async listarTodosCertificados() {
     const [inscricoes, todasTentativas] = await Promise.all([
       inscricaoService.list(),
@@ -129,16 +131,19 @@ const localCertificadoService: CertificadoService = {
       todasTentativas,
     );
   },
+  // gera o pdf e ja dispara o download
   gerarCertificado(dados) {
     gerarPdf(dados);
   },
 };
 
 const httpCertificadoService: CertificadoService = {
+  // mesma regra do mock, so que a filtragem por status ja vem da query
   async listarCertificadosDoParticipante(participanteId) {
     const inscricoes = await api.get<Inscricao[]>(`/inscricoes?participanteId=${participanteId}&status=PRESENTE`);
     return enriquecer(inscricoes);
   },
+  // certificados de todo mundo, usado na tela de gestao
   async listarTodosCertificados() {
     const [inscricoes, todasTentativas] = await Promise.all([
       api.get<Inscricao[]>("/inscricoes"),
@@ -149,6 +154,7 @@ const httpCertificadoService: CertificadoService = {
       todasTentativas,
     );
   },
+  // pdf sempre montado no navegador, mock ou nao
   gerarCertificado(dados) {
     gerarPdf(dados);
   },

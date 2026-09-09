@@ -5,6 +5,7 @@ export const QUESTIONARIO_TAMANHO = 10;
 export const ALTERNATIVAS_POR_PERGUNTA = 4;
 export const PERCENTUAL_APROVACAO = 60;
 
+// uma pergunta em branco, 4 alternativas vazias, nenhuma marcada como correta
 export function perguntaVazia(): PerguntaQuestionario {
   return {
     id: crypto.randomUUID(),
@@ -13,6 +14,7 @@ export function perguntaVazia(): PerguntaQuestionario {
   };
 }
 
+// as 10 perguntas em branco de um questionario novo
 export function questionarioVazio(): PerguntaQuestionario[] {
   return Array.from({ length: QUESTIONARIO_TAMANHO }, perguntaVazia);
 }
@@ -30,6 +32,7 @@ export function validarQuestionario(perguntas: PerguntaQuestionario[]): number |
   return null;
 }
 
+// conta acertos comparando as respostas escolhidas com o gabarito
 export function corrigirRespostas(
   perguntas: PerguntaQuestionario[],
   respostas: number[],

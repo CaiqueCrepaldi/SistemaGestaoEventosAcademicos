@@ -30,10 +30,12 @@ export function QuestionarioPage() {
     );
   }, [eventoId]);
 
+  // guarda a alternativa escolhida pra aquela pergunta
   function escolher(indicePergunta: number, indiceAlternativa: number) {
     setRespostas((prev) => ({ ...prev, [indicePergunta]: indiceAlternativa }));
   }
 
+  // confere se respondeu tudo, envia e mostra o resultado
   async function enviar() {
     if (!eventoId || !usuario?.participanteId) return;
     if (Object.keys(respostas).length !== perguntas.length) {
@@ -58,6 +60,7 @@ export function QuestionarioPage() {
     }
   }
 
+  // limpa resultado e respostas pra tentar de novo
   function refazer() {
     setResultado(null);
     setRespostas({});

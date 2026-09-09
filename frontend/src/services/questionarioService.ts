@@ -13,6 +13,7 @@ export interface PerguntaSemGabarito {
   alternativas: { texto: string }[];
 }
 
+// tira o campo `correta` de cada alternativa antes de mandar pro aluno
 function ocultarGabarito(perguntas: PerguntaQuestionario[]): PerguntaSemGabarito[] {
   return perguntas.map((p) => ({
     id: p.id,
@@ -28,6 +29,7 @@ interface QuestionarioService {
   listarTodasTentativas(): Promise<TentativaQuestionario[]>;
 }
 
+// busca o evento pelo id, estoura erro se nao existir
 async function buscarEventoOuFalhar(eventoId: string): Promise<Evento> {
   const evento = await eventoService.get(eventoId);
   if (!evento) throw new ApiError(404, "Evento não encontrado.", "EVENTO_NAO_ENCONTRADO");
@@ -36,11 +38,13 @@ async function buscarEventoOuFalhar(eventoId: string): Promise<Evento> {
 
 // mock guarda as tentativas numa colecao propria, fora do createCrudService generico
 const localQuestionarioService: QuestionarioService = {
+  // devolve as perguntas do evento sem o gabarito
   async obterQuestionario(eventoId) {
     const evento = await buscarEventoOuFalhar(eventoId);
     return delay(ocultarGabarito(evento.questionario));
   },
 
+  // corrige contra o gabarito do evento e salva a tentativa
   async enviarRespostas(eventoId, participanteId, respostas) {
     const evento = await buscarEventoOuFalhar(eventoId);
     if (respostas.length !== evento.questionario.length || respostas.some((r) => r === undefined || r === null)) {
@@ -64,11 +68,13 @@ const localQuestionarioService: QuestionarioService = {
     return delay(tentativa);
   },
 
+  // tentativas de um aluno especifico num evento especifico
   async listarTentativas(eventoId, participanteId) {
     const tentativas = loadCollection<TentativaQuestionario>(TENTATIVAS_KEY, []);
     return delay(tentativas.filter((t) => t.eventoId === eventoId && t.participanteId === participanteId));
   },
 
+  // todas as tentativas de todo mundo, usado na tela de certificados da equipe
   async listarTodasTentativas() {
     return delay(loadCollection<TentativaQuestionario>(TENTATIVAS_KEY, []));
   },

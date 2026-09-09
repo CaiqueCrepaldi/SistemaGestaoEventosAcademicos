@@ -6,6 +6,7 @@ import { toast } from "../../components/ui/Toast";
 import { eventoService, feedbackService, participanteService } from "../../services";
 import type { Evento, Feedback, Participante } from "../../types";
 
+// lista de avaliacoes por evento, com media e formulario de novo feedback
 export function FeedbackPage() {
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [eventos, setEventos] = useState<Evento[]>([]);
@@ -18,6 +19,7 @@ export function FeedbackPage() {
     void carregar();
   }, []);
 
+  // busca feedbacks/eventos/participantes de uma vez
   async function carregar() {
     const [f, e, p] = await Promise.all([feedbackService.list(), eventoService.list(), participanteService.list()]);
     setFeedbacks(f);
@@ -26,11 +28,13 @@ export function FeedbackPage() {
     setEventoId((atual) => atual || e[0]?.id || "");
   }
 
+  // abre o modal em branco pro evento/participante atuais
   function abrirNovo() {
     setForm({ eventoId: eventoId || eventos[0]?.id || "", participanteId: participantes[0]?.id ?? "", nota: 5, comentario: "" });
     setModalAberto(true);
   }
 
+  // valida o comentario e grava o feedback
   async function salvar() {
     if (!form.comentario.trim()) {
       toast.error("Preencha o comentário — todos os campos são obrigatórios.");

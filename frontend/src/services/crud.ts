@@ -15,18 +15,22 @@ function createLocalCrudService<T extends { id: string }>(key: string, seed: T[]
   let cache = loadCollection<T>(key, seed);
 
   return {
+    // copia do cache inteiro
     async list() {
       return delay([...cache]);
     },
+    // busca um item pelo id
     async get(id) {
       return delay(cache.find((item) => item.id === id));
     },
+    // adiciona um item novo com id gerado na hora
     async create(data) {
       const item = { ...data, id: newId() } as T;
       cache = [...cache, item];
       saveCollection(key, cache);
       return delay(item);
     },
+    // faz merge parcial nos dados do item
     async update(id, data) {
       cache = cache.map((item) => (item.id === id ? { ...item, ...data } : item));
       saveCollection(key, cache);
@@ -34,6 +38,7 @@ function createLocalCrudService<T extends { id: string }>(key: string, seed: T[]
       if (!updated) throw new Error(`Registro ${id} não encontrado em ${key}`);
       return delay(updated);
     },
+    // remove um item pelo id
     async remove(id) {
       cache = cache.filter((item) => item.id !== id);
       saveCollection(key, cache);

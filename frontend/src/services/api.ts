@@ -30,6 +30,7 @@ interface ApiErrorBody {
   erros?: ApiErrorField[];
 }
 
+// le o token salvo na sessao, null se nao tiver ou se o json tiver corrompido
 function getToken(): string | null {
   const raw = localStorage.getItem(SESSION_KEY);
   if (!raw) return null;
@@ -41,6 +42,7 @@ function getToken(): string | null {
   }
 }
 
+// faz a chamada http de verdade, usada so quando USE_MOCK eh false
 async function request<T>(path: string, method: string, body?: unknown): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = { "Content-Type": "application/json" };

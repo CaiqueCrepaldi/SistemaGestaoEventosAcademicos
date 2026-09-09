@@ -10,6 +10,7 @@ import { maskTelefone, validarEmail, validarNome, validarTelefone } from "../../
 
 const VAZIO: Omit<Palestrante, "id"> = { nome: "", email: "", telefone: "" };
 
+// crud de palestrantes pra equipe, lista read-only pro aluno
 export function PalestrantesPage() {
   const { usuario } = useAuth();
   const [palestrantes, setPalestrantes] = useState<Palestrante[]>([]);
@@ -23,6 +24,7 @@ export function PalestrantesPage() {
     void carregar();
   }, []);
 
+  // busca a lista atualizada de palestrantes
   async function carregar() {
     setPalestrantes(await palestranteService.list());
   }
@@ -47,18 +49,21 @@ export function PalestrantesPage() {
     );
   }
 
+  // abre o modal em branco
   function abrirNovo() {
     setEditando(null);
     setForm(VAZIO);
     setModalAberto(true);
   }
 
+  // abre o modal ja preenchido com os dados do palestrante clicado
   function abrirEdicao(palestrante: Palestrante) {
     setEditando(palestrante);
     setForm({ nome: palestrante.nome, email: palestrante.email, telefone: palestrante.telefone });
     setModalAberto(true);
   }
 
+  // checa formato de nome/email/telefone
   function validar(): string | null {
     if (!validarNome(form.nome)) return "Nome deve conter apenas letras.";
     if (!validarEmail(form.email)) return "E-mail em formato inválido.";
@@ -66,6 +71,7 @@ export function PalestrantesPage() {
     return null;
   }
 
+  // valida, e se for edicao pede confirmacao antes de gravar
   function pedirSalvar() {
     const erro = validar();
     if (erro) {
@@ -79,6 +85,7 @@ export function PalestrantesPage() {
     }
   }
 
+  // cria ou atualiza dependendo se ta editando
   async function salvar() {
     if (editando) {
       await palestranteService.update(editando.id, form);
@@ -92,6 +99,7 @@ export function PalestrantesPage() {
     await carregar();
   }
 
+  // bloqueia exclusao se tiver evento vinculado, senao remove
   async function excluir() {
     if (!excluindo) return;
     // evento sempre precisa de palestrante, entao bloqueia se tiver vinculo

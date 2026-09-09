@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
+// tela de login, redireciona se ja tiver sessao ativa
 export function LoginPage() {
   const { usuario, login, carregando, erro } = useAuth();
   const navigate = useNavigate();
@@ -10,6 +11,7 @@ export function LoginPage() {
 
   if (usuario) return <Navigate to="/" replace />;
 
+  // tenta logar e redireciona pra home
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     try {

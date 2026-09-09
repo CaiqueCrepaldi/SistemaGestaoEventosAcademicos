@@ -6,6 +6,7 @@ import { certificadoService, eventoService, type CertificadoDisponivel } from ".
 import type { Evento } from "../../types";
 import { PERCENTUAL_APROVACAO } from "../../utils/questionario";
 
+// tela de certificados, aluno emite o proprio, equipe ve de todo mundo
 export function CertificadosPage() {
   const { usuario } = useAuth();
   const isEquipe = usuario?.perfil === "ADMINISTRADOR" || usuario?.perfil === "SECRETARIA";
@@ -18,6 +19,7 @@ export function CertificadosPage() {
     void carregar();
   }, [usuario?.id]);
 
+  // equipe carrega certificado de todo mundo, aluno so os proprios
   async function carregar() {
     if (isEquipe) {
       const [c, e] = await Promise.all([certificadoService.listarTodosCertificados(), eventoService.list()]);

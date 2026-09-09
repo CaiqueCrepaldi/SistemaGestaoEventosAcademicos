@@ -5,6 +5,7 @@ interface PageHeaderProps {
   actions?: ReactNode;
 }
 
+// cabecalho padrao do topo de cada pagina, titulo + botoes de acao
 export function PageHeader({ title, actions }: PageHeaderProps) {
   return (
     <div className="page-header">

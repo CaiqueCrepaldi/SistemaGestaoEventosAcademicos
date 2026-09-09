@@ -12,6 +12,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+// guarda quem esta logado e expoe login/logout pro resto do app via useAuth()
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<SessaoUsuario | null>(null);
   const [carregando, setCarregando] = useState(false);
@@ -22,6 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (raw) setUsuario(JSON.parse(raw));
   }, []);
 
+  // chama o authService, guarda a sessao no estado e no localStorage
   async function login(email: string, senha: string) {
     setCarregando(true);
     setErro(null);
@@ -37,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // limpa sessao do estado e do localStorage
   function logout() {
     setUsuario(null);
     localStorage.removeItem(SESSION_KEY);
@@ -49,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// hook de acesso ao contexto, estoura erro se usado fora do AuthProvider
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth precisa estar dentro de AuthProvider");

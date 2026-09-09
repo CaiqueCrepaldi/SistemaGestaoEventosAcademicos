@@ -12,6 +12,7 @@ interface ToastItem {
 let proximoId = 1;
 let ouvintes: Array<(item: ToastItem) => void> = [];
 
+// cria um item novo e avisa todo mundo que ta ouvindo
 function emitir(tipo: ToastTipo, mensagem: string) {
   const item: ToastItem = { id: proximoId++, tipo, mensagem };
   ouvintes.forEach((ouvinte) => ouvinte(item));
@@ -42,6 +43,7 @@ export function ToastViewport() {
     };
   }, []);
 
+  // fecha um toast especifico antes do tempo (botao de x)
   function fechar(id: number) {
     setItens((prev) => prev.filter((i) => i.id !== id));
   }

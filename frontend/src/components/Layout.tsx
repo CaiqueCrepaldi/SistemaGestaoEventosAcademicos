@@ -46,6 +46,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/feedback", label: "Feedback", perfis: TODOS_PERFIS, icon: FeedbackIcon },
 ];
 
+// monta o texto da migalha de pao a partir da url atual
 function useMigalhas(menuItens: NavItem[]) {
   const location = useLocation();
   const partes = location.pathname.split("/").filter(Boolean);
@@ -63,6 +64,7 @@ function useMigalhas(menuItens: NavItem[]) {
   return [secao];
 }
 
+// topbar + menu lateral + migalha de pao, envolve toda pagina autenticada
 export function Layout() {
   const { usuario, logout } = useAuth();
   const menuItens = NAV_ITEMS.filter((item) => !usuario || item.perfis.includes(usuario.perfil));

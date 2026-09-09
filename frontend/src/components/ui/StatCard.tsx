@@ -5,6 +5,7 @@ interface StatCardProps {
   tone?: "blue" | "green" | "orange" | "purple";
 }
 
+// cartao de numero grande, usado no Dashboard e no Feedback
 export function StatCard({ label, value, hint, tone = "blue" }: StatCardProps) {
   return (
     <div className={`stat-card tone-${tone}`}>
