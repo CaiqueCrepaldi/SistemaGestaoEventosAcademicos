@@ -53,7 +53,7 @@ h1, h2, h3 {
   font-weight: 700;
 }
 
-/* app shell: topbar + nav + breadcrumb empilhados, conteudo rola embaixo */
+/* app shell: topbar + nav empilhados, conteudo rola embaixo */
 .app-shell {
   display: flex;
   flex-direction: column;
@@ -146,20 +146,6 @@ h1, h2, h3 {
 .nav-link.active {
   color: var(--gray-900);
   border-bottom-color: var(--yellow-500);
-}
-
-.breadcrumb-bar {
-  flex-shrink: 0;
-  padding: 10px 28px;
-  background: var(--gray-50);
-  border-bottom: 1px solid var(--gray-200);
-  font-size: 13px;
-  color: var(--gray-500);
-}
-
-.breadcrumb-sep {
-  margin: 0 6px;
-  color: var(--gray-300);
 }
 
 .content {

@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   AgendaIcon,
@@ -32,7 +32,7 @@ interface NavItem {
   icon: ComponentType<{ className?: string }>;
 }
 
-// fonte unica do menu, usada tanto pros links quanto pra migalha de pao abaixo
+// fonte unica do menu
 const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Principal", end: true, perfis: EQUIPE, icon: DashboardIcon },
   { to: "/eventos", label: "Eventos", perfis: TODOS_PERFIS, icon: EventoIcon },
@@ -46,29 +46,10 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/feedback", label: "Feedback", perfis: TODOS_PERFIS, icon: FeedbackIcon },
 ];
 
-// monta o texto da migalha de pao a partir da url atual
-function useMigalhas(menuItens: NavItem[]) {
-  const location = useLocation();
-  const partes = location.pathname.split("/").filter(Boolean);
-
-  if (partes.length === 0) {
-    return [];
-  }
-
-  const atual = menuItens.find((item) => item.to === `/${partes[0]}`);
-  const secao = atual?.label ?? partes[0];
-
-  if (partes.length > 1) {
-    return [secao, "Detalhe"];
-  }
-  return [secao];
-}
-
-// topbar + menu lateral + migalha de pao, envolve toda pagina autenticada
+// topbar + menu lateral, envolve toda pagina autenticada
 export function Layout() {
   const { usuario, logout } = useAuth();
   const menuItens = NAV_ITEMS.filter((item) => !usuario || item.perfis.includes(usuario.perfil));
-  const migalhas = useMigalhas(menuItens);
 
   return (
     <div className="app-shell">
@@ -103,17 +84,6 @@ export function Layout() {
           );
         })}
       </nav>
-
-      {migalhas.length > 0 && (
-        <div className="breadcrumb-bar">
-          {migalhas.map((parte, i) => (
-            <span key={i}>
-              {i > 0 && <span className="breadcrumb-sep">/</span>}
-              {parte}
-            </span>
-          ))}
-        </div>
-      )}
 
       <main className="content">
         <Outlet />
