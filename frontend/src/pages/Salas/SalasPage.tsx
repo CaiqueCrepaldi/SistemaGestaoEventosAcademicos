@@ -3,7 +3,7 @@ import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { toast } from "../../components/ui/Toast";
-import { salaService } from "../../services";
+import { eventoService, salaService } from "../../services";
 import type { Sala } from "../../types";
 
 const VAZIO: Omit<Sala, "id"> = { nome: "", capacidade: 0 };
@@ -67,9 +67,16 @@ export function SalasPage() {
     await carregar();
   }
 
-  // remove a sala marcada pra exclusao
+  // bloqueia exclusao se tiver evento vinculado, senao remove
   async function excluir() {
     if (!excluindo) return;
+    // evento sempre precisa de sala, entao bloqueia se tiver vinculo
+    const eventos = await eventoService.list();
+    if (eventos.some((e) => e.salaId === excluindo.id)) {
+      toast.error("Não é possível remover: há eventos vinculados a esta sala.");
+      setExcluindo(null);
+      return;
+    }
     await salaService.remove(excluindo.id);
     toast.success("Sala removida.");
     setExcluindo(null);

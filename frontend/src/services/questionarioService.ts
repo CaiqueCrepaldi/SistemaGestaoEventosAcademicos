@@ -27,6 +27,8 @@ interface QuestionarioService {
   enviarRespostas(eventoId: string, participanteId: string, respostas: number[]): Promise<TentativaQuestionario>;
   listarTentativas(eventoId: string, participanteId: string): Promise<TentativaQuestionario[]>;
   listarTodasTentativas(): Promise<TentativaQuestionario[]>;
+  // limpa as tentativas orfas quando o evento e apagado (no http o backend ja faz isso sozinho)
+  removerTentativasDoEvento(eventoId: string): Promise<void>;
 }
 
 // busca o evento pelo id, estoura erro se nao existir
@@ -78,6 +80,13 @@ const localQuestionarioService: QuestionarioService = {
   async listarTodasTentativas() {
     return delay(loadCollection<TentativaQuestionario>(TENTATIVAS_KEY, []));
   },
+
+  // mock nao tem fk, entao ao apagar um evento precisa limpar as tentativas dele na mao
+  async removerTentativasDoEvento(eventoId) {
+    const tentativas = loadCollection<TentativaQuestionario>(TENTATIVAS_KEY, []);
+    saveCollection(TENTATIVAS_KEY, tentativas.filter((t) => t.eventoId !== eventoId));
+    return delay(undefined);
+  },
 };
 
 // http: perguntas e correcao vivem no backend, servidor nunca manda o gabarito antes do aluno responder
@@ -94,6 +103,8 @@ const httpQuestionarioService: QuestionarioService = {
   listarTodasTentativas() {
     return api.get<TentativaQuestionario[]>("/questionario-tentativas");
   },
+  // backend ja cascade-deleta as tentativas junto com o evento, nao tem o que fazer aqui
+  async removerTentativasDoEvento() {},
 };
 
 export const questionarioService: QuestionarioService = USE_MOCK ? localQuestionarioService : httpQuestionarioService;

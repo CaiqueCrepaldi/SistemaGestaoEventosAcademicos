@@ -8,9 +8,11 @@ import {
   ApiError,
   emailService,
   eventoService,
+  feedbackService,
   inscricaoAlunoService,
   inscricaoService,
   palestranteService,
+  questionarioService,
   salaService,
 } from "../../services";
 import type { Evento, Inscricao, Palestrante, Sala } from "../../types";
@@ -229,10 +231,20 @@ export function EventosPage() {
     await carregar();
   }
 
-  // remove o evento marcado pra exclusao
+  // remove o evento e tudo que depende dele (inscricao, feedback, tentativa de questionario)
   async function excluir() {
     if (!excluindo) return;
-    await eventoService.remove(excluindo.id);
+    const eventoId = excluindo.id;
+    const [inscricoesDoEvento, feedbacksDoEvento] = await Promise.all([
+      inscricaoService.list().then((lista) => lista.filter((i) => i.eventoId === eventoId)),
+      feedbackService.list().then((lista) => lista.filter((f) => f.eventoId === eventoId)),
+    ]);
+    await Promise.all([
+      ...inscricoesDoEvento.map((i) => inscricaoService.remove(i.id)),
+      ...feedbacksDoEvento.map((f) => feedbackService.remove(f.id)),
+      questionarioService.removerTentativasDoEvento(eventoId),
+    ]);
+    await eventoService.remove(eventoId);
     toast.success("Evento removido.");
     setExcluindo(null);
     await carregar();
