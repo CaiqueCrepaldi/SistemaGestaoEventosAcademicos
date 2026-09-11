@@ -1,66 +1,74 @@
 import { randomUUID } from "crypto";
-import { feedbacksStore, inscricoesStore, participantesStore, usuariosStore } from "../../db/store";
+import { Prisma, type Participante as ParticipanteDb } from "@prisma/client";
+import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
+import type { Participante } from "../../types/domain";
 import type { ParticipanteInput, ParticipanteUpdateInput } from "./participantes.schemas";
+
+// prisma devolve criadoEm como Date, resto do app espera string (ISO)
+function paraDominio(participante: ParticipanteDb): Participante {
+  return { ...participante, criadoEm: participante.criadoEm.toISOString() };
+}
 
 // lista participantes ordenados por nome
 async function listar() {
-  return [...participantesStore.listar()].sort((a, b) => a.nome.localeCompare(b.nome));
+  const participantes = await prisma.participante.findMany({ orderBy: { nome: "asc" } });
+  return participantes.map(paraDominio);
 }
 
 // busca um participante pelo id, 404 se nao existir
 async function buscarOuFalhar(id: string) {
-  const participante = participantesStore.buscarPorId(id);
+  const participante = await prisma.participante.findUnique({ where: { id } });
   if (!participante) throw AppError.naoEncontrado("PARTICIPANTE_NAO_ENCONTRADO", "Participante não encontrado.");
-  return participante;
+  return paraDominio(participante);
 }
 
-// bloqueia email/rgm repetido, ignorando o proprio registro quando eh update
-function garantirEmailERgmUnicos(dados: { email?: string; rgm?: string }, ignorarId?: string) {
-  if (dados.email) {
-    const existente = participantesStore.buscarUm((p) => p.email === dados.email);
-    if (existente && existente.id !== ignorarId) {
-      throw AppError.conflito("EMAIL_DUPLICADO", "Já existe um participante com este e-mail.");
-    }
+// traduz violacao de unique constraint do postgres pro erro de negocio certo
+function relancarComoConflito(erro: unknown): never {
+  if (erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === "P2002") {
+    const campo = (erro.meta?.target as string[] | undefined)?.[0];
+    if (campo === "rgm") throw AppError.conflito("RGM_DUPLICADO", "Já existe um participante com este RGM.");
+    throw AppError.conflito("EMAIL_DUPLICADO", "Já existe um participante com este e-mail.");
   }
-  if (dados.rgm) {
-    const existente = participantesStore.buscarUm((p) => p.rgm === dados.rgm);
-    if (existente && existente.id !== ignorarId) {
-      throw AppError.conflito("RGM_DUPLICADO", "Já existe um participante com este RGM.");
-    }
-  }
+  throw erro;
 }
 
 // cadastra um participante novo
 async function criar(dados: ParticipanteInput) {
-  garantirEmailERgmUnicos(dados);
-  return participantesStore.criar({ id: randomUUID(), ...dados, criadoEm: new Date().toISOString() });
+  try {
+    const participante = await prisma.participante.create({ data: { id: randomUUID(), ...dados } });
+    return paraDominio(participante);
+  } catch (erro) {
+    relancarComoConflito(erro);
+  }
 }
 
 // edita um participante existente
 async function atualizar(id: string, dados: ParticipanteUpdateInput) {
   await buscarOuFalhar(id);
-  garantirEmailERgmUnicos(dados, id);
-  return participantesStore.atualizar(id, dados)!;
+  try {
+    const participante = await prisma.participante.update({ where: { id }, data: dados });
+    return paraDominio(participante);
+  } catch (erro) {
+    relancarComoConflito(erro);
+  }
 }
 
 // remove um participante, bloqueia se tiver inscricao/feedback vinculado
+// (conta de usuario vinculada so perde a referencia, o banco faz isso sozinho via onDelete: SetNull)
 async function remover(id: string) {
   await buscarOuFalhar(id);
-  // sem fk de banco: inscricao/feedback vinculado bloqueia exclusao, conta de usuario so perde a referencia
-  const temVinculo =
-    inscricoesStore.contar((i) => i.participanteId === id) > 0 || feedbacksStore.contar((f) => f.participanteId === id) > 0;
-  if (temVinculo) {
+  const [inscricoes, feedbacks] = await Promise.all([
+    prisma.inscricao.count({ where: { participanteId: id } }),
+    prisma.feedback.count({ where: { participanteId: id } }),
+  ]);
+  if (inscricoes > 0 || feedbacks > 0) {
     throw AppError.conflito(
       "CONFLITO_DEPENDENCIA",
       "Não é possível remover: existem inscrições ou feedbacks vinculados a este participante.",
     );
   }
-  const usuarioVinculado = usuariosStore.buscarUm((u) => u.participanteId === id);
-  if (usuarioVinculado) {
-    usuariosStore.atualizar(usuarioVinculado.id, { participanteId: null });
-  }
-  participantesStore.remover(id);
+  await prisma.participante.delete({ where: { id } });
 }
 
 export const participantesService = { listar, buscarOuFalhar, criar, atualizar, remover };

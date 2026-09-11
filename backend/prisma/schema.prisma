@@ -1,0 +1,156 @@
+// schema do banco, gerado a partir dos tipos que ja existiam em src/types/domain.ts
+// rodar "npm run db:migrate" depois de preencher DATABASE_URL no .env
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // conexao sem pooler, usada so pelo "prisma migrate" pra alterar o schema
+  directUrl = env("DIRECT_URL")
+}
+
+enum Perfil {
+  ADMINISTRADOR
+  SECRETARIA
+  ALUNO
+}
+
+enum StatusPresenca {
+  PENDENTE
+  PRESENTE
+  AUSENTE
+}
+
+model Usuario {
+  id             String   @id
+  nome           String
+  emailLogin     String   @unique
+  senhaHash      String
+  perfil         Perfil
+  rgm            String?
+  participanteId String?
+  participante   Participante? @relation(fields: [participanteId], references: [id], onDelete: SetNull)
+  criadoEm       DateTime @default(now())
+
+  checkinsFeitos  Inscricao[]        @relation("CheckinFeitoPor")
+  recuperacoes    RecuperacaoSenha[]
+
+  @@map("usuarios")
+}
+
+model Participante {
+  id       String   @id
+  nome     String
+  email    String   @unique
+  rgm      String   @unique
+  criadoEm DateTime @default(now())
+
+  usuarios   Usuario[]
+  inscricoes Inscricao[]
+  feedbacks  Feedback[]
+  tentativas TentativaQuestionario[]
+
+  @@map("participantes")
+}
+
+model Sala {
+  id         String   @id
+  nome       String
+  capacidade Int
+  eventos    Evento[]
+
+  @@map("salas")
+}
+
+model Palestrante {
+  id       String   @id
+  nome     String
+  email    String   @unique
+  telefone String
+  eventos  Evento[]
+
+  @@map("palestrantes")
+}
+
+// questionario fica como json (10 perguntas com 4 alternativas cada) em vez de tabela
+// separada — nunca e consultado pergunta a pergunta, so lido/gravado inteiro
+model Evento {
+  id            String   @id
+  titulo        String
+  horario       DateTime
+  salaId        String
+  sala          Sala     @relation(fields: [salaId], references: [id], onDelete: Restrict)
+  palestranteId String
+  palestrante   Palestrante @relation(fields: [palestranteId], references: [id], onDelete: Restrict)
+  tema          String
+  cargaHoraria  Float
+  questionario  Json
+  criadoEm      DateTime @default(now())
+
+  inscricoes Inscricao[]
+  feedbacks  Feedback[]
+  tentativas TentativaQuestionario[]
+
+  @@map("eventos")
+}
+
+model Inscricao {
+  id             String         @id
+  participanteId String
+  participante   Participante   @relation(fields: [participanteId], references: [id], onDelete: Restrict)
+  eventoId       String
+  evento         Evento         @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  statusPresenca StatusPresenca @default(PENDENTE)
+  dataCheckin    DateTime?
+  usuarioId      String?
+  usuario        Usuario?       @relation("CheckinFeitoPor", fields: [usuarioId], references: [id], onDelete: SetNull)
+  dataInscricao  DateTime       @default(now())
+
+  @@unique([participanteId, eventoId])
+  @@map("inscricoes")
+}
+
+model Feedback {
+  id             String       @id
+  eventoId       String
+  evento         Evento       @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  participanteId String
+  participante   Participante @relation(fields: [participanteId], references: [id], onDelete: Restrict)
+  nota           Int
+  comentario     String
+  criadoEm       DateTime     @default(now())
+
+  @@unique([participanteId, eventoId])
+  @@map("feedbacks")
+}
+
+model RecuperacaoSenha {
+  id        String    @id
+  usuarioId String
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  codigo    String
+  expiraEm  DateTime
+  usadoEm   DateTime?
+  criadoEm  DateTime  @default(now())
+
+  @@map("recuperacoes_senha")
+}
+
+// respostas[i] = indice da alternativa escolhida na pergunta i, mesma ordem do questionario do evento
+model TentativaQuestionario {
+  id             String       @id
+  participanteId String
+  participante   Participante @relation(fields: [participanteId], references: [id], onDelete: Restrict)
+  eventoId       String
+  evento         Evento       @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  respostas      Int[]
+  acertos        Int
+  totalPerguntas Int
+  percentual     Int
+  criadoEm       DateTime     @default(now())
+
+  @@map("tentativas_questionario")
+}

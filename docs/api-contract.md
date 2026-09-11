@@ -2,14 +2,14 @@
 
 Referência de rotas, formatos e regras de autorização entre frontend e
 backend (Node.js + TypeScript + Express, implementado em `backend/` — ver
-[`../backend/README.md`](../backend/README.md) pra como rodar). O banco de
-dados (PostgreSQL) é administrado à parte, em outra ferramenta/projeto —
-por enquanto o backend guarda os dados em memória, isolado em
-`backend/src/db/`, sem afetar nada do que está documentado aqui (rota,
-formato de request/response e regra de autorização continuam os mesmos,
-não importa o que tem por trás guardando o dado). O frontend já roda hoje
-contra um mock em `localStorage` que segue esse mesmo contrato, então
-trocar por chamadas HTTP reais é só trocar a camada de serviço — a UI não muda.
+[`../backend/README.md`](../backend/README.md) pra como rodar). Os dados
+ficam num PostgreSQL hospedado, acessado via Prisma
+(`backend/prisma/schema.prisma`), isolado atrás de `backend/src/db/prisma.ts`,
+sem afetar nada do que está documentado aqui (rota, formato de
+request/response e regra de autorização são os mesmos, não importa o que
+tem por trás guardando o dado). O frontend também roda contra um mock em
+`localStorage` que segue esse mesmo contrato, então trocar por chamadas
+HTTP reais é só trocar a camada de serviço — a UI não muda.
 
 Prefixo `/api` em tudo. JSON, `camelCase` igual aos tipos do frontend.
 
@@ -418,33 +418,31 @@ real em `backend/src/modules/inscricoes/inscricoes.service.ts` (função
 
 ```ts
 async function confirmarEmail(id: string, participanteIdDoToken: string) {
-  const inscricao = await buscarOuFalhar(id);
+  const inscricao = await prisma.inscricao.findUnique({
+    where: { id },
+    include: { participante: true, evento: { include: { palestrante: true } } },
+  });
+  if (!inscricao) throw AppError.naoEncontrado("INSCRICAO_NAO_ENCONTRADA", "Inscrição não encontrada.");
   if (inscricao.participanteId !== participanteIdDoToken) {
     throw AppError.acessoNegado("Esta inscrição não pertence a você.");
   }
 
-  const participante = participantesStore.buscarPorId(inscricao.participanteId);
-  const evento = eventosStore.buscarPorId(inscricao.eventoId);
-  if (!participante || !evento) {
-    throw AppError.naoEncontrado("INSCRICAO_NAO_ENCONTRADA", "Inscrição não encontrada.");
-  }
-  const palestrante = evento.palestranteId ? palestrantesStore.buscarPorId(evento.palestranteId) : undefined;
-
-  await emailService.enviarConfirmacaoInscricao(participante.email, {
-    participanteNome: participante.nome,
-    eventoTitulo: evento.titulo,
-    eventoTema: evento.tema,
-    palestranteNome: palestrante?.nome ?? "—",
-    eventoHorario: new Date(evento.horario),
+  await emailService.enviarConfirmacaoInscricao(inscricao.participante.email, {
+    participanteNome: inscricao.participante.nome,
+    eventoTitulo: inscricao.evento.titulo,
+    eventoTema: inscricao.evento.tema,
+    palestranteNome: inscricao.evento.palestrante.nome,
+    eventoHorario: inscricao.evento.horario,
   });
 
-  return { destinatario: participante.email, enviadoEm: new Date().toISOString() };
+  return { destinatario: inscricao.participante.email, enviadoEm: new Date().toISOString() };
 }
 ```
 
-(`buscarOuFalhar`, `participantesStore` e `eventosStore` vêm de
-`backend/src/db/store.ts` — o repositório em memória que guarda os dados
-enquanto o banco de verdade não é ligado, ver `backend/README.md`.)
+(`prisma` vem de `backend/src/db/prisma.ts` — instância única do Prisma
+Client usada por todos os services, ver `backend/README.md`. O `include`
+já traz participante/evento/palestrante numa consulta só, em vez de três
+idas ao banco.)
 
 `emailService` (`backend/src/modules/email/email.service.ts`) usa um
 transporte `nodemailer` configurado por variável de ambiente (`SMTP_HOST`,

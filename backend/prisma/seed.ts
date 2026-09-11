@@ -1,19 +1,12 @@
-// dados de demo carregados em memoria quando o servidor sobe
-// mesmas contas do mock do frontend (frontend/src/services/seed.ts)
-// some tudo a cada restart, o "banco" eh so em memoria (ver repositorio.ts)
+// popula o banco com os mesmos dados de demonstracao que o backend usava em memoria
+// roda com "npm run db:seed" (so preenche o que ainda nao existe, ver upsert abaixo)
 import { randomUUID } from "crypto";
-import bcrypt from "bcryptjs";
-import type { Evento, Feedback, Inscricao, Palestrante, Participante, PerguntaQuestionario, Sala, Usuario } from "../types/domain";
-
-const agora = new Date().toISOString();
-
-// hashSync em vez do gerarHashSenha async, roda uma vez so no carregamento do modulo
-function hashSincrono(senha: string): string {
-  return bcrypt.hashSync(senha, 10);
-}
+import type { Prisma } from "@prisma/client";
+import type { PerguntaQuestionario } from "../src/types/domain";
+import { gerarHashSenha } from "../src/utils/password";
+import { prisma } from "../src/db/prisma";
 
 // monta as 10 perguntas a partir de uma lista compacta (enunciado + 4 alternativas + indice da correta)
-// mesma estrutura do seed do frontend
 function montarQuestionario(
   itens: { enunciado: string; alternativas: [string, string, string, string]; correta: 0 | 1 | 2 | 3 }[],
 ): PerguntaQuestionario[] {
@@ -23,29 +16,6 @@ function montarQuestionario(
     alternativas: item.alternativas.map((texto, i) => ({ texto, correta: i === item.correta })),
   }));
 }
-
-export const salasSeed: Sala[] = [
-  { id: randomUUID(), nome: "Auditório A", capacidade: 120 },
-  { id: randomUUID(), nome: "Sala 204", capacidade: 40 },
-  { id: randomUUID(), nome: "Laboratório de Informática 1", capacidade: 30 },
-];
-const [salaAuditorio, sala204, salaLab1] = salasSeed;
-
-export const palestrantesSeed: Palestrante[] = [
-  {
-    id: randomUUID(),
-    nome: "Dra. Mariana Costa",
-    email: "mariana.costa@umc.br",
-    telefone: "(11) 98888-1111",
-  },
-  {
-    id: randomUUID(),
-    nome: "Msc. Felipe Andrade",
-    email: "felipe.andrade@umc.br",
-    telefone: "(11) 97777-2222",
-  },
-];
-const [palestranteMariana, palestranteFelipe] = palestrantesSeed;
 
 const questionarioIA = montarQuestionario([
   { enunciado: "O que é Inteligência Artificial, de forma geral?", alternativas: ["Um sistema capaz de simular capacidades cognitivas humanas", "Um tipo de banco de dados relacional", "Uma linguagem de programação", "Um protocolo de rede"], correta: 0 },
@@ -99,149 +69,204 @@ const questionarioPosteres = montarQuestionario([
   { enunciado: "Por que perguntas da plateia durante a sessão de pôsteres são importantes?", alternativas: ["Ajudam o autor a esclarecer pontos e aprimorar a pesquisa", "Servem apenas para constranger o apresentador", "Não têm nenhuma utilidade acadêmica", "São proibidas nesse tipo de evento"], correta: 0 },
 ]);
 
-export const eventosSeed: Evento[] = [
-  {
-    id: randomUUID(),
-    titulo: "Abertura e Palestra Magna: IA na Educação",
-    horario: "2026-09-14T09:00:00-03:00",
+// sala/evento nao tem campo unico alem do id, entao aqui eh so criar se ainda nao existir
+async function garantirSala(nome: string, capacidade: number) {
+  const existente = await prisma.sala.findFirst({ where: { nome } });
+  if (existente) return existente;
+  return prisma.sala.create({ data: { id: randomUUID(), nome, capacidade } });
+}
+
+interface DadosEvento {
+  horario: Date;
+  salaId: string;
+  palestranteId: string;
+  tema: string;
+  cargaHoraria: number;
+  questionario: PerguntaQuestionario[];
+}
+
+async function garantirEvento(titulo: string, dados: DadosEvento) {
+  const existente = await prisma.evento.findFirst({ where: { titulo } });
+  if (existente) return existente;
+  return prisma.evento.create({
+    data: { id: randomUUID(), titulo, ...dados, questionario: dados.questionario as unknown as Prisma.InputJsonValue },
+  });
+}
+
+// idempotente: sala/evento usam "cria se nao existir", o resto usa upsert por email/rgm (campo unico de verdade)
+async function seed() {
+  const salaAuditorio = await garantirSala("Auditório A", 120);
+  const sala204 = await garantirSala("Sala 204", 40);
+  const salaLab1 = await garantirSala("Laboratório de Informática 1", 30);
+
+  const palestranteMariana = await prisma.palestrante.upsert({
+    where: { email: "mariana.costa@umc.br" },
+    update: {},
+    create: { id: randomUUID(), nome: "Dra. Mariana Costa", email: "mariana.costa@umc.br", telefone: "(11) 98888-1111" },
+  });
+  const palestranteFelipe = await prisma.palestrante.upsert({
+    where: { email: "felipe.andrade@umc.br" },
+    update: {},
+    create: { id: randomUUID(), nome: "Msc. Felipe Andrade", email: "felipe.andrade@umc.br", telefone: "(11) 97777-2222" },
+  });
+
+  const eventoAbertura = await garantirEvento("Abertura e Palestra Magna: IA na Educação", {
+    horario: new Date("2026-09-14T09:00:00-03:00"),
     salaId: salaAuditorio.id,
     palestranteId: palestranteMariana.id,
     tema: "Inteligência Artificial aplicada à Educação",
     cargaHoraria: 2,
     questionario: questionarioIA,
-    criadoEm: agora,
-  },
-  {
-    id: randomUUID(),
-    titulo: "Minicurso: Arquitetura de Microsserviços",
-    horario: "2026-09-14T14:00:00-03:00",
+  });
+  const eventoMicrosservicos = await garantirEvento("Minicurso: Arquitetura de Microsserviços", {
+    horario: new Date("2026-09-14T14:00:00-03:00"),
     salaId: sala204.id,
     palestranteId: palestranteFelipe.id,
     tema: "Arquitetura de Microsserviços na prática",
     cargaHoraria: 4,
     questionario: questionarioMicrosservicos,
-    criadoEm: agora,
-  },
-  {
-    id: randomUUID(),
-    titulo: "Workshop Prático: React na Prática",
-    horario: "2026-09-15T10:00:00-03:00",
+  });
+  await garantirEvento("Workshop Prático: React na Prática", {
+    horario: new Date("2026-09-15T10:00:00-03:00"),
     salaId: salaLab1.id,
     palestranteId: palestranteFelipe.id,
     tema: "Desenvolvimento front-end com React",
     cargaHoraria: 4,
     questionario: questionarioReact,
-    criadoEm: agora,
-  },
-  {
-    id: randomUUID(),
-    titulo: "Sessão de Apresentação de Pôsteres",
-    horario: "2026-10-05T13:30:00-03:00",
+  });
+  await garantirEvento("Sessão de Apresentação de Pôsteres", {
+    horario: new Date("2026-10-05T13:30:00-03:00"),
     salaId: sala204.id,
     palestranteId: palestranteMariana.id,
     tema: "Iniciação Científica: pôsteres e resultados",
     cargaHoraria: 3,
     questionario: questionarioPosteres,
-    criadoEm: agora,
-  },
-];
-const [eventoAbertura, eventoMicrosservicos] = eventosSeed;
+  });
 
-export const participantesSeed: Participante[] = [
-  { id: randomUUID(), nome: "João Pedro Lima", email: "joao.lima@aluno.umc.br", rgm: "20240100111", criadoEm: agora },
-  { id: randomUUID(), nome: "Beatriz Fernandes", email: "beatriz.fernandes@aluno.umc.br", rgm: "20240100222", criadoEm: agora },
-  { id: randomUUID(), nome: "Lucas Martins", email: "lucas.martins@aluno.umc.br", rgm: "20230100333", criadoEm: agora },
-];
-const [participanteJoao, participanteBeatriz, participanteLucas] = participantesSeed;
+  const participanteJoao = await prisma.participante.upsert({
+    where: { email: "joao.lima@aluno.umc.br" },
+    update: {},
+    create: { id: randomUUID(), nome: "João Pedro Lima", email: "joao.lima@aluno.umc.br", rgm: "20240100111" },
+  });
+  const participanteBeatriz = await prisma.participante.upsert({
+    where: { email: "beatriz.fernandes@aluno.umc.br" },
+    update: {},
+    create: { id: randomUUID(), nome: "Beatriz Fernandes", email: "beatriz.fernandes@aluno.umc.br", rgm: "20240100222" },
+  });
+  const participanteLucas = await prisma.participante.upsert({
+    where: { email: "lucas.martins@aluno.umc.br" },
+    update: {},
+    create: { id: randomUUID(), nome: "Lucas Martins", email: "lucas.martins@aluno.umc.br", rgm: "20230100333" },
+  });
 
-export const usuariosSeed: Usuario[] = [
-  {
-    id: randomUUID(),
-    nome: "Ana Ribeiro",
-    emailLogin: "admin@umc.br",
-    senhaHash: hashSincrono("admin123"),
-    perfil: "ADMINISTRADOR",
-    rgm: null,
-    participanteId: null,
-    criadoEm: agora,
-  },
-  {
-    id: randomUUID(),
-    nome: "Carlos Souza",
-    emailLogin: "secretaria@umc.br",
-    senhaHash: hashSincrono("secretaria123"),
-    perfil: "SECRETARIA",
-    rgm: null,
-    participanteId: null,
-    criadoEm: agora,
-  },
-  {
-    id: randomUUID(),
-    nome: "João Pedro Lima",
-    emailLogin: "aluno@aluno.umc.br",
-    senhaHash: hashSincrono("aluno123"),
-    perfil: "ALUNO",
-    rgm: "20240100111",
-    participanteId: participanteJoao.id,
-    criadoEm: agora,
-  },
-];
-const [usuarioAdmin] = usuariosSeed;
+  const usuarioAdmin = await prisma.usuario.upsert({
+    where: { emailLogin: "admin@umc.br" },
+    update: {},
+    create: {
+      id: randomUUID(),
+      nome: "Ana Ribeiro",
+      emailLogin: "admin@umc.br",
+      senhaHash: await gerarHashSenha("admin123"),
+      perfil: "ADMINISTRADOR",
+    },
+  });
+  await prisma.usuario.upsert({
+    where: { emailLogin: "secretaria@umc.br" },
+    update: {},
+    create: {
+      id: randomUUID(),
+      nome: "Carlos Souza",
+      emailLogin: "secretaria@umc.br",
+      senhaHash: await gerarHashSenha("secretaria123"),
+      perfil: "SECRETARIA",
+    },
+  });
+  await prisma.usuario.upsert({
+    where: { emailLogin: "aluno@aluno.umc.br" },
+    update: {},
+    create: {
+      id: randomUUID(),
+      nome: "João Pedro Lima",
+      emailLogin: "aluno@aluno.umc.br",
+      senhaHash: await gerarHashSenha("aluno123"),
+      perfil: "ALUNO",
+      rgm: "20240100111",
+      participanteId: participanteJoao.id,
+    },
+  });
 
-export const inscricoesSeed: Inscricao[] = [
-  {
-    id: randomUUID(),
-    participanteId: participanteJoao.id,
-    eventoId: eventoAbertura.id,
-    statusPresenca: "PRESENTE",
-    dataCheckin: "2026-09-14T09:05:00-03:00",
-    usuarioId: usuarioAdmin.id,
-    dataInscricao: agora,
-  },
-  {
-    id: randomUUID(),
-    participanteId: participanteBeatriz.id,
-    eventoId: eventoAbertura.id,
-    statusPresenca: "PENDENTE",
-    dataCheckin: null,
-    usuarioId: null,
-    dataInscricao: agora,
-  },
-  {
-    id: randomUUID(),
-    participanteId: participanteLucas.id,
-    eventoId: eventoMicrosservicos.id,
-    statusPresenca: "PENDENTE",
-    dataCheckin: null,
-    usuarioId: null,
-    dataInscricao: agora,
-  },
-  {
-    id: randomUUID(),
-    participanteId: participanteJoao.id,
-    eventoId: eventoMicrosservicos.id,
-    statusPresenca: "AUSENTE",
-    dataCheckin: null,
-    usuarioId: null,
-    dataInscricao: agora,
-  },
-];
+  await prisma.inscricao.upsert({
+    where: { participanteId_eventoId: { participanteId: participanteJoao.id, eventoId: eventoAbertura.id } },
+    update: {},
+    create: {
+      id: "inscricao-joao-abertura",
+      participanteId: participanteJoao.id,
+      eventoId: eventoAbertura.id,
+      statusPresenca: "PRESENTE",
+      dataCheckin: new Date("2026-09-14T09:05:00-03:00"),
+      usuarioId: usuarioAdmin.id,
+    },
+  });
+  await prisma.inscricao.upsert({
+    where: { participanteId_eventoId: { participanteId: participanteBeatriz.id, eventoId: eventoAbertura.id } },
+    update: {},
+    create: {
+      id: "inscricao-beatriz-abertura",
+      participanteId: participanteBeatriz.id,
+      eventoId: eventoAbertura.id,
+      statusPresenca: "PENDENTE",
+    },
+  });
+  await prisma.inscricao.upsert({
+    where: { participanteId_eventoId: { participanteId: participanteLucas.id, eventoId: eventoMicrosservicos.id } },
+    update: {},
+    create: {
+      id: "inscricao-lucas-microsservicos",
+      participanteId: participanteLucas.id,
+      eventoId: eventoMicrosservicos.id,
+      statusPresenca: "PENDENTE",
+    },
+  });
+  await prisma.inscricao.upsert({
+    where: { participanteId_eventoId: { participanteId: participanteJoao.id, eventoId: eventoMicrosservicos.id } },
+    update: {},
+    create: {
+      id: "inscricao-joao-microsservicos",
+      participanteId: participanteJoao.id,
+      eventoId: eventoMicrosservicos.id,
+      statusPresenca: "AUSENTE",
+    },
+  });
 
-export const feedbacksSeed: Feedback[] = [
-  {
-    id: randomUUID(),
-    eventoId: eventoAbertura.id,
-    participanteId: participanteJoao.id,
-    nota: 5,
-    comentario: "Evento muito bem organizado, ótimas palestras.",
-    criadoEm: agora,
-  },
-  {
-    id: randomUUID(),
-    eventoId: eventoAbertura.id,
-    participanteId: participanteBeatriz.id,
-    nota: 4,
-    comentario: "Gostei bastante, só achei o intervalo curto.",
-    criadoEm: agora,
-  },
-];
+  await prisma.feedback.upsert({
+    where: { participanteId_eventoId: { participanteId: participanteJoao.id, eventoId: eventoAbertura.id } },
+    update: {},
+    create: {
+      id: "feedback-joao-abertura",
+      eventoId: eventoAbertura.id,
+      participanteId: participanteJoao.id,
+      nota: 5,
+      comentario: "Evento muito bem organizado, ótimas palestras.",
+    },
+  });
+  await prisma.feedback.upsert({
+    where: { participanteId_eventoId: { participanteId: participanteBeatriz.id, eventoId: eventoAbertura.id } },
+    update: {},
+    create: {
+      id: "feedback-beatriz-abertura",
+      eventoId: eventoAbertura.id,
+      participanteId: participanteBeatriz.id,
+      nota: 4,
+      comentario: "Gostei bastante, só achei o intervalo curto.",
+    },
+  });
+
+  console.log("[seed] concluido");
+}
+
+seed()
+  .catch((erro) => {
+    console.error("[seed] falhou", erro);
+    process.exitCode = 1;
+  })
+  .finally(() => prisma.$disconnect());

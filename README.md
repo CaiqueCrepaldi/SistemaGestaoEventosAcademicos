@@ -4,12 +4,11 @@ Projeto de TCC/PFC: um sistema pra gerenciar eventos acadêmicos (palestras,
 minicursos, workshops, etc.) — cadastro de eventos, salas e palestrantes,
 inscrição e check-in de participantes, emissão de certificado e feedback.
 
-Frontend em React + TypeScript. Backend em Node.js + TypeScript + Express
-— o contrato entre os dois está em
-[`docs/api-contract.md`](docs/api-contract.md). O banco de dados
-(PostgreSQL) é administrado à parte, em outra ferramenta/projeto; por
-enquanto o backend guarda os dados em memória (ver
-[`backend/README.md`](backend/README.md)).
+Frontend em React + TypeScript. Backend em Node.js + TypeScript + Express,
+com PostgreSQL (via Prisma) como banco de dados — o contrato entre os dois
+lados está em [`docs/api-contract.md`](docs/api-contract.md). Passo a passo
+completo pra rodar o backend (incluindo o banco) em
+[`backend/README.md`](backend/README.md).
 
 Demo publicada: https://caiquecrepaldi.github.io/SistemaGestaoEventosAcademicos/#/
 
@@ -17,7 +16,7 @@ Demo publicada: https://caiquecrepaldi.github.io/SistemaGestaoEventosAcademicos/
 
 ```
 frontend/   React + TypeScript + Vite
-backend/    Node.js + TypeScript + Express (dados em memória por enquanto)
+backend/    Node.js + TypeScript + Express + PostgreSQL (Prisma)
 docs/       contrato de API entre os dois lados
 ```
 
@@ -108,8 +107,7 @@ Mais detalhe de scripts e deploy em [`frontend/README.md`](frontend/README.md).
 
 Node.js + TypeScript + Express, implementando exatamente o contrato de
 [`docs/api-contract.md`](docs/api-contract.md) (rotas, formatos,
-autorização por perfil). O banco de dados (PostgreSQL) é administrado à
-parte, em outra ferramenta/projeto — por enquanto os dados ficam em
-memória no próprio processo (resetam a cada reinício), com as mesmas
-contas de demonstração da tabela acima. Passo a passo completo pra rodar
-localmente em [`backend/README.md`](backend/README.md).
+autorização por perfil). Os dados ficam num PostgreSQL hospedado, acessado
+via Prisma (`backend/prisma/schema.prisma`), com as mesmas contas de
+demonstração da tabela acima. Passo a passo completo pra rodar localmente
+(incluindo criar o banco) em [`backend/README.md`](backend/README.md).
