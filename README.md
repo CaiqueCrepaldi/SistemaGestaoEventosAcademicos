@@ -10,7 +10,7 @@ lados está em [`docs/api-contract.md`](docs/api-contract.md). Passo a passo
 completo pra rodar o backend (incluindo o banco) em
 [`backend/README.md`](backend/README.md).
 
-Demo publicada: https://caiquecrepaldi.github.io/SistemaGestaoEventosAcademicos/#/
+Demo publicada: https://sistema-gestao-eventos-academicos.vercel.app/#/login
 
 ## Estrutura do repositório
 
