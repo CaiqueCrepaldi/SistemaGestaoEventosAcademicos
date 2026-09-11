@@ -125,21 +125,20 @@ export function CadastroPage() {
             {errosCampo.emailInstitucional && <p className="form-error">{errosCampo.emailInstitucional}</p>}
           </div>
 
-          <div className="field-row">
-            <div className="field">
-              <label className="field">
-                <span>Senha</span>
-                <PasswordInput value={form.senha} onChange={(senha) => setForm({ ...form, senha })} required />
-              </label>
-              {errosCampo.senha && <p className="form-error">{errosCampo.senha}</p>}
-            </div>
-            <div className="field">
-              <label className="field">
-                <span>Confirmar senha</span>
-                <PasswordInput value={confirmarSenha} onChange={setConfirmarSenha} required />
-              </label>
-              {errosCampo.confirmarSenha && <p className="form-error">{errosCampo.confirmarSenha}</p>}
-            </div>
+          <div className="field">
+            <label className="field">
+              <span>Senha</span>
+              <PasswordInput value={form.senha} onChange={(senha) => setForm({ ...form, senha })} required />
+            </label>
+            {errosCampo.senha && <p className="form-error">{errosCampo.senha}</p>}
+          </div>
+
+          <div className="field">
+            <label className="field">
+              <span>Confirmar senha</span>
+              <PasswordInput value={confirmarSenha} onChange={setConfirmarSenha} required />
+            </label>
+            {errosCampo.confirmarSenha && <p className="form-error">{errosCampo.confirmarSenha}</p>}
           </div>
 
           {erroGeral && <p className="form-error">{erroGeral}</p>}
