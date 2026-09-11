@@ -23,11 +23,13 @@ async function buscarOuFalhar(id: string) {
   return paraDominio(participante);
 }
 
-// traduz violacao de unique constraint do postgres pro erro de negocio certo
+// traduz violacao de unique constraint pro erro de negocio certo
+// no mysql o "target" vem como string com o nome do indice (ex: "participantes_rgm_key"), nao array de colunas
 function relancarComoConflito(erro: unknown): never {
   if (erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === "P2002") {
-    const campo = (erro.meta?.target as string[] | undefined)?.[0];
-    if (campo === "rgm") throw AppError.conflito("RGM_DUPLICADO", "Já existe um participante com este RGM.");
+    const alvo = erro.meta?.target;
+    const texto = Array.isArray(alvo) ? alvo.join(",") : String(alvo ?? "");
+    if (texto.includes("rgm")) throw AppError.conflito("RGM_DUPLICADO", "Já existe um participante com este RGM.");
     throw AppError.conflito("EMAIL_DUPLICADO", "Já existe um participante com este e-mail.");
   }
   throw erro;

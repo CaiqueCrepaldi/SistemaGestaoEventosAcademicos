@@ -6,9 +6,13 @@ import { MAX_TENTATIVAS_QUESTIONARIO, PERCENTUAL_APROVACAO } from "../../utils/q
 import type { PerguntaQuestionario, TentativaQuestionario } from "../../types/domain";
 import type { RespostasQuestionarioInput } from "./questionario.schemas";
 
-// prisma devolve criadoEm como Date, resto do app espera string (ISO)
+// prisma devolve criadoEm como Date (resto do app espera string ISO) e respostas como Json (guardado assim pq mysql nao tem array nativo)
 function paraDominio(tentativa: TentativaDb): TentativaQuestionario {
-  return { ...tentativa, criadoEm: tentativa.criadoEm.toISOString() };
+  return {
+    ...tentativa,
+    criadoEm: tentativa.criadoEm.toISOString(),
+    respostas: tentativa.respostas as unknown as number[],
+  };
 }
 
 // busca o evento pelo id, 404 se nao existir

@@ -8,9 +8,9 @@ localmente.
 
 ## Sobre o banco de dados
 
-Os dados ficam num **PostgreSQL hospedado** (Neon, Supabase, Railway ou
-qualquer outro provedor compatível), acessado via **Prisma**. O schema
-completo (tabelas, relacionamentos, chaves estrangeiras) está em
+Os dados ficam num banco **TiDB Cloud** (compatível com o protocolo MySQL,
+acessado via **Prisma** com `provider = "mysql"`). O schema completo
+(tabelas, relacionamentos, chaves estrangeiras) está em
 [`prisma/schema.prisma`](prisma/schema.prisma).
 
 Toda a lógica que mexe nos dados fica isolada em `src/db/prisma.ts`
@@ -20,7 +20,7 @@ Toda a lógica que mexe nos dados fica isolada em `src/db/prisma.ts`
 ## Stack
 
 - **Express** — servidor HTTP e roteamento.
-- **Prisma + PostgreSQL** — persistência dos dados.
+- **Prisma + TiDB (MySQL)** — persistência dos dados.
 - **Zod** — validação de corpo de requisição.
 - **jsonwebtoken** + **bcryptjs** — autenticação (JWT) e hash de senha.
 - **nodemailer** — envio de e-mail (confirmação de inscrição, código de
@@ -32,9 +32,10 @@ Toda a lógica que mexe nos dados fica isolada em `src/db/prisma.ts`
 
 ### 1. Banco de dados
 
-Crie um banco PostgreSQL gratuito num provedor hospedado (ex: Neon —
-[neon.tech](https://neon.tech), sem cartão de crédito) e copie a
-connection string.
+Crie um cluster grátis no [TiDB Cloud](https://tidbcloud.com/) (Serverless)
+e pega a connection string na aba "Connect" (escolhe "Prisma" no seletor de
+formato, ele já monta a `DATABASE_URL` certa). As tabelas quem cria é o
+Prisma Migrate no passo 3 — não precisa criar nada na mão.
 
 ### 2. Variáveis de ambiente
 
@@ -44,7 +45,7 @@ Crie um arquivo `backend/.env` (não é versionado, ver `.gitignore`) com:
 PORT=8080
 NODE_ENV=development
 CORS_ORIGIN=http://localhost:5173
-DATABASE_URL=postgresql://usuario:senha@host/banco?sslmode=require
+DATABASE_URL="mysql://usuario:senha@host.tidbcloud.com:4000/sgea?sslaccept=strict"
 JWT_SECRET=troque-este-valor-por-um-segredo-longo-e-aleatorio
 JWT_EXPIRES_IN=8h
 SMTP_HOST=
@@ -143,9 +144,9 @@ de devolver.
 
 Regras como "não deixar excluir uma sala com evento vinculado" ou "não
 deixar dois participantes com o mesmo e-mail" existem em duas camadas: o
-próprio schema do Postgres (chave estrangeira com `onDelete: Restrict`,
+próprio schema do MySQL (chave estrangeira com `onDelete: Restrict`,
 coluna `@unique`) e uma checagem prévia no `*.service.ts` correspondente,
 que existe só pra devolver uma mensagem de erro legível em vez do erro cru
 do banco. Exclusão em cascata (ex: apagar um evento junto com suas
 inscrições/feedbacks/tentativas de questionário) é feita pelo próprio
-Postgres via `onDelete: Cascade`, configurado em `prisma/schema.prisma`.
+MySQL via `onDelete: Cascade`, configurado em `prisma/schema.prisma`.

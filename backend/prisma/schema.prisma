@@ -8,10 +8,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  // conexao sem pooler, usada so pelo "prisma migrate" pra alterar o schema
-  directUrl = env("DIRECT_URL")
+  provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
 enum Perfil {
@@ -142,13 +140,14 @@ model RecuperacaoSenha {
 }
 
 // respostas[i] = indice da alternativa escolhida na pergunta i, mesma ordem do questionario do evento
+// guardado como Json (array de numeros) porque mysql nao tem coluna de array nativa
 model TentativaQuestionario {
   id             String       @id
   participanteId String
   participante   Participante @relation(fields: [participanteId], references: [id], onDelete: Restrict)
   eventoId       String
   evento         Evento       @relation(fields: [eventoId], references: [id], onDelete: Cascade)
-  respostas      Int[]
+  respostas      Json
   acertos        Int
   totalPerguntas Int
   percentual     Int
