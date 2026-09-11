@@ -1,24 +1,17 @@
-import nodemailer, { type Transporter } from "nodemailer";
+import { Resend } from "resend";
 import { env } from "../../config/env";
 
-// sem SMTP_HOST configurado (padrao em dev local) cai no fallback de so logar no console
-let transporter: Transporter | null = null;
-if (env.smtp.host) {
-  transporter = nodemailer.createTransport({
-    host: env.smtp.host,
-    port: env.smtp.port,
-    secure: env.smtp.port === 465,
-    auth: env.smtp.user ? { user: env.smtp.user, pass: env.smtp.pass } : undefined,
-  });
-}
+// sem RESEND_API_KEY configurada (padrao em dev local) cai no fallback de so logar no console
+const resend = env.resend.apiKey ? new Resend(env.resend.apiKey) : null;
 
-// manda o email de verdade ou so loga, dependendo se o SMTP ta configurado
+// manda o email de verdade ou so loga, dependendo se o Resend ta configurado
 async function enviar(destinatario: string, assunto: string, html: string): Promise<void> {
-  if (!transporter) {
+  if (!resend) {
     console.info(`[e-mail simulado] Para: ${destinatario} | Assunto: ${assunto}\n${html}\n`);
     return;
   }
-  await transporter.sendMail({ from: env.smtp.from, to: destinatario, subject: assunto, html });
+  const { error } = await resend.emails.send({ from: env.resend.from, to: destinatario, subject: assunto, html });
+  if (error) throw new Error(`Falha ao enviar e-mail via Resend: ${error.message}`);
 }
 
 interface DadosConfirmacaoInscricao {

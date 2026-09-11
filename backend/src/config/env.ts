@@ -20,11 +20,9 @@ export const env = {
   jwtSecret: obrigatoria("JWT_SECRET"),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "8h",
 
-  smtp: {
-    host: process.env.SMTP_HOST || null,
-    port: Number(process.env.SMTP_PORT ?? 587),
-    user: process.env.SMTP_USER || undefined,
-    pass: process.env.SMTP_PASS || undefined,
-    from: process.env.SMTP_FROM ?? "Gestão de Eventos Acadêmicos <no-reply@sgea.local>",
+  resend: {
+    apiKey: process.env.RESEND_API_KEY || null,
+    // sem dominio proprio verificado no Resend, o remetente tem que ser esse (so funciona pra teste)
+    from: process.env.EMAIL_FROM ?? "Gestão de Eventos Acadêmicos <onboarding@resend.dev>",
   },
 };

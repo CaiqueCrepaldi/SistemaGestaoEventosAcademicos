@@ -23,9 +23,9 @@ Toda a lógica que mexe nos dados fica isolada em `src/db/prisma.ts`
 - **Prisma + TiDB (MySQL)** — persistência dos dados.
 - **Zod** — validação de corpo de requisição.
 - **jsonwebtoken** + **bcryptjs** — autenticação (JWT) e hash de senha.
-- **nodemailer** — envio de e-mail (confirmação de inscrição, código de
-  recuperação de senha). Sem SMTP configurado, só imprime no console — não
-  precisa de servidor de e-mail de verdade pra testar em dev.
+- **Resend** — envio de e-mail (confirmação de inscrição, código de
+  recuperação de senha). Sem `RESEND_API_KEY` configurada, só imprime no
+  console — não precisa de conta no Resend pra testar em dev.
 - **tsx** — roda TypeScript direto em dev, sem passo de build manual.
 
 ## Passo a passo pra rodar localmente
@@ -48,18 +48,24 @@ CORS_ORIGIN=http://localhost:5173
 DATABASE_URL="mysql://usuario:senha@host.tidbcloud.com:4000/sgea?sslaccept=strict"
 JWT_SECRET=troque-este-valor-por-um-segredo-longo-e-aleatorio
 JWT_EXPIRES_IN=8h
-SMTP_HOST=
-SMTP_PORT=587
-SMTP_USER=
-SMTP_PASS=
-SMTP_FROM=Gestão de Eventos Acadêmicos <no-reply@sgea.local>
+RESEND_API_KEY=
+EMAIL_FROM=Gestão de Eventos Acadêmicos <onboarding@resend.dev>
 ```
 
 `DATABASE_URL` e `JWT_SECRET` são obrigatórios pra o servidor subir (troque
 o `JWT_SECRET` por um valor aleatório e longo em qualquer ambiente real —
-quem souber esse segredo consegue forjar token de admin). Deixe as
-variáveis de `SMTP_*` em branco em dev: sem SMTP configurado, o backend só
-imprime o e-mail no console em vez de enviar de verdade.
+quem souber esse segredo consegue forjar token de admin). Deixe
+`RESEND_API_KEY` em branco em dev: sem ela, o backend só imprime o e-mail
+no console em vez de enviar de verdade.
+
+Pra enviar de verdade: cria conta grátis em [resend.com](https://resend.com/)
+(100 e-mails/dia, 3000/mês de graça), gera uma API key em
+[resend.com/api-keys](https://resend.com/api-keys) e cola em
+`RESEND_API_KEY`. Sem verificar um domínio próprio, `EMAIL_FROM` só pode
+usar `onboarding@resend.dev` (funciona, mas é só pra teste — a Resend
+recomenda não usar em produção); pra usar um remetente com o domínio da
+UMC/próprio, verifica o domínio em [resend.com/domains](https://resend.com/domains)
+primeiro.
 
 ### 3. Instalar, migrar e popular
 
