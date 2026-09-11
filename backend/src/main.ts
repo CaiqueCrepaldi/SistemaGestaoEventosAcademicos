@@ -1,4 +1,4 @@
-import { criarApp } from "./app";
+import { criarApp } from "./expressApp";
 import { env } from "./config/env";
 import { prisma } from "./db/prisma";
 

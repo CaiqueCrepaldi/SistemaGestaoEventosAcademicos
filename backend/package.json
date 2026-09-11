@@ -2,15 +2,15 @@
   "name": "sgea-backend",
   "private": true,
   "version": "0.1.0",
-  "description": "Backend do Sistema de Gestão de Eventos Acadêmicos — Node.js + TypeScript + Express + PostgreSQL (Prisma)",
-  "main": "dist/server.js",
+  "description": "Backend do Sistema de Gestão de Eventos Acadêmicos — Node.js + TypeScript + Express + MySQL/TiDB (Prisma)",
+  "main": "dist/main.js",
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.json",
-    "start": "node dist/server.js",
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc --noEmit && node scripts/bundle-vercel.mjs",
+    "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -35,6 +35,7 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.10.5",
     "@types/nodemailer": "^6.4.17",
+    "esbuild": "^0.28.2",
     "prisma": "^6.2.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
