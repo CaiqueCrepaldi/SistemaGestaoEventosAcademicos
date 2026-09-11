@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { PasswordInput } from "../../components/ui/PasswordInput";
 import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
 import { ApiError } from "../../services/api";
@@ -21,7 +22,7 @@ function validarCliente(form: typeof VAZIO, confirmarSenha: string): Record<stri
     erros.emailInstitucional = `E-mail precisa ser institucional (termina com ${DOMINIO_INSTITUCIONAL})`;
   }
   if (!validarRgm(form.rgm)) {
-    erros.rgm = "RGM deve ter exatamente 11 caracteres, sem espaços.";
+    erros.rgm = "RGM deve ter exatamente 11 dígitos, sem espaços.";
   }
   if (form.senha.length < 6) {
     erros.senha = "Senha deve ter no mínimo 6 caracteres";
@@ -81,7 +82,7 @@ export function CadastroPage() {
     <div className="login-screen">
       <div className="login-card">
         <div className="login-brand">
-          <p>Criar conta de aluno</p>
+          <p>Criar conta de usuário</p>
         </div>
 
         <form onSubmit={handleSubmit} className="form">
@@ -101,7 +102,8 @@ export function CadastroPage() {
               <input
                 value={form.rgm}
                 onChange={(e) => setForm({ ...form, rgm: normalizarRgm(e.target.value) })}
-                placeholder="11 caracteres, sem espaços"
+                placeholder="11 dígitos, sem espaços"
+                inputMode="numeric"
                 maxLength={11}
                 required
               />
@@ -116,6 +118,7 @@ export function CadastroPage() {
                 type="email"
                 value={form.emailInstitucional}
                 onChange={(e) => setForm({ ...form, emailInstitucional: e.target.value })}
+                placeholder={`nome${DOMINIO_INSTITUCIONAL}`}
                 required
               />
             </label>
@@ -126,24 +129,14 @@ export function CadastroPage() {
             <div className="field">
               <label className="field">
                 <span>Senha</span>
-                <input
-                  type="password"
-                  value={form.senha}
-                  onChange={(e) => setForm({ ...form, senha: e.target.value })}
-                  required
-                />
+                <PasswordInput value={form.senha} onChange={(senha) => setForm({ ...form, senha })} required />
               </label>
               {errosCampo.senha && <p className="form-error">{errosCampo.senha}</p>}
             </div>
             <div className="field">
               <label className="field">
                 <span>Confirmar senha</span>
-                <input
-                  type="password"
-                  value={confirmarSenha}
-                  onChange={(e) => setConfirmarSenha(e.target.value)}
-                  required
-                />
+                <PasswordInput value={confirmarSenha} onChange={setConfirmarSenha} required />
               </label>
               {errosCampo.confirmarSenha && <p className="form-error">{errosCampo.confirmarSenha}</p>}
             </div>
@@ -156,9 +149,9 @@ export function CadastroPage() {
           </button>
         </form>
 
-        <p style={{ textAlign: "center", marginTop: 16 }}>
+        <div className="login-links">
           <Link to="/login">Já tenho conta — entrar</Link>
-        </p>
+        </div>
       </div>
     </div>
   );

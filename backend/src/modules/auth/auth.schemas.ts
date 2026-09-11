@@ -9,7 +9,7 @@ export const registroSchema = z.object({
     .string()
     .trim()
     .transform(normalizarRgm)
-    .refine((valor) => REGEX_RGM.test(valor), "RGM deve ter exatamente 11 caracteres, sem espaços."),
+    .refine((valor) => REGEX_RGM.test(valor), "RGM deve ter exatamente 11 dígitos, sem espaços."),
   emailInstitucional: z
     .string()
     .email("E-mail institucional inválido.")
@@ -28,12 +28,12 @@ export const loginSchema = z.object({
 export type LoginInput = z.infer<typeof loginSchema>;
 
 export const solicitarRecuperacaoSchema = z.object({
-  identificador: z.string().trim().min(1, "Informe e-mail ou RGM."),
+  email: z.string().trim().email("Informe um e-mail válido."),
 });
 export type SolicitarRecuperacaoInput = z.infer<typeof solicitarRecuperacaoSchema>;
 
 export const confirmarRecuperacaoSchema = z.object({
-  identificador: z.string().trim().min(1),
+  email: z.string().trim().email("Informe um e-mail válido."),
   codigo: z.string().trim().min(1, "Código é obrigatório."),
   novaSenha: z.string().min(8, "A senha deve ter ao menos 8 caracteres."),
 });

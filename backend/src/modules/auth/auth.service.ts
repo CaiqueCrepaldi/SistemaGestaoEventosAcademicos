@@ -69,9 +69,9 @@ async function login(dados: LoginInput) {
   };
 }
 
-// acha usuario por email de login ou por rgm, usado na recuperacao de senha
-function buscarUsuarioPorIdentificador(identificador: string) {
-  return prisma.usuario.findFirst({ where: { OR: [{ emailLogin: identificador }, { rgm: identificador }] } });
+// acha usuario pelo email de login, usado na recuperacao de senha
+function buscarUsuarioPorEmail(email: string) {
+  return prisma.usuario.findUnique({ where: { emailLogin: email } });
 }
 
 // gera um codigo numerico de 6 digitos
@@ -81,9 +81,9 @@ function gerarCodigoNumerico(): string {
 
 // gera o codigo de recuperacao, salva com validade de 15min e dispara o email
 async function solicitarRecuperacaoSenha(dados: SolicitarRecuperacaoInput) {
-  const usuario = await buscarUsuarioPorIdentificador(dados.identificador);
+  const usuario = await buscarUsuarioPorEmail(dados.email);
   if (!usuario) {
-    throw AppError.naoEncontrado("USUARIO_NAO_ENCONTRADO", "Não encontramos conta com esse e-mail ou RGM.");
+    throw AppError.naoEncontrado("USUARIO_NAO_ENCONTRADO", "Não encontramos conta com esse e-mail.");
   }
 
   const codigo = gerarCodigoNumerico();
@@ -104,9 +104,9 @@ async function solicitarRecuperacaoSenha(dados: SolicitarRecuperacaoInput) {
 
 // confere o codigo e troca a senha
 async function confirmarRecuperacaoSenha(dados: ConfirmarRecuperacaoInput) {
-  const usuario = await buscarUsuarioPorIdentificador(dados.identificador);
+  const usuario = await buscarUsuarioPorEmail(dados.email);
   if (!usuario) {
-    throw AppError.naoEncontrado("USUARIO_NAO_ENCONTRADO", "Não encontramos conta com esse e-mail ou RGM.");
+    throw AppError.naoEncontrado("USUARIO_NAO_ENCONTRADO", "Não encontramos conta com esse e-mail.");
   }
 
   const pendente = await prisma.recuperacaoSenha.findFirst({

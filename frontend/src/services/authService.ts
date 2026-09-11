@@ -33,8 +33,8 @@ export interface SolicitarRecuperacaoResult {
 interface AuthService {
   login(emailLogin: string, senha: string): Promise<SessaoUsuario>;
   cadastrarAluno(dados: CadastroAlunoInput): Promise<void>;
-  solicitarRecuperacaoSenha(identificador: string): Promise<SolicitarRecuperacaoResult>;
-  confirmarRecuperacaoSenha(identificador: string, codigo: string, novaSenha: string): Promise<void>;
+  solicitarRecuperacaoSenha(email: string): Promise<SolicitarRecuperacaoResult>;
+  confirmarRecuperacaoSenha(email: string, codigo: string, novaSenha: string): Promise<void>;
 }
 
 // token falso so pra ter uma string no lugar de jwt de verdade, sem assinatura nenhuma
@@ -45,10 +45,10 @@ function fakeJwt(usuarioId: string, perfil: Perfil): string {
 
 const RECUPERACAO_KEY = "sgea:recuperacao-senha";
 
-// acha usuario por email de login ou por rgm, usado na recuperacao de senha
-function buscarUsuarioPorIdentificador(identificador: string) {
+// acha usuario pelo email de login, usado na recuperacao de senha
+function buscarUsuarioPorEmail(email: string) {
   const usuarios = loadCollection("usuarios-v2", usuariosSeed);
-  return usuarios.find((u) => u.emailLogin === identificador || u.rgm === identificador);
+  return usuarios.find((u) => u.emailLogin === email);
 }
 
 // le do localStorage os codigos de recuperacao ainda pendentes
@@ -115,11 +115,11 @@ const localAuthService: AuthService = {
   },
 
   // gera o codigo, guarda com validade de 15min e avisa na tela (modo demo)
-  async solicitarRecuperacaoSenha(identificador) {
-    const usuario = buscarUsuarioPorIdentificador(identificador);
+  async solicitarRecuperacaoSenha(email) {
+    const usuario = buscarUsuarioPorEmail(email);
     if (!usuario) {
       await delay(undefined, 300);
-      throw new ApiError(404, "Não encontramos conta com esse e-mail ou RGM.", "USUARIO_NAO_ENCONTRADO");
+      throw new ApiError(404, "Não encontramos conta com esse e-mail.", "USUARIO_NAO_ENCONTRADO");
     }
 
     const codigo = String(Math.floor(100000 + Math.random() * 900000));
@@ -133,11 +133,11 @@ const localAuthService: AuthService = {
   },
 
   // confere o codigo e troca a senha
-  async confirmarRecuperacaoSenha(identificador, codigo, novaSenha) {
-    const usuario = buscarUsuarioPorIdentificador(identificador);
+  async confirmarRecuperacaoSenha(email, codigo, novaSenha) {
+    const usuario = buscarUsuarioPorEmail(email);
     if (!usuario) {
       await delay(undefined, 200);
-      throw new ApiError(404, "Não encontramos conta com esse e-mail ou RGM.", "USUARIO_NAO_ENCONTRADO");
+      throw new ApiError(404, "Não encontramos conta com esse e-mail.", "USUARIO_NAO_ENCONTRADO");
     }
 
     const pendentes = lerCodigosPendentes();
@@ -174,11 +174,11 @@ const httpAuthService: AuthService = {
   cadastrarAluno(dados) {
     return api.post<void>("/auth/registro", dados);
   },
-  solicitarRecuperacaoSenha(identificador) {
-    return api.post<SolicitarRecuperacaoResult>("/auth/recuperacao-senha", { identificador });
+  solicitarRecuperacaoSenha(email) {
+    return api.post<SolicitarRecuperacaoResult>("/auth/recuperacao-senha", { email });
   },
-  confirmarRecuperacaoSenha(identificador, codigo, novaSenha) {
-    return api.post<void>("/auth/recuperacao-senha/confirmar", { identificador, codigo, novaSenha });
+  confirmarRecuperacaoSenha(email, codigo, novaSenha) {
+    return api.post<void>("/auth/recuperacao-senha/confirmar", { email, codigo, novaSenha });
   },
 };
 

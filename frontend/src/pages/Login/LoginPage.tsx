@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
+import { PasswordInput } from "../../components/ui/PasswordInput";
 import { useAuth } from "../../context/AuthContext";
 
 // tela de login, redireciona se ja tiver sessao ativa
@@ -45,12 +46,7 @@ export function LoginPage() {
           </label>
           <label className="field">
             <span>Senha</span>
-            <input
-              type="password"
-              value={senha}
-              onChange={(e) => setSenha(e.target.value)}
-              required
-            />
+            <PasswordInput value={senha} onChange={setSenha} required />
           </label>
 
           {erro && <p className="form-error">{erro}</p>}

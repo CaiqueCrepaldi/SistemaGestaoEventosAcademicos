@@ -1,12 +1,13 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { PasswordInput } from "../../components/ui/PasswordInput";
 import { authService } from "../../services/authService";
 
-// fluxo de 2 etapas: pedir codigo, depois confirmar codigo + nova senha
+// fluxo de 2 etapas: pedir codigo pelo e-mail cadastrado, depois confirmar codigo + nova senha
 export function EsqueciSenhaPage() {
   const navigate = useNavigate();
   const [etapa, setEtapa] = useState<"identificar" | "confirmar">("identificar");
-  const [identificador, setIdentificador] = useState("");
+  const [email, setEmail] = useState("");
   const [codigo, setCodigo] = useState("");
   const [novaSenha, setNovaSenha] = useState("");
   const [confirmarSenha, setConfirmarSenha] = useState("");
@@ -20,7 +21,7 @@ export function EsqueciSenhaPage() {
     setErro(null);
     setCarregando(true);
     try {
-      const res = await authService.solicitarRecuperacaoSenha(identificador);
+      const res = await authService.solicitarRecuperacaoSenha(email);
       setCodigoDemo(res.codigoDemo ?? null);
       setEtapa("confirmar");
     } catch (e) {
@@ -42,7 +43,7 @@ export function EsqueciSenhaPage() {
 
     setCarregando(true);
     try {
-      await authService.confirmarRecuperacaoSenha(identificador, codigo, novaSenha);
+      await authService.confirmarRecuperacaoSenha(email, codigo, novaSenha);
       navigate("/login");
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao redefinir senha");
@@ -60,12 +61,13 @@ export function EsqueciSenhaPage() {
 
         {etapa === "identificar" && (
           <form onSubmit={solicitarCodigo} className="form">
-            <p className="form-hint">Informe seu e-mail institucional ou RGM. Vamos enviar um código de verificação.</p>
+            <p className="form-hint">Informe o e-mail cadastrado na sua conta. Vamos enviar um código de verificação.</p>
             <label className="field">
-              <span>E-mail ou RGM</span>
+              <span>E-mail cadastrado</span>
               <input
-                value={identificador}
-                onChange={(e) => setIdentificador(e.target.value)}
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
                 autoFocus
               />
@@ -92,21 +94,11 @@ export function EsqueciSenhaPage() {
             <div className="field-row">
               <label className="field">
                 <span>Nova senha</span>
-                <input
-                  type="password"
-                  value={novaSenha}
-                  onChange={(e) => setNovaSenha(e.target.value)}
-                  required
-                />
+                <PasswordInput value={novaSenha} onChange={setNovaSenha} required />
               </label>
               <label className="field">
                 <span>Confirmar nova senha</span>
-                <input
-                  type="password"
-                  value={confirmarSenha}
-                  onChange={(e) => setConfirmarSenha(e.target.value)}
-                  required
-                />
+                <PasswordInput value={confirmarSenha} onChange={setConfirmarSenha} required />
               </label>
             </div>
 

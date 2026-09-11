@@ -144,3 +144,25 @@ export function FeedbackIcon(props: SVGProps<SVGSVGElement>) {
     </Icon>
   );
 }
+
+// icone de olho aberto, usado no botao de mostrar senha
+export function OlhoIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </Icon>
+  );
+}
+
+// icone de olho riscado, usado no botao de ocultar senha
+export function OlhoFechadoIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M3.5 3.5l17 17" />
+      <path d="M10.6 5.2A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a15.6 15.6 0 0 1-3.4 4.3" />
+      <path d="M6.6 6.6C4 8.3 2 12 2 12s3.5 7 10 7a9.6 9.6 0 0 0 3.9-.8" />
+      <path d="M9.9 10a3 3 0 0 0 4.1 4.1" />
+    </Icon>
+  );
+}

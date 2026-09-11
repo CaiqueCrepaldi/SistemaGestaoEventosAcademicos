@@ -3,7 +3,7 @@
 
 const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const REGEX_NOME = /^[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'\s-]*$/;
-const REGEX_RGM = /^[A-Z0-9]{11}$/;
+const REGEX_RGM = /^[0-9]{11}$/;
 const REGEX_TELEFONE = /^\(\d{2}\) \d{4,5}-\d{4}$/;
 
 export const RGM_TAMANHO = 11;
@@ -18,12 +18,12 @@ export function validarNome(valor: string): boolean {
   return REGEX_NOME.test(valor.trim());
 }
 
-// deixa so letra/numero maiusculo, usado no onChange do campo de rgm tambem
+// deixa so digito, usado no onChange do campo de rgm tambem
 export function normalizarRgm(valor: string): string {
-  return valor.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return valor.replace(/\D/g, "");
 }
 
-// exatamente 11 caracteres alfanumericos maiusculos
+// exatamente 11 digitos
 export function validarRgm(valor: string): boolean {
   return REGEX_RGM.test(valor);
 }

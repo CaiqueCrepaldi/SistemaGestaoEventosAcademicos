@@ -8,7 +8,7 @@ export const participanteSchema = z.object({
     .string()
     .trim()
     .transform(normalizarRgm)
-    .refine((valor) => REGEX_RGM.test(valor), "RGM deve ter exatamente 11 caracteres, sem espaços."),
+    .refine((valor) => REGEX_RGM.test(valor), "RGM deve ter exatamente 11 dígitos, sem espaços."),
 });
 export type ParticipanteInput = z.infer<typeof participanteSchema>;
 

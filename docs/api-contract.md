@@ -148,17 +148,18 @@ Erro: `401 CREDENCIAIS_INVALIDAS` se e-mail ou senha estiverem errados.
 
 ### `POST /api/auth/recuperacao-senha` e `POST /api/auth/recuperacao-senha/confirmar` (endpoints dedicados)
 
-Fluxo de "esqueci minha senha", identificando o usuário por e-mail ou RGM.
+Fluxo de "esqueci minha senha", identificando o usuário só pelo e-mail
+cadastrado (sem opção de RGM — mantém a tela simples e evita ambiguidade
+com o RGM, que hoje é só numérico).
 
-`POST /api/auth/recuperacao-senha` — Request: `{ "identificador": "joao.lima@aluno.ifsp.edu.br" }`
-(aceita e-mail ou RGM). Gera um código, manda por e-mail (ou loga, se for
-ambiente de teste) e responde `200` com `{}` — o código em si nunca volta no
-corpo em produção (só o mock local, pra demonstração, devolve
-`codigoDemo`). `404 USUARIO_NAO_ENCONTRADO` se não achar ninguém com esse
-identificador.
+`POST /api/auth/recuperacao-senha` — Request: `{ "email": "joao.lima@aluno.umc.br" }`.
+Gera um código, manda por e-mail (ou loga, se for ambiente de teste) e
+responde `200` com `{}` — o código em si nunca volta no corpo em produção
+(só o mock local, pra demonstração, devolve `codigoDemo`). `404
+USUARIO_NAO_ENCONTRADO` se não achar ninguém com esse e-mail.
 
 `POST /api/auth/recuperacao-senha/confirmar` — Request:
-`{ "identificador": "...", "codigo": "123456", "novaSenha": "..." }`.
+`{ "email": "...", "codigo": "123456", "novaSenha": "..." }`.
 `200` se der certo. `422 CODIGO_INVALIDO` se o código estiver errado,
 expirado, ou não existir nenhum pendente pra esse usuário.
 

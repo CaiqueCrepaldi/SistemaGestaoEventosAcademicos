@@ -50,7 +50,7 @@ Garantir que os dados cadastrados no sistema (participantes, palestrantes, event
 |---|---|
 | Nome | Apenas letras (com acentos), espaços e hífen — sem números |
 | E-mail | Formato válido (`algo@dominio.algo`) |
-| RGM | Exatamente 11 caracteres alfanuméricos, convertido automaticamente para maiúsculo enquanto o usuário digita |
+| RGM | Exatamente 11 dígitos numéricos, sem espaços ou letras |
 | Telefone (palestrante) | Máscara automática `(00) 00000-0000` |
 
 ### Fluxo do usuário

@@ -46,7 +46,7 @@ export function ParticipantesPage() {
   function validar(): string | null {
     if (!validarNome(form.nome)) return "Nome deve conter apenas letras.";
     if (!validarEmail(form.email)) return "E-mail em formato inválido.";
-    if (!validarRgm(form.rgm)) return "RGM deve ter exatamente 11 caracteres, sem espaços.";
+    if (!validarRgm(form.rgm)) return "RGM deve ter exatamente 11 dígitos, sem espaços.";
     return null;
   }
 
@@ -174,7 +174,8 @@ export function ParticipantesPage() {
               <input
                 value={form.rgm}
                 onChange={(e) => setForm({ ...form, rgm: normalizarRgm(e.target.value) })}
-                placeholder="11 caracteres, sem espaços"
+                placeholder="11 dígitos, sem espaços"
+                inputMode="numeric"
                 maxLength={11}
                 required
               />
