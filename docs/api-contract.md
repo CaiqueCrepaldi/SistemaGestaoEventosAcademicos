@@ -419,7 +419,7 @@ O corpo do e-mail junta dados de três lugares (inscrição → evento →
 palestrante), então faz sentido resolver tudo isso no service antes de
 montar a mensagem em vez de espalhar query em cada camada. Implementação
 real em `backend/src/modules/inscricoes/inscricoes.service.ts` (função
-`confirmarEmail`) usando a API do Resend:
+`confirmarEmail`) usando a API do SendGrid:
 
 ```ts
 async function confirmarEmail(id: string, participanteIdDoToken: string) {
@@ -450,14 +450,22 @@ já traz participante/evento/palestrante numa consulta só, em vez de três
 idas ao banco.)
 
 `emailService` (`backend/src/modules/email/email.service.ts`) usa o SDK do
-Resend, configurado por variável de ambiente (`RESEND_API_KEY`,
-`EMAIL_FROM` — ver `backend/README.md`). **Sem `RESEND_API_KEY`
-configurada, o e-mail não é enviado de verdade — só impresso no console**
+SendGrid, configurado por variável de ambiente (`SENDGRID_API_KEY`,
+`EMAIL_FROM` — ver `backend/README.md`). `EMAIL_FROM` precisa ser
+exatamente o e-mail que passou pela "Single Sender Verification" no
+SendGrid, senão o envio falha. **Sem `SENDGRID_API_KEY` configurada, o
+e-mail não é enviado de verdade — só impresso no console**
 (`[e-mail simulado] ...`), o que é o padrão em desenvolvimento local e
-evita precisar de uma conta no Resend só pra testar o fluxo. Se o envio
+evita precisar de uma conta no SendGrid só pra testar o fluxo. Se o envio
 falhar (API fora do ar, chave inválida), a exceção sobe como erro 500
 padrão — não derruba a inscrição, que já foi criada e
 persistida antes desse endpoint ser chamado.
+
+Já a recuperação de senha (`POST /api/auth/recuperacao-senha`) trata falha
+de envio como não-fatal — ela sempre responde `200`, com ou sem e-mail de
+verdade, porque a rota já tem o mecanismo de `codigoDemo` (ver seção
+"Autenticação" acima) pra continuar funcionável mesmo sem envio configurado
+ou se o provedor recusar o destinatário.
 
 ## Certificados
 

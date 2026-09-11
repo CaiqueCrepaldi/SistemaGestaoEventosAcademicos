@@ -23,9 +23,9 @@ Toda a lógica que mexe nos dados fica isolada em `src/db/prisma.ts`
 - **Prisma + TiDB (MySQL)** — persistência dos dados.
 - **Zod** — validação de corpo de requisição.
 - **jsonwebtoken** + **bcryptjs** — autenticação (JWT) e hash de senha.
-- **Resend** — envio de e-mail (confirmação de inscrição, código de
-  recuperação de senha). Sem `RESEND_API_KEY` configurada, só imprime no
-  console — não precisa de conta no Resend pra testar em dev.
+- **SendGrid** — envio de e-mail (confirmação de inscrição, código de
+  recuperação de senha). Sem `SENDGRID_API_KEY` configurada, só imprime no
+  console — não precisa de conta no SendGrid pra testar em dev.
 - **tsx** — roda TypeScript direto em dev, sem passo de build manual.
 
 ## Passo a passo pra rodar localmente
@@ -48,24 +48,24 @@ CORS_ORIGIN=http://localhost:5173
 DATABASE_URL="mysql://usuario:senha@host.tidbcloud.com:4000/sgea?sslaccept=strict"
 JWT_SECRET=troque-este-valor-por-um-segredo-longo-e-aleatorio
 JWT_EXPIRES_IN=8h
-RESEND_API_KEY=
-EMAIL_FROM=Gestão de Eventos Acadêmicos <onboarding@resend.dev>
+SENDGRID_API_KEY=
+EMAIL_FROM=
 ```
 
 `DATABASE_URL` e `JWT_SECRET` são obrigatórios pra o servidor subir (troque
 o `JWT_SECRET` por um valor aleatório e longo em qualquer ambiente real —
 quem souber esse segredo consegue forjar token de admin). Deixe
-`RESEND_API_KEY` em branco em dev: sem ela, o backend só imprime o e-mail
-no console em vez de enviar de verdade.
+`SENDGRID_API_KEY`/`EMAIL_FROM` em branco em dev: sem eles, o backend só
+imprime o e-mail no console em vez de enviar de verdade.
 
-Pra enviar de verdade: cria conta grátis em [resend.com](https://resend.com/)
-(100 e-mails/dia, 3000/mês de graça), gera uma API key em
-[resend.com/api-keys](https://resend.com/api-keys) e cola em
-`RESEND_API_KEY`. Sem verificar um domínio próprio, `EMAIL_FROM` só pode
-usar `onboarding@resend.dev` (funciona, mas é só pra teste — a Resend
-recomenda não usar em produção); pra usar um remetente com o domínio da
-UMC/próprio, verifica o domínio em [resend.com/domains](https://resend.com/domains)
-primeiro.
+Pra enviar de verdade: cria conta grátis em
+[sendgrid.com](https://signup.sendgrid.com/) (100 e-mails/dia de graça),
+verifica um e-mail próprio em **Settings → Sender Authentication → Single
+Sender Verification** (não precisa de domínio, só confirmar um link
+mandado pra essa caixa), gera uma API key em
+[app.sendgrid.com/settings/api_keys](https://app.sendgrid.com/settings/api_keys)
+e preenche `SENDGRID_API_KEY` com a chave e `EMAIL_FROM` com **exatamente**
+o e-mail verificado (o SendGrid recusa qualquer outro remetente).
 
 ### 3. Instalar, migrar e popular
 
@@ -130,8 +130,8 @@ backend/
                        cada um com routes → service → schemas
     types/             tipos das entidades (domain.ts) e extensão do Request do Express
     utils/             JWT, hash de senha, DTOs de resposta, wrapper de rota async
-    app.ts             monta o Express (middlewares globais + todas as rotas)
-    server.ts          ponto de entrada (sobe o servidor HTTP)
+    expressApp.ts       monta o Express (middlewares globais + todas as rotas)
+    main.ts             ponto de entrada (sobe o servidor HTTP)
 ```
 
 Cada módulo segue o mesmo padrão: `*.routes.ts` define os endpoints e quem

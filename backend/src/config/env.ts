@@ -20,9 +20,9 @@ export const env = {
   jwtSecret: obrigatoria("JWT_SECRET"),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "8h",
 
-  resend: {
-    apiKey: process.env.RESEND_API_KEY || null,
-    // sem dominio proprio verificado no Resend, o remetente tem que ser esse (so funciona pra teste)
-    from: process.env.EMAIL_FROM ?? "Gestão de Eventos Acadêmicos <onboarding@resend.dev>",
+  sendgrid: {
+    apiKey: process.env.SENDGRID_API_KEY || null,
+    // precisa ser o e-mail que passou pela "Single Sender Verification" no SendGrid
+    from: process.env.EMAIL_FROM || null,
   },
 };

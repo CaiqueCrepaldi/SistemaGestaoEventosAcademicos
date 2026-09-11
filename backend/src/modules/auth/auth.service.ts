@@ -96,9 +96,15 @@ async function solicitarRecuperacaoSenha(dados: SolicitarRecuperacaoInput) {
     },
   });
 
-  await emailService.enviarCodigoRecuperacao(usuario.emailLogin, codigo);
+  // falha de envio nao pode travar a recuperacao — em demo o codigoDemo abaixo
+  // resolve isso mesmo assim, e nem toda falha de provedor deveria bloquear o fluxo
+  try {
+    await emailService.enviarCodigoRecuperacao(usuario.emailLogin, codigo);
+  } catch (erro) {
+    console.error("[recuperacao-senha] falha ao enviar e-mail:", erro);
+  }
 
-  // fora de producao devolve o codigo no corpo tb, so pra testar sem SMTP configurado
+  // fora de producao devolve o codigo no corpo tb, so pra testar sem e-mail configurado
   return env.isProduction ? {} : { codigoDemo: codigo };
 }
 

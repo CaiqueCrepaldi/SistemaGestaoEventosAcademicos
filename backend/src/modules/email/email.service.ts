@@ -1,17 +1,21 @@
-import { Resend } from "resend";
+import sgMail from "@sendgrid/mail";
 import { env } from "../../config/env";
 
-// sem RESEND_API_KEY configurada (padrao em dev local) cai no fallback de so logar no console
-const resend = env.resend.apiKey ? new Resend(env.resend.apiKey) : null;
+// sem SENDGRID_API_KEY/EMAIL_FROM configurados (padrao em dev local) cai no fallback de so logar no console
+const sendgridPronto = Boolean(env.sendgrid.apiKey && env.sendgrid.from);
+if (env.sendgrid.apiKey) sgMail.setApiKey(env.sendgrid.apiKey);
 
-// manda o email de verdade ou so loga, dependendo se o Resend ta configurado
+// manda o email de verdade ou so loga, dependendo se o SendGrid ta configurado
 async function enviar(destinatario: string, assunto: string, html: string): Promise<void> {
-  if (!resend) {
+  if (!sendgridPronto) {
     console.info(`[e-mail simulado] Para: ${destinatario} | Assunto: ${assunto}\n${html}\n`);
     return;
   }
-  const { error } = await resend.emails.send({ from: env.resend.from, to: destinatario, subject: assunto, html });
-  if (error) throw new Error(`Falha ao enviar e-mail via Resend: ${error.message}`);
+  try {
+    await sgMail.send({ from: env.sendgrid.from!, to: destinatario, subject: assunto, html });
+  } catch (erro) {
+    throw new Error(`Falha ao enviar e-mail via SendGrid: ${erro instanceof Error ? erro.message : String(erro)}`);
+  }
 }
 
 interface DadosConfirmacaoInscricao {
