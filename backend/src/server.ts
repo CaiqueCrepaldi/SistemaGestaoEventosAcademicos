@@ -2,9 +2,8 @@ import { criarApp } from "./app";
 import { env } from "./config/env";
 import { prisma } from "./db/prisma";
 
-// exportado pra dar pra rodar tanto como servidor tradicional (npm start)
-// quanto como funcao serverless (vercel importa isso e chama sem dar listen)
-export const app = criarApp();
+// so export default (a vercel reclama se misturar export nomeado com default no entrypoint)
+const app = criarApp();
 
 // so sobe servidor http de verdade quando esse arquivo eh o ponto de entrada
 // (ambiente serverless so importa "app" e invoca direto, sem passar por aqui)
