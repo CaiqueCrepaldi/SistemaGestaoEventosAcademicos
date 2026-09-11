@@ -109,28 +109,32 @@ Revisão de código completa do fluxo de busca (frontend) e testes de API confir
 
 ## 4. Cadastro de eventos, salas e palestrantes
 
+> **Atualização:** o cadastro (criar/editar/excluir) de Salas e Palestrantes
+> pela interface foi removido — essas duas tabelas agora são geridas direto
+> no banco de dados. As telas `/salas` e `/palestrantes` continuam existindo,
+> mas só como listagem de leitura. O restante desta seção (Eventos e a
+> verificação abaixo) descreve o comportamento de antes dessa mudança, na
+> parte que ainda se aplica hoje.
+
 ### Objetivo
 
-Antes de existir um evento no sistema, é preciso ter pelo menos uma sala e um palestrante cadastrados — o evento sempre referencia os dois. Essas três telas (todas restritas a administrador/secretaria) formam a base de todo o resto do sistema: sem elas não há evento, sem evento não há inscrição, check-in, questionário nem certificado.
+Antes de existir um evento no sistema, é preciso ter pelo menos uma sala e um palestrante cadastrados — o evento sempre referencia os dois. A tela de Eventos (restrita a administrador/secretaria) é a base de todo o resto do sistema: sem evento não há inscrição, check-in, questionário nem certificado.
 
 ### Fluxo do usuário
 
-- **Salas** (`/salas`): cadastro simples de nome e capacidade (número de lugares), usado depois para calcular vagas disponíveis nas inscrições.
-- **Palestrantes** (`/palestrantes`): cadastro de nome, e-mail e telefone (com máscara automática). O aluno enxerga essa tela em modo somente leitura, sem o telefone.
-- **Eventos** (`/eventos`): título, sala, data/horário, palestrante responsável, tema e carga horária, além do construtor das 10 perguntas do questionário (ver funcionalidade 1). Só é possível abrir o formulário de novo evento se já existir pelo menos uma sala e um palestrante cadastrados.
-- Nas três telas, editar ou excluir um registro pede confirmação antes de gravar ("Confirmar alteração" / "Remover ..."), e qualquer campo inválido ou vazio é avisado por notificação (toast) — nunca por `alert()`.
+- **Salas** (`/salas`) e **Palestrantes** (`/palestrantes`): listagem somente leitura para todos os perfis (o aluno não vê o telefone do palestrante). Não há mais botão de criar/editar/excluir nessas telas.
+- **Eventos** (`/eventos`): título, sala, data/horário, palestrante responsável, tema e carga horária, além do construtor das 10 perguntas do questionário (ver funcionalidade 1). Só é possível abrir o formulário de novo evento se já existir pelo menos uma sala e um palestrante cadastrados no banco.
+- Editar ou excluir um evento pede confirmação antes de gravar ("Confirmar alteração" / "Remover ..."), e qualquer campo inválido ou vazio é avisado por notificação (toast) — nunca por `alert()`.
 
 ### Como funciona por trás
 
-- **Integridade entre cadastros:** como todo evento exige uma sala e um palestrante (`Evento.salaId` e `Evento.palestranteId` são obrigatórios), o sistema impede excluir uma sala ou um palestrante que ainda esteja vinculado a algum evento. Essa checagem existe nas duas camadas: no back-end (`salas.service.ts` e `palestrantes.service.ts`, função `remover`, devolvendo erro `409 CONFLITO_DEPENDENCIA`/`PALESTRANTE_EM_USO`) e no front-end (`SalasPage.tsx` e `PalestrantesPage.tsx`, função `excluir`, que checam a lista de eventos antes de remover e avisam por toast). Sem essa trava, um evento ficaria "orfão", apontando para uma sala ou palestrante que não existe mais.
-- **Exclusão em cascata do evento:** ao excluir um evento, tudo o que depende dele também precisa sumir — inscrições, feedbacks e tentativas de questionário daquele evento. Isso é feito no back-end dentro de uma única operação (`eventos.service.ts`, função `remover`) e, no modo mock, orquestrado pela própria tela (`EventosPage.tsx`, função `excluir`, que apaga inscrições/feedbacks/tentativas do evento antes de remover o evento em si).
+- **Integridade referencial:** como todo evento exige uma sala e um palestrante (`Evento.salaId` e `Evento.palestranteId` são obrigatórios), o schema do banco usa `onDelete: Restrict` nessas relações — não é possível apagar uma sala ou palestrante em uso, mesmo removendo direto no banco enquanto houver evento vinculado.
+- **Exclusão em cascata do evento:** ao excluir um evento, tudo o que depende dele também precisa sumir — inscrições, feedbacks e tentativas de questionário daquele evento. Isso é feito no back-end dentro de uma única operação (`eventos.service.ts`, função `remover`).
 - O construtor de perguntas do formulário de evento trava o salvamento (com aviso indicando qual das 10 perguntas está incompleta) enquanto qualquer enunciado, alternativa ou marcação de "correta" estiver faltando — a validação (`validarQuestionario`, em `frontend/src/utils/questionario.ts`) é a mesma usada para montar o formulário.
 
 ### Verificação realizada
 
-Testado via requisições reais à API: criação de sala, palestrante e evento vinculando os dois; tentativa de excluir a sala e o palestrante em uso (bloqueada com `409` nos dois casos); edição do evento; exclusão do evento; e, só então, exclusão da sala e do palestrante — liberada com sucesso após o evento deixar de existir.
-
-Durante essa verificação foi identificada e corrigida uma inconsistência: a tela de Salas ainda não tinha a mesma trava de exclusão que a tela de Palestrantes já tinha (no modo mock, era possível excluir uma sala em uso, deixando o evento com uma sala inexistente) — e a exclusão de um evento no modo mock não estava de fato removendo as inscrições/feedbacks/tentativas vinculados, apesar de a caixa de confirmação já avisar que isso aconteceria. As duas foram corrigidas nesta revisão.
+Antes da remoção do cadastro de salas/palestrantes, foi testado via requisições reais à API: criação de sala, palestrante e evento vinculando os dois; tentativa de excluir a sala e o palestrante em uso (bloqueada com `409` nos dois casos); edição do evento; exclusão do evento; e, só então, exclusão da sala e do palestrante — liberada com sucesso após o evento deixar de existir. Depois da remoção, foi confirmado que as telas de Salas e Palestrantes continuam listando os dados existentes e que o formulário de Eventos continua preenchendo os `<select>` de sala/palestrante normalmente.
 
 ---
 

@@ -37,9 +37,9 @@ auto-cadastro.
 | Eventos — listar / detalhe               | ✅ | ✅ | ✅ |
 | Eventos — criar / editar / excluir       | ✅ | ✅ | ❌ |
 | Palestrantes — listar / detalhe          | com telefone | com telefone | sem telefone |
-| Palestrantes — criar / editar / excluir  | ✅ | ✅ | ❌ |
+| Palestrantes — criar / editar / excluir  | removido (gerido direto no banco) | removido | removido |
 | Salas — listar / detalhe                 | ✅ | ✅ | ✅ (só nome/capacidade, pra Agenda e listagem de eventos) |
-| Salas — criar / editar / excluir         | ✅ | ✅ | ❌ |
+| Salas — criar / editar / excluir         | removido (gerido direto no banco) | removido | removido |
 | Participantes (cadastro avulso)          | ✅ | ✅ | ❌ |
 | Inscrições — listar                      | ✅ (todas) | ✅ (todas) | ✅ (só as próprias) |
 | Inscrições — criar/excluir manualmente   | ✅ | ✅ | ❌ |
@@ -256,7 +256,9 @@ interface PalestrantePublico {
 
 `GET /api/palestrantes` e `GET /api/palestrantes/{id}` — qualquer perfil
 autenticado, telefone incluído ou não dependendo do perfil do token.
-POST/PUT/DELETE são admin/secretaria only, aluno toma 403.
+Não existe mais `POST`/`PUT`/`DELETE` — o cadastro de palestrantes foi
+removido da aplicação (dados geridos direto no banco); a tela
+`PalestrantesPage.tsx` é só leitura pra todos os perfis.
 
 ## Salas
 
@@ -271,7 +273,9 @@ interface Sala {
 - `GET /api/salas` e `GET /api/salas/{id}` — qualquer perfil autenticado.
   O aluno não gerencia sala nenhuma, mas a Agenda e o detalhe do evento
   mostram o nome da sala de cada sessão, então precisam poder ler a lista.
-- `POST` / `PUT /api/salas/{id}` / `DELETE /api/salas/{id}` — admin/secretaria only, `403` pra aluno.
+- Não existe mais `POST`/`PUT`/`DELETE` — o cadastro de salas foi removido
+  da aplicação (dados geridos direto no banco); a tela `SalasPage.tsx` é
+  só leitura.
 
 ## Participantes
 

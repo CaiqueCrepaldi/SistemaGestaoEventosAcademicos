@@ -1,10 +1,8 @@
 import { Router } from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
-import { autenticar, autorizar } from "../../middleware/auth";
-import { validarCorpo } from "../../middleware/validate";
+import { autenticar } from "../../middleware/auth";
 import { palestranteParaDTO } from "../../utils/dto";
 import { palestrantesService } from "./palestrantes.service";
-import { palestranteSchema, palestranteUpdateSchema } from "./palestrantes.schemas";
 
 export const palestrantesRouter = Router();
 
@@ -27,40 +25,5 @@ palestrantesRouter.get(
     const palestrante = await palestrantesService.buscarOuFalhar(req.params.id);
     const paraAluno = req.usuario!.perfil === "ALUNO";
     res.json(palestranteParaDTO(palestrante, paraAluno));
-  }),
-);
-
-// cadastra um palestrante novo, so admin/secretaria
-palestrantesRouter.post(
-  "/",
-  autenticar,
-  autorizar("ADMINISTRADOR", "SECRETARIA"),
-  validarCorpo(palestranteSchema),
-  asyncHandler(async (req, res) => {
-    const palestrante = await palestrantesService.criar(req.body);
-    res.status(201).json(palestranteParaDTO(palestrante, false));
-  }),
-);
-
-// edita um palestrante, so admin/secretaria
-palestrantesRouter.put(
-  "/:id",
-  autenticar,
-  autorizar("ADMINISTRADOR", "SECRETARIA"),
-  validarCorpo(palestranteUpdateSchema),
-  asyncHandler(async (req, res) => {
-    const palestrante = await palestrantesService.atualizar(req.params.id, req.body);
-    res.json(palestranteParaDTO(palestrante, false));
-  }),
-);
-
-// remove um palestrante, so admin/secretaria
-palestrantesRouter.delete(
-  "/:id",
-  autenticar,
-  autorizar("ADMINISTRADOR", "SECRETARIA"),
-  asyncHandler(async (req, res) => {
-    await palestrantesService.remover(req.params.id);
-    res.status(204).send();
   }),
 );
