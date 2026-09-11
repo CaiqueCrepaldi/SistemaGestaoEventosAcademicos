@@ -21,6 +21,8 @@ export interface CertificadoDisponivel {
   // melhor percentual do aluno no questionario desse evento, null se ainda nao respondeu
   melhorPercentual: number | null;
   questionarioAprovado: boolean;
+  // quantas das tentativas permitidas (ver MAX_TENTATIVAS_QUESTIONARIO) o aluno ja usou
+  tentativasUsadas: number;
 }
 
 // hash simples pra gerar um codigo curto e consistente por inscricao, so decorativo
@@ -73,6 +75,7 @@ async function enriquecer(
       codigoValidacao: gerarCodigoValidacao(inscricao.id),
       melhorPercentual,
       questionarioAprovado: melhorPercentual !== null && melhorPercentual >= PERCENTUAL_APROVACAO,
+      tentativasUsadas: tentativas.length,
     });
   }
   return certificados;

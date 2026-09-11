@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import type { TentativaQuestionario as TentativaDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
+import { MAX_TENTATIVAS_QUESTIONARIO, PERCENTUAL_APROVACAO } from "../../utils/questionario";
 import type { PerguntaQuestionario, TentativaQuestionario } from "../../types/domain";
 import type { RespostasQuestionarioInput } from "./questionario.schemas";
 
@@ -18,12 +19,27 @@ async function buscarEventoOuFalhar(eventoId: string) {
 }
 
 // corrige contra o gabarito do evento e salva a tentativa
-// pode ter mais de uma tentativa por aluno/evento, quem decide elegibilidade de certificado usa a melhor
+// no maximo 2 tentativas por aluno/evento; aprovou uma vez (>= PERCENTUAL_APROVACAO), nao pode mais refazer
 async function responder(eventoId: string, participanteId: string, dados: RespostasQuestionarioInput) {
   const evento = await buscarEventoOuFalhar(eventoId);
   const questionario = evento.questionario as unknown as PerguntaQuestionario[];
   if (dados.respostas.length !== questionario.length) {
     throw AppError.validacao("Responda todas as perguntas do questionário antes de enviar.");
+  }
+
+  const tentativasAnteriores = await prisma.tentativaQuestionario.findMany({ where: { eventoId, participanteId } });
+  const jaAprovado = tentativasAnteriores.some((t) => t.percentual >= PERCENTUAL_APROVACAO);
+  if (jaAprovado) {
+    throw AppError.conflito(
+      "QUESTIONARIO_JA_APROVADO",
+      "Você já atingiu a nota mínima neste questionário e não pode refazê-lo.",
+    );
+  }
+  if (tentativasAnteriores.length >= MAX_TENTATIVAS_QUESTIONARIO) {
+    throw AppError.conflito(
+      "LIMITE_TENTATIVAS_ATINGIDO",
+      `Você já utilizou as ${MAX_TENTATIVAS_QUESTIONARIO} tentativas permitidas para este questionário.`,
+    );
   }
 
   const totalPerguntas = questionario.length;

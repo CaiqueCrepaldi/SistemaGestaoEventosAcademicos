@@ -1,5 +1,5 @@
 import type { Evento, PerguntaQuestionario, TentativaQuestionario } from "../types";
-import { corrigirRespostas } from "../utils/questionario";
+import { MAX_TENTATIVAS_QUESTIONARIO, PERCENTUAL_APROVACAO, corrigirRespostas } from "../utils/questionario";
 import { ApiError, USE_MOCK, api } from "./api";
 import { eventoService } from "./entityServices";
 import { delay, loadCollection, newId, saveCollection } from "./storage";
@@ -47,10 +47,25 @@ const localQuestionarioService: QuestionarioService = {
   },
 
   // corrige contra o gabarito do evento e salva a tentativa
+  // no maximo 2 tentativas por aluno/evento; aprovou uma vez, nao pode mais refazer
   async enviarRespostas(eventoId, participanteId, respostas) {
     const evento = await buscarEventoOuFalhar(eventoId);
     if (respostas.length !== evento.questionario.length || respostas.some((r) => r === undefined || r === null)) {
       throw new ApiError(422, "Responda todas as perguntas do questionário antes de enviar.", "RESPOSTAS_INCOMPLETAS");
+    }
+
+    const tentativas = loadCollection<TentativaQuestionario>(TENTATIVAS_KEY, []);
+    const tentativasAnteriores = tentativas.filter((t) => t.eventoId === eventoId && t.participanteId === participanteId);
+    const jaAprovado = tentativasAnteriores.some((t) => t.percentual >= PERCENTUAL_APROVACAO);
+    if (jaAprovado) {
+      throw new ApiError(409, "Você já atingiu a nota mínima neste questionário e não pode refazê-lo.", "QUESTIONARIO_JA_APROVADO");
+    }
+    if (tentativasAnteriores.length >= MAX_TENTATIVAS_QUESTIONARIO) {
+      throw new ApiError(
+        409,
+        `Você já utilizou as ${MAX_TENTATIVAS_QUESTIONARIO} tentativas permitidas para este questionário.`,
+        "LIMITE_TENTATIVAS_ATINGIDO",
+      );
     }
 
     const { acertos, totalPerguntas, percentual } = corrigirRespostas(evento.questionario, respostas);
@@ -65,7 +80,6 @@ const localQuestionarioService: QuestionarioService = {
       criadoEm: new Date().toISOString(),
     };
 
-    const tentativas = loadCollection<TentativaQuestionario>(TENTATIVAS_KEY, []);
     saveCollection(TENTATIVAS_KEY, [...tentativas, tentativa]);
     return delay(tentativa);
   },

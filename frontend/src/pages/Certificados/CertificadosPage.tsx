@@ -4,7 +4,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { useAuth } from "../../context/AuthContext";
 import { certificadoService, eventoService, type CertificadoDisponivel } from "../../services";
 import type { Evento } from "../../types";
-import { PERCENTUAL_APROVACAO } from "../../utils/questionario";
+import { MAX_TENTATIVAS_QUESTIONARIO, PERCENTUAL_APROVACAO } from "../../utils/questionario";
 
 // tela de certificados, aluno emite o proprio, equipe ve de todo mundo
 export function CertificadosPage() {
@@ -44,35 +44,42 @@ export function CertificadosPage() {
             </p>
           ) : (
             <ul className="simple-list">
-              {certificados.map((c) => (
-                <li key={c.inscricaoId} className="simple-list-item simple-list-item-row">
-                  <div>
-                    <div className="simple-list-title">{c.eventoTitulo}</div>
-                    <div className="simple-list-sub">
-                      {c.tema} · {c.data ? new Date(c.data).toLocaleDateString("pt-BR") : "—"}
-                    </div>
-                    <div className="simple-list-sub">
-                      {c.melhorPercentual === null
-                        ? `Responda o questionário (mínimo ${PERCENTUAL_APROVACAO}% de acertos) para liberar o certificado.`
-                        : c.questionarioAprovado
+              {certificados.map((c) => {
+                const tentativasEsgotadas = !c.questionarioAprovado && c.tentativasUsadas >= MAX_TENTATIVAS_QUESTIONARIO;
+                return (
+                  <li key={c.inscricaoId} className="simple-list-item simple-list-item-row">
+                    <div>
+                      <div className="simple-list-title">{c.eventoTitulo}</div>
+                      <div className="simple-list-sub">
+                        {c.tema} · {c.data ? new Date(c.data).toLocaleDateString("pt-BR") : "—"}
+                      </div>
+                      <div className="simple-list-sub">
+                        {c.questionarioAprovado
                           ? `Questionário aprovado: ${c.melhorPercentual}% de acertos.`
-                          : `Última tentativa: ${c.melhorPercentual}% de acertos — mínimo de ${PERCENTUAL_APROVACAO}% necessário.`}
+                          : tentativasEsgotadas
+                            ? `Você usou as ${MAX_TENTATIVAS_QUESTIONARIO} tentativas permitidas e não atingiu o mínimo de ${PERCENTUAL_APROVACAO}%.`
+                            : c.melhorPercentual === null
+                              ? `Responda o questionário (mínimo ${PERCENTUAL_APROVACAO}% de acertos, ${MAX_TENTATIVAS_QUESTIONARIO} tentativas) para liberar o certificado.`
+                              : `Última tentativa: ${c.melhorPercentual}% de acertos — mínimo de ${PERCENTUAL_APROVACAO}% necessário (${c.tentativasUsadas}/${MAX_TENTATIVAS_QUESTIONARIO} tentativas usadas).`}
+                      </div>
                     </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <Link className="btn btn-ghost" to={`/eventos/${c.eventoId}/questionario`}>
-                      {c.questionarioAprovado ? "Refazer questionário" : "Questionário"}
-                    </Link>
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => certificadoService.gerarCertificado(c)}
-                      disabled={!c.questionarioAprovado}
-                    >
-                      Emitir certificado
-                    </button>
-                  </div>
-                </li>
-              ))}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {!c.questionarioAprovado && !tentativasEsgotadas && (
+                        <Link className="btn btn-ghost" to={`/eventos/${c.eventoId}/questionario`}>
+                          {c.tentativasUsadas === 0 ? "Questionário" : "Refazer questionário"}
+                        </Link>
+                      )}
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => certificadoService.gerarCertificado(c)}
+                        disabled={!c.questionarioAprovado}
+                      >
+                        Emitir certificado
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
