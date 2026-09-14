@@ -104,6 +104,25 @@ h1, h2, h3 {
   color: #a3a3a3;
 }
 
+.topbar-user-trigger {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.topbar-user-trigger:hover,
+.topbar-user-trigger:focus-visible {
+  background: var(--black-800);
+}
+
+.topbar-user-trigger:focus-visible {
+  outline: 2px solid var(--yellow-500);
+  outline-offset: 2px;
+}
+
 .topbar .btn-ghost {
   color: #e5e5e5;
 }
@@ -520,6 +539,40 @@ h1, h2, h3 {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 6px;
+}
+
+.profile-details {
+  display: grid;
+  gap: 14px;
+}
+
+.profile-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.profile-detail:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.profile-detail span {
+  color: var(--gray-500);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.profile-detail strong {
+  color: var(--gray-900);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.profile-note {
+  margin: 18px 0 0;
 }
 
 /* Lists */
