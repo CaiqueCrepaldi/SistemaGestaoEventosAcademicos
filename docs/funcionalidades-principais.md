@@ -93,7 +93,6 @@ Agilizar a inscrição de alunos em eventos e o check-in no dia do evento, permi
 **Check-in:**
 1. A secretaria digita nome, e-mail ou RGM do aluno que chegou ao evento.
 2. Ao selecionar o participante na lista de resultados, aparecem todas as inscrições dele, com botões para confirmar presença ou marcar ausência.
-3. Também é possível exportar a lista de presença de um evento em CSV.
 
 ### Como funciona por trás
 

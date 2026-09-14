@@ -352,10 +352,6 @@ inteiro e filtra no cliente a cada tecla digitada. Funciona para o volume
 de dados de uma feira acadêmica; se crescer, um `?busca=` na própria rota
 de participantes resolveria sem mudar o frontend.
 
-A exportação de CSV de presença (`gerarCsvPresenca`) é inteiramente
-client-side — monta o arquivo em JS a partir da lista de inscrições já
-carregada, não bate em endpoint nenhum pra isso.
-
 ### `DELETE /api/inscricoes/{id}` (admin/secretaria)
 
 `204`. Aluno toma `403` — não existe fluxo de cancelamento de inscrição

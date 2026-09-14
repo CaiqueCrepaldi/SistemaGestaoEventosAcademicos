@@ -64,52 +64,9 @@ async function marcarAusente(inscricaoId: string): Promise<Inscricao> {
   });
 }
 
-// lista de presenca de UM evento, usada pra conferencia manual e export csv
-async function listarPresencaPorEvento(eventoId: string): Promise<InscricaoDetalhada[]> {
-  const [inscricoes, participantes, evento] = await Promise.all([
-    inscricaoService.list(),
-    participanteService.list(),
-    eventoService.get(eventoId),
-  ]);
-
-  return inscricoes
-    .filter((i) => i.eventoId === eventoId)
-    .map((inscricao) => {
-      const participante = participantes.find((p) => p.id === inscricao.participanteId);
-      return {
-        inscricao,
-        participanteNome: participante?.nome ?? "",
-        participanteEmail: participante?.email ?? "",
-        participanteRgm: participante?.rgm ?? "",
-        eventoTitulo: evento?.titulo ?? "",
-        eventoHorario: evento?.horario ?? "",
-      };
-    });
-}
-
-// monta o conteudo do csv de presenca, linha por inscrito
-function gerarCsvPresenca(lista: InscricaoDetalhada[]): string {
-  const cabecalho = ["Nome", "E-mail", "RGM", "Evento", "Status", "Check-in"];
-  const linhas = lista.map((item) =>
-    [
-      item.participanteNome,
-      item.participanteEmail,
-      item.participanteRgm,
-      item.eventoTitulo,
-      item.inscricao.statusPresenca,
-      item.inscricao.dataCheckin ?? "",
-    ]
-      .map((campo) => `"${String(campo).replace(/"/g, '""')}"`)
-      .join(","),
-  );
-  return [cabecalho.join(","), ...linhas].join("\n");
-}
-
 export const checkinService = {
   buscarParticipantes,
   listarInscricoesDoParticipante,
   confirmarPresenca,
   marcarAusente,
-  listarPresencaPorEvento,
-  gerarCsvPresenca,
 };

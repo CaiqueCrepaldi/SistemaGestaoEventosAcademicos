@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { Badge } from "../../components/ui/Badge";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { useAuth } from "../../context/AuthContext";
-import { checkinService, eventoService } from "../../services";
+import { checkinService } from "../../services";
 import type { InscricaoDetalhada } from "../../services/checkinService";
-import type { Evento, Participante, StatusPresenca } from "../../types";
+import type { Participante, StatusPresenca } from "../../types";
 
 // traduz o status em cor pra Badge
 function badgeTone(status: StatusPresenca): "green" | "red" | "orange" {
@@ -20,17 +20,6 @@ function badgeLabel(status: StatusPresenca): string {
   return "Pendente";
 }
 
-// forca o download de um arquivo gerado em memoria, sem endpoint de backend
-function baixarCsv(nomeArquivo: string, conteudo: string) {
-  const blob = new Blob([conteudo], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = nomeArquivo;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
 // busca de participante por nome/email/rgm e confirmacao de presenca
 export function CheckinPage() {
   const { usuario } = useAuth();
@@ -38,16 +27,6 @@ export function CheckinPage() {
   const [resultados, setResultados] = useState<Participante[]>([]);
   const [selecionado, setSelecionado] = useState<Participante | null>(null);
   const [inscricoes, setInscricoes] = useState<InscricaoDetalhada[]>([]);
-
-  const [eventos, setEventos] = useState<Evento[]>([]);
-  const [eventoExportar, setEventoExportar] = useState("");
-
-  useEffect(() => {
-    void eventoService.list().then((e) => {
-      setEventos(e);
-      setEventoExportar(e[0]?.id ?? "");
-    });
-  }, []);
 
   useEffect(() => {
     void checkinService.buscarParticipantes(termo).then(setResultados);
@@ -70,14 +49,6 @@ export function CheckinPage() {
   async function marcarAusente(inscricaoId: string) {
     await checkinService.marcarAusente(inscricaoId);
     if (selecionado) setInscricoes(await checkinService.listarInscricoesDoParticipante(selecionado.id));
-  }
-
-  // gera o csv de presenca do evento escolhido e baixa
-  async function exportar() {
-    const lista = await checkinService.listarPresencaPorEvento(eventoExportar);
-    const evento = eventos.find((e) => e.id === eventoExportar);
-    const csv = checkinService.gerarCsvPresenca(lista);
-    baixarCsv(`presenca-${evento?.titulo ?? "evento"}.csv`, csv);
   }
 
   return (
@@ -151,22 +122,6 @@ export function CheckinPage() {
               </tbody>
             </table>
           )}
-        </div>
-      </div>
-
-      <div className="card">
-        <h3>Exportar lista de presença</h3>
-        <div className="field-row">
-          <select className="search-input" value={eventoExportar} onChange={(e) => setEventoExportar(e.target.value)}>
-            {eventos.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.titulo}
-              </option>
-            ))}
-          </select>
-          <button className="btn btn-primary" onClick={() => void exportar()} disabled={!eventoExportar}>
-            Exportar CSV
-          </button>
         </div>
       </div>
     </div>
