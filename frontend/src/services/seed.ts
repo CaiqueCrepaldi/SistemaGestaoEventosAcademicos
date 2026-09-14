@@ -41,7 +41,7 @@ export const usuariosSeed: Usuario[] = [
   {
     id: "u3",
     nome: "João Pedro Lima",
-    emailLogin: "aluno@aluno.umc.br",
+    emailLogin: "aluno@alunos.umc.br",
     senhaHash: "aluno123",
     perfil: "ALUNO",
     rgm: "20240100111",
@@ -167,9 +167,9 @@ export const eventosSeed: Evento[] = [
 
 // pa1 eh o participante ligado ao usuario aluno (u3 acima)
 export const participantesSeed: Participante[] = [
-  { id: "pa1", nome: "João Pedro Lima", email: "joao.lima@aluno.umc.br", rgm: "20240100111" },
-  { id: "pa2", nome: "Beatriz Fernandes", email: "beatriz.fernandes@aluno.umc.br", rgm: "20240100222" },
-  { id: "pa3", nome: "Lucas Martins", email: "lucas.martins@aluno.umc.br", rgm: "20230100333" },
+  { id: "pa1", nome: "João Pedro Lima", email: "joao.lima@alunos.umc.br", rgm: "20240100111" },
+  { id: "pa2", nome: "Beatriz Fernandes", email: "beatriz.fernandes@alunos.umc.br", rgm: "20240100222" },
+  { id: "pa3", nome: "Lucas Martins", email: "lucas.martins@alunos.umc.br", rgm: "20230100333" },
 ];
 
 // i1 ja vem com presenca confirmada, i4 ausente, pra testar Certificados sem checkin manual

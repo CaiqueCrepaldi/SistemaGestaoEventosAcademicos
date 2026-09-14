@@ -141,6 +141,6 @@ Testado via requisições reais à API: criação de sala, palestrante e evento 
 |---|---|---|
 | Administrador | admin@umc.br | admin123 |
 | Secretaria | secretaria@umc.br | secretaria123 |
-| Aluno | aluno@aluno.umc.br | aluno123 |
+| Aluno | aluno@alunos.umc.br | aluno123 |
 
 O aluno de demonstração já está inscrito e com presença confirmada no evento "Abertura e Palestra Magna: IA na Educação", pronto para testar o questionário e a emissão do certificado sem precisar repetir os passos de inscrição e check-in.

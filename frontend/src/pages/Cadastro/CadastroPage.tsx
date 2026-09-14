@@ -7,7 +7,7 @@ import { ApiError } from "../../services/api";
 import { authService } from "../../services/authService";
 import { normalizarRgm, validarEmail, validarNome, validarRgm } from "../../utils/validacao";
 
-const DOMINIO_INSTITUCIONAL = "@aluno.umc.br";
+const DOMINIO_INSTITUCIONAL = "@alunos.umc.br";
 
 const VAZIO = { nomeCompleto: "", rgm: "", emailInstitucional: "", senha: "" };
 
@@ -102,7 +102,7 @@ export function CadastroPage() {
               <input
                 value={form.rgm}
                 onChange={(e) => setForm({ ...form, rgm: normalizarRgm(e.target.value) })}
-                placeholder="11 dígitos, sem espaços"
+                placeholder="11 dígitos numéricos e sem espaço"
                 inputMode="numeric"
                 maxLength={11}
                 required

@@ -36,7 +36,7 @@ Três perfis de usuário:
   participante; dashboard com estatísticas gerais.
 - **Aluno** — perfil com cadastro público (`/cadastro`, sem precisar de
   admin criar a conta, e-mail institucional obrigatório terminando em
-  `@aluno.umc.br`). Só lê eventos, agenda, salas e palestrantes (sem ver
+  `@alunos.umc.br`). Só lê eventos, agenda, salas e palestrantes (sem ver
   telefone do palestrante); se inscreve sozinho nos eventos que quiser (com
   verificação de vaga e de inscrição duplicada); recebe e-mail de
   confirmação; responde ao questionário do evento depois que a presença é
@@ -76,7 +76,7 @@ Contas de demonstração:
 |---|---|---|
 | Administrador | admin@umc.br | admin123 |
 | Secretaria | secretaria@umc.br | secretaria123 |
-| Aluno | aluno@aluno.umc.br | aluno123 |
+| Aluno | aluno@alunos.umc.br | aluno123 |
 
 O aluno de demonstração já está inscrito e com presença confirmada num
 evento, pronto pra testar o questionário e a emissão do certificado sem

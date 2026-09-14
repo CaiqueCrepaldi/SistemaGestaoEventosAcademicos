@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { REGEX_NOME, REGEX_RGM, normalizarRgm } from "../../utils/validacao";
 
-const DOMINIO_INSTITUCIONAL = "@aluno.umc.br";
+const DOMINIO_INSTITUCIONAL = "@alunos.umc.br";
 
 export const registroSchema = z.object({
   nomeCompleto: z.string().trim().regex(REGEX_NOME, "Nome deve conter apenas letras."),

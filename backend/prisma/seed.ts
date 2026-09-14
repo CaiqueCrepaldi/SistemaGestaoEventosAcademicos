@@ -144,19 +144,19 @@ async function seed() {
   });
 
   const participanteJoao = await prisma.participante.upsert({
-    where: { email: "joao.lima@aluno.umc.br" },
+    where: { email: "joao.lima@alunos.umc.br" },
     update: {},
-    create: { id: randomUUID(), nome: "João Pedro Lima", email: "joao.lima@aluno.umc.br", rgm: "20240100111" },
+    create: { id: randomUUID(), nome: "João Pedro Lima", email: "joao.lima@alunos.umc.br", rgm: "20240100111" },
   });
   const participanteBeatriz = await prisma.participante.upsert({
-    where: { email: "beatriz.fernandes@aluno.umc.br" },
+    where: { email: "beatriz.fernandes@alunos.umc.br" },
     update: {},
-    create: { id: randomUUID(), nome: "Beatriz Fernandes", email: "beatriz.fernandes@aluno.umc.br", rgm: "20240100222" },
+    create: { id: randomUUID(), nome: "Beatriz Fernandes", email: "beatriz.fernandes@alunos.umc.br", rgm: "20240100222" },
   });
   const participanteLucas = await prisma.participante.upsert({
-    where: { email: "lucas.martins@aluno.umc.br" },
+    where: { email: "lucas.martins@alunos.umc.br" },
     update: {},
-    create: { id: randomUUID(), nome: "Lucas Martins", email: "lucas.martins@aluno.umc.br", rgm: "20230100333" },
+    create: { id: randomUUID(), nome: "Lucas Martins", email: "lucas.martins@alunos.umc.br", rgm: "20230100333" },
   });
 
   const usuarioAdmin = await prisma.usuario.upsert({
@@ -182,12 +182,12 @@ async function seed() {
     },
   });
   await prisma.usuario.upsert({
-    where: { emailLogin: "aluno@aluno.umc.br" },
+    where: { emailLogin: "aluno@alunos.umc.br" },
     update: {},
     create: {
       id: randomUUID(),
       nome: "João Pedro Lima",
-      emailLogin: "aluno@aluno.umc.br",
+      emailLogin: "aluno@alunos.umc.br",
       senhaHash: await gerarHashSenha("aluno123"),
       perfil: "ALUNO",
       rgm: "20240100111",

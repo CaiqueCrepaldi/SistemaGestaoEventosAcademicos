@@ -152,7 +152,7 @@ Fluxo de "esqueci minha senha", identificando o usuário só pelo e-mail
 cadastrado (sem opção de RGM — mantém a tela simples e evita ambiguidade
 com o RGM, que hoje é só numérico).
 
-`POST /api/auth/recuperacao-senha` — Request: `{ "email": "joao.lima@aluno.umc.br" }`.
+`POST /api/auth/recuperacao-senha` — Request: `{ "email": "joao.lima@alunos.umc.br" }`.
 Gera um código, manda por e-mail (ou loga, se for ambiente de teste) e
 responde `200` com `{}` — o código em si nunca volta no corpo em produção
 (só o mock local, pra demonstração, devolve `codigoDemo`). `404

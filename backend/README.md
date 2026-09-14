@@ -97,7 +97,7 @@ direto nesta API. As contas de demonstração são as mesmas dos dois lados:
 |---|---|---|
 | Administrador | admin@umc.br | admin123 |
 | Secretaria | secretaria@umc.br | secretaria123 |
-| Aluno | aluno@aluno.umc.br | aluno123 |
+| Aluno | aluno@alunos.umc.br | aluno123 |
 
 ## Scripts disponíveis
 
