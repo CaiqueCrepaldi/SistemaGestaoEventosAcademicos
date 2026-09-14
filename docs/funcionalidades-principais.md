@@ -109,10 +109,9 @@ Revisão de código completa do fluxo de busca (frontend) e testes de API confir
 
 ## 4. Cadastro de eventos, salas e palestrantes
 
-> **Atualização:** o cadastro (criar/editar/excluir) de Salas, que tinha sido
-> removido em favor de gestão direta no banco, voltou a ser feito pela
-> interface, restrito a administrador/secretaria. Palestrantes continua
-> somente leitura, gerido direto no banco.
+> **Atualização:** o cadastro (criar/editar/excluir) de Salas e Palestrantes,
+> que tinha sido removido em favor de gestão direta no banco, voltou a ser
+> feito pela interface, restrito a administrador/secretaria.
 
 ### Objetivo
 
@@ -121,9 +120,9 @@ Antes de existir um evento no sistema, é preciso ter pelo menos uma sala e um p
 ### Fluxo do usuário
 
 - **Salas** (`/salas`): cadastro simples de nome e capacidade (número de lugares), usado depois para calcular vagas disponíveis nas inscrições.
-- **Palestrantes** (`/palestrantes`): listagem somente leitura para todos os perfis (o aluno não vê o telefone do palestrante). Não há botão de criar/editar/excluir nessa tela.
+- **Palestrantes** (`/palestrantes`): cadastro de nome, e-mail e telefone (com máscara automática). O aluno enxerga essa tela em modo somente leitura, sem o telefone.
 - **Eventos** (`/eventos`): título, sala, data/horário, palestrante responsável, tema e carga horária, além do construtor das 10 perguntas do questionário (ver funcionalidade 1). Só é possível abrir o formulário de novo evento se já existir pelo menos uma sala e um palestrante cadastrados.
-- Nas telas de Salas e Eventos, editar ou excluir um registro pede confirmação antes de gravar ("Confirmar alteração" / "Remover ..."), e qualquer campo inválido ou vazio é avisado por notificação (toast) — nunca por `alert()`.
+- Nas três telas, editar ou excluir um registro pede confirmação antes de gravar ("Confirmar alteração" / "Remover ..."), e qualquer campo inválido ou vazio é avisado por notificação (toast) — nunca por `alert()`.
 
 ### Como funciona por trás
 

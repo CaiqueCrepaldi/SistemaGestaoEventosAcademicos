@@ -256,9 +256,9 @@ interface PalestrantePublico {
 
 `GET /api/palestrantes` e `GET /api/palestrantes/{id}` — qualquer perfil
 autenticado, telefone incluído ou não dependendo do perfil do token.
-Não existe mais `POST`/`PUT`/`DELETE` — o cadastro de palestrantes foi
-removido da aplicação (dados geridos direto no banco); a tela
-`PalestrantesPage.tsx` é só leitura pra todos os perfis.
+`POST /api/palestrantes`, `PUT /api/palestrantes/{id}` e
+`DELETE /api/palestrantes/{id}` — administrador/secretaria. A exclusão é
+bloqueada quando há eventos vinculados ao palestrante.
 
 ## Salas
 
