@@ -429,6 +429,24 @@ h1, h2, h3 {
   cursor: pointer;
 }
 
+.lgpd-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--gray-500);
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.lgpd-consent input {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  accent-color: var(--yellow-500);
+}
+
 .password-toggle:hover {
   color: var(--gray-700);
   background: var(--gray-100);
@@ -714,6 +732,33 @@ h1, h2, h3 {
 
 .login-links a:hover {
   text-decoration: underline;
+}
+
+.cadastro-login-link {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--gray-200);
+}
+
+.cadastro-login-link a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 18px;
+  border: 1px solid var(--yellow-500);
+  border-radius: 8px;
+  color: var(--yellow-text);
+  background: var(--yellow-50);
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.cadastro-login-link a:hover {
+  background: var(--yellow-500);
+  color: var(--on-yellow);
+  text-decoration: none;
+  box-shadow: 0 3px 8px rgba(245, 158, 11, 0.22);
 }
 
 .login-hint {

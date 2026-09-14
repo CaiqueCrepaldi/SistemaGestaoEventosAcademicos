@@ -141,6 +141,11 @@ export function CadastroPage() {
             {errosCampo.confirmarSenha && <p className="form-error">{errosCampo.confirmarSenha}</p>}
           </div>
 
+          <label className="lgpd-consent">
+            <input type="checkbox" />
+            <span>Li e aceito os termos de uso e a política de privacidade (LGPD).</span>
+          </label>
+
           {erroGeral && <p className="form-error">{erroGeral}</p>}
 
           <button className="btn btn-primary btn-block" type="submit" disabled={carregando}>
@@ -148,7 +153,7 @@ export function CadastroPage() {
           </button>
         </form>
 
-        <div className="login-links">
+        <div className="login-links cadastro-login-link">
           <Link to="/login">Já tenho conta — entrar</Link>
         </div>
       </div>
