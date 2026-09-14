@@ -29,10 +29,10 @@ docs/       contrato de API e detalhamento das funcionalidades principais
 
 Três perfis de usuário:
 
-- **Administrador** e **Secretaria** — acesso igual, total: CRUD de eventos
-  e participantes; gestão de inscrições; check-in (confirmar
-  presença/ausência e exportar lista); consulta da nota de todos os alunos
-  no questionário de cada evento; emissão de certificado de qualquer
+- **Administrador** e **Secretaria** — acesso igual, total: CRUD de
+  eventos, salas, palestrantes e participantes; gestão de inscrições;
+  check-in (confirmar presença/ausência); consulta da nota de todos os
+  alunos no questionário de cada evento; emissão de certificado de qualquer
   participante; dashboard com estatísticas gerais.
 - **Aluno** — perfil com cadastro público (`/cadastro`, sem precisar de
   admin criar a conta, e-mail institucional obrigatório terminando em
@@ -43,11 +43,12 @@ Três perfis de usuário:
   confirmada no check-in; só emite o próprio certificado se atingir 60% de
   acertos. Não acessa telas de gestão, participantes ou check-in.
 
-As telas de **Salas** (`/salas`) e **Palestrantes** (`/palestrantes`)
-continuam visíveis pra todos os perfis, mas só como listagem de leitura — o
-cadastro (criar/editar/excluir) dessas duas tabelas foi removido da
-interface e agora é feito direto no banco de dados. Cada evento referencia
-uma sala e um palestrante já existentes, além de um questionário obrigatório
+As telas de **Salas** (`/salas`) e **Palestrantes** (`/palestrantes`) têm
+cadastro completo (criar, editar, excluir) restrito a administrador/
+secretaria — sala com nome e capacidade, palestrante com nome, e-mail e
+telefone (com máscara automática). Aluno só enxerga as duas listas em modo
+leitura. Cada evento referencia uma sala e um palestrante já existentes,
+além de um questionário obrigatório
 de 10 perguntas (4 alternativas, 1 correta cada) definido por
 administrador/secretaria no momento da criação — é esse questionário que o
 aluno precisa responder, acertando pelo menos 6 de 10, para liberar a
@@ -108,7 +109,8 @@ não é versionado, com as duas variáveis abaixo):
 jeito normal de trabalhar na UI no dia a dia. E-mail de confirmação de
 inscrição só vai pro console e some numa mensagem na tela, já que não tem
 servidor de e-mail nenhum nesse modo. Certificado é gerado em PDF direto
-no navegador com `jsPDF`, também sem precisar do backend.
+no navegador com `jsPDF`, seguindo o modelo oficial de certificado da UMC
+(moldura, logo, assinatura e selo), também sem precisar do backend.
 
 **Integrado**: cada chamada de serviço vira request HTTP de verdade pra
 `VITE_API_URL`, com `Authorization: Bearer <token>` (token salvo em
