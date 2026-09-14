@@ -16,6 +16,7 @@ import {
   salaService,
 } from "../../services";
 import type { Evento, Inscricao, Palestrante, Sala } from "../../types";
+import { inputLocalParaIso, isoParaInputLocal } from "../../utils/data";
 import { questionarioVazio, validarQuestionario } from "../../utils/questionario";
 
 // formulario em branco pra "novo evento", ja com questionario de 10 perguntas vazias
@@ -149,7 +150,7 @@ export function EventosPage() {
     setEditando(evento);
     setForm({
       titulo: evento.titulo,
-      horario: evento.horario,
+      horario: isoParaInputLocal(evento.horario),
       salaId: evento.salaId,
       palestranteId: evento.palestranteId,
       tema: evento.tema ?? "",
@@ -217,18 +218,24 @@ export function EventosPage() {
     }
   }
 
-  // cria ou atualiza dependendo se ta editando
+  // cria ou atualiza dependendo se ta editando, convertendo o horario do input (fuso local) pra ISO
   async function salvar() {
-    if (editando) {
-      await eventoService.update(editando.id, form);
-      toast.success("Evento atualizado.");
-    } else {
-      await eventoService.create(form);
-      toast.success("Evento cadastrado.");
+    const dados = { ...form, horario: inputLocalParaIso(form.horario) };
+    try {
+      if (editando) {
+        await eventoService.update(editando.id, dados);
+        toast.success("Evento atualizado.");
+      } else {
+        await eventoService.create(dados);
+        toast.success("Evento cadastrado.");
+      }
+      setConfirmandoSalvar(false);
+      setModalAberto(false);
+      await carregar();
+    } catch (e) {
+      setConfirmandoSalvar(false);
+      toast.error(e instanceof ApiError ? e.message : "Não foi possível salvar o evento.");
     }
-    setConfirmandoSalvar(false);
-    setModalAberto(false);
-    await carregar();
   }
 
   // remove o evento e tudo que depende dele (inscricao, feedback, tentativa de questionario)
