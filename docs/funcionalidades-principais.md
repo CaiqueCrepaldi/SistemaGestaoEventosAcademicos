@@ -109,12 +109,9 @@ Revisão de código completa do fluxo de busca (frontend) e testes de API confir
 
 ## 4. Cadastro de eventos, salas e palestrantes
 
-> **Atualização:** o cadastro (criar/editar/excluir) de Salas e Palestrantes
-> pela interface foi removido — essas duas tabelas agora são geridas direto
-> no banco de dados. As telas `/salas` e `/palestrantes` continuam existindo,
-> mas só como listagem de leitura. O restante desta seção (Eventos e a
-> verificação abaixo) descreve o comportamento de antes dessa mudança, na
-> parte que ainda se aplica hoje.
+> **Atualização:** o cadastro (criar/editar/excluir) de Palestrantes voltou a
+> ser feito pela interface por administrador/secretaria. Salas continuam
+> somente leitura e geridas direto no banco.
 
 ### Objetivo
 
@@ -122,7 +119,8 @@ Antes de existir um evento no sistema, é preciso ter pelo menos uma sala e um p
 
 ### Fluxo do usuário
 
-- **Salas** (`/salas`) e **Palestrantes** (`/palestrantes`): listagem somente leitura para todos os perfis (o aluno não vê o telefone do palestrante). Não há mais botão de criar/editar/excluir nessas telas.
+- **Salas** (`/salas`): listagem somente leitura para todos os perfis.
+- **Palestrantes** (`/palestrantes`): administrador/secretaria podem criar, editar e excluir nome, e-mail e telefone; o aluno acessa somente a listagem e não vê o telefone.
 - **Eventos** (`/eventos`): título, sala, data/horário, palestrante responsável, tema e carga horária, além do construtor das 10 perguntas do questionário (ver funcionalidade 1). Só é possível abrir o formulário de novo evento se já existir pelo menos uma sala e um palestrante cadastrados no banco.
 - Editar ou excluir um evento pede confirmação antes de gravar ("Confirmar alteração" / "Remover ..."), e qualquer campo inválido ou vazio é avisado por notificação (toast) — nunca por `alert()`.
 
