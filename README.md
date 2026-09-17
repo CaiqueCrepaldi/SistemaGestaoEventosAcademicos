@@ -30,10 +30,11 @@ docs/       contrato de API e detalhamento das funcionalidades principais
 Três perfis de usuário:
 
 - **Administrador** e **Secretaria** — acesso igual, total: CRUD de
-  eventos, salas, palestrantes e participantes; gestão de inscrições;
-  check-in (confirmar presença/ausência); consulta da nota de todos os
-  alunos no questionário de cada evento; emissão de certificado de qualquer
-  participante; dashboard com estatísticas gerais.
+  eventos, salas e palestrantes; leitura (com busca) da lista de
+  participantes; gestão de inscrições; check-in (confirmar
+  presença/ausência); consulta da nota de todos os alunos no questionário de
+  cada evento; emissão de certificado de qualquer participante; dashboard
+  com estatísticas gerais.
 - **Aluno** — perfil com cadastro público (`/cadastro`, sem precisar de
   admin criar a conta, e-mail institucional obrigatório terminando em
   `@alunos.umc.br`). Só lê eventos, agenda, salas e palestrantes (sem ver
@@ -64,11 +65,13 @@ linha, ignorar valor forjado no corpo, esconder o gabarito do questionário
 antes da resposta) — então testar só pela tela não basta, a validação de
 verdade tem que estar no backend.
 
-Todo formulário de cadastro (participante, evento, conta de aluno) valida
-nome (só letras), e-mail e RGM (11 caracteres, normalizado em maiúsculo) e
-avisa qualquer erro por notificação na tela — nunca por `alert()` ou só no
+Todo formulário de cadastro (evento, conta de aluno) valida nome (só
+letras), e-mail e RGM (11 caracteres, normalizado em maiúsculo) e avisa
+qualquer erro por notificação na tela — nunca por `alert()` ou só no
 console — com a mesma regra espelhada no backend via Zod. Editar ou excluir
-qualquer cadastro pede confirmação antes de gravar.
+qualquer cadastro pede confirmação antes de gravar. Participantes não têm
+mais cadastro manual pela interface — a tabela é gerida direto no banco, e
+todo Participante hoje nasce automaticamente do cadastro de conta de aluno.
 
 Contas de demonstração:
 

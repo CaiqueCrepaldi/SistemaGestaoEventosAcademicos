@@ -1,9 +1,7 @@
-import { randomUUID } from "crypto";
-import { Prisma, type Participante as ParticipanteDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import type { Participante } from "../../types/domain";
-import type { ParticipanteInput, ParticipanteUpdateInput } from "./participantes.schemas";
+import type { Participante as ParticipanteDb } from "@prisma/client";
 
 // prisma devolve criadoEm como Date, resto do app espera string (ISO)
 function paraDominio(participante: ParticipanteDb): Participante {
@@ -23,54 +21,4 @@ async function buscarOuFalhar(id: string) {
   return paraDominio(participante);
 }
 
-// traduz violacao de unique constraint pro erro de negocio certo
-// no mysql o "target" vem como string com o nome do indice (ex: "participantes_rgm_key"), nao array de colunas
-function relancarComoConflito(erro: unknown): never {
-  if (erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === "P2002") {
-    const alvo = erro.meta?.target;
-    const texto = Array.isArray(alvo) ? alvo.join(",") : String(alvo ?? "");
-    if (texto.includes("rgm")) throw AppError.conflito("RGM_DUPLICADO", "Já existe um participante com este RGM.");
-    throw AppError.conflito("EMAIL_DUPLICADO", "Já existe um participante com este e-mail.");
-  }
-  throw erro;
-}
-
-// cadastra um participante novo
-async function criar(dados: ParticipanteInput) {
-  try {
-    const participante = await prisma.participante.create({ data: { id: randomUUID(), ...dados } });
-    return paraDominio(participante);
-  } catch (erro) {
-    relancarComoConflito(erro);
-  }
-}
-
-// edita um participante existente
-async function atualizar(id: string, dados: ParticipanteUpdateInput) {
-  await buscarOuFalhar(id);
-  try {
-    const participante = await prisma.participante.update({ where: { id }, data: dados });
-    return paraDominio(participante);
-  } catch (erro) {
-    relancarComoConflito(erro);
-  }
-}
-
-// remove um participante, bloqueia se tiver inscricao/feedback vinculado
-// (conta de usuario vinculada so perde a referencia, o banco faz isso sozinho via onDelete: SetNull)
-async function remover(id: string) {
-  await buscarOuFalhar(id);
-  const [inscricoes, feedbacks] = await Promise.all([
-    prisma.inscricao.count({ where: { participanteId: id } }),
-    prisma.feedback.count({ where: { participanteId: id } }),
-  ]);
-  if (inscricoes > 0 || feedbacks > 0) {
-    throw AppError.conflito(
-      "CONFLITO_DEPENDENCIA",
-      "Não é possível remover: existem inscrições ou feedbacks vinculados a este participante.",
-    );
-  }
-  await prisma.participante.delete({ where: { id } });
-}
-
-export const participantesService = { listar, buscarOuFalhar, criar, atualizar, remover };
+export const participantesService = { listar, buscarOuFalhar };

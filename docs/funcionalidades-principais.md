@@ -40,9 +40,16 @@ Testado via requisições reais à API (não apenas leitura de código):
 
 ## 2. Validação de cadastros com avisos visuais (sem `alert`/`console.log`)
 
+> **Atualização:** o cadastro (criar/editar/excluir) de Participantes pela
+> interface foi removido — essa tabela agora é gerida direto no banco de
+> dados. A tela `/participantes` continua existindo, mas só como listagem
+> de leitura com busca. As regras de nome/e-mail/RGM descritas abaixo
+> continuam valendo para o cadastro de conta de aluno, que é quem ainda
+> cria um Participante pela interface.
+
 ### Objetivo
 
-Garantir que os dados cadastrados no sistema (participantes, palestrantes, eventos, contas de aluno) sigam um formato consistente, evitando erros de digitação e dados inválidos, com mensagens de erro claras exibidas na própria tela — nunca em caixas de diálogo do navegador ou apenas no console.
+Garantir que os dados cadastrados no sistema (palestrantes, eventos, contas de aluno) sigam um formato consistente, evitando erros de digitação e dados inválidos, com mensagens de erro claras exibidas na própria tela — nunca em caixas de diálogo do navegador ou apenas no console.
 
 ### Regras aplicadas
 
@@ -55,16 +62,16 @@ Garantir que os dados cadastrados no sistema (participantes, palestrantes, event
 
 ### Fluxo do usuário
 
-1. Ao preencher qualquer formulário do sistema (cadastro de participante, palestrante, evento, ou cadastro de conta de aluno) e tentar salvar com um campo inválido ou vazio, uma notificação (toast) aparece no canto da tela explicando exatamente o que está errado.
+1. Ao preencher qualquer formulário do sistema (cadastro de palestrante, evento, ou cadastro de conta de aluno) e tentar salvar com um campo inválido ou vazio, uma notificação (toast) aparece no canto da tela explicando exatamente o que está errado.
 2. O campo de RGM já formata automaticamente em maiúsculo enquanto o usuário digita, e o campo de telefone aplica a máscara `(00) 00000-0000` sozinho.
 3. Nada é salvo enquanto houver um campo inválido — o formulário permanece aberto para correção.
-4. Confirmações de sucesso ("Participante cadastrado.", "Evento atualizado.", etc.) também aparecem como notificação, no lugar de um `alert()` do navegador.
+4. Confirmações de sucesso ("Palestrante cadastrado.", "Evento atualizado.", etc.) também aparecem como notificação, no lugar de um `alert()` do navegador.
 
 ### Como funciona por trás
 
 - As regras de validação (nome, e-mail, RGM, telefone) existem em dois lugares espelhados: `frontend/src/utils/validacao.ts` (checagem imediata na tela) e `backend/src/utils/validacao.ts` + os schemas Zod de cada módulo (segunda barreira, caso a API seja chamada diretamente). Isso segue o princípio de nunca confiar apenas na validação do navegador.
 - O sistema de notificação (`frontend/src/components/ui/Toast.tsx`) é um "pub/sub" simples: qualquer parte do código pode chamar `toast.error("mensagem")` ou `toast.success("mensagem")`, e um componente único (`ToastViewport`), montado uma vez na raiz da aplicação, exibe a notificação por alguns segundos e some sozinha.
-- Antes de qualquer edição ou exclusão (participante, palestrante, sala, evento, inscrição), o sistema exibe uma caixa de confirmação (`ConfirmDialog.tsx`) — outra camada de proteção contra ações acidentais, especialmente importante numa aplicação usada por secretaria/administração.
+- Antes de qualquer edição ou exclusão (palestrante, sala, evento, inscrição), o sistema exibe uma caixa de confirmação (`ConfirmDialog.tsx`) — outra camada de proteção contra ações acidentais, especialmente importante numa aplicação usada por secretaria/administração.
 - No back-end, a validação Zod (`validarCorpo` como middleware) barra a requisição antes mesmo de chegar à lógica de negócio, devolvendo código de erro `422` com a mensagem de qual campo falhou.
 
 ### Verificação realizada

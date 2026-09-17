@@ -40,7 +40,8 @@ auto-cadastro.
 | Palestrantes — criar / editar / excluir  | ✅ | ✅ | ❌ |
 | Salas — listar / detalhe                 | ✅ | ✅ | ✅ (só nome/capacidade, pra Agenda e listagem de eventos) |
 | Salas — criar / editar / excluir         | ✅ | ✅ | ❌ |
-| Participantes (cadastro avulso)          | ✅ | ✅ | ❌ |
+| Participantes — listar / detalhe         | ✅ | ✅ | ❌ |
+| Participantes — criar / editar / excluir | removido (gerido direto no banco) | removido | removido |
 | Inscrições — listar                      | ✅ (todas) | ✅ (todas) | ✅ (só as próprias) |
 | Inscrições — criar/excluir manualmente   | ✅ | ✅ | ❌ |
 | Autoinscrição no evento                  | — | — | ✅ (só a própria) |
@@ -277,11 +278,12 @@ interface Sala {
 
 ## Participantes
 
-Cadastro manual de gente sem login próprio (convidado externo, por
-exemplo) — gerido só por admin/secretaria. Todo aluno já ganha um
-Participante automaticamente no registro, então ele nunca chama esses
-endpoints diretamente (a tela de Check-in, que também lê essa lista pra
-buscar por nome/e-mail/RGM, é exclusiva de admin/secretaria).
+Representa qualquer pessoa que pode se inscrever em evento (todo aluno já
+ganha um Participante automaticamente no registro, então ele nunca chama
+esses endpoints diretamente). O cadastro manual (criar/editar/excluir) pela
+interface foi removido — a tabela agora é gerida direto no banco de dados.
+A tela `/participantes`, exclusiva de admin/secretaria, é só leitura, com
+busca por nome/e-mail/RGM (a mesma lista é usada pela tela de Check-in).
 
 ```ts
 interface Participante {
@@ -292,8 +294,8 @@ interface Participante {
 }
 ```
 
-`GET /api/participantes`, `GET /api/participantes/{id}`, `POST`, `PUT`,
-`DELETE` — tudo admin/secretaria only, `403` pra aluno em qualquer verbo.
+`GET /api/participantes` e `GET /api/participantes/{id}` — admin/secretaria
+only, `403` pra aluno. Não existe mais `POST`/`PUT`/`DELETE`.
 
 ## Inscrições
 
