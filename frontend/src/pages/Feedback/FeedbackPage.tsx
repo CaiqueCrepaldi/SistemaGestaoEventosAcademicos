@@ -69,10 +69,28 @@ export function FeedbackPage() {
 
   // abre o modal em branco pro evento/participante atuais
   function abrirNovo() {
-    const eventoPadrao = isEquipe ? eventoId || eventos[0]?.id || "" : eventosDisponiveisParaAluno[0]?.id || "";
-    const participantePadrao = isEquipe ? participantes[0]?.id ?? "" : usuario?.participanteId ?? "";
+    const eventosParaCadastro = isEquipe ? eventos : eventosDisponiveisParaAluno;
+    const participantesParaCadastro = isEquipe
+      ? participantes
+      : participantes.filter((p) => p.id === usuario?.participanteId);
+    const combinacaoDisponivel = eventosParaCadastro
+      .flatMap((evento) => participantesParaCadastro.map((participante) => ({ evento, participante })))
+      .find(
+        ({ evento, participante }) =>
+          !feedbacks.some((feedback) => feedback.eventoId === evento.id && feedback.participanteId === participante.id),
+      );
 
-    setForm({ eventoId: eventoPadrao, participanteId: participantePadrao, nota: 5, comentario: "" });
+    if (!combinacaoDisponivel) {
+      toast.info("Não há uma palestra disponível para receber um novo feedback.");
+      return;
+    }
+
+    setForm({
+      eventoId: combinacaoDisponivel.evento.id,
+      participanteId: combinacaoDisponivel.participante.id,
+      nota: 5,
+      comentario: "",
+    });
     setModalAberto(true);
   }
 
@@ -108,10 +126,14 @@ export function FeedbackPage() {
       }
     }
 
-    await feedbackService.create(payload);
-    toast.success("Feedback registrado.");
-    setModalAberto(false);
-    await carregar();
+    try {
+      await feedbackService.create(payload);
+      toast.success("Feedback registrado.");
+      setModalAberto(false);
+      await carregar();
+    } catch (erro) {
+      toast.error(erro instanceof Error ? erro.message : "Não foi possível registrar o feedback.");
+    }
   }
 
   async function excluir() {

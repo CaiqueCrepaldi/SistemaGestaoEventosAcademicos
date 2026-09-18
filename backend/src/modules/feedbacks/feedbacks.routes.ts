@@ -84,15 +84,16 @@ feedbacksRouter.put(
   }),
 );
 
-// remove um feedback, bloqueia se nao for da equipe nem dono
+// remove feedback somente pela equipe
 feedbacksRouter.delete(
   "/:id",
   autenticar,
   asyncHandler(async (req, res) => {
-    const feedback = await feedbacksService.buscarOuFalhar(req.params.id);
-    if (!ehEquipe(req.usuario!.perfil) && feedback.participanteId !== req.usuario!.participanteId) {
-      throw AppError.acessoNegado();
+    if (!ehEquipe(req.usuario!.perfil)) {
+      throw AppError.acessoNegado("Somente administrador ou secretaria podem excluir feedbacks.");
     }
+
+    await feedbacksService.buscarOuFalhar(req.params.id);
     await feedbacksService.remover(req.params.id);
     res.status(204).send();
   }),
