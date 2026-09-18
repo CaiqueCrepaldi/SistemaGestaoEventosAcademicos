@@ -31,6 +31,17 @@ async function buscarOuFalhar(id: string) {
   return paraDominio(feedback);
 }
 
+// somente alunos podem enviar feedback para eventos em que fizeram check-in
+async function validarParticipacaoPresente(eventoId: string, participanteId: string) {
+  const inscricao = await prisma.inscricao.findUnique({
+    where: { participanteId_eventoId: { participanteId, eventoId } },
+  });
+
+  if (!inscricao || inscricao.statusPresenca !== "PRESENTE" || !inscricao.dataCheckin) {
+    throw AppError.acessoNegado("Você só pode enviar feedback para palestras em que realizou o check-in.");
+  }
+}
+
 // cria um feedback novo, bloqueia duplicidade e evento/participante inexistente
 async function criar(eventoId: string, participanteId: string, nota: number, comentario: string) {
   const [evento, participante] = await Promise.all([
@@ -68,4 +79,4 @@ async function remover(id: string) {
   await prisma.feedback.delete({ where: { id } });
 }
 
-export const feedbacksService = { listar, buscarOuFalhar, criar, atualizar, remover };
+export const feedbacksService = { listar, buscarOuFalhar, validarParticipacaoPresente, criar, atualizar, remover };

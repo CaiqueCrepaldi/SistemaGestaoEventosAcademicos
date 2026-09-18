@@ -60,6 +60,10 @@ feedbacksRouter.post(
       ]);
     }
 
+    if (!ehEquipe(req.usuario!.perfil)) {
+      await feedbacksService.validarParticipacaoPresente(req.body.eventoId, participanteId);
+    }
+
     const feedback = await feedbacksService.criar(req.body.eventoId, participanteId, req.body.nota, req.body.comentario);
     res.status(201).json(feedbackParaDTO(feedback));
   }),
