@@ -82,6 +82,10 @@ h1, h2, h3 {
   color: #ffffff;
 }
 
+.brand-accent {
+  color: var(--blue-500);
+}
+
 .topbar-user {
   display: flex;
   align-items: center;

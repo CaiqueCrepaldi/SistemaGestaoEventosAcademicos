@@ -57,7 +57,9 @@ export function Layout() {
     <div className="app-shell">
       <header className="topbar">
         <div className="brand">
-          <span className="brand-title">UMC · Gestão de Eventos Acadêmicos</span>
+          <span className="brand-title">
+            <span className="brand-accent">UMC</span> · Gestão de Eventos Acadêmicos
+          </span>
         </div>
         <div className="topbar-user">
           <button
