@@ -1,7 +1,7 @@
 export const SESSION_KEY = "sgea:session";
 
-// sem .env cai em mock por padrao
-export const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "false";
+// todos os dados da aplicacao sao obtidos pelo backend e persistidos no banco
+export const USE_MOCK = false;
 
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
