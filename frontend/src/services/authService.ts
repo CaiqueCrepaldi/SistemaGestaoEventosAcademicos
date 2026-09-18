@@ -44,10 +44,11 @@ function fakeJwt(usuarioId: string, perfil: Perfil): string {
 }
 
 const RECUPERACAO_KEY = "sgea:recuperacao-senha";
+const USUARIOS_STORAGE_KEY = "usuarios-v3";
 
 // acha usuario pelo email de login, usado na recuperacao de senha
 function buscarUsuarioPorEmail(email: string) {
-  const usuarios = loadCollection("usuarios-v2", usuariosSeed);
+  const usuarios = loadCollection(USUARIOS_STORAGE_KEY, usuariosSeed);
   return usuarios.find((u) => u.emailLogin === email);
 }
 
@@ -59,7 +60,7 @@ function lerCodigosPendentes(): Record<string, { codigo: string; expiraEm: numbe
 const localAuthService: AuthService = {
   // confere email+senha contra o seed e devolve uma sessao com token falso
   async login(emailLogin, senha) {
-    const usuarios = loadCollection("usuarios-v2", usuariosSeed);
+    const usuarios = loadCollection(USUARIOS_STORAGE_KEY, usuariosSeed);
     const usuario = usuarios.find((u) => u.emailLogin === emailLogin && u.senhaHash === senha);
     if (!usuario) {
       await delay(undefined, 300);
@@ -82,7 +83,7 @@ const localAuthService: AuthService = {
   // cria o Participante e o Usuario ALUNO vinculado, bloqueia email/rgm duplicado
   async cadastrarAluno(dados) {
     const [usuarios, participantes] = await Promise.all([
-      Promise.resolve(loadCollection("usuarios-v2", usuariosSeed)),
+      Promise.resolve(loadCollection(USUARIOS_STORAGE_KEY, usuariosSeed)),
       participanteService.list(),
     ]);
 
@@ -109,7 +110,7 @@ const localAuthService: AuthService = {
       rgm: dados.rgm,
       participanteId: participante.id,
     };
-    saveCollection("usuarios-v2", [...usuarios, usuario]);
+    saveCollection(USUARIOS_STORAGE_KEY, [...usuarios, usuario]);
 
     await delay(undefined, 300);
   },
@@ -147,9 +148,9 @@ const localAuthService: AuthService = {
       throw new ApiError(422, "Código inválido ou expirado.", "CODIGO_INVALIDO");
     }
 
-    const usuarios = loadCollection("usuarios-v2", usuariosSeed);
+    const usuarios = loadCollection(USUARIOS_STORAGE_KEY, usuariosSeed);
     saveCollection(
-      "usuarios-v2",
+      USUARIOS_STORAGE_KEY,
       usuarios.map((u) => (u.id === usuario.id ? { ...u, senhaHash: novaSenha } : u)),
     );
     delete pendentes[usuario.id];

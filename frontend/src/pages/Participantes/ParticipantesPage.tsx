@@ -17,6 +17,8 @@ export function ParticipantesPage() {
   const [form, setForm] = useState(VAZIO);
   const [confirmandoSalvar, setConfirmandoSalvar] = useState(false);
   const [excluindo, setExcluindo] = useState<Participante | null>(null);
+  const [inativando, setInativando] = useState<Participante | null>(null);
+  const [motivoInativacao, setMotivoInativacao] = useState("");
 
   useEffect(() => {
     void carregar();
@@ -66,6 +68,34 @@ export function ParticipantesPage() {
     }
   }
 
+  function abrirInativacao(participante: Participante) {
+    setInativando(participante);
+    setMotivoInativacao("");
+  }
+
+  async function alterarAtivo() {
+    if (!inativando) return;
+    const ativo = inativando.ativo === false;
+
+    if (!ativo && !motivoInativacao.trim()) {
+      toast.error("Informe o motivo da inativação.");
+      return;
+    }
+
+    try {
+      await participanteService.update(inativando.id, {
+        ativo,
+        motivoInativacao: ativo ? null : motivoInativacao.trim(),
+      });
+      toast.success(ativo ? "Aluno reativado." : "Aluno inativado.");
+      setInativando(null);
+      setMotivoInativacao("");
+      await carregar();
+    } catch (erro) {
+      toast.error(erro instanceof Error ? erro.message : "Não foi possível alterar o status do aluno.");
+    }
+  }
+
   const filtrados = participantes.filter((p) => {
     const alvo = busca.trim().toLowerCase();
     if (!alvo) return true;
@@ -89,6 +119,7 @@ export function ParticipantesPage() {
               <th>Nome</th>
               <th>E-mail</th>
               <th>RGM</th>
+              <th>Status</th>
               <th />
             </tr>
           </thead>
@@ -98,15 +129,22 @@ export function ParticipantesPage() {
                 <td>{participante.nome}</td>
                 <td>{participante.email}</td>
                 <td>{participante.rgm}</td>
+                <td>{participante.ativo === false ? "Inativo" : "Ativo"}</td>
                 <td className="table-actions">
                   <button className="btn btn-ghost" onClick={() => abrirEdicao(participante)}>Editar</button>
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() => (participante.ativo === false ? setInativando(participante) : abrirInativacao(participante))}
+                  >
+                    {participante.ativo === false ? "Reativar" : "Inativar"}
+                  </button>
                   <button className="btn btn-ghost btn-danger" onClick={() => setExcluindo(participante)}>Excluir</button>
                 </td>
               </tr>
             ))}
             {filtrados.length === 0 && (
               <tr>
-                <td colSpan={4} className="empty-cell">
+                <td colSpan={5} className="empty-cell">
                   Nenhum participante encontrado.
                 </td>
               </tr>
@@ -173,6 +211,56 @@ export function ParticipantesPage() {
           onConfirm={() => void excluir()}
           onCancel={() => setExcluindo(null)}
         />
+      )}
+
+      {inativando && (
+        <Modal
+          title={inativando.ativo === false ? "Reativar aluno" : "Inativar aluno"}
+          onClose={() => setInativando(null)}
+        >
+          {inativando.ativo === false ? (
+            <p>Deseja reativar o acesso de {inativando.nome}?</p>
+          ) : (
+            <form
+              className="form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void alterarAtivo();
+              }}
+            >
+              <p>O aluno perderá o acesso ao sistema, mas seu histórico será preservado.</p>
+              <label className="field">
+                <span>Motivo da inativação</span>
+                <textarea
+                  value={motivoInativacao}
+                  onChange={(e) => setMotivoInativacao(e.target.value)}
+                  rows={4}
+                  maxLength={500}
+                  required
+                  autoFocus
+                />
+              </label>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-ghost" onClick={() => setInativando(null)}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-danger-solid">
+                  Inativar
+                </button>
+              </div>
+            </form>
+          )}
+          {inativando.ativo === false && (
+            <div className="modal-footer">
+              <button type="button" className="btn btn-ghost" onClick={() => setInativando(null)}>
+                Cancelar
+              </button>
+              <button type="button" className="btn btn-primary" onClick={() => void alterarAtivo()}>
+                Reativar
+              </button>
+            </div>
+          )}
+        </Modal>
       )}
     </div>
   );

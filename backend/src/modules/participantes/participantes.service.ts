@@ -32,10 +32,16 @@ function relancarComoConflito(erro: unknown): never {
 async function atualizar(id: string, dados: ParticipanteUpdateInput) {
   await buscarOuFalhar(id);
 
+  if (dados.ativo === false && !dados.motivoInativacao?.trim()) {
+    throw AppError.validacao("Informe o motivo da inativação.", [
+      { campo: "motivoInativacao", mensagem: "O motivo da inativação é obrigatório." },
+    ]);
+  }
+
   try {
     const participante = await prisma.participante.update({
       where: { id },
-      data: dados,
+      data: dados.ativo === true ? { ...dados, motivoInativacao: null } : dados,
     });
     return paraDominio(participante);
   } catch (erro) {
@@ -46,26 +52,21 @@ async function atualizar(id: string, dados: ParticipanteUpdateInput) {
 async function remover(id: string) {
   await buscarOuFalhar(id);
 
-  const usuarios = await prisma.usuario.findMany({
-    where: { participanteId: id },
-    select: { id: true, perfil: true },
-  });
-  const usuarioAdministrativo = usuarios.find((usuario) => usuario.perfil !== "ALUNO");
+  const [inscricoes, usuarios, feedbacks, tentativas] = await Promise.all([
+    prisma.inscricao.count({ where: { participanteId: id } }),
+    prisma.usuario.count({ where: { participanteId: id } }),
+    prisma.feedback.count({ where: { participanteId: id } }),
+    prisma.tentativaQuestionario.count({ where: { participanteId: id } }),
+  ]);
 
-  if (usuarioAdministrativo) {
+  if (inscricoes > 0 || usuarios > 0 || feedbacks > 0 || tentativas > 0) {
     throw AppError.conflito(
       "PARTICIPANTE_EM_USO",
-      "Não é possível remover este participante porque ele está vinculado a um administrador ou secretário.",
+      "Não é possível remover este participante porque ele possui conta ou histórico no sistema. Inative o aluno para preservar os dados.",
     );
   }
 
-  await prisma.$transaction(async (transacao) => {
-    await transacao.feedback.deleteMany({ where: { participanteId: id } });
-    await transacao.tentativaQuestionario.deleteMany({ where: { participanteId: id } });
-    await transacao.inscricao.deleteMany({ where: { participanteId: id } });
-    await transacao.usuario.deleteMany({ where: { participanteId: id, perfil: "ALUNO" } });
-    await transacao.participante.delete({ where: { id } });
-  });
+  await prisma.participante.delete({ where: { id } });
 }
 
 export const participantesService = { listar, buscarOuFalhar, atualizar, remover };

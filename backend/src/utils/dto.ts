@@ -46,6 +46,8 @@ export function participanteParaDTO(participante: Participante) {
     nome: participante.nome,
     email: participante.email,
     rgm: participante.rgm,
+    ativo: participante.ativo,
+    motivoInativacao: participante.motivoInativacao,
   };
 }
 

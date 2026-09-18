@@ -52,11 +52,22 @@ async function registrarAluno(dados: RegistroInput) {
 
 // confere email+senha e devolve o token assinado
 async function login(dados: LoginInput) {
-  const usuario = await prisma.usuario.findUnique({ where: { emailLogin: dados.emailLogin } });
+  const usuario = await prisma.usuario.findUnique({
+    where: { emailLogin: dados.emailLogin },
+    include: { participante: true },
+  });
   // mensagem generica pra nao dar dica se foi email ou senha que errou
   const senhaOk = usuario ? await conferirSenha(dados.senha, usuario.senhaHash) : false;
   if (!usuario || !senhaOk) {
     throw new AppError(401, "CREDENCIAIS_INVALIDAS", "E-mail ou senha inválidos.");
+  }
+
+  if (usuario.perfil === "ALUNO" && usuario.participante && !usuario.participante.ativo) {
+    throw new AppError(
+      403,
+      "USUARIO_INATIVO",
+      "Seu acesso foi inativado. Entre em contato com a secretaria.",
+    );
   }
 
   const token = assinarToken({ sub: usuario.id, perfil: usuario.perfil, participanteId: usuario.participanteId });

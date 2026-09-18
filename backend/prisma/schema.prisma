@@ -46,6 +46,8 @@ model Participante {
   nome     String
   email    String   @unique
   rgm      String   @unique
+  ativo    Boolean  @default(true)
+  motivoInativacao String?
   criadoEm DateTime @default(now())
 
   usuarios   Usuario[]

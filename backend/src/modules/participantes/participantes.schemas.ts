@@ -9,6 +9,8 @@ export const participanteSchema = z.object({
     .trim()
     .transform(normalizarRgm)
     .refine((valor) => REGEX_RGM.test(valor), "RGM deve ter exatamente 11 dígitos, sem espaços."),
+  ativo: z.boolean().optional(),
+  motivoInativacao: z.string().trim().max(500).nullable().optional(),
 });
 
 export const participanteUpdateSchema = participanteSchema.partial();

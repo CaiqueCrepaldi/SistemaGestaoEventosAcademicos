@@ -19,6 +19,8 @@ export interface Participante {
   nome: string;
   email: string;
   rgm: string;
+  ativo: boolean;
+  motivoInativacao: string | null;
   criadoEm: string;
 }
 
