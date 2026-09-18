@@ -46,17 +46,26 @@ async function atualizar(id: string, dados: ParticipanteUpdateInput) {
 async function remover(id: string) {
   await buscarOuFalhar(id);
 
-  const inscricoes = await prisma.inscricao.count({ where: { participanteId: id } });
-  const usuarios = await prisma.usuario.count({ where: { participanteId: id } });
+  const usuarios = await prisma.usuario.findMany({
+    where: { participanteId: id },
+    select: { id: true, perfil: true },
+  });
+  const usuarioAdministrativo = usuarios.find((usuario) => usuario.perfil !== "ALUNO");
 
-  if (inscricoes > 0 || usuarios > 0) {
+  if (usuarioAdministrativo) {
     throw AppError.conflito(
       "PARTICIPANTE_EM_USO",
-      "Não é possível remover este participante porque ele está vinculado a inscrições ou a um usuário.",
+      "Não é possível remover este participante porque ele está vinculado a um administrador ou secretário.",
     );
   }
 
-  await prisma.participante.delete({ where: { id } });
+  await prisma.$transaction(async (transacao) => {
+    await transacao.feedback.deleteMany({ where: { participanteId: id } });
+    await transacao.tentativaQuestionario.deleteMany({ where: { participanteId: id } });
+    await transacao.inscricao.deleteMany({ where: { participanteId: id } });
+    await transacao.usuario.deleteMany({ where: { participanteId: id, perfil: "ALUNO" } });
+    await transacao.participante.delete({ where: { id } });
+  });
 }
 
 export const participantesService = { listar, buscarOuFalhar, atualizar, remover };
