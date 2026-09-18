@@ -27,8 +27,7 @@ export function FeedbackPage() {
       (inscricao) =>
         inscricao.participanteId === usuario?.participanteId &&
         inscricao.eventoId === evento.id &&
-        inscricao.statusPresenca === "PRESENTE" &&
-        Boolean(inscricao.dataCheckin),
+        inscricao.statusPresenca === "PRESENTE",
     ),
   );
 
@@ -58,8 +57,7 @@ export function FeedbackPage() {
         (inscricao) =>
           inscricao.participanteId === usuario?.participanteId &&
           inscricao.eventoId === evento.id &&
-          inscricao.statusPresenca === "PRESENTE" &&
-          Boolean(inscricao.dataCheckin),
+          inscricao.statusPresenca === "PRESENTE",
       ),
     );
 
@@ -116,8 +114,7 @@ export function FeedbackPage() {
         (inscricao) =>
           inscricao.participanteId === usuario?.participanteId &&
           inscricao.eventoId === form.eventoId &&
-          inscricao.statusPresenca === "PRESENTE" &&
-          Boolean(inscricao.dataCheckin),
+          inscricao.statusPresenca === "PRESENTE",
       );
 
       if (!participou) {

@@ -37,7 +37,7 @@ async function validarParticipacaoPresente(eventoId: string, participanteId: str
     where: { participanteId_eventoId: { participanteId, eventoId } },
   });
 
-  if (!inscricao || inscricao.statusPresenca !== "PRESENTE" || !inscricao.dataCheckin) {
+  if (!inscricao || inscricao.statusPresenca !== "PRESENTE") {
     throw AppError.acessoNegado("Você só pode enviar feedback para palestras em que realizou o check-in.");
   }
 }
