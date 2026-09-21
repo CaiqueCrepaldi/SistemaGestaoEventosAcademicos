@@ -1,9 +1,9 @@
-// conversao de horario entre o form de evento e o formato trafegado/guardado (mock e http)
+// conversao de horario entre o form de evento e o formato trafegado com a api
 //
 // decisao do sistema: o que o usuario digita/ve em <input type="datetime-local"> e sempre
-// tratado como horario local do navegador; o valor trafegado com a api (e guardado no mock)
-// e sempre um ISO-8601 com offset (aqui, UTC com sufixo "Z" — "Z" ja e um offset valido e sem
-// ambiguidade). O backend faz a mesma normalizacao em eventos.schemas.ts
+// tratado como horario local do navegador; o valor trafegado com a api e sempre um ISO-8601
+// com offset (aqui, UTC com sufixo "Z" — "Z" ja e um offset valido e sem ambiguidade). O
+// backend faz a mesma normalizacao em eventos.schemas.ts
 // (z.coerce.date().transform(d => d.toISOString())), entao os dois lados concordam.
 
 // ISO-8601 (com "Z" ou offset explicito) -> valor aceito por <input type="datetime-local">,

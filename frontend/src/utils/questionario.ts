@@ -33,17 +33,3 @@ export function validarQuestionario(perguntas: PerguntaQuestionario[]): number |
   }
   return null;
 }
-
-// conta acertos comparando as respostas escolhidas com o gabarito
-export function corrigirRespostas(
-  perguntas: PerguntaQuestionario[],
-  respostas: number[],
-): { acertos: number; totalPerguntas: number; percentual: number } {
-  const totalPerguntas = perguntas.length;
-  const acertos = perguntas.reduce((total, pergunta, indice) => {
-    const alternativaEscolhida = pergunta.alternativas[respostas[indice]];
-    return alternativaEscolhida?.correta ? total + 1 : total;
-  }, 0);
-  const percentual = totalPerguntas > 0 ? Math.round((acertos / totalPerguntas) * 100) : 0;
-  return { acertos, totalPerguntas, percentual };
-}

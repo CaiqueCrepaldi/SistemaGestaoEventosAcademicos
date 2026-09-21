@@ -3,13 +3,10 @@
 Referência de rotas, formatos e regras de autorização entre frontend e
 backend (Node.js + TypeScript + Express, implementado em `backend/` — ver
 [`../backend/README.md`](../backend/README.md) pra como rodar). Os dados
-ficam num PostgreSQL hospedado, acessado via Prisma
-(`backend/prisma/schema.prisma`), isolado atrás de `backend/src/db/prisma.ts`,
-sem afetar nada do que está documentado aqui (rota, formato de
-request/response e regra de autorização são os mesmos, não importa o que
-tem por trás guardando o dado). O frontend também roda contra um mock em
-`localStorage` que segue esse mesmo contrato, então trocar por chamadas
-HTTP reais é só trocar a camada de serviço — a UI não muda.
+ficam num cluster **TiDB Cloud** (compatível com MySQL), acessado via
+Prisma (`backend/prisma/schema.prisma`), isolado atrás de
+`backend/src/db/prisma.ts`. O frontend não guarda dado de negócio nenhum
+localmente — toda tela fala direto com essa API.
 
 Prefixo `/api` em tudo. JSON, `camelCase` igual aos tipos do frontend.
 
@@ -156,8 +153,9 @@ com o RGM, que hoje é só numérico).
 `POST /api/auth/recuperacao-senha` — Request: `{ "email": "joao.lima@alunos.umc.br" }`.
 Gera um código, manda por e-mail (ou loga, se for ambiente de teste) e
 responde `200` com `{}` — o código em si nunca volta no corpo em produção
-(só o mock local, pra demonstração, devolve `codigoDemo`). `404
-USUARIO_NAO_ENCONTRADO` se não achar ninguém com esse e-mail.
+(fora de produção, o backend devolve `codigoDemo` no corpo pra testar sem
+e-mail configurado). `404 USUARIO_NAO_ENCONTRADO` se não achar ninguém com
+esse e-mail.
 
 `POST /api/auth/recuperacao-senha/confirmar` — Request:
 `{ "email": "...", "codigo": "123456", "novaSenha": "..." }`.
@@ -172,11 +170,10 @@ recarrega e revalidar que o token ainda é válido. Mesmo formato do campo
 
 **Ainda não é chamado pelo frontend** — hoje o React confia direto no que
 está salvo em `localStorage["sgea:session"]` depois do login, sem
-revalidar contra o backend a cada reload. Funciona porque o mock nunca
-expira. Em modo integrado isso significa que um token expirado só vai
-falhar no primeiro request de verdade que a tela fizer (ex: abrir a lista
-de eventos), não no carregamento inicial — é um ponto de melhoria futura,
-não algo que quebra o fluxo hoje.
+revalidar contra o backend a cada reload. Um token expirado só vai falhar
+no primeiro request de verdade que a tela fizer (ex: abrir a lista de
+eventos), não no carregamento inicial — é um ponto de melhoria futura, não
+algo que quebra o fluxo hoje.
 
 ## Eventos
 
@@ -231,12 +228,10 @@ Aluno chamando POST/PUT/DELETE cai em `403 ACESSO_NEGADO`.
 ## Palestrantes
 
 O campo `telefone` nunca pode aparecer no JSON pra aluno — nem como
-`"telefone": null`, a chave some inteira. Isso é decisão do backend (dois
-DTOs, `@JsonView`, o que for mais fácil de manter), baseado no perfil do
-token. Não dá pra confiar que o frontend simplesmente não mostra o campo —
-hoje ele já esconde na UI (`PalestrantesPage.tsx` tem um `// TODO` marcando
-esse ponto), mas o dado ainda vem inteiro do mock, porque o mock não tem
-conceito de perfil no meio do caminho.
+`"telefone": null`, a chave some inteira. Isso é decisão do backend (DTO
+por perfil), baseado no perfil do token. Não dá pra confiar que o frontend
+simplesmente não mostra o campo — a checagem de verdade é essa do backend;
+a tela (`PalestrantesPage.tsx`) só reflete o que já vem faltando no JSON.
 
 ```ts
 // visão admin/secretaria
@@ -280,10 +275,11 @@ interface Sala {
 
 Representa qualquer pessoa que pode se inscrever em evento (todo aluno já
 ganha um Participante automaticamente no registro, então ele nunca chama
-esses endpoints diretamente). O cadastro manual (criar/editar/excluir) pela
-interface foi removido — a tabela agora é gerida direto no banco de dados.
-A tela `/participantes`, exclusiva de admin/secretaria, é só leitura, com
-busca por nome/e-mail/RGM (a mesma lista é usada pela tela de Check-in).
+esses endpoints diretamente). Não existe cadastro manual — a tela
+`/participantes`, exclusiva de admin/secretaria, lista com busca por
+nome/e-mail/RGM (a mesma lista é usada pela tela de Check-in), pode
+inativar/reativar um aluno e, só quando ele já está inativo, removê-lo de
+vez.
 
 ```ts
 interface Participante {
@@ -291,11 +287,25 @@ interface Participante {
   nome: string;
   email: string;
   rgm: string;
+  ativo: boolean;
+  motivoInativacao: string | null;
 }
 ```
 
 `GET /api/participantes` e `GET /api/participantes/{id}` — admin/secretaria
-only, `403` pra aluno. Não existe mais `POST`/`PUT`/`DELETE`.
+only, `403` pra aluno. Não existe `POST` (participante só nasce via
+`POST /api/auth/registro`).
+
+`PUT /api/participantes/{id}` — admin/secretaria. Usado pra inativar
+(`{ "ativo": false, "motivoInativacao": "..." }`, motivo obrigatório) e
+reativar (`{ "ativo": true }`, zera `motivoInativacao`).
+
+`DELETE /api/participantes/{id}` — admin/secretaria. Só funciona se o
+participante já estiver inativo (`409 PARTICIPANTE_ATIVO` caso contrário);
+remove em cascata o `Usuario` vinculado, inscrições, feedbacks e tentativas
+de questionário. Administrador e secretaria nunca têm `Participante`
+associado, então nunca são alcançados por essa rota — e o serviço ainda
+confere isso explicitamente (`409 USUARIO_PROTEGIDO`) como garantia extra.
 
 ## Inscrições
 

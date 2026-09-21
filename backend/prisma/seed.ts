@@ -4,7 +4,20 @@ import { randomUUID } from "crypto";
 import type { Prisma } from "@prisma/client";
 import type { PerguntaQuestionario } from "../src/types/domain";
 import { gerarHashSenha } from "../src/utils/password";
+import { criptografar, indiceBusca } from "../src/utils/criptografia";
 import { prisma } from "../src/db/prisma";
+
+// monta os campos cifrados + indice de busca de um participante, pronto pro "create" do upsert
+function dadosParticipante(nome: string, email: string, rgm: string) {
+  return {
+    id: randomUUID(),
+    nome: criptografar(nome),
+    email: criptografar(email),
+    emailHash: indiceBusca(email),
+    rgm: criptografar(rgm),
+    rgmHash: indiceBusca(rgm),
+  };
+}
 
 // monta as 10 perguntas a partir de uma lista compacta (enunciado + 4 alternativas + indice da correta)
 function montarQuestionario(
@@ -144,53 +157,56 @@ async function seed() {
   });
 
   const participanteJoao = await prisma.participante.upsert({
-    where: { email: "joao.lima@alunos.umc.br" },
+    where: { emailHash: indiceBusca("joao.lima@alunos.umc.br") },
     update: {},
-    create: { id: randomUUID(), nome: "João Pedro Lima", email: "joao.lima@alunos.umc.br", rgm: "20240100111" },
+    create: dadosParticipante("João Pedro Lima", "joao.lima@alunos.umc.br", "20240100111"),
   });
   const participanteBeatriz = await prisma.participante.upsert({
-    where: { email: "beatriz.fernandes@alunos.umc.br" },
+    where: { emailHash: indiceBusca("beatriz.fernandes@alunos.umc.br") },
     update: {},
-    create: { id: randomUUID(), nome: "Beatriz Fernandes", email: "beatriz.fernandes@alunos.umc.br", rgm: "20240100222" },
+    create: dadosParticipante("Beatriz Fernandes", "beatriz.fernandes@alunos.umc.br", "20240100222"),
   });
   const participanteLucas = await prisma.participante.upsert({
-    where: { email: "lucas.martins@alunos.umc.br" },
+    where: { emailHash: indiceBusca("lucas.martins@alunos.umc.br") },
     update: {},
-    create: { id: randomUUID(), nome: "Lucas Martins", email: "lucas.martins@alunos.umc.br", rgm: "20230100333" },
+    create: dadosParticipante("Lucas Martins", "lucas.martins@alunos.umc.br", "20230100333"),
   });
 
   const usuarioAdmin = await prisma.usuario.upsert({
-    where: { emailLogin: "admin@umc.br" },
+    where: { emailLoginHash: indiceBusca("admin@umc.br") },
     update: {},
     create: {
       id: randomUUID(),
-      nome: "Ana Ribeiro",
-      emailLogin: "admin@umc.br",
+      nome: criptografar("Ana Ribeiro"),
+      emailLogin: criptografar("admin@umc.br"),
+      emailLoginHash: indiceBusca("admin@umc.br"),
       senhaHash: await gerarHashSenha("admin123"),
       perfil: "ADMINISTRADOR",
     },
   });
   await prisma.usuario.upsert({
-    where: { emailLogin: "secretaria@umc.br" },
+    where: { emailLoginHash: indiceBusca("secretaria@umc.br") },
     update: {},
     create: {
       id: randomUUID(),
-      nome: "Carlos Souza",
-      emailLogin: "secretaria@umc.br",
+      nome: criptografar("Carlos Souza"),
+      emailLogin: criptografar("secretaria@umc.br"),
+      emailLoginHash: indiceBusca("secretaria@umc.br"),
       senhaHash: await gerarHashSenha("secretaria123"),
       perfil: "SECRETARIA",
     },
   });
   await prisma.usuario.upsert({
-    where: { emailLogin: "aluno@alunos.umc.br" },
+    where: { emailLoginHash: indiceBusca("aluno@alunos.umc.br") },
     update: {},
     create: {
       id: randomUUID(),
-      nome: "João Pedro Lima",
-      emailLogin: "aluno@alunos.umc.br",
+      nome: criptografar("João Pedro Lima"),
+      emailLogin: criptografar("aluno@alunos.umc.br"),
+      emailLoginHash: indiceBusca("aluno@alunos.umc.br"),
       senhaHash: await gerarHashSenha("aluno123"),
       perfil: "ALUNO",
-      rgm: "20240100111",
+      rgm: criptografar("20240100111"),
       participanteId: participanteJoao.id,
     },
   });

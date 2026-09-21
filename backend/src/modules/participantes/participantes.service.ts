@@ -1,18 +1,26 @@
 import { Prisma, type Participante as ParticipanteDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
+import { criptografar, descriptografar, indiceBusca } from "../../utils/criptografia";
 import type { Participante } from "../../types/domain";
 import type { ParticipanteUpdateInput } from "./participantes.schemas";
 
-// prisma devolve criadoEm como Date, resto do app espera string (ISO)
+// prisma devolve criadoEm como Date e nome/email/rgm cifrados — decifra e converte pro formato do resto do app
 function paraDominio(participante: ParticipanteDb): Participante {
-  return { ...participante, criadoEm: participante.criadoEm.toISOString() };
+  return {
+    ...participante,
+    nome: descriptografar(participante.nome),
+    email: descriptografar(participante.email),
+    rgm: descriptografar(participante.rgm),
+    criadoEm: participante.criadoEm.toISOString(),
+  };
 }
 
-// lista participantes ordenados por nome
+// lista participantes ordenados por nome — a ordenacao tem que ser depois de decifrar,
+// porque nome cifrado nao tem ordem alfabetica nenhuma no banco
 async function listar() {
-  const participantes = await prisma.participante.findMany({ orderBy: { nome: "asc" } });
-  return participantes.map(paraDominio);
+  const participantes = await prisma.participante.findMany();
+  return participantes.map(paraDominio).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
 // busca um participante pelo id, 404 se nao existir
@@ -38,10 +46,22 @@ async function atualizar(id: string, dados: ParticipanteUpdateInput) {
     ]);
   }
 
+  // recifra nome/email/rgm se vieram no corpo, recalculando o indice de busca dos que mudaram
+  const dadosCifrados: Prisma.ParticipanteUpdateInput = { ...dados };
+  if (dados.nome !== undefined) dadosCifrados.nome = criptografar(dados.nome);
+  if (dados.email !== undefined) {
+    dadosCifrados.email = criptografar(dados.email);
+    dadosCifrados.emailHash = indiceBusca(dados.email);
+  }
+  if (dados.rgm !== undefined) {
+    dadosCifrados.rgm = criptografar(dados.rgm);
+    dadosCifrados.rgmHash = indiceBusca(dados.rgm);
+  }
+
   try {
     const participante = await prisma.participante.update({
       where: { id },
-      data: dados.ativo === true ? { ...dados, motivoInativacao: null } : dados,
+      data: dados.ativo === true ? { ...dadosCifrados, motivoInativacao: null } : dadosCifrados,
     });
     return paraDominio(participante);
   } catch (erro) {
@@ -49,24 +69,32 @@ async function atualizar(id: string, dados: ParticipanteUpdateInput) {
   }
 }
 
+// so remove participante inativo — e o usuario vinculado tem que ser ALUNO,
+// administrador/secretaria nunca tem participante entao nunca cai aqui, mas
+// a checagem fica como garantia extra: essas duas contas nao podem ser
+// removidas de jeito nenhum
 async function remover(id: string) {
-  await buscarOuFalhar(id);
+  const participante = await buscarOuFalhar(id);
 
-  const [inscricoes, usuarios, feedbacks, tentativas] = await Promise.all([
-    prisma.inscricao.count({ where: { participanteId: id } }),
-    prisma.usuario.count({ where: { participanteId: id } }),
-    prisma.feedback.count({ where: { participanteId: id } }),
-    prisma.tentativaQuestionario.count({ where: { participanteId: id } }),
-  ]);
-
-  if (inscricoes > 0 || usuarios > 0 || feedbacks > 0 || tentativas > 0) {
+  if (participante.ativo !== false) {
     throw AppError.conflito(
-      "PARTICIPANTE_EM_USO",
-      "Não é possível remover este participante porque ele possui conta ou histórico no sistema. Inative o aluno para preservar os dados.",
+      "PARTICIPANTE_ATIVO",
+      "Só é possível remover um aluno depois de inativá-lo.",
     );
   }
 
-  await prisma.participante.delete({ where: { id } });
+  const usuario = await prisma.usuario.findFirst({ where: { participanteId: id } });
+  if (usuario && usuario.perfil !== "ALUNO") {
+    throw AppError.conflito("USUARIO_PROTEGIDO", "Administrador e secretaria não podem ser removidos.");
+  }
+
+  await prisma.$transaction([
+    prisma.tentativaQuestionario.deleteMany({ where: { participanteId: id } }),
+    prisma.feedback.deleteMany({ where: { participanteId: id } }),
+    prisma.inscricao.deleteMany({ where: { participanteId: id } }),
+    ...(usuario ? [prisma.usuario.delete({ where: { id: usuario.id } })] : []),
+    prisma.participante.delete({ where: { id } }),
+  ]);
 }
 
 export const participantesService = { listar, buscarOuFalhar, atualizar, remover };

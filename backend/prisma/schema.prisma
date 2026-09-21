@@ -24,13 +24,16 @@ enum StatusPresenca {
   AUSENTE
 }
 
+// nome/emailLogin/rgm ficam cifrados (AES-256-GCM, ver backend/src/utils/criptografia.ts);
+// emailLoginHash eh o indice deterministico usado pra login/duplicidade, nunca exibido
 model Usuario {
   id             String   @id
-  nome           String
-  emailLogin     String   @unique
+  nome           String   @db.Text
+  emailLogin     String   @db.Text
+  emailLoginHash String   @unique
   senhaHash      String
   perfil         Perfil
-  rgm            String?
+  rgm            String?  @db.Text
   participanteId String?
   participante   Participante? @relation(fields: [participanteId], references: [id], onDelete: SetNull)
   criadoEm       DateTime @default(now())
@@ -41,14 +44,18 @@ model Usuario {
   @@map("usuarios")
 }
 
+// nome/email/rgm ficam cifrados; emailHash/rgmHash sao os indices deterministicos
+// usados pra checagem de duplicidade, nunca exibidos
 model Participante {
-  id       String   @id
-  nome     String
-  email    String   @unique
-  rgm      String   @unique
-  ativo    Boolean  @default(true)
+  id        String   @id
+  nome      String   @db.Text
+  email     String   @db.Text
+  emailHash String   @unique
+  rgm       String   @db.Text
+  rgmHash   String   @unique
+  ativo     Boolean  @default(true)
   motivoInativacao String?
-  criadoEm DateTime @default(now())
+  criadoEm  DateTime @default(now())
 
   usuarios   Usuario[]
   inscricoes Inscricao[]

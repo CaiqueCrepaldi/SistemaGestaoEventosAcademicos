@@ -21,8 +21,8 @@ Cada evento cadastrado no sistema possui um questionário de múltipla escolha c
 
 ### Como funciona por trás
 
-- **Gabarito nunca é exposto antes da resposta.** O aluno recebe as perguntas sem o campo que indica a alternativa correta — tanto no modo mock (`frontend/src/services/questionarioService.ts`, função `ocultarGabarito`) quanto na API (`backend/src/utils/dto.ts`, função `eventoParaDTO` com o parâmetro `paraAluno`).
-- **A correção acontece do lado do servidor (ou do serviço, no modo mock)**, nunca no navegador do aluno antes do envio — evita que a resposta certa seja descoberta inspecionando o código da página. Isso é feito em `backend/src/modules/questionario/questionario.service.ts` (função `responder`) e replicado no mock em `frontend/src/utils/questionario.ts` (função `corrigirRespostas`).
+- **Gabarito nunca é exposto antes da resposta.** O aluno recebe as perguntas sem o campo que indica a alternativa correta — isso é feito na API (`backend/src/utils/dto.ts`, função `eventoParaDTO` com o parâmetro `paraAluno`).
+- **A correção acontece do lado do servidor**, nunca no navegador do aluno antes do envio — evita que a resposta certa seja descoberta inspecionando o código da página. Isso é feito em `backend/src/modules/questionario/questionario.service.ts` (função `responder`).
 - Cada tentativa é armazenada (não sobrescreve a anterior), e a elegibilidade ao certificado usa sempre a **melhor tentativa** do aluno naquele evento (`certificadoService.ts`, função `enriquecer`).
 - O percentual mínimo (60%) é uma constante única (`PERCENTUAL_APROVACAO`), usada tanto para calcular a liberação quanto para exibir a mensagem ao aluno — evita que as duas partes do sistema fiquem com regras divergentes.
 - No back-end, as rotas do questionário exigem autenticação e, quando aplicável, perfil de ALUNO (`backend/src/modules/eventos/eventos.routes.ts`): um aluno só enxerga e responde ao próprio questionário, nunca o de outra pessoa. A rota que lista a nota de todos os alunos em todos os eventos (usada na tela de gestão) é restrita a ADMINISTRADOR/SECRETARIA.

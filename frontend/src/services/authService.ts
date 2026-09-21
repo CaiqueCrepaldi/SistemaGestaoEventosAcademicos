@@ -1,9 +1,5 @@
 import type { Perfil } from "../types";
-import { toast } from "../components/ui/Toast";
-import { ApiError, USE_MOCK, api } from "./api";
-import { participanteService } from "./entityServices";
-import { usuariosSeed } from "./seed";
-import { delay, loadCollection, newId, saveCollection } from "./storage";
+import { api } from "./api";
 
 export interface UsuarioPerfil {
   id: string;
@@ -37,129 +33,6 @@ interface AuthService {
   confirmarRecuperacaoSenha(email: string, codigo: string, novaSenha: string): Promise<void>;
 }
 
-// token falso so pra ter uma string no lugar de jwt de verdade, sem assinatura nenhuma
-function fakeJwt(usuarioId: string, perfil: Perfil): string {
-  const payload = btoa(JSON.stringify({ sub: usuarioId, perfil, exp: Date.now() + 1000 * 60 * 60 * 8 }));
-  return `mock.${payload}.jwt`;
-}
-
-const RECUPERACAO_KEY = "sgea:recuperacao-senha";
-const USUARIOS_STORAGE_KEY = "usuarios-v3";
-
-// acha usuario pelo email de login, usado na recuperacao de senha
-function buscarUsuarioPorEmail(email: string) {
-  const usuarios = loadCollection(USUARIOS_STORAGE_KEY, usuariosSeed);
-  return usuarios.find((u) => u.emailLogin === email);
-}
-
-// le do localStorage os codigos de recuperacao ainda pendentes
-function lerCodigosPendentes(): Record<string, { codigo: string; expiraEm: number }> {
-  return JSON.parse(localStorage.getItem(RECUPERACAO_KEY) ?? "{}");
-}
-
-const localAuthService: AuthService = {
-  // confere email+senha contra o seed e devolve uma sessao com token falso
-  async login(emailLogin, senha) {
-    const usuarios = loadCollection(USUARIOS_STORAGE_KEY, usuariosSeed);
-    const usuario = usuarios.find((u) => u.emailLogin === emailLogin && u.senhaHash === senha);
-    if (!usuario) {
-      await delay(undefined, 300);
-      throw new ApiError(401, "E-mail ou senha inválidos", "CREDENCIAIS_INVALIDAS");
-    }
-    return delay(
-      {
-        id: usuario.id,
-        nome: usuario.nome,
-        emailLogin: usuario.emailLogin,
-        perfil: usuario.perfil,
-        rgm: usuario.rgm ?? null,
-        participanteId: usuario.participanteId ?? null,
-        token: fakeJwt(usuario.id, usuario.perfil),
-      },
-      300,
-    );
-  },
-
-  // cria o Participante e o Usuario ALUNO vinculado, bloqueia email/rgm duplicado
-  async cadastrarAluno(dados) {
-    const [usuarios, participantes] = await Promise.all([
-      Promise.resolve(loadCollection(USUARIOS_STORAGE_KEY, usuariosSeed)),
-      participanteService.list(),
-    ]);
-
-    const duplicado =
-      usuarios.some((u) => u.emailLogin === dados.emailInstitucional) ||
-      participantes.some((p) => p.rgm === dados.rgm);
-    if (duplicado) {
-      await delay(undefined, 200);
-      throw new ApiError(409, "RGM ou e-mail já cadastrado", "CADASTRO_DUPLICADO");
-    }
-
-    const participante = await participanteService.create({
-      nome: dados.nomeCompleto,
-      email: dados.emailInstitucional,
-      rgm: dados.rgm,
-    });
-
-    const usuario = {
-      id: newId(),
-      nome: dados.nomeCompleto,
-      emailLogin: dados.emailInstitucional,
-      senhaHash: dados.senha,
-      perfil: "ALUNO" as const,
-      rgm: dados.rgm,
-      participanteId: participante.id,
-    };
-    saveCollection(USUARIOS_STORAGE_KEY, [...usuarios, usuario]);
-
-    await delay(undefined, 300);
-  },
-
-  // gera o codigo, guarda com validade de 15min e avisa na tela (modo demo)
-  async solicitarRecuperacaoSenha(email) {
-    const usuario = buscarUsuarioPorEmail(email);
-    if (!usuario) {
-      await delay(undefined, 300);
-      throw new ApiError(404, "Não encontramos conta com esse e-mail.", "USUARIO_NAO_ENCONTRADO");
-    }
-
-    const codigo = String(Math.floor(100000 + Math.random() * 900000));
-    const pendentes = lerCodigosPendentes();
-    pendentes[usuario.id] = { codigo, expiraEm: Date.now() + 1000 * 60 * 15 };
-    localStorage.setItem(RECUPERACAO_KEY, JSON.stringify(pendentes));
-    // sem servidor de email no mock, o codigo aparece num aviso na tela
-    toast.info(`Código de recuperação (demonstração) para ${usuario.emailLogin}: ${codigo}`);
-
-    return delay({ codigoDemo: codigo }, 300);
-  },
-
-  // confere o codigo e troca a senha
-  async confirmarRecuperacaoSenha(email, codigo, novaSenha) {
-    const usuario = buscarUsuarioPorEmail(email);
-    if (!usuario) {
-      await delay(undefined, 200);
-      throw new ApiError(404, "Não encontramos conta com esse e-mail.", "USUARIO_NAO_ENCONTRADO");
-    }
-
-    const pendentes = lerCodigosPendentes();
-    const pendente = pendentes[usuario.id];
-    if (!pendente || pendente.codigo !== codigo || pendente.expiraEm < Date.now()) {
-      await delay(undefined, 200);
-      throw new ApiError(422, "Código inválido ou expirado.", "CODIGO_INVALIDO");
-    }
-
-    const usuarios = loadCollection(USUARIOS_STORAGE_KEY, usuariosSeed);
-    saveCollection(
-      USUARIOS_STORAGE_KEY,
-      usuarios.map((u) => (u.id === usuario.id ? { ...u, senhaHash: novaSenha } : u)),
-    );
-    delete pendentes[usuario.id];
-    localStorage.setItem(RECUPERACAO_KEY, JSON.stringify(pendentes));
-
-    await delay(undefined, 300);
-  },
-};
-
 interface LoginResponseDTO {
   token: string;
   tokenType: string;
@@ -167,7 +40,7 @@ interface LoginResponseDTO {
   usuario: UsuarioPerfil;
 }
 
-const httpAuthService: AuthService = {
+export const authService: AuthService = {
   async login(emailLogin, senha) {
     const res = await api.post<LoginResponseDTO>("/auth/login", { emailLogin, senha });
     return { ...res.usuario, token: res.token };
@@ -182,5 +55,3 @@ const httpAuthService: AuthService = {
     return api.post<void>("/auth/recuperacao-senha/confirmar", { email, codigo, novaSenha });
   },
 };
-
-export const authService: AuthService = USE_MOCK ? localAuthService : httpAuthService;

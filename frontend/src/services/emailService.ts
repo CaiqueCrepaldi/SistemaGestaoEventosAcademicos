@@ -1,7 +1,5 @@
 import type { Inscricao } from "../types";
-import { USE_MOCK, api } from "./api";
-import { participanteService } from "./entityServices";
-import { delay } from "./storage";
+import { api } from "./api";
 
 export interface ConfirmacaoEmailResult {
   destinatario: string;
@@ -11,21 +9,8 @@ interface EmailService {
   enviarConfirmacaoInscricao(inscricao: Inscricao): Promise<ConfirmacaoEmailResult>;
 }
 
-// no mock nao tem servidor de email de verdade, aviso pro usuario fica por conta de quem chama (EventosPage.tsx)
-const localEmailService: EmailService = {
-  // busca o email do participante, o aviso pro usuario fica por conta de quem chama
-  async enviarConfirmacaoInscricao(inscricao) {
-    const participante = await participanteService.get(inscricao.participanteId);
-    const destinatario = participante?.email ?? "e-mail não encontrado";
-    await delay(undefined, 200);
-    return { destinatario };
-  },
-};
-
-const httpEmailService: EmailService = {
+export const emailService: EmailService = {
   enviarConfirmacaoInscricao(inscricao) {
     return api.post<ConfirmacaoEmailResult>(`/inscricoes/${inscricao.id}/confirmacao-email`, {});
   },
 };
-
-export const emailService: EmailService = USE_MOCK ? localEmailService : httpEmailService;

@@ -1,8 +1,5 @@
 export const SESSION_KEY = "sgea:session";
 
-// todos os dados da aplicacao sao obtidos pelo backend e persistidos no banco
-export const USE_MOCK = false;
-
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
 export interface ApiErrorField {
@@ -42,7 +39,7 @@ function getToken(): string | null {
   }
 }
 
-// faz a chamada http de verdade, usada so quando USE_MOCK eh false
+// faz a chamada http de verdade
 async function request<T>(path: string, method: string, body?: unknown): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = { "Content-Type": "application/json" };

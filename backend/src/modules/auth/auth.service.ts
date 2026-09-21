@@ -5,6 +5,7 @@ import { AppError } from "../../errors/AppError";
 import { conferirSenha, gerarHashSenha } from "../../utils/password";
 import { assinarToken, duracaoEmSegundos } from "../../utils/jwt";
 import { usuarioParaDTO } from "../../utils/dto";
+import { criptografar, descriptografar, indiceBusca } from "../../utils/criptografia";
 import { env } from "../../config/env";
 import { emailService } from "../email/email.service";
 import type { Usuario } from "../../types/domain";
@@ -12,19 +13,30 @@ import type { ConfirmarRecuperacaoInput, LoginInput, RegistroInput, SolicitarRec
 
 const CODIGO_VALIDADE_MS = 15 * 60 * 1000; // 15 min
 
-// prisma devolve criadoEm como Date, resto do app espera string (ISO) — reaproveitado em usuarios.routes.ts
+// prisma devolve criadoEm como Date e nome/emailLogin/rgm cifrados — decifra e converte pro
+// formato que o resto do app espera (reaproveitado em usuarios.routes.ts)
 export function usuarioParaDominio(usuario: UsuarioDb): Usuario {
-  return { ...usuario, criadoEm: usuario.criadoEm.toISOString() };
+  return {
+    ...usuario,
+    nome: descriptografar(usuario.nome),
+    emailLogin: descriptografar(usuario.emailLogin),
+    rgm: usuario.rgm ? descriptografar(usuario.rgm) : null,
+    criadoEm: usuario.criadoEm.toISOString(),
+  };
 }
 
 // cria o Participante e o Usuario ALUNO vinculado, checa duplicidade de email/rgm antes
+// pelo indice de busca (hash deterministico), ja que email/rgm ficam cifrados no banco
 async function registrarAluno(dados: RegistroInput) {
-  const emailDuplicado = await prisma.usuario.findUnique({ where: { emailLogin: dados.emailInstitucional } });
+  const emailHash = indiceBusca(dados.emailInstitucional);
+  const rgmHash = indiceBusca(dados.rgm);
+
+  const emailDuplicado = await prisma.usuario.findUnique({ where: { emailLoginHash: emailHash } });
   if (emailDuplicado) {
     throw AppError.conflito("EMAIL_DUPLICADO", "Já existe uma conta com este e-mail.");
   }
 
-  const rgmDuplicado = await prisma.participante.findUnique({ where: { rgm: dados.rgm } });
+  const rgmDuplicado = await prisma.participante.findUnique({ where: { rgmHash } });
   if (rgmDuplicado) {
     throw AppError.conflito("RGM_DUPLICADO", "Já existe um cadastro com este RGM.");
   }
@@ -32,17 +44,25 @@ async function registrarAluno(dados: RegistroInput) {
   const senhaHash = await gerarHashSenha(dados.senha);
 
   const participante = await prisma.participante.create({
-    data: { id: randomUUID(), nome: dados.nomeCompleto, email: dados.emailInstitucional, rgm: dados.rgm },
+    data: {
+      id: randomUUID(),
+      nome: criptografar(dados.nomeCompleto),
+      email: criptografar(dados.emailInstitucional),
+      emailHash,
+      rgm: criptografar(dados.rgm),
+      rgmHash,
+    },
   });
 
   const usuario = await prisma.usuario.create({
     data: {
       id: randomUUID(),
-      nome: dados.nomeCompleto,
-      emailLogin: dados.emailInstitucional,
+      nome: criptografar(dados.nomeCompleto),
+      emailLogin: criptografar(dados.emailInstitucional),
+      emailLoginHash: emailHash,
       senhaHash,
       perfil: "ALUNO",
-      rgm: dados.rgm,
+      rgm: criptografar(dados.rgm),
       participanteId: participante.id,
     },
   });
@@ -53,7 +73,7 @@ async function registrarAluno(dados: RegistroInput) {
 // confere email+senha e devolve o token assinado
 async function login(dados: LoginInput) {
   const usuario = await prisma.usuario.findUnique({
-    where: { emailLogin: dados.emailLogin },
+    where: { emailLoginHash: indiceBusca(dados.emailLogin) },
     include: { participante: true },
   });
   // mensagem generica pra nao dar dica se foi email ou senha que errou
@@ -80,9 +100,9 @@ async function login(dados: LoginInput) {
   };
 }
 
-// acha usuario pelo email de login, usado na recuperacao de senha
+// acha usuario pelo email de login (via indice de busca), usado na recuperacao de senha
 function buscarUsuarioPorEmail(email: string) {
-  return prisma.usuario.findUnique({ where: { emailLogin: email } });
+  return prisma.usuario.findUnique({ where: { emailLoginHash: indiceBusca(email) } });
 }
 
 // gera um codigo numerico de 6 digitos
@@ -109,8 +129,9 @@ async function solicitarRecuperacaoSenha(dados: SolicitarRecuperacaoInput) {
 
   // falha de envio nao pode travar a recuperacao — em demo o codigoDemo abaixo
   // resolve isso mesmo assim, e nem toda falha de provedor deveria bloquear o fluxo
+  // usa dados.email (ja veio em texto puro do request) em vez de descriptografar usuario.emailLogin
   try {
-    await emailService.enviarCodigoRecuperacao(usuario.emailLogin, codigo);
+    await emailService.enviarCodigoRecuperacao(dados.email, codigo);
   } catch (erro) {
     console.error("[recuperacao-senha] falha ao enviar e-mail:", erro);
   }

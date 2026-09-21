@@ -93,41 +93,24 @@ npm install
 npm run dev
 ```
 
-Abre em `http://localhost:5173` (ou a próxima porta livre). Por padrão,
-sem nenhum `.env` configurado, ele já sobe em **modo mock** — dá pra usar
-o sistema inteiro sem o backend rodando.
+Abre em `http://localhost:5173` (ou a próxima porta livre). Precisa do
+backend (`backend/`) rodando — ver [`backend/README.md`](backend/README.md)
+pra como subir ele — porque toda a aplicação fala direto com a API/banco
+real, não existe mais um modo "mock" com dado fake no navegador.
 
-### Modo mock vs. modo integrado
+Cria `frontend/.env.local` (não é versionado) com a variável abaixo
+apontando pro backend:
 
-Duas variáveis de ambiente controlam isso (cria `frontend/.env.local`, que
-não é versionado, com as duas variáveis abaixo):
+```
+VITE_API_URL=http://localhost:8080/api
+```
 
-| Variável | mock (padrão) | integrado |
-|---|---|---|
-| `VITE_USE_MOCK` | `true` (ou nem existir) | `false` |
-| `VITE_API_URL` | ignorado | ex: `http://localhost:8080/api` |
-
-**Mock**: os dados vivem no `localStorage` do navegador, pré-carregados de
-`frontend/src/services/seed.ts`. Não precisa do backend rodando — é o
-jeito normal de trabalhar na UI no dia a dia. E-mail de confirmação de
-inscrição só vai pro console e some numa mensagem na tela, já que não tem
-servidor de e-mail nenhum nesse modo. Certificado é gerado em PDF direto
-no navegador com `jsPDF`, seguindo o modelo oficial de certificado da UMC
-(moldura, logo, assinatura e selo), também sem precisar do backend.
-
-**Integrado**: cada chamada de serviço vira request HTTP de verdade pra
-`VITE_API_URL`, com `Authorization: Bearer <token>` (token salvo em
-`localStorage["sgea:session"]` depois do login). Precisa do backend
-(`backend/`) rodando — ver [`backend/README.md`](backend/README.md) pra
-como subir ele.
-
-Pra trocar, edita `frontend/.env.local` e reinicia o `npm run dev` (env
-var não recarrega sozinha). Por baixo do capô, os services que fazem
-requisição (`crud.ts`, `authService.ts`, `emailService.ts`,
-`inscricaoAlunoService.ts`, `certificadoService.ts`, `questionarioService.ts`)
-têm dois adapters — localStorage e HTTP — atrás da mesma interface,
-escolhidos uma vez no import a partir de `VITE_USE_MOCK`. Nenhuma página
-sabe qual modo está ativo.
+Cada chamada de serviço vira request HTTP de verdade pra `VITE_API_URL`,
+com `Authorization: Bearer <token>` (token salvo em
+`localStorage["sgea:session"]` depois do login — a única coisa que o
+frontend guarda no navegador é a sessão, não dado de negócio). Certificado
+continua sendo gerado em PDF direto no navegador com `jsPDF`, seguindo o
+modelo oficial de certificado da UMC (moldura, logo, assinatura e selo).
 
 Mais detalhe de scripts e deploy em [`frontend/README.md`](frontend/README.md).
 

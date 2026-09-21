@@ -1,8 +1,8 @@
 import { jsPDF } from "jspdf";
 import type { Inscricao, TentativaQuestionario } from "../types";
 import { PERCENTUAL_APROVACAO } from "../utils/questionario";
-import { USE_MOCK, api } from "./api";
-import { eventoService, inscricaoService, palestranteService, participanteService } from "./entityServices";
+import { api } from "./api";
+import { eventoService, palestranteService, participanteService } from "./entityServices";
 import { questionarioService } from "./questionarioService";
 
 // tudo que o pdf do certificado precisa, ja "achatado"
@@ -209,34 +209,8 @@ interface CertificadoService {
   gerarCertificado(dados: CertificadoDisponivel): void;
 }
 
-// mock: certificado so existe se a inscricao estiver PRESENTE
-const localCertificadoService: CertificadoService = {
-  // certificados de UM aluno, so os eventos onde ele tem PRESENTE
-  async listarCertificadosDoParticipante(participanteId) {
-    const inscricoes = (await inscricaoService.list()).filter(
-      (i) => i.participanteId === participanteId && i.statusPresenca === "PRESENTE",
-    );
-    return enriquecer(inscricoes);
-  },
-  // certificados de todo mundo, usado na tela de gestao
-  async listarTodosCertificados() {
-    const [inscricoes, todasTentativas] = await Promise.all([
-      inscricaoService.list(),
-      questionarioService.listarTodasTentativas(),
-    ]);
-    return enriquecer(
-      inscricoes.filter((i) => i.statusPresenca === "PRESENTE"),
-      todasTentativas,
-    );
-  },
-  // gera o pdf e ja dispara o download
-  gerarCertificado(dados) {
-    gerarPdf(dados);
-  },
-};
-
-const httpCertificadoService: CertificadoService = {
-  // mesma regra do mock, so que a filtragem por status ja vem da query
+export const certificadoService: CertificadoService = {
+  // filtragem por status ja vem da query
   async listarCertificadosDoParticipante(participanteId) {
     const inscricoes = await api.get<Inscricao[]>(`/inscricoes?participanteId=${participanteId}&status=PRESENTE`);
     return enriquecer(inscricoes);
@@ -252,10 +226,8 @@ const httpCertificadoService: CertificadoService = {
       todasTentativas,
     );
   },
-  // pdf sempre montado no navegador, mock ou nao
+  // pdf sempre montado no navegador
   gerarCertificado(dados) {
     gerarPdf(dados);
   },
 };
-
-export const certificadoService: CertificadoService = USE_MOCK ? localCertificadoService : httpCertificadoService;

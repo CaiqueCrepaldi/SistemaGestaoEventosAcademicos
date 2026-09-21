@@ -138,7 +138,11 @@ export function ParticipantesPage() {
                   >
                     {participante.ativo === false ? "Reativar" : "Inativar"}
                   </button>
-                  <button className="btn btn-ghost btn-danger" onClick={() => setExcluindo(participante)}>Excluir</button>
+                  {participante.ativo === false && (
+                    <button className="btn btn-ghost btn-danger" onClick={() => setExcluindo(participante)}>
+                      Excluir
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -205,7 +209,7 @@ export function ParticipantesPage() {
       {excluindo && (
         <ConfirmDialog
           title="Remover participante"
-          message={`Tem certeza que deseja remover "${excluindo.nome}"? Essa ação não pode ser desfeita.`}
+          message={`Tem certeza que deseja remover "${excluindo.nome}"? A conta, inscrições, feedbacks e tentativas de questionário serão apagados. Essa ação não pode ser desfeita.`}
           confirmLabel="Remover"
           tone="danger"
           onConfirm={() => void excluir()}

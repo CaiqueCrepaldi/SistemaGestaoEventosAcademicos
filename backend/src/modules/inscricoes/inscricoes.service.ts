@@ -3,6 +3,7 @@ import type { Inscricao as InscricaoDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { emailService } from "../email/email.service";
+import { descriptografar } from "../../utils/criptografia";
 import type { Inscricao, StatusPresenca } from "../../types/domain";
 import type { InscricaoCheckinInput, InscricaoInput } from "./inscricoes.schemas";
 
@@ -114,15 +115,17 @@ async function confirmarEmail(id: string, participanteIdDoToken: string) {
     throw AppError.acessoNegado("Esta inscrição não pertence a você.");
   }
 
-  await emailService.enviarConfirmacaoInscricao(inscricao.participante.email, {
-    participanteNome: inscricao.participante.nome,
+  const emailParticipante = descriptografar(inscricao.participante.email);
+
+  await emailService.enviarConfirmacaoInscricao(emailParticipante, {
+    participanteNome: descriptografar(inscricao.participante.nome),
     eventoTitulo: inscricao.evento.titulo,
     eventoTema: inscricao.evento.tema,
     palestranteNome: inscricao.evento.palestrante.nome,
     eventoHorario: inscricao.evento.horario,
   });
 
-  return { destinatario: inscricao.participante.email, enviadoEm: new Date().toISOString() };
+  return { destinatario: emailParticipante, enviadoEm: new Date().toISOString() };
 }
 
 export const inscricoesService = { listar, buscarOuFalhar, criarManual, atualizarCheckin, remover, confirmarEmail };

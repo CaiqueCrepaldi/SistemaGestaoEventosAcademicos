@@ -10,38 +10,19 @@ npm install
 npm run dev
 ```
 
-Sem nenhum `.env.local` configurado, o app já sobe em modo mock (ver
-abaixo). Pra ligar no backend de verdade, crie `frontend/.env.local` (não é
-versionado) com o conteúdo da tabela da próxima seção.
+Precisa do backend (`../backend`) rodando — não existe modo "mock" com
+dado fake no navegador, toda a aplicação fala direto com a API/banco real.
+Crie `frontend/.env.local` (não é versionado) com:
 
-## Mock vs. integrado
+```
+VITE_API_URL=http://localhost:8080/api
+```
 
-Duas variáveis controlam isso, em `.env.local` (não versionado):
-
-| Variável | mock (padrão) | integrado |
-|---|---|---|
-| `VITE_USE_MOCK` | `true` | `false` |
-| `VITE_API_URL` | ignorado | url da API, tipo `http://localhost:8080/api` |
-
-No modo mock os dados ficam no localStorage do navegador, pré-carregados de
-`src/services/seed.ts` — não precisa do backend rodando, é o jeito normal
-de mexer na UI no dia a dia. E-mail de confirmação de inscrição só vai pro
-console e pra `localStorage["sgea:emails-enviados"]`, já que não tem
-servidor de e-mail nenhum aqui.
-
-No modo integrado cada chamada de serviço vira request HTTP de verdade pra
+Cada chamada de serviço (`crud.ts`, `authService.ts`, `emailService.ts`
+etc., todos por cima de `api.ts`) vira request HTTP de verdade pra
 `VITE_API_URL`, com `Authorization: Bearer <token>` (token vem da sessão
-salva em `localStorage["sgea:session"]` no login). Precisa do backend
-(`../backend`) rodando e seguindo o contrato do `docs/api-contract.md`.
-
-Pra trocar, edita o `.env.local` e reinicia o `npm run dev` (env var não
-recarrega sozinha). Sem `.env` nenhum configurado o app cai em mock por
-padrão — só `false` explícito liga o modo integrado.
-
-Por baixo do capô: `crud.ts`, `authService.ts` e `emailService.ts` têm cada
-um dois adapters (localStorage e HTTP via `api.ts`) atrás da mesma
-interface, escolhidos uma vez no import pelo `VITE_USE_MOCK`. Página nenhuma
-sabe qual modo tá ativo.
+salva em `localStorage["sgea:session"]` no login — a única coisa que o
+frontend guarda no navegador é a sessão, não dado de negócio).
 
 ## Scripts
 

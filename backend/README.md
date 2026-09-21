@@ -48,15 +48,27 @@ CORS_ORIGIN=http://localhost:5173
 DATABASE_URL="mysql://usuario:senha@host.tidbcloud.com:4000/sgea?sslaccept=strict"
 JWT_SECRET=troque-este-valor-por-um-segredo-longo-e-aleatorio
 JWT_EXPIRES_IN=8h
+ENCRYPTION_KEY=
 SENDGRID_API_KEY=
 EMAIL_FROM=
 ```
 
-`DATABASE_URL` e `JWT_SECRET` são obrigatórios pra o servidor subir (troque
-o `JWT_SECRET` por um valor aleatório e longo em qualquer ambiente real —
-quem souber esse segredo consegue forjar token de admin). Deixe
-`SENDGRID_API_KEY`/`EMAIL_FROM` em branco em dev: sem eles, o backend só
-imprime o e-mail no console em vez de enviar de verdade.
+`DATABASE_URL`, `JWT_SECRET` e `ENCRYPTION_KEY` são obrigatórios pra o
+servidor subir (troque o `JWT_SECRET` por um valor aleatório e longo em
+qualquer ambiente real — quem souber esse segredo consegue forjar token de
+admin). Deixe `SENDGRID_API_KEY`/`EMAIL_FROM` em branco em dev: sem eles, o
+backend só imprime o e-mail no console em vez de enviar de verdade.
+
+`ENCRYPTION_KEY` cifra nome/e-mail/rgm de `usuarios`/`participantes` em
+repouso (AES-256-GCM, ver `src/utils/criptografia.ts`) — precisa ser uma
+chave de 32 bytes em base64:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+**Trocar essa chave torna ilegível todo dado já cifrado com a antiga —
+guarde-a com o mesmo cuidado que o `JWT_SECRET`, nunca a perca.**
 
 Pra enviar de verdade: cria conta grátis em
 [sendgrid.com](https://signup.sendgrid.com/) (100 e-mails/dia de graça),
@@ -86,12 +98,10 @@ conferir que o processo subiu.
 No `frontend/.env` (crie se não existir):
 
 ```
-VITE_USE_MOCK=false
 VITE_API_URL=http://localhost:8080/api
 ```
 
-Com isso o frontend para de usar o mock em localStorage e passa a bater
-direto nesta API. As contas de demonstração são as mesmas dos dois lados:
+As contas de demonstração são as mesmas dos dois lados:
 
 | Perfil | E-mail | Senha |
 |---|---|---|

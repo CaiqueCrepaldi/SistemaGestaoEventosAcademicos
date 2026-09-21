@@ -118,7 +118,7 @@ export function CadastroPage() {
                 type="email"
                 value={form.emailInstitucional}
                 onChange={(e) => setForm({ ...form, emailInstitucional: e.target.value })}
-                placeholder={`nome${DOMINIO_INSTITUCIONAL}`}
+                placeholder={`rgm${DOMINIO_INSTITUCIONAL}`}
                 required
               />
             </label>
