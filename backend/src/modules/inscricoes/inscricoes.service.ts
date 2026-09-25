@@ -4,6 +4,7 @@ import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { emailService } from "../email/email.service";
 import { descriptografar } from "../../utils/criptografia";
+import { registrarAuditoria } from "../../utils/auditoria";
 import type { Inscricao, StatusPresenca } from "../../types/domain";
 import type { InscricaoCheckinInput, InscricaoInput } from "./inscricoes.schemas";
 
@@ -80,6 +81,7 @@ async function atualizarCheckin(id: string, dados: InscricaoCheckinInput, usuari
       where: { id },
       data: { statusPresenca: "PRESENTE", dataCheckin: new Date(), usuarioId: usuarioIdDoToken },
     });
+    await registrarAuditoria(usuarioIdDoToken, "PRESENCA_CONFIRMADA", `inscricao ${id}`);
     return paraDominio(inscricao);
   }
 
@@ -88,6 +90,7 @@ async function atualizarCheckin(id: string, dados: InscricaoCheckinInput, usuari
       where: { id },
       data: { statusPresenca: "AUSENTE", dataCheckin: null },
     });
+    await registrarAuditoria(usuarioIdDoToken, "PRESENCA_MARCADA_AUSENTE", `inscricao ${id}`);
     return paraDominio(inscricao);
   }
 

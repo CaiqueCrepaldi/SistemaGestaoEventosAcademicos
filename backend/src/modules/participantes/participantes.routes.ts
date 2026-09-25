@@ -33,7 +33,7 @@ participantesRouter.put(
   "/:id",
   validarCorpo(participanteUpdateSchema),
   asyncHandler(async (req, res) => {
-    const participante = await participantesService.atualizar(req.params.id, req.body);
+    const participante = await participantesService.atualizar(req.params.id, req.body, req.usuario!.sub);
     res.json(participanteParaDTO(participante));
   }),
 );
@@ -41,7 +41,7 @@ participantesRouter.put(
 participantesRouter.delete(
   "/:id",
   asyncHandler(async (req, res) => {
-    await participantesService.remover(req.params.id);
+    await participantesService.remover(req.params.id, req.usuario!.sub);
     res.status(204).send();
   }),
 );

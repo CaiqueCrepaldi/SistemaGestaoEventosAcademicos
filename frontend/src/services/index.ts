@@ -1,5 +1,7 @@
 export * from "./entityServices";
 export { ApiError, api } from "./api";
+export { auditoriaService } from "./auditoriaService";
+export type { LogAuditoria } from "./auditoriaService";
 export { authService } from "./authService";
 export type { CadastroAlunoInput, SessaoUsuario, UsuarioPerfil } from "./authService";
 export { certificadoService } from "./certificadoService";

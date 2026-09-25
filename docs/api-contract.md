@@ -46,6 +46,7 @@ auto-cadastro.
 | Certificados                             | ✅ (de qualquer participante) | ✅ | ✅ (só os próprios) |
 | Feedback                                 | ✅ (listar tudo) | ✅ | ✅ (ver ⚠️ abaixo) |
 | Dashboard / estatísticas                 | ✅ | ✅ | ❌ |
+| Auditoria (logs de login e mudanças)      | ✅ | ✅ | ❌ |
 | Trabalhos                                | removido do projeto | removido | removido |
 
 ⚠️ **Feedback ainda não tem o mesmo tratamento por perfil que o resto** — a
@@ -93,9 +94,13 @@ Request:
   "nomeCompleto": "João Pedro Lima",
   "rgm": "2024010011",
   "emailInstitucional": "joao.lima@aluno.ifsp.edu.br",
-  "senha": "SenhaForte123"
+  "senha": "SenhaForte123",
+  "aceiteLgpd": true
 }
 ```
+`aceiteLgpd` precisa ser `true` — é o aceite dos Termos de Uso/Política de
+Privacidade (LGPD). Validado com `z.literal(true)`, então "esconder o
+checkbox no frontend" nunca é suficiente pra pular essa exigência.
 
 Response `201`:
 ```json
@@ -105,17 +110,21 @@ Response `201`:
   "emailLogin": "joao.lima@aluno.ifsp.edu.br",
   "perfil": "ALUNO",
   "rgm": "2024010011",
-  "participanteId": "9c1a4d2e-participante-uuid"
+  "participanteId": "9c1a4d2e-participante-uuid",
+  "consentimentoLgpdEm": "2026-09-25T17:52:31.626Z"
 }
 ```
 Senha não volta no corpo em nenhum endpoint, nunca.
+`consentimentoLgpdEm` é a data/hora exata do aceite, gravada no servidor no
+momento do registro (nunca confia em timestamp vindo do cliente) — `null`
+pras contas provisionadas antes desse controle existir (admin/secretaria).
 
 Erros:
 | Status | code | Quando |
 |---|---|---|
 | 409 | `RGM_DUPLICADO` | já existe usuário/participante com esse RGM |
 | 409 | `EMAIL_DUPLICADO` | já existe usuário com esse e-mail |
-| 422 | `VALIDACAO` | campo obrigatório faltando, e-mail fora do padrão institucional, senha fraca (pelo menos 8 caracteres como piso) |
+| 422 | `VALIDACAO` | campo obrigatório faltando, e-mail fora do padrão institucional, senha fraca (pelo menos 8 caracteres como piso), `aceiteLgpd` ausente ou `false` |
 
 ### `POST /api/auth/login` (endpoint dedicado)
 
@@ -174,6 +183,20 @@ revalidar contra o backend a cada reload. Um token expirado só vai falhar
 no primeiro request de verdade que a tela fizer (ex: abrir a lista de
 eventos), não no carregamento inicial — é um ponto de melhoria futura, não
 algo que quebra o fluxo hoje.
+
+## Auditoria
+
+Toda ação sensível gera uma linha em `LogAuditoria` (login com sucesso ou
+falha, cadastro de aluno, inativação/reativação/remoção de participante,
+criação/edição/remoção de evento, confirmação de presença/ausência no
+check-in). O campo `detalhe` nunca guarda dado sensível (senha, token,
+e-mail em texto puro) — só id do registro afetado e um motivo curto. Uma
+falha ao gravar o log nunca derruba a operação de verdade (só loga o erro
+no console do servidor).
+
+`GET /api/logs-auditoria` — admin/secretaria only, `403` pra aluno. Devolve
+os 200 registros mais recentes, mais novo primeiro, com o nome de quem
+agiu já decifrado (`atorNome`, `null` se o usuário foi removido depois).
 
 ## Eventos
 

@@ -11,6 +11,7 @@ export interface Usuario {
   perfil: Perfil;
   rgm: string | null;
   participanteId: string | null;
+  consentimentoLgpdEm: string | null;
   criadoEm: string;
 }
 

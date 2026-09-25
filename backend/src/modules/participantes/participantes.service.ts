@@ -2,6 +2,7 @@ import { Prisma, type Participante as ParticipanteDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { criptografar, descriptografar, indiceBusca } from "../../utils/criptografia";
+import { registrarAuditoria } from "../../utils/auditoria";
 import type { Participante } from "../../types/domain";
 import type { ParticipanteUpdateInput } from "./participantes.schemas";
 
@@ -37,7 +38,7 @@ function relancarComoConflito(erro: unknown): never {
   throw erro;
 }
 
-async function atualizar(id: string, dados: ParticipanteUpdateInput) {
+async function atualizar(id: string, dados: ParticipanteUpdateInput, atorId: string) {
   await buscarOuFalhar(id);
 
   if (dados.ativo === false && !dados.motivoInativacao?.trim()) {
@@ -63,6 +64,13 @@ async function atualizar(id: string, dados: ParticipanteUpdateInput) {
       where: { id },
       data: dados.ativo === true ? { ...dadosCifrados, motivoInativacao: null } : dadosCifrados,
     });
+
+    if (dados.ativo === false) {
+      await registrarAuditoria(atorId, "PARTICIPANTE_INATIVADO", `participante ${id}: ${dados.motivoInativacao}`);
+    } else if (dados.ativo === true) {
+      await registrarAuditoria(atorId, "PARTICIPANTE_REATIVADO", `participante ${id}`);
+    }
+
     return paraDominio(participante);
   } catch (erro) {
     relancarComoConflito(erro);
@@ -73,7 +81,7 @@ async function atualizar(id: string, dados: ParticipanteUpdateInput) {
 // administrador/secretaria nunca tem participante entao nunca cai aqui, mas
 // a checagem fica como garantia extra: essas duas contas nao podem ser
 // removidas de jeito nenhum
-async function remover(id: string) {
+async function remover(id: string, atorId: string) {
   const participante = await buscarOuFalhar(id);
 
   if (participante.ativo !== false) {
@@ -95,6 +103,8 @@ async function remover(id: string) {
     ...(usuario ? [prisma.usuario.delete({ where: { id: usuario.id } })] : []),
     prisma.participante.delete({ where: { id } }),
   ]);
+
+  await registrarAuditoria(atorId, "PARTICIPANTE_REMOVIDO", `participante ${id}`);
 }
 
 export const participantesService = { listar, buscarOuFalhar, atualizar, remover };

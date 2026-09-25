@@ -20,6 +20,7 @@ export interface CadastroAlunoInput {
   rgm: string;
   emailInstitucional: string;
   senha: string;
+  aceiteLgpd: boolean;
 }
 
 export interface SolicitarRecuperacaoResult {

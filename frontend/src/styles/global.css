@@ -921,3 +921,52 @@ h1, h2, h3 {
   font-weight: 700;
   margin: 8px 0;
 }
+
+/* Termos de uso / Politica de privacidade */
+.legal-card {
+  max-width: 720px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.legal-card h1 {
+  margin: 0 0 4px;
+  font-size: 24px;
+}
+
+.legal-card h2 {
+  font-size: 16px;
+  margin: 22px 0 8px;
+}
+
+.legal-card p,
+.legal-card li {
+  color: var(--gray-700);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.legal-versao {
+  color: var(--gray-500);
+  font-size: 12px;
+  margin-bottom: 18px;
+}
+
+.legal-tabela {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+  font-size: 13px;
+}
+
+.legal-tabela th,
+.legal-tabela td {
+  border: 1px solid var(--gray-200);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.legal-tabela th {
+  background: var(--gray-100);
+}

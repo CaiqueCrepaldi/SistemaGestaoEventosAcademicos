@@ -18,6 +18,10 @@ export const registroSchema = z.object({
       message: `E-mail precisa ser institucional (terminar com ${DOMINIO_INSTITUCIONAL}).`,
     }),
   senha: z.string().min(8, "A senha deve ter ao menos 8 caracteres."),
+  // esconder o checkbox no frontend nao e controle — o backend exige o aceite explicito (LGPD)
+  aceiteLgpd: z.literal(true, {
+    message: "É necessário aceitar os termos de uso e a política de privacidade.",
+  }),
 });
 export type RegistroInput = z.infer<typeof registroSchema>;
 

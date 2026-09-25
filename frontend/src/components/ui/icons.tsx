@@ -145,6 +145,19 @@ export function FeedbackIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+// icone de lista/documento, usado na tela de auditoria
+export function AuditoriaIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M7 3h8l4 4v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
+      <path d="M15 3v4h4" />
+      <path d="M9 12h6" />
+      <path d="M9 16h6" />
+      <path d="M9 8h2" />
+    </Icon>
+  );
+}
+
 // icone de olho aberto, usado no botao de mostrar senha
 export function OlhoIcon(props: SVGProps<SVGSVGElement>) {
   return (

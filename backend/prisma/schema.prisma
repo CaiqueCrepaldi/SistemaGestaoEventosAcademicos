@@ -36,10 +36,14 @@ model Usuario {
   rgm            String?  @db.Text
   participanteId String?
   participante   Participante? @relation(fields: [participanteId], references: [id], onDelete: SetNull)
+  // data/hora em que aceitou os termos de uso/politica de privacidade no cadastro (LGPD);
+  // null pra contas provisionadas antes desse controle existir (admin/secretaria, seeds antigos)
+  consentimentoLgpdEm DateTime?
   criadoEm       DateTime @default(now())
 
   checkinsFeitos  Inscricao[]        @relation("CheckinFeitoPor")
   recuperacoes    RecuperacaoSenha[]
+  logsAuditoria   LogAuditoria[]
 
   @@map("usuarios")
 }
@@ -163,4 +167,19 @@ model TentativaQuestionario {
   criadoEm       DateTime     @default(now())
 
   @@map("tentativas_questionario")
+}
+
+// trilha de auditoria (login, mudanca em registro critico) — exigencia de LGPD/seguranca.
+// "acao" eh um codigo curto (LOGIN_SUCESSO, PARTICIPANTE_INATIVADO etc.), "detalhe" nunca
+// guarda dado sensivel (senha, token, PII bruta) — so contexto operacional
+model LogAuditoria {
+  id        String   @id
+  usuarioId String?
+  usuario   Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  acao      String
+  detalhe   String?  @db.Text
+  criadoEm  DateTime @default(now())
+
+  @@index([criadoEm])
+  @@map("logs_auditoria")
 }

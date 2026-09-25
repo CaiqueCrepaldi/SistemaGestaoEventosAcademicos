@@ -6,6 +6,7 @@ import { conferirSenha, gerarHashSenha } from "../../utils/password";
 import { assinarToken, duracaoEmSegundos } from "../../utils/jwt";
 import { usuarioParaDTO } from "../../utils/dto";
 import { criptografar, descriptografar, indiceBusca } from "../../utils/criptografia";
+import { registrarAuditoria } from "../../utils/auditoria";
 import { env } from "../../config/env";
 import { emailService } from "../email/email.service";
 import type { Usuario } from "../../types/domain";
@@ -21,6 +22,7 @@ export function usuarioParaDominio(usuario: UsuarioDb): Usuario {
     nome: descriptografar(usuario.nome),
     emailLogin: descriptografar(usuario.emailLogin),
     rgm: usuario.rgm ? descriptografar(usuario.rgm) : null,
+    consentimentoLgpdEm: usuario.consentimentoLgpdEm ? usuario.consentimentoLgpdEm.toISOString() : null,
     criadoEm: usuario.criadoEm.toISOString(),
   };
 }
@@ -64,8 +66,12 @@ async function registrarAluno(dados: RegistroInput) {
       perfil: "ALUNO",
       rgm: criptografar(dados.rgm),
       participanteId: participante.id,
+      // aceiteLgpd ja foi validado como obrigatoriamente true no schema — registra o momento exato
+      consentimentoLgpdEm: new Date(),
     },
   });
+
+  await registrarAuditoria(usuario.id, "USUARIO_REGISTRADO", "cadastro publico de aluno");
 
   return usuarioParaDTO(usuarioParaDominio(usuario));
 }
@@ -79,16 +85,21 @@ async function login(dados: LoginInput) {
   // mensagem generica pra nao dar dica se foi email ou senha que errou
   const senhaOk = usuario ? await conferirSenha(dados.senha, usuario.senhaHash) : false;
   if (!usuario || !senhaOk) {
+    // nunca grava o e-mail tentado (PII) no log — so se o usuario existe ou nao
+    await registrarAuditoria(usuario?.id ?? null, "LOGIN_FALHA", usuario ? "senha incorreta" : "e-mail nao encontrado");
     throw new AppError(401, "CREDENCIAIS_INVALIDAS", "E-mail ou senha inválidos.");
   }
 
   if (usuario.perfil === "ALUNO" && usuario.participante && !usuario.participante.ativo) {
+    await registrarAuditoria(usuario.id, "LOGIN_FALHA", "conta inativa");
     throw new AppError(
       403,
       "USUARIO_INATIVO",
       "Seu acesso foi inativado. Entre em contato com a secretaria.",
     );
   }
+
+  await registrarAuditoria(usuario.id, "LOGIN_SUCESSO");
 
   const token = assinarToken({ sub: usuario.id, perfil: usuario.perfil, participanteId: usuario.participanteId });
 

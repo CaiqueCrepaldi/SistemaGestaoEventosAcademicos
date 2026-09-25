@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { Modal } from "./ui/Modal";
 import {
   AgendaIcon,
+  AuditoriaIcon,
   CertificadoIcon,
   CheckinIcon,
   DashboardIcon,
@@ -42,6 +43,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/participantes", label: "Participantes", perfis: EQUIPE, icon: ParticipanteIcon },
   { to: "/inscricoes", label: "Inscrições", perfis: EQUIPE, icon: InscricaoIcon },
   { to: "/checkin", label: "Check-in", perfis: EQUIPE, icon: CheckinIcon },
+  { to: "/auditoria", label: "Auditoria", perfis: EQUIPE, icon: AuditoriaIcon },
   { to: "/agenda", label: "Agenda", perfis: TODOS_PERFIS, icon: AgendaIcon },
   { to: "/certificados", label: "Certificados", perfis: TODOS_PERFIS, icon: CertificadoIcon },
   { to: "/feedback", label: "Feedback", perfis: TODOS_PERFIS, icon: FeedbackIcon },

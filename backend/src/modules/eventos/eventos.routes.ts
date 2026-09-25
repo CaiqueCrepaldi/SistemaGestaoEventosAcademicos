@@ -40,7 +40,7 @@ eventosRouter.post(
   autorizar("ADMINISTRADOR", "SECRETARIA"),
   validarCorpo(eventoSchema),
   asyncHandler(async (req, res) => {
-    const evento = await eventosService.criar(req.body);
+    const evento = await eventosService.criar(req.body, req.usuario!.sub);
     res.status(201).json(eventoParaDTO(evento, false));
   }),
 );
@@ -52,7 +52,7 @@ eventosRouter.put(
   autorizar("ADMINISTRADOR", "SECRETARIA"),
   validarCorpo(eventoUpdateSchema),
   asyncHandler(async (req, res) => {
-    const evento = await eventosService.atualizar(req.params.id, req.body);
+    const evento = await eventosService.atualizar(req.params.id, req.body, req.usuario!.sub);
     res.json(eventoParaDTO(evento, false));
   }),
 );
@@ -63,7 +63,7 @@ eventosRouter.delete(
   autenticar,
   autorizar("ADMINISTRADOR", "SECRETARIA"),
   asyncHandler(async (req, res) => {
-    await eventosService.remover(req.params.id);
+    await eventosService.remover(req.params.id, req.usuario!.sub);
     res.status(204).send();
   }),
 );

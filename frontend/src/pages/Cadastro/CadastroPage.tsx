@@ -24,8 +24,8 @@ function validarCliente(form: typeof VAZIO, confirmarSenha: string): Record<stri
   if (!validarRgm(form.rgm)) {
     erros.rgm = "RGM deve ter exatamente 11 dígitos, sem espaços.";
   }
-  if (form.senha.length < 6) {
-    erros.senha = "Senha deve ter no mínimo 6 caracteres";
+  if (form.senha.length < 8) {
+    erros.senha = "Senha deve ter no mínimo 8 caracteres";
   } else if (form.senha !== confirmarSenha) {
     erros.confirmarSenha = "As senhas não coincidem";
   }
@@ -42,6 +42,7 @@ export function CadastroPage() {
   const [errosCampo, setErrosCampo] = useState<Record<string, string>>({});
   const [erroGeral, setErroGeral] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
+  const [aceitoLgpd, setAceitoLgpd] = useState(false);
 
   // valida no cliente, manda pro backend e trata os erros possiveis
   async function handleSubmit(e: FormEvent) {
@@ -54,10 +55,14 @@ export function CadastroPage() {
       toast.error("Corrija os campos destacados antes de continuar.");
       return;
     }
+    if (!aceitoLgpd) {
+      toast.error("É necessário aceitar os termos de uso e a política de privacidade.");
+      return;
+    }
 
     setCarregando(true);
     try {
-      await authService.cadastrarAluno(form);
+      await authService.cadastrarAluno({ ...form, aceiteLgpd: aceitoLgpd });
       await login(form.emailInstitucional, form.senha);
       navigate("/eventos");
     } catch (erro) {
@@ -142,8 +147,11 @@ export function CadastroPage() {
           </div>
 
           <label className="lgpd-consent">
-            <input type="checkbox" />
-            <span>Li e aceito os termos de uso e a política de privacidade (LGPD).</span>
+            <input type="checkbox" checked={aceitoLgpd} onChange={(e) => setAceitoLgpd(e.target.checked)} required />
+            <span>
+              Li e aceito os <Link to="/termos-de-uso" target="_blank" rel="noopener noreferrer">termos de uso</Link> e a{" "}
+              <Link to="/politica-de-privacidade" target="_blank" rel="noopener noreferrer">política de privacidade</Link> (LGPD).
+            </span>
           </label>
 
           {erroGeral && <p className="form-error">{erroGeral}</p>}

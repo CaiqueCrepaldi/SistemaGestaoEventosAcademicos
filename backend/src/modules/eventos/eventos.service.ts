@@ -3,6 +3,7 @@ import type { Evento as EventoDb, Prisma } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { paraDominio as paraDominioInscricao } from "../inscricoes/inscricoes.service";
+import { registrarAuditoria } from "../../utils/auditoria";
 import type { Evento, PerguntaQuestionario } from "../../types/domain";
 import type { EventoInput, EventoUpdateInput } from "./eventos.schemas";
 
@@ -51,7 +52,7 @@ async function validarReferencias(dados: Partial<Pick<EventoInput, "salaId" | "p
 }
 
 // cadastra um evento novo
-async function criar(dados: EventoInput) {
+async function criar(dados: EventoInput, atorId: string) {
   await validarReferencias(dados);
   const evento = await prisma.evento.create({
     data: {
@@ -65,11 +66,12 @@ async function criar(dados: EventoInput) {
       questionario: dados.questionario as unknown as Prisma.InputJsonValue,
     },
   });
+  await registrarAuditoria(atorId, "EVENTO_CRIADO", `evento ${evento.id}: ${evento.titulo}`);
   return paraDominio(evento);
 }
 
 // edita um evento existente
-async function atualizar(id: string, dados: EventoUpdateInput) {
+async function atualizar(id: string, dados: EventoUpdateInput, atorId: string) {
   await buscarOuFalhar(id);
   await validarReferencias(dados);
   const evento = await prisma.evento.update({
@@ -84,13 +86,15 @@ async function atualizar(id: string, dados: EventoUpdateInput) {
       questionario: dados.questionario as unknown as Prisma.InputJsonValue | undefined,
     },
   });
+  await registrarAuditoria(atorId, "EVENTO_ATUALIZADO", `evento ${id}`);
   return paraDominio(evento);
 }
 
 // remove o evento; inscricao/feedback/tentativa vinculados somem juntos (onDelete: Cascade no schema)
-async function remover(id: string) {
+async function remover(id: string, atorId: string) {
   await buscarOuFalhar(id);
   await prisma.evento.delete({ where: { id } });
+  await registrarAuditoria(atorId, "EVENTO_REMOVIDO", `evento ${id}`);
 }
 
 // autoinscricao do aluno logado: checa duplicidade e vaga antes de criar

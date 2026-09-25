@@ -4,6 +4,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ToastViewport } from "./components/ui/Toast";
 import { AuthProvider } from "./context/AuthContext";
 import { AgendaPage } from "./pages/Agenda/AgendaPage";
+import { AuditoriaPage } from "./pages/Auditoria/AuditoriaPage";
 import { CadastroPage } from "./pages/Cadastro/CadastroPage";
 import { CertificadosPage } from "./pages/Certificados/CertificadosPage";
 import { CheckinPage } from "./pages/Checkin/CheckinPage";
@@ -12,6 +13,8 @@ import { EsqueciSenhaPage } from "./pages/EsqueciSenha/EsqueciSenhaPage";
 import { EventosPage } from "./pages/Eventos/EventosPage";
 import { FeedbackPage } from "./pages/Feedback/FeedbackPage";
 import { InscricoesPage } from "./pages/Inscricoes/InscricoesPage";
+import { PoliticaDePrivacidadePage } from "./pages/Legal/PoliticaDePrivacidadePage";
+import { TermosDeUsoPage } from "./pages/Legal/TermosDeUsoPage";
 import { LoginPage } from "./pages/Login/LoginPage";
 import { PalestrantesPage } from "./pages/Palestrantes/PalestrantesPage";
 import { ParticipantesPage } from "./pages/Participantes/ParticipantesPage";
@@ -28,6 +31,8 @@ export function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/cadastro" element={<CadastroPage />} />
           <Route path="/esqueci-senha" element={<EsqueciSenhaPage />} />
+          <Route path="/termos-de-uso" element={<TermosDeUsoPage />} />
+          <Route path="/politica-de-privacidade" element={<PoliticaDePrivacidadePage />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
               {/* rotas que ADMINISTRADOR, SECRETARIA e ALUNO acessam */}
@@ -46,6 +51,7 @@ export function App() {
                 <Route path="/participantes" element={<ParticipantesPage />} />
                 <Route path="/inscricoes" element={<InscricoesPage />} />
                 <Route path="/checkin" element={<CheckinPage />} />
+                <Route path="/auditoria" element={<AuditoriaPage />} />
               </Route>
             </Route>
           </Route>
