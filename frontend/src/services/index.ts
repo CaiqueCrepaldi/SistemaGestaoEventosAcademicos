@@ -1,4 +1,5 @@
 export * from "./entityServices";
+export type { EventoParaAvaliar } from "./entityServices";
 export { ApiError, api } from "./api";
 export { auditoriaService, SEM_RESPONSAVEL } from "./auditoriaService";
 export type { LogAuditoria, PaginaAuditoria, ResponsavelAuditoria } from "./auditoriaService";

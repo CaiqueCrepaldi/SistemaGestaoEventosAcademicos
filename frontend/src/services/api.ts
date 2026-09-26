@@ -39,17 +39,33 @@ function getToken(): string | null {
   }
 }
 
+// sem limite a tela ficaria "carregando" pra sempre se o servidor nao respondesse
+const TIMEOUT_MS = 30_000;
+
 // faz a chamada http de verdade
 async function request<T>(path: string, method: string, body?: unknown): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const response = await fetch(`${BASE_URL}${path}`, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (erro) {
+    if (erro instanceof DOMException && erro.name === "AbortError") {
+      throw new ApiError(0, "O servidor demorou demais para responder. Tente novamente.", "TIMEOUT");
+    }
+    throw new ApiError(0, "Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.", "REDE");
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (response.status === 204) {
     return undefined as T;

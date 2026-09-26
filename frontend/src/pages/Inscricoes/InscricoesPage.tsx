@@ -115,7 +115,7 @@ export function InscricoesPage() {
   const eventoSelecionado = eventos.find((e) => e.id === eventoId);
   const vagas = vagasDisponiveis(eventoSelecionado);
 
-  // busca por nome/email/rgm, mesma logica do checkinService.buscarParticipantes
+  // busca por nome/email/rgm, mesma logica do filtro da tela de check-in
   const alvoBusca = buscaParticipante.trim().toLowerCase();
   const resultadosBusca = alvoBusca
     ? participantes.filter(

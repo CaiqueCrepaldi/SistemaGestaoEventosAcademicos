@@ -40,7 +40,8 @@ export type AcaoAuditoria =
 // de verdade — so registra o erro no console e segue. "detalhe" precisa ser sempre contexto
 // operacional (tipo da entidade + id, motivo curto), nunca dado sensivel (nome, e-mail, RGM,
 // senha, codigo de recuperacao, token). "criadoEm" so eh passado quando o log precisa carregar
-// exatamente o mesmo instante de outro registro (ex.: o aceite LGPD)
+// exatamente o mesmo instante de outro registro (ex.: o aceite LGPD).
+// Logs so sao criados aqui: nada no sistema apaga ou edita uma linha de logs_auditoria.
 export async function registrarAuditoria(
   usuarioId: string | null,
   acao: AcaoAuditoria,
@@ -48,8 +49,11 @@ export async function registrarAuditoria(
   criadoEm?: Date,
 ): Promise<void> {
   try {
+    // copia o nome (ja cifrado no cadastro, mesma chave/formato de criptografar()) de quem agiu:
+    // se o usuario for excluido depois, o log mantem o responsavel mesmo com usuarioId nulo
+    const ator = usuarioId ? await prisma.usuario.findUnique({ where: { id: usuarioId }, select: { nome: true } }) : null;
     await prisma.logAuditoria.create({
-      data: { id: randomUUID(), usuarioId, acao, detalhe, criadoEm },
+      data: { id: randomUUID(), usuarioId, atorNomeCifrado: ator?.nome ?? null, acao, detalhe, criadoEm },
     });
   } catch (erro) {
     console.error("[auditoria] falha ao registrar log:", erro);

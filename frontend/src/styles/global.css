@@ -613,6 +613,12 @@ h1, h2, h3 {
   border-radius: 8px;
 }
 
+/* lista longa que rola dentro do proprio card em vez de esticar a pagina */
+.list-scroll {
+  max-height: 460px;
+  overflow-y: auto;
+}
+
 .simple-list-item.clickable {
   cursor: pointer;
 }

@@ -44,19 +44,14 @@ auto-cadastro.
 | Autoinscrição no evento                  | — | — | ✅ (só a própria) |
 | Check-in (confirmar presença/ausência)   | ✅ | ✅ | ❌ |
 | Certificados                             | ✅ (de qualquer participante) | ✅ | ✅ (só os próprios) |
-| Feedback                                 | ✅ (listar tudo) | ✅ | ✅ (ver ⚠️ abaixo) |
+| Feedback                                 | ✅ (listar tudo) | ✅ | ✅ (só os próprios, e só de palestra com certificado) |
 | Dashboard / estatísticas                 | ✅ | ✅ | ❌ |
 | Auditoria (trilha de operações e acessos) | ✅ | ✅ | ❌ |
 | Trabalhos                                | removido do projeto | removido | removido |
 
-⚠️ **Feedback ainda não tem o mesmo tratamento por perfil que o resto** — a
-tela hoje é a mesma para os três perfis, sem restringir aluno a ver/editar
-só o próprio feedback. Isso é uma lacuna conhecida do frontend atual (não
-foi adaptada quando os outros recursos ganharam a visão por perfil), listada
-em "coisas que ainda faltam" no fim deste documento. Pra manter os dois
-lados honestos: implemente a autorização do jeito que está descrito na
-seção **Feedback**, mesmo que o frontend ainda não a exija — é o
-comportamento correto e o frontend vai alcançar depois.
+Feedback: as regras por perfil (aluno só vê/edita o próprio e só avalia
+palestra em que recebeu o certificado) estão na seção **Feedback** e são
+aplicadas no backend; a tela já reflete isso.
 
 Trabalhos saiu do escopo do projeto. Não implementar
 `TrabalhoController`/`TrabalhoService`/tabela `trabalhos` — se algo já foi
@@ -239,7 +234,8 @@ Parâmetro inválido → `422` no formato padrão. Response `200`:
       "detalhe": "sala 17bc33b0-…",
       "criadoEm": "2026-09-26T02:25:48.684Z",
       "usuarioId": "…",
-      "atorNome": "Ana Ribeiro"
+      "atorNome": "Ana Ribeiro",
+      "atorRemovido": false
     }
   ],
   "total": 132,
@@ -249,8 +245,15 @@ Parâmetro inválido → `422` no formato padrão. Response `200`:
 }
 ```
 
-`atorNome` vem já decifrado (`null` se não houve responsável ou se o
-usuário foi removido depois).
+`atorNome` vem já decifrado. Cada log guarda uma cópia **cifrada** do nome de
+quem agiu (`atorNomeCifrado`, tirada na hora do log): se a conta for excluída
+depois, o log continua existindo com `usuarioId: null` (a FK é `ON DELETE SET
+NULL`; nada apaga log em cascata), `atorNome` vem dessa cópia e
+`atorRemovido` fica `true` (a tela mostra "(conta removida)"). `atorNome` só é
+`null` em ação pública sem responsável (login falho, recuperação de senha com
+e-mail inexistente) e nos logs criados antes da cópia existir cujo usuário foi
+excluído. A trilha é só leitura: nenhuma rota, service ou script apaga ou edita
+log (o TiDB não tem trigger, então essa proteção é da aplicação).
 
 `GET /api/logs-auditoria/responsaveis` — quem já aparece na trilha, pra
 montar o filtro: `[{ "id": "…", "nome": "Ana Ribeiro" }]`, ordenado por nome.
@@ -376,6 +379,12 @@ interface Participante {
 only, `403` pra aluno. Não existe `POST` (participante só nasce via
 `POST /api/auth/registro`).
 
+`GET /api/participantes/alunos` — admin/secretaria only. Só os participantes
+com conta de perfil `ALUNO`, já decifrados e em ordem alfabética (pt-BR), no
+mesmo formato de `Participante` (com `ativo`). É o que a tela de Check-in
+carrega ao abrir; o filtro por nome/e-mail/RGM roda no cliente em cima dessa
+lista (os campos ficam cifrados no banco, então não dá pra filtrar por `LIKE`).
+
 `PUT /api/participantes/{id}` — admin/secretaria. Usado pra inativar
 (`{ "ativo": false, "motivoInativacao": "..." }`, motivo obrigatório) e
 reativar (`{ "ativo": true }`, zera `motivoInativacao`).
@@ -436,13 +445,16 @@ um patch parcial:
   certificado.
 - Marcar ausente: `{ "statusPresenca": "AUSENTE", "dataCheckin": null }`.
 
+Confirmar presença de um aluno **inativo** retorna `409 PARTICIPANTE_INATIVO`
+("Aluno inativo: não é possível confirmar presença.") — a tela de Check-in
+também desabilita o botão, mas a regra vale na API.
+
 Aluno toma `403` em qualquer `PUT`/`DELETE` de inscrição — ele não confirma
 a própria presença, isso é sempre feito por quem está na recepção do
-evento. A busca de participante por nome/e-mail/RGM na tela de Check-in
-também não tem endpoint dedicado: o frontend carrega `GET /api/participantes`
-inteiro e filtra no cliente a cada tecla digitada. Funciona para o volume
-de dados de uma feira acadêmica; se crescer, um `?busca=` na própria rota
-de participantes resolveria sem mudar o frontend.
+evento. A tela de Check-in carrega todos os alunos de uma vez em
+`GET /api/participantes/alunos` e filtra por nome/e-mail/RGM no cliente.
+Funciona para o volume de dados de uma feira acadêmica; se crescer, um
+`?busca=` nessa rota resolveria sem mudar o frontend.
 
 ### `DELETE /api/inscricoes/{id}` (admin/secretaria)
 
@@ -593,21 +605,30 @@ interface Feedback {
 }
 ```
 
-Hoje isso é um recurso flat igual os outros — `GET/POST/PUT/DELETE
-/api/feedbacks` — porque a tela `FeedbackPage.tsx` ainda não foi adaptada
-por perfil (é a mesma tela de gestão pra admin, secretaria e aluno, listada
-na seção de lacunas conhecidas no fim deste documento). O comportamento
-**correto**, que o backend deve implementar desde já mesmo o frontend
-ainda não pedindo:
+Recurso flat — `GET/POST/PUT/DELETE /api/feedbacks`. Regras (todas validadas
+no backend, a tela só reflete o que a API liberou):
 
-- Aluno só pode criar feedback com o próprio `participanteId` (backend
-  ignora/sobrescreve pelo do token, mesmo padrão de Inscrição) e só edita
-  ou lê o próprio — nunca a lista inteira. `422 VALIDACAO` se a nota
-  estiver fora de 1-5, `409 FEEDBACK_JA_ENVIADO` se já existe feedback
-  desse participante pra esse evento.
-- Admin/secretaria continuam com `GET /api/feedbacks?eventoId=` liberado
-  pra ver/gerenciar tudo (é o que a tela usa pra calcular a média
-  exibida).
+- **Aluno só avalia palestra em que já recebeu o certificado** — a mesma regra
+  da tela de Certificados: presença confirmada (`PRESENTE`) **e** alguma
+  tentativa do questionário com no mínimo 60% (`utils/certificado.ts`,
+  `utils/questionario.ts`). Sem isso, `POST /api/feedbacks` responde `403`
+  "Você só pode avaliar palestras em que recebeu o certificado."
+- Um feedback por aluno por evento (índice único `participanteId + eventoId`):
+  `409 FEEDBACK_JA_ENVIADO` se já avaliou.
+- Aluno só cria com o próprio `participanteId`: o backend usa **sempre** o do
+  token e ignora o do corpo. Só edita ou lê o próprio, nunca a lista inteira.
+  `422 VALIDACAO` se a nota estiver fora de 1-5.
+- Admin/secretaria veem tudo (`GET /api/feedbacks?eventoId=`), podem criar em
+  nome de um participante (sem a regra do certificado) e são os únicos que
+  excluem.
+- Todo feedback criado, editado ou removido gera log de auditoria
+  (`FEEDBACK_CRIADO` / `_ATUALIZADO` / `_REMOVIDO`).
+
+`GET /api/feedbacks/elegiveis` — só `ALUNO` (`403` pra equipe). Eventos que o
+aluno logado pode avaliar agora (recebeu o certificado e ainda não avaliou):
+`[{ "id": "…", "titulo": "…", "horario": "2026-09-27T14:00:00.000Z" }]`. É o
+que preenche o select do modal "Novo feedback"; lista vazia = botão
+desabilitado com o motivo.
 
 ## Dashboard
 
@@ -679,13 +700,11 @@ tem permissão — não misturar os dois, e não usar 404 pra esconder um 403
 
 ## Lacunas conhecidas (frontend ainda não fez, backend não precisa esperar)
 
-- **Feedback sem restrição por perfil** — maior pendência. A tela é
-  genérica pros três perfis hoje; o backend deve aplicar a regra da seção
-  Feedback mesmo assim, e o frontend alcança depois.
 - `GET /api/usuarios/me` documentado mas não chamado ainda (sessão não é
   revalidada no reload, só confia no localStorage).
-- Busca de participante no Check-in é client-side (carrega tudo, filtra no
-  navegador) — funciona, mas não escala pra uma base grande de dados.
+- Busca de aluno no Check-in é client-side (`GET /api/participantes/alunos`
+  carrega tudo, filtra no navegador) — funciona, mas não escala pra uma base
+  grande de dados.
 - Sem endpoint de validação de código de certificado (o código impresso no
   PDF é só uma referência visual por enquanto).
 - O campo `perguntas` do Evento só tem tela de cadastro (admin/secretaria

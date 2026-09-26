@@ -24,6 +24,15 @@ async function listar() {
   return participantes.map(paraDominio).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
+// so os alunos: participantes com conta de acesso de perfil ALUNO, em ordem alfabetica (depois de
+// decifrar) — usado pelo check-in, que mostra todos sem precisar digitar nada
+async function listarAlunos() {
+  const participantes = await prisma.participante.findMany({
+    where: { usuarios: { some: { perfil: "ALUNO" } } },
+  });
+  return participantes.map(paraDominio).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+}
+
 // busca um participante pelo id, 404 se nao existir
 async function buscarOuFalhar(id: string) {
   const participante = await prisma.participante.findUnique({ where: { id } });
@@ -128,4 +137,4 @@ async function remover(id: string, atorId: string) {
   );
 }
 
-export const participantesService = { listar, buscarOuFalhar, atualizar, remover };
+export const participantesService = { listar, listarAlunos, buscarOuFalhar, atualizar, remover };

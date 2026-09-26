@@ -14,7 +14,9 @@
 //   npx tsx scripts/backfill-auditoria.ts --aplicar  -> grava de verdade
 //
 // idempotente: so cria o que ainda nao existe, entao rodar duas vezes nao duplica nada.
-// nao seleciona nome/e-mail/rgm de ninguem — so id, perfil e datas.
+// SO CRIA (createMany): este script nunca apaga nem altera um log existente.
+// nao decifra nada: o unico dado pessoal que passa por aqui eh o nome JA CIFRADO, copiado
+// como esta pra atorNomeCifrado (pre-requisito: migration auditoria_nome_do_responsavel aplicada).
 import { randomUUID } from "crypto";
 import { prisma } from "../src/db/prisma";
 
@@ -23,6 +25,7 @@ const TAMANHO_LOTE = 100;
 interface LogParaCriar {
   id: string;
   usuarioId: string;
+  atorNomeCifrado: string;
   acao: "USUARIO_REGISTRADO" | "CONSENTIMENTO_LGPD_ACEITO";
   detalhe: string;
   criadoEm: Date;
@@ -32,8 +35,9 @@ async function main() {
   const aplicar = process.argv.includes("--aplicar");
   console.log(aplicar ? "[backfill-auditoria] MODO REAL: vai gravar no banco" : "[backfill-auditoria] SIMULACAO (dry-run): nada sera gravado");
 
+  // "nome" aqui eh o texto JA CIFRADO do banco, copiado como esta pra atorNomeCifrado (nunca decifrado)
   const usuarios = await prisma.usuario.findMany({
-    select: { id: true, perfil: true, criadoEm: true, consentimentoLgpdEm: true },
+    select: { id: true, nome: true, perfil: true, criadoEm: true, consentimentoLgpdEm: true },
     orderBy: { criadoEm: "asc" },
   });
 
@@ -52,6 +56,7 @@ async function main() {
       paraCriar.push({
         id: randomUUID(),
         usuarioId: usuario.id,
+        atorNomeCifrado: usuario.nome,
         acao: "USUARIO_REGISTRADO",
         detalhe: `registro retroativo: conta existente antes desta trilha (perfil ${usuario.perfil})`,
         criadoEm: usuario.criadoEm,
@@ -63,6 +68,7 @@ async function main() {
         paraCriar.push({
           id: randomUUID(),
           usuarioId: usuario.id,
+          atorNomeCifrado: usuario.nome,
           acao: "CONSENTIMENTO_LGPD_ACEITO",
           detalhe:
             `termos de uso e política de privacidade aceitos em ${usuario.consentimentoLgpdEm.toISOString()} ` +

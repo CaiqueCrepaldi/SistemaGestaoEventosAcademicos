@@ -20,6 +20,15 @@ participantesRouter.get(
   }),
 );
 
+// lista so os alunos (com conta ALUNO), em ordem alfabetica; antes de "/:id" pra "alunos" nao virar id
+participantesRouter.get(
+  "/alunos",
+  asyncHandler(async (_req, res) => {
+    const alunos = await participantesService.listarAlunos();
+    res.json(alunos.map(participanteParaDTO));
+  }),
+);
+
 // busca um participante pelo id
 participantesRouter.get(
   "/:id",

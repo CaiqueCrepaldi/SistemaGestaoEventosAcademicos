@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { toast } from "../../components/ui/Toast";
-import { auditoriaService, SEM_RESPONSAVEL } from "../../services";
+import { ApiError, auditoriaService, SEM_RESPONSAVEL } from "../../services";
 import type { PaginaAuditoria, ResponsavelAuditoria } from "../../services";
 
 // traduz o codigo da acao pra um texto legivel na tela (a ordem aqui eh a do filtro de acao)
@@ -61,6 +60,9 @@ export function AuditoriaPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [carregando, setCarregando] = useState(true);
+  const [erroCarga, setErroCarga] = useState<string | null>(null);
+  // sobe a cada "Tentar novamente" pra refazer a mesma consulta
+  const [tentativa, setTentativa] = useState(0);
 
   const periodoInvalido = Boolean(filtros.dataInicial && filtros.dataFinal && filtros.dataInicial > filtros.dataFinal);
 
@@ -72,6 +74,7 @@ export function AuditoriaPage() {
     if (periodoInvalido) return;
     let descartar = false;
     setCarregando(true);
+    setErroCarga(null);
     auditoriaService
       .listar({
         page,
@@ -88,7 +91,13 @@ export function AuditoriaPage() {
         else setPagina(resposta);
       })
       .catch((e) => {
-        if (!descartar) toast.error(e instanceof Error ? e.message : "Não foi possível carregar a trilha de auditoria.");
+        if (descartar) return;
+        // 401 = token expirado/invalido (a sessao dura 8h e o app nao derruba a tela sozinho)
+        if (e instanceof ApiError && e.status === 401) {
+          setErroCarga("Sua sessão expirou. Clique em Sair e entre novamente para ver a trilha de auditoria.");
+        } else {
+          setErroCarga(e instanceof Error ? e.message : "Não foi possível carregar a trilha de auditoria.");
+        }
       })
       .finally(() => {
         if (!descartar) setCarregando(false);
@@ -96,7 +105,7 @@ export function AuditoriaPage() {
     return () => {
       descartar = true;
     };
-  }, [filtros, page, pageSize, periodoInvalido]);
+  }, [filtros, page, pageSize, periodoInvalido, tentativa]);
 
   // mudar qualquer filtro volta pra primeira pagina
   function alterarFiltro(campo: keyof typeof FILTROS_VAZIOS, valor: string) {
@@ -177,7 +186,18 @@ export function AuditoriaPage() {
               </tr>
             </thead>
             <tbody>
-              {carregando && !pagina ? (
+              {erroCarga ? (
+                <tr>
+                  <td colSpan={4} className="empty-cell" role="alert">
+                    <p className="form-error" style={{ marginBottom: 10 }}>
+                      {erroCarga}
+                    </p>
+                    <button type="button" className="btn btn-primary" onClick={() => setTentativa((n) => n + 1)}>
+                      Tentar novamente
+                    </button>
+                  </td>
+                </tr>
+              ) : carregando && !pagina ? (
                 <tr>
                   <td colSpan={4} className="empty-cell">
                     Carregando…
@@ -188,7 +208,10 @@ export function AuditoriaPage() {
                   {itens.map((log) => (
                     <tr key={log.id}>
                       <td>{new Date(log.criadoEm).toLocaleString("pt-BR")}</td>
-                      <td>{log.atorNome ?? "—"}</td>
+                      <td>
+                        {log.atorNome ?? "—"}
+                        {log.atorRemovido && <span className="form-hint"> (conta removida)</span>}
+                      </td>
                       <td>{ACAO_LABEL[log.acao] ?? log.acao}</td>
                       <td>{log.detalhe ?? "—"}</td>
                     </tr>
@@ -206,6 +229,7 @@ export function AuditoriaPage() {
           </table>
         </div>
 
+        {!erroCarga && (
         <div
           style={{
             display: "flex",
@@ -252,6 +276,7 @@ export function AuditoriaPage() {
             </button>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

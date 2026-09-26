@@ -3,6 +3,7 @@ import { Prisma, type Feedback as FeedbackDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { camposInformados, registrarAuditoria } from "../../utils/auditoria";
+import { eventosComCertificado, temCertificado } from "../../utils/certificado";
 import type { Feedback } from "../../types/domain";
 import type { FeedbackUpdateInput } from "./feedbacks.schemas";
 
@@ -32,15 +33,29 @@ async function buscarOuFalhar(id: string) {
   return paraDominio(feedback);
 }
 
-// somente alunos podem enviar feedback para eventos em que fizeram check-in
-async function validarParticipacaoPresente(eventoId: string, participanteId: string) {
-  const inscricao = await prisma.inscricao.findUnique({
-    where: { participanteId_eventoId: { participanteId, eventoId } },
-  });
-
-  if (!inscricao || inscricao.statusPresenca !== "PRESENTE") {
-    throw AppError.acessoNegado("Você só pode enviar feedback para palestras em que realizou o check-in.");
+// aluno so avalia palestra em que ja recebeu o certificado (mesma regra da tela de Certificados:
+// presenca confirmada + nota minima no questionario, ver utils/certificado.ts)
+async function validarDireitoAoCertificado(eventoId: string, participanteId: string) {
+  if (!(await temCertificado(participanteId, eventoId))) {
+    throw AppError.acessoNegado("Você só pode avaliar palestras em que recebeu o certificado.");
   }
+}
+
+// eventos que o aluno pode avaliar agora: tem certificado e ainda nao mandou feedback
+async function listarEventosElegiveis(participanteId: string) {
+  const [comCertificado, jaAvaliados] = await Promise.all([
+    eventosComCertificado(participanteId),
+    prisma.feedback.findMany({ where: { participanteId }, select: { eventoId: true } }),
+  ]);
+  const avaliados = new Set(jaAvaliados.map((feedback) => feedback.eventoId));
+  const elegiveis = comCertificado.filter((eventoId) => !avaliados.has(eventoId));
+
+  const eventos = await prisma.evento.findMany({
+    where: { id: { in: elegiveis } },
+    orderBy: { horario: "desc" },
+    select: { id: true, titulo: true, horario: true },
+  });
+  return eventos.map((evento) => ({ id: evento.id, titulo: evento.titulo, horario: evento.horario.toISOString() }));
 }
 
 // cria um feedback novo, bloqueia duplicidade e evento/participante inexistente
@@ -89,4 +104,12 @@ async function remover(id: string, atorId: string) {
   );
 }
 
-export const feedbacksService = { listar, buscarOuFalhar, validarParticipacaoPresente, criar, atualizar, remover };
+export const feedbacksService = {
+  listar,
+  buscarOuFalhar,
+  validarDireitoAoCertificado,
+  listarEventosElegiveis,
+  criar,
+  atualizar,
+  remover,
+};

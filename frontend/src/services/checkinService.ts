@@ -1,4 +1,5 @@
-import type { Inscricao } from "../types";
+import type { Inscricao, Participante } from "../types";
+import { api } from "./api";
 import { eventoService, inscricaoService, participanteService } from "./entityServices";
 
 // formato "achatado" usado so na tela de checkin
@@ -11,17 +12,11 @@ export interface InscricaoDetalhada {
   eventoHorario: string;
 }
 
-// busca por nome, email ou rgm, campo vazio devolve lista vazia
-async function buscarParticipantes(termo: string) {
-  const participantes = await participanteService.list();
-  const alvo = termo.trim().toLowerCase();
-  if (!alvo) return [];
-  return participantes.filter(
-    (p) =>
-      p.nome.toLowerCase().includes(alvo) ||
-      p.email.toLowerCase().includes(alvo) ||
-      p.rgm.toLowerCase().includes(alvo),
-  );
+// todos os alunos cadastrados (participantes com conta ALUNO), ja em ordem alfabetica, com o
+// campo "ativo". nome/e-mail/rgm ficam cifrados no banco, entao quem filtra por texto eh a tela,
+// em cima dessa lista ja decifrada pelo backend
+function listarAlunos(): Promise<Participante[]> {
+  return api.get<Participante[]>("/participantes/alunos");
 }
 
 // todas as inscricoes de UM participante, com o titulo do evento ja junto
@@ -65,7 +60,7 @@ async function marcarAusente(inscricaoId: string): Promise<Inscricao> {
 }
 
 export const checkinService = {
-  buscarParticipantes,
+  listarAlunos,
   listarInscricoesDoParticipante,
   confirmarPresenca,
   marcarAusente,

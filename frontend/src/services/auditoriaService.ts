@@ -7,6 +7,8 @@ export interface LogAuditoria {
   criadoEm: string;
   usuarioId: string | null;
   atorNome: string | null;
+  // o responsavel existia na epoca do log, mas a conta foi excluida depois (nome vem da copia guardada no log)
+  atorRemovido: boolean;
 }
 
 export interface PaginaAuditoria {

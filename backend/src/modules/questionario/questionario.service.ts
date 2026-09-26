@@ -3,7 +3,7 @@ import type { TentativaQuestionario as TentativaDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { registrarAuditoria } from "../../utils/auditoria";
-import { MAX_TENTATIVAS_QUESTIONARIO, PERCENTUAL_APROVACAO } from "../../utils/questionario";
+import { atingiuNotaMinima, MAX_TENTATIVAS_QUESTIONARIO, PERCENTUAL_APROVACAO } from "../../utils/questionario";
 import type { PerguntaQuestionario, TentativaQuestionario } from "../../types/domain";
 import type { RespostasQuestionarioInput } from "./questionario.schemas";
 
@@ -33,7 +33,7 @@ async function responder(eventoId: string, participanteId: string, dados: Respos
   }
 
   const tentativasAnteriores = await prisma.tentativaQuestionario.findMany({ where: { eventoId, participanteId } });
-  const jaAprovado = tentativasAnteriores.some((t) => t.percentual >= PERCENTUAL_APROVACAO);
+  const jaAprovado = atingiuNotaMinima(tentativasAnteriores.map((t) => t.percentual));
   if (jaAprovado) {
     throw AppError.conflito(
       "QUESTIONARIO_JA_APROVADO",

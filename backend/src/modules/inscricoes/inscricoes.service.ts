@@ -79,9 +79,18 @@ async function criarManual(dados: InscricaoInput, ator: { id: string; perfil: Pe
 
 // muda o status de presenca (confirma, marca ausente ou reverte pra pendente)
 async function atualizarCheckin(id: string, dados: InscricaoCheckinInput, usuarioIdDoToken: string) {
-  await buscarOuFalhar(id);
+  const existente = await buscarOuFalhar(id);
 
   if (dados.statusPresenca === "PRESENTE") {
+    // aluno inativado nao pode ter presenca confirmada (a tela do check-in tambem bloqueia, mas a regra vale na API)
+    const participante = await prisma.participante.findUnique({
+      where: { id: existente.participanteId },
+      select: { ativo: true },
+    });
+    if (participante && !participante.ativo) {
+      throw AppError.conflito("PARTICIPANTE_INATIVO", "Aluno inativo: não é possível confirmar presença.");
+    }
+
     // ignora qualquer dataCheckin/usuarioId vindo do cliente, sempre usa horario do servidor
     const inscricao = await prisma.inscricao.update({
       where: { id },

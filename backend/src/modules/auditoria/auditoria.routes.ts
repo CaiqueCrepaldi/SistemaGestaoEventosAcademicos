@@ -31,7 +31,8 @@ const consultaSchema = z
   });
 
 // lista paginada, mais recente primeiro, com filtros aplicados no banco — nunca exibe dado
-// sensivel, so o nome de quem agiu (decifrado) e o codigo/detalhe da acao
+// sensivel, so o nome de quem agiu (decifrado) e o codigo/detalhe da acao.
+// So leitura: nenhuma rota, service ou script apaga ou edita logs (TiDB nao tem trigger pra proteger)
 auditoriaRouter.get(
   "/",
   asyncHandler(async (req, res) => {
@@ -68,7 +69,14 @@ auditoriaRouter.get(
         detalhe: log.detalhe,
         criadoEm: log.criadoEm.toISOString(),
         usuarioId: log.usuarioId,
-        atorNome: log.usuario ? descriptografar(log.usuario.nome) : null,
+        // usuario existente: nome atual; usuario excluido: cai na copia guardada no proprio log
+        atorNome: log.usuario
+          ? descriptografar(log.usuario.nome)
+          : log.atorNomeCifrado
+            ? descriptografar(log.atorNomeCifrado)
+            : null,
+        // tinha responsavel na epoca, mas a conta nao existe mais
+        atorRemovido: !log.usuario && Boolean(log.atorNomeCifrado),
       })),
       total,
       page,

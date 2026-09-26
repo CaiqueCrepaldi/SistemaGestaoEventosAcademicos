@@ -173,11 +173,14 @@ model TentativaQuestionario {
 
 // trilha de auditoria (login, mudanca em registro critico) — exigencia de LGPD/seguranca.
 // "acao" eh um codigo curto (LOGIN_SUCESSO, PARTICIPANTE_INATIVADO etc.), "detalhe" nunca
-// guarda dado sensivel (senha, token, PII bruta) — so contexto operacional
+// guarda dado sensivel (senha, token, PII bruta) — so contexto operacional.
+// o log NUNCA eh apagado nem editado: excluir o usuario so zera usuarioId (SetNull), e
+// atorNomeCifrado (copia do nome cifrado de quem agiu, tirada na hora do log) mantem quem foi
 model LogAuditoria {
   id        String   @id
   usuarioId String?
   usuario   Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  atorNomeCifrado String? @db.Text
   acao      String
   detalhe   String?  @db.Text
   criadoEm  DateTime @default(now())

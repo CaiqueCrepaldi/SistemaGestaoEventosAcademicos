@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
-import { autenticar } from "../../middleware/auth";
+import { autenticar, autorizar } from "../../middleware/auth";
 import { validarCorpo } from "../../middleware/validate";
 import { AppError } from "../../errors/AppError";
 import { feedbackParaDTO } from "../../utils/dto";
@@ -27,6 +27,21 @@ feedbacksRouter.get(
 
     const feedbacks = await feedbacksService.listar({ eventoId, participanteId });
     res.json(feedbacks.map(feedbackParaDTO));
+  }),
+);
+
+// eventos que o aluno logado pode avaliar agora (certificado recebido + ainda sem feedback);
+// tem que vir antes de "/:id", senao "elegiveis" seria lido como um id
+feedbacksRouter.get(
+  "/elegiveis",
+  autenticar,
+  autorizar("ALUNO"),
+  asyncHandler(async (req, res) => {
+    const participanteId = req.usuario!.participanteId;
+    if (!participanteId) {
+      throw AppError.acessoNegado("Esta conta não está vinculada a um participante.");
+    }
+    res.json(await feedbacksService.listarEventosElegiveis(participanteId));
   }),
 );
 
@@ -60,8 +75,9 @@ feedbacksRouter.post(
       ]);
     }
 
+    // 403 se nao tem certificado nesse evento; se ja avaliou, o criar() abaixo responde 409
     if (!ehEquipe(req.usuario!.perfil)) {
-      await feedbacksService.validarParticipacaoPresente(req.body.eventoId, participanteId);
+      await feedbacksService.validarDireitoAoCertificado(req.body.eventoId, participanteId);
     }
 
     const feedback = await feedbacksService.criar(

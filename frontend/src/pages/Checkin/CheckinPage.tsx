@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "../../components/ui/Badge";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
 import { checkinService } from "../../services";
 import type { InscricaoDetalhada } from "../../services/checkinService";
@@ -20,35 +21,79 @@ function badgeLabel(status: StatusPresenca): string {
   return "Pendente";
 }
 
-// busca de participante por nome/email/rgm e confirmacao de presenca
+// lista todos os alunos cadastrados; a busca so filtra essa lista. Confirmacao de presenca por aluno
 export function CheckinPage() {
   const { usuario } = useAuth();
+  const [alunos, setAlunos] = useState<Participante[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [erroCarga, setErroCarga] = useState<string | null>(null);
+  const [tentativa, setTentativa] = useState(0);
   const [termo, setTermo] = useState("");
-  const [resultados, setResultados] = useState<Participante[]>([]);
   const [selecionado, setSelecionado] = useState<Participante | null>(null);
   const [inscricoes, setInscricoes] = useState<InscricaoDetalhada[]>([]);
 
+  // carrega a lista completa uma vez (o backend ja devolve decifrada e em ordem alfabetica)
   useEffect(() => {
-    void checkinService.buscarParticipantes(termo).then(setResultados);
-  }, [termo]);
+    let descartar = false;
+    setCarregando(true);
+    setErroCarga(null);
+    checkinService
+      .listarAlunos()
+      .then((lista) => {
+        if (!descartar) setAlunos(lista);
+      })
+      .catch((e) => {
+        if (!descartar) setErroCarga(e instanceof Error ? e.message : "Não foi possível carregar os alunos.");
+      })
+      .finally(() => {
+        if (!descartar) setCarregando(false);
+      });
+    return () => {
+      descartar = true;
+    };
+  }, [tentativa]);
+
+  // a busca so filtra a lista ja carregada: nome, e-mail ou RGM
+  const filtrados = useMemo(() => {
+    const alvo = termo.trim().toLowerCase();
+    if (!alvo) return alunos;
+    return alunos.filter(
+      (p) => p.nome.toLowerCase().includes(alvo) || p.email.toLowerCase().includes(alvo) || p.rgm.toLowerCase().includes(alvo),
+    );
+  }, [alunos, termo]);
+
+  const selecionadoInativo = selecionado?.ativo === false;
 
   // guarda o participante clicado e carrega as inscricoes dele
   async function selecionar(participante: Participante) {
     setSelecionado(participante);
-    setInscricoes(await checkinService.listarInscricoesDoParticipante(participante.id));
+    try {
+      setInscricoes(await checkinService.listarInscricoesDoParticipante(participante.id));
+    } catch (e) {
+      setInscricoes([]);
+      toast.error(e instanceof Error ? e.message : "Não foi possível carregar as inscrições.");
+    }
   }
 
   // confirma presenca e recarrega a lista pra atualizar o status na tela
   async function confirmar(inscricaoId: string) {
-    if (!usuario) return;
-    await checkinService.confirmarPresenca(inscricaoId, usuario.id);
-    if (selecionado) setInscricoes(await checkinService.listarInscricoesDoParticipante(selecionado.id));
+    if (!usuario || selecionadoInativo) return;
+    try {
+      await checkinService.confirmarPresenca(inscricaoId, usuario.id);
+      if (selecionado) setInscricoes(await checkinService.listarInscricoesDoParticipante(selecionado.id));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível confirmar a presença.");
+    }
   }
 
   // marca ausente e recarrega a lista
   async function marcarAusente(inscricaoId: string) {
-    await checkinService.marcarAusente(inscricaoId);
-    if (selecionado) setInscricoes(await checkinService.listarInscricoesDoParticipante(selecionado.id));
+    try {
+      await checkinService.marcarAusente(inscricaoId);
+      if (selecionado) setInscricoes(await checkinService.listarInscricoesDoParticipante(selecionado.id));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível marcar a ausência.");
+    }
   }
 
   return (
@@ -57,33 +102,65 @@ export function CheckinPage() {
 
       <div className="grid-2">
         <div className="card">
-          <h3>Buscar participante</h3>
+          <h3>Alunos</h3>
           <input
             className="search-input"
-            placeholder="Nome, e-mail ou RGM…"
+            placeholder="Filtrar por nome, e-mail ou RGM…"
             value={termo}
             onChange={(e) => setTermo(e.target.value)}
             autoFocus
           />
-          <ul className="simple-list">
-            {resultados.map((participante) => (
-              <li
-                key={participante.id}
-                className={"simple-list-item clickable" + (selecionado?.id === participante.id ? " selected" : "")}
-                onClick={() => void selecionar(participante)}
-              >
-                <div className="simple-list-title">{participante.nome}</div>
-                <div className="simple-list-sub">
-                  {participante.email} · RGM {participante.rgm}
-                </div>
+          {!carregando && !erroCarga && (
+            <p className="form-hint" style={{ margin: "8px 0" }}>
+              {termo.trim()
+                ? `${filtrados.length} de ${alunos.length} aluno${alunos.length === 1 ? "" : "s"}`
+                : `${alunos.length} aluno${alunos.length === 1 ? "" : "s"} cadastrado${alunos.length === 1 ? "" : "s"}`}
+            </p>
+          )}
+          <ul className="simple-list list-scroll">
+            {carregando && <li className="empty-cell">Carregando alunos…</li>}
+            {erroCarga && (
+              <li className="empty-cell" role="alert">
+                <p className="form-error" style={{ marginBottom: 10 }}>
+                  {erroCarga}
+                </p>
+                <button type="button" className="btn btn-primary" onClick={() => setTentativa((n) => n + 1)}>
+                  Tentar novamente
+                </button>
               </li>
-            ))}
-            {termo && resultados.length === 0 && <li className="empty-cell">Nenhum participante encontrado.</li>}
+            )}
+            {!carregando &&
+              !erroCarga &&
+              filtrados.map((participante) => (
+                <li
+                  key={participante.id}
+                  className={"simple-list-item clickable" + (selecionado?.id === participante.id ? " selected" : "")}
+                  onClick={() => void selecionar(participante)}
+                >
+                  <div className="simple-list-item-row">
+                    <div className="simple-list-title">{participante.nome}</div>
+                    {participante.ativo === false && <Badge tone="red">Inativo</Badge>}
+                  </div>
+                  <div className="simple-list-sub">
+                    {participante.email} · RGM {participante.rgm}
+                  </div>
+                </li>
+              ))}
+            {!carregando && !erroCarga && filtrados.length === 0 && (
+              <li className="empty-cell">
+                {alunos.length === 0 ? "Nenhum aluno cadastrado." : "Nenhum aluno encontrado com esse filtro."}
+              </li>
+            )}
           </ul>
         </div>
 
         <div className="card">
-          <h3>{selecionado ? `Inscrições de ${selecionado.nome}` : "Selecione um participante"}</h3>
+          <h3>{selecionado ? `Inscrições de ${selecionado.nome}` : "Selecione um aluno"}</h3>
+          {selecionadoInativo && (
+            <p className="form-error" style={{ marginBottom: 10 }}>
+              Aluno inativo: não é possível confirmar presença.
+            </p>
+          )}
           {selecionado && (
             <table className="table">
               <thead>
@@ -103,7 +180,12 @@ export function CheckinPage() {
                       </Badge>
                     </td>
                     <td className="table-actions">
-                      <button className="btn btn-primary" onClick={() => void confirmar(item.inscricao.id)}>
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => void confirmar(item.inscricao.id)}
+                        disabled={selecionadoInativo}
+                        title={selecionadoInativo ? "Aluno inativo" : undefined}
+                      >
                         Confirmar presença
                       </button>
                       <button className="btn btn-ghost" onClick={() => void marcarAusente(item.inscricao.id)}>
@@ -115,7 +197,7 @@ export function CheckinPage() {
                 {inscricoes.length === 0 && (
                   <tr>
                     <td colSpan={3} className="empty-cell">
-                      Este participante não possui inscrições.
+                      Este aluno não possui inscrições.
                     </td>
                   </tr>
                 )}
