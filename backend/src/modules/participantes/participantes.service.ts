@@ -39,7 +39,7 @@ function relancarComoConflito(erro: unknown): never {
 }
 
 async function atualizar(id: string, dados: ParticipanteUpdateInput, atorId: string) {
-  await buscarOuFalhar(id);
+  const atual = await buscarOuFalhar(id);
 
   if (dados.ativo === false && !dados.motivoInativacao?.trim()) {
     throw AppError.validacao("Informe o motivo da inativação.", [
@@ -65,10 +65,26 @@ async function atualizar(id: string, dados: ParticipanteUpdateInput, atorId: str
       data: dados.ativo === true ? { ...dadosCifrados, motivoInativacao: null } : dadosCifrados,
     });
 
-    if (dados.ativo === false) {
-      await registrarAuditoria(atorId, "PARTICIPANTE_INATIVADO", `participante ${id}: ${dados.motivoInativacao}`);
-    } else if (dados.ativo === true) {
+    // so conta como mudanca de status se o valor de fato mudou (o formulario manda "ativo" em toda edicao)
+    const statusMudou = dados.ativo !== undefined && dados.ativo !== atual.ativo;
+    // o motivo da inativacao eh texto livre e pode ter dado pessoal: fica so no cadastro, nunca no log
+    if (statusMudou && dados.ativo === false) {
+      await registrarAuditoria(atorId, "PARTICIPANTE_INATIVADO", `participante ${id} (motivo registrado no cadastro)`);
+    } else if (statusMudou && dados.ativo === true) {
       await registrarAuditoria(atorId, "PARTICIPANTE_REATIVADO", `participante ${id}`);
+    }
+
+    // edicao de dados (nome/e-mail/rgm/motivo) — grava so os nomes dos campos que mudaram, nunca os valores;
+    // o motivo que acompanha uma inativacao ja esta coberto pelo log de inativacao, nao conta como edicao a parte
+    const camposAlterados = (["nome", "email", "rgm", "motivoInativacao"] as const).filter(
+      (campo) => dados[campo] !== undefined && dados[campo] !== atual[campo] && !(campo === "motivoInativacao" && statusMudou),
+    );
+    if (camposAlterados.length > 0 || !statusMudou) {
+      await registrarAuditoria(
+        atorId,
+        "PARTICIPANTE_ATUALIZADO",
+        `participante ${id} (campos: ${camposAlterados.length > 0 ? camposAlterados.join(", ") : "nenhum alterado"})`,
+      );
     }
 
     return paraDominio(participante);
@@ -96,7 +112,7 @@ async function remover(id: string, atorId: string) {
     throw AppError.conflito("USUARIO_PROTEGIDO", "Administrador e secretaria não podem ser removidos.");
   }
 
-  await prisma.$transaction([
+  const [tentativas, feedbacks, inscricoes] = await prisma.$transaction([
     prisma.tentativaQuestionario.deleteMany({ where: { participanteId: id } }),
     prisma.feedback.deleteMany({ where: { participanteId: id } }),
     prisma.inscricao.deleteMany({ where: { participanteId: id } }),
@@ -104,7 +120,12 @@ async function remover(id: string, atorId: string) {
     prisma.participante.delete({ where: { id } }),
   ]);
 
-  await registrarAuditoria(atorId, "PARTICIPANTE_REMOVIDO", `participante ${id}`);
+  await registrarAuditoria(
+    atorId,
+    "PARTICIPANTE_REMOVIDO",
+    `participante ${id} (removidos junto: ${inscricoes.count} inscrições, ${feedbacks.count} feedbacks, ` +
+      `${tentativas.count} tentativas de questionário${usuario ? ", 1 conta de acesso" : ""})`,
+  );
 }
 
 export const participantesService = { listar, buscarOuFalhar, atualizar, remover };

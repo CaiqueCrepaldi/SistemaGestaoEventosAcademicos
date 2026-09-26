@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import type { TentativaQuestionario as TentativaDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
+import { registrarAuditoria } from "../../utils/auditoria";
 import { MAX_TENTATIVAS_QUESTIONARIO, PERCENTUAL_APROVACAO } from "../../utils/questionario";
 import type { PerguntaQuestionario, TentativaQuestionario } from "../../types/domain";
 import type { RespostasQuestionarioInput } from "./questionario.schemas";
@@ -24,7 +25,7 @@ async function buscarEventoOuFalhar(eventoId: string) {
 
 // corrige contra o gabarito do evento e salva a tentativa
 // no maximo 2 tentativas por aluno/evento; aprovou uma vez (>= PERCENTUAL_APROVACAO), nao pode mais refazer
-async function responder(eventoId: string, participanteId: string, dados: RespostasQuestionarioInput) {
+async function responder(eventoId: string, participanteId: string, dados: RespostasQuestionarioInput, atorId: string) {
   const evento = await buscarEventoOuFalhar(eventoId);
   const questionario = evento.questionario as unknown as PerguntaQuestionario[];
   if (dados.respostas.length !== questionario.length) {
@@ -64,6 +65,12 @@ async function responder(eventoId: string, participanteId: string, dados: Respos
       percentual,
     },
   });
+  await registrarAuditoria(
+    atorId,
+    "QUESTIONARIO_RESPONDIDO",
+    `tentativa ${tentativa.id} (evento ${eventoId}): ${percentual}% de acertos (${acertos}/${totalPerguntas}), ` +
+      `atingiu os ${PERCENTUAL_APROVACAO}% que liberam o certificado: ${percentual >= PERCENTUAL_APROVACAO ? "sim" : "não"}`,
+  );
   return paraDominio(tentativa);
 }
 

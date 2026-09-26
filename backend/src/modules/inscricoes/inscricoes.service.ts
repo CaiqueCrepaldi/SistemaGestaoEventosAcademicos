@@ -5,7 +5,7 @@ import { AppError } from "../../errors/AppError";
 import { emailService } from "../email/email.service";
 import { descriptografar } from "../../utils/criptografia";
 import { registrarAuditoria } from "../../utils/auditoria";
-import type { Inscricao, StatusPresenca } from "../../types/domain";
+import type { Inscricao, Perfil, StatusPresenca } from "../../types/domain";
 import type { InscricaoCheckinInput, InscricaoInput } from "./inscricoes.schemas";
 
 interface FiltrosListagem {
@@ -44,7 +44,7 @@ async function buscarOuFalhar(id: string) {
 }
 
 // inscricao manual feita por admin/secretaria, checa duplicidade e vaga
-async function criarManual(dados: InscricaoInput) {
+async function criarManual(dados: InscricaoInput, ator: { id: string; perfil: Perfil }) {
   const [participante, evento] = await Promise.all([
     prisma.participante.findUnique({ where: { id: dados.participanteId } }),
     prisma.evento.findUnique({ where: { id: dados.eventoId }, include: { sala: true } }),
@@ -68,6 +68,12 @@ async function criarManual(dados: InscricaoInput) {
   const inscricao = await prisma.inscricao.create({
     data: { id: randomUUID(), participanteId: dados.participanteId, eventoId: dados.eventoId, statusPresenca: "PENDENTE" },
   });
+  const quem = ator.perfil === "SECRETARIA" ? "pela secretaria" : "pelo administrador";
+  await registrarAuditoria(
+    ator.id,
+    "INSCRICAO_CRIADA",
+    `inscrição ${inscricao.id} (evento ${dados.eventoId}, participante ${dados.participanteId}) feita ${quem}`,
+  );
   return paraDominio(inscricao);
 }
 
@@ -98,17 +104,23 @@ async function atualizarCheckin(id: string, dados: InscricaoCheckinInput, usuari
     where: { id },
     data: { statusPresenca: "PENDENTE", dataCheckin: null },
   });
+  await registrarAuditoria(usuarioIdDoToken, "INSCRICAO_ATUALIZADA", `inscrição ${id}: presença revertida para pendente`);
   return paraDominio(inscricao);
 }
 
 // remove uma inscricao
-async function remover(id: string) {
-  await buscarOuFalhar(id);
+async function remover(id: string, atorId: string) {
+  const inscricao = await buscarOuFalhar(id);
   await prisma.inscricao.delete({ where: { id } });
+  await registrarAuditoria(
+    atorId,
+    "INSCRICAO_REMOVIDA",
+    `inscrição ${id} (evento ${inscricao.eventoId}, participante ${inscricao.participanteId})`,
+  );
 }
 
 // dispara o email de confirmacao, so pro proprio dono da inscricao
-async function confirmarEmail(id: string, participanteIdDoToken: string) {
+async function confirmarEmail(id: string, participanteIdDoToken: string, atorId: string) {
   const inscricao = await prisma.inscricao.findUnique({
     where: { id },
     include: { participante: true, evento: { include: { palestrante: true } } },
@@ -120,13 +132,23 @@ async function confirmarEmail(id: string, participanteIdDoToken: string) {
 
   const emailParticipante = descriptografar(inscricao.participante.email);
 
-  await emailService.enviarConfirmacaoInscricao(emailParticipante, {
-    participanteNome: descriptografar(inscricao.participante.nome),
-    eventoTitulo: inscricao.evento.titulo,
-    eventoTema: inscricao.evento.tema,
-    palestranteNome: inscricao.evento.palestrante.nome,
-    eventoHorario: inscricao.evento.horario,
-  });
+  try {
+    const resultado = await emailService.enviarConfirmacaoInscricao(emailParticipante, {
+      participanteNome: descriptografar(inscricao.participante.nome),
+      eventoTitulo: inscricao.evento.titulo,
+      eventoTema: inscricao.evento.tema,
+      palestranteNome: inscricao.evento.palestrante.nome,
+      eventoHorario: inscricao.evento.horario,
+    });
+    await registrarAuditoria(
+      atorId,
+      "EMAIL_ENVIADO",
+      `confirmação de inscrição, inscrição ${id}${resultado === "simulado" ? " (simulado: SendGrid não configurado)" : ""}`,
+    );
+  } catch (erro) {
+    await registrarAuditoria(atorId, "EMAIL_FALHA", `confirmação de inscrição, inscrição ${id}: falha no envio`);
+    throw erro;
+  }
 
   return { destinatario: emailParticipante, enviadoEm: new Date().toISOString() };
 }

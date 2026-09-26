@@ -46,6 +46,9 @@ async function registrarAluno(dados: RegistroInput) {
 
   const senhaHash = await gerarHashSenha(dados.senha);
 
+  // instante unico do aceite: vai igual pra usuarios.consentimentoLgpdEm e pro log de auditoria
+  const consentimentoEm = new Date();
+
   const participante = await prisma.participante.create({
     data: {
       id: randomUUID(),
@@ -68,11 +71,17 @@ async function registrarAluno(dados: RegistroInput) {
       rgm: criptografar(dados.rgm),
       participanteId: participante.id,
       // aceiteLgpd ja foi validado como obrigatoriamente true no schema — registra o momento exato
-      consentimentoLgpdEm: new Date(),
+      consentimentoLgpdEm: consentimentoEm,
     },
   });
 
   await registrarAuditoria(usuario.id, "USUARIO_REGISTRADO", "cadastro publico de aluno");
+  await registrarAuditoria(
+    usuario.id,
+    "CONSENTIMENTO_LGPD_ACEITO",
+    `termos de uso e política de privacidade aceitos em ${consentimentoEm.toISOString()}`,
+    consentimentoEm,
+  );
 
   return usuarioParaDTO(usuarioParaDominio(usuario));
 }
@@ -126,6 +135,8 @@ function gerarCodigoNumerico(): string {
 async function solicitarRecuperacaoSenha(dados: SolicitarRecuperacaoInput) {
   const usuario = await buscarUsuarioPorEmail(dados.email);
   if (!usuario) {
+    // nunca grava o e-mail digitado (PII) no log
+    await registrarAuditoria(null, "RECUPERACAO_SENHA_FALHA", "e-mail não cadastrado");
     throw AppError.naoEncontrado("USUARIO_NAO_ENCONTRADO", "Não encontramos conta com esse e-mail.");
   }
 
@@ -138,14 +149,21 @@ async function solicitarRecuperacaoSenha(dados: SolicitarRecuperacaoInput) {
       expiraEm: new Date(Date.now() + CODIGO_VALIDADE_MS),
     },
   });
+  await registrarAuditoria(usuario.id, "RECUPERACAO_SENHA_SOLICITADA", "código de verificação gerado, validade de 15 minutos");
 
   // falha de envio nao pode travar a recuperacao — em demo o codigoDemo abaixo
   // resolve isso mesmo assim, e nem toda falha de provedor deveria bloquear o fluxo
   // usa dados.email (ja veio em texto puro do request) em vez de descriptografar usuario.emailLogin
   try {
-    await emailService.enviarCodigoRecuperacao(dados.email, codigo);
+    const resultado = await emailService.enviarCodigoRecuperacao(dados.email, codigo);
+    await registrarAuditoria(
+      usuario.id,
+      "EMAIL_ENVIADO",
+      `recuperação de senha, usuário ${usuario.id}${resultado === "simulado" ? " (simulado: SendGrid não configurado)" : ""}`,
+    );
   } catch (erro) {
     console.error("[recuperacao-senha] falha ao enviar e-mail:", erro);
+    await registrarAuditoria(usuario.id, "EMAIL_FALHA", `recuperação de senha, usuário ${usuario.id}: falha no envio`);
   }
 
   // fora de producao devolve o codigo no corpo tb, so pra testar sem e-mail configurado
@@ -156,6 +174,7 @@ async function solicitarRecuperacaoSenha(dados: SolicitarRecuperacaoInput) {
 async function confirmarRecuperacaoSenha(dados: ConfirmarRecuperacaoInput) {
   const usuario = await buscarUsuarioPorEmail(dados.email);
   if (!usuario) {
+    await registrarAuditoria(null, "RECUPERACAO_SENHA_FALHA", "confirmação: e-mail não cadastrado");
     throw AppError.naoEncontrado("USUARIO_NAO_ENCONTRADO", "Não encontramos conta com esse e-mail.");
   }
 
@@ -164,12 +183,22 @@ async function confirmarRecuperacaoSenha(dados: ConfirmarRecuperacaoInput) {
     where: { usuarioId: usuario.id, usadoEm: null, expiraEm: { gt: new Date() } },
     orderBy: { criadoEm: "desc" },
   });
-  if (!pendente || pendente.tentativas >= MAX_TENTATIVAS_CODIGO) {
+  if (!pendente) {
+    await registrarAuditoria(usuario.id, "RECUPERACAO_SENHA_FALHA", "confirmação: código inexistente, expirado ou já utilizado");
+    throw new AppError(422, "CODIGO_INVALIDO", "Código inválido ou expirado.");
+  }
+  if (pendente.tentativas >= MAX_TENTATIVAS_CODIGO) {
+    await registrarAuditoria(usuario.id, "RECUPERACAO_SENHA_FALHA", `confirmação: limite de ${MAX_TENTATIVAS_CODIGO} tentativas excedido`);
     throw new AppError(422, "CODIGO_INVALIDO", "Código inválido ou expirado.");
   }
 
   if (!(await conferirSenha(dados.codigo, pendente.codigoHash))) {
     await prisma.recuperacaoSenha.update({ where: { id: pendente.id }, data: { tentativas: { increment: 1 } } });
+    await registrarAuditoria(
+      usuario.id,
+      "RECUPERACAO_SENHA_FALHA",
+      `confirmação: código incorreto (tentativa ${pendente.tentativas + 1} de ${MAX_TENTATIVAS_CODIGO})`,
+    );
     throw new AppError(422, "CODIGO_INVALIDO", "Código inválido ou expirado.");
   }
 
@@ -178,6 +207,7 @@ async function confirmarRecuperacaoSenha(dados: ConfirmarRecuperacaoInput) {
     prisma.usuario.update({ where: { id: usuario.id }, data: { senhaHash: novaSenhaHash } }),
     prisma.recuperacaoSenha.update({ where: { id: pendente.id }, data: { usadoEm: new Date() } }),
   ]);
+  await registrarAuditoria(usuario.id, "SENHA_REDEFINIDA", "senha redefinida com código de recuperação");
 }
 
 export const authService = {

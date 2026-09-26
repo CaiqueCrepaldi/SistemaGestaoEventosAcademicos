@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
+import { camposInformados, registrarAuditoria } from "../../utils/auditoria";
 import type { SalaInput, SalaUpdateInput } from "./salas.schemas";
 
 // lista salas ordenadas por nome
@@ -17,18 +18,22 @@ async function buscarOuFalhar(id: string) {
 }
 
 // cadastra uma sala nova
-async function criar(dados: SalaInput) {
-  return prisma.sala.create({ data: { id: randomUUID(), ...dados } });
+async function criar(dados: SalaInput, atorId: string) {
+  const sala = await prisma.sala.create({ data: { id: randomUUID(), ...dados } });
+  await registrarAuditoria(atorId, "SALA_CRIADA", `sala ${sala.id}`);
+  return sala;
 }
 
 // edita uma sala existente
-async function atualizar(id: string, dados: SalaUpdateInput) {
+async function atualizar(id: string, dados: SalaUpdateInput, atorId: string) {
   await buscarOuFalhar(id);
-  return prisma.sala.update({ where: { id }, data: dados });
+  const sala = await prisma.sala.update({ where: { id }, data: dados });
+  await registrarAuditoria(atorId, "SALA_ATUALIZADA", `sala ${id} (campos: ${camposInformados(dados)})`);
+  return sala;
 }
 
 // remove uma sala, bloqueia se tiver evento vinculado (o banco tambem tem essa trava, isso so da uma mensagem melhor)
-async function remover(id: string) {
+async function remover(id: string, atorId: string) {
   await buscarOuFalhar(id);
   const temEventoVinculado = (await prisma.evento.count({ where: { salaId: id } })) > 0;
   if (temEventoVinculado) {
@@ -43,6 +48,7 @@ async function remover(id: string) {
     }
     throw erro;
   }
+  await registrarAuditoria(atorId, "SALA_REMOVIDA", `sala ${id}`);
 }
 
 export const salasService = { listar, buscarOuFalhar, criar, atualizar, remover };

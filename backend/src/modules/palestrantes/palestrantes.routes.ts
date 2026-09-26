@@ -36,7 +36,7 @@ palestrantesRouter.post(
   "/",
   validarCorpo(palestranteSchema),
   asyncHandler(async (req, res) => {
-    const palestrante = await palestrantesService.criar(req.body);
+    const palestrante = await palestrantesService.criar(req.body, req.usuario!.sub);
     res.status(201).json(palestranteParaDTO(palestrante, false));
   }),
 );
@@ -45,7 +45,7 @@ palestrantesRouter.put(
   "/:id",
   validarCorpo(palestranteUpdateSchema),
   asyncHandler(async (req, res) => {
-    const palestrante = await palestrantesService.atualizar(req.params.id, req.body);
+    const palestrante = await palestrantesService.atualizar(req.params.id, req.body, req.usuario!.sub);
     res.json(palestranteParaDTO(palestrante, false));
   }),
 );
@@ -53,7 +53,7 @@ palestrantesRouter.put(
 palestrantesRouter.delete(
   "/:id",
   asyncHandler(async (req, res) => {
-    await palestrantesService.remover(req.params.id);
+    await palestrantesService.remover(req.params.id, req.usuario!.sub);
     res.status(204).send();
   }),
 );

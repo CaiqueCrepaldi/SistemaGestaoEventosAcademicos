@@ -46,7 +46,7 @@ auto-cadastro.
 | Certificados                             | ✅ (de qualquer participante) | ✅ | ✅ (só os próprios) |
 | Feedback                                 | ✅ (listar tudo) | ✅ | ✅ (ver ⚠️ abaixo) |
 | Dashboard / estatísticas                 | ✅ | ✅ | ❌ |
-| Auditoria (logs de login e mudanças)      | ✅ | ✅ | ❌ |
+| Auditoria (trilha de operações e acessos) | ✅ | ✅ | ❌ |
 | Trabalhos                                | removido do projeto | removido | removido |
 
 ⚠️ **Feedback ainda não tem o mesmo tratamento por perfil que o resto** — a
@@ -186,17 +186,74 @@ algo que quebra o fluxo hoje.
 
 ## Auditoria
 
-Toda ação sensível gera uma linha em `LogAuditoria` (login com sucesso ou
-falha, cadastro de aluno, inativação/reativação/remoção de participante,
-criação/edição/remoção de evento, confirmação de presença/ausência no
-check-in). O campo `detalhe` nunca guarda dado sensível (senha, token,
-e-mail em texto puro) — só id do registro afetado e um motivo curto. Uma
+Toda operação que grava, altera ou apaga dados gera uma linha em
+`LogAuditoria`, além de logins e acessos negados. O log só é gravado
+**depois** da operação dar certo (exceto as ações de falha, que são o
+próprio registro da falha). O campo `detalhe` nunca guarda dado pessoal ou
+sensível (nome, e-mail, RGM, senha, código de recuperação, token,
+comentário de feedback, motivo de inativação) — só o tipo da entidade + id
+e um motivo curto; em edições, só os *nomes* dos campos alterados. Uma
 falha ao gravar o log nunca derruba a operação de verdade (só loga o erro
-no console do servidor).
+no console do servidor). Os logs são imutáveis: não existe rota pra editar
+ou apagar.
 
-`GET /api/logs-auditoria` — admin/secretaria only, `403` pra aluno. Devolve
-os 200 registros mais recentes, mais novo primeiro, com o nome de quem
-agiu já decifrado (`atorNome`, `null` se o usuário foi removido depois).
+| Ação (`acao`) | Quando |
+|---|---|
+| `LOGIN_SUCESSO`, `LOGIN_FALHA` | login (a falha nunca grava o e-mail digitado) |
+| `ACESSO_NEGADO` | usuário autenticado barrado por perfil/posse/check-in (detalhe: método + rota, sem query string) |
+| `USUARIO_REGISTRADO` | cadastro público de aluno |
+| `CONSENTIMENTO_LGPD_ACEITO` | aceite dos termos; `criadoEm` é idêntico a `usuarios.consentimentoLgpdEm` |
+| `RECUPERACAO_SENHA_SOLICITADA`, `RECUPERACAO_SENHA_FALHA`, `SENHA_REDEFINIDA` | fluxo "esqueci a senha" (falha: e-mail não cadastrado, código incorreto/expirado, excesso de tentativas) |
+| `EMAIL_ENVIADO`, `EMAIL_FALHA` | envio de e-mail (recuperação de senha, confirmação de inscrição); nunca grava o endereço; marca "(simulado)" quando o SendGrid não está configurado |
+| `SALA_CRIADA` / `_ATUALIZADA` / `_REMOVIDA` | salas |
+| `PALESTRANTE_CRIADO` / `_ATUALIZADO` / `_REMOVIDO` | palestrantes |
+| `EVENTO_CRIADO` / `_ATUALIZADO` / `_REMOVIDO` | eventos (a remoção informa quantas inscrições/feedbacks/tentativas foram junto) |
+| `PARTICIPANTE_ATUALIZADO`, `_INATIVADO`, `_REATIVADO`, `_REMOVIDO` | participantes (a remoção informa o que foi junto) |
+| `INSCRICAO_CRIADA` | inscrição manual (secretaria/admin) ou autoinscrição do aluno — o detalhe diz qual |
+| `INSCRICAO_ATUALIZADA`, `INSCRICAO_REMOVIDA` | reversão de presença pra pendente / remoção da inscrição |
+| `PRESENCA_CONFIRMADA`, `PRESENCA_MARCADA_AUSENTE` | check-in |
+| `QUESTIONARIO_RESPONDIDO` | percentual de acertos e se atingiu os 60% que liberam o certificado |
+| `FEEDBACK_CRIADO` / `_ATUALIZADO` / `_REMOVIDO` | feedbacks |
+
+Todas as rotas abaixo são admin/secretaria only (`403` pra aluno).
+
+`GET /api/logs-auditoria` — lista paginada, mais novo primeiro. Query
+params (todos opcionais):
+
+| Param | Padrão | Descrição |
+|---|---|---|
+| `page` | `1` | página (≥ 1) |
+| `pageSize` | `50` | itens por página (1–200) |
+| `acao` | — | código exato da ação (ex.: `SALA_CRIADA`) |
+| `usuarioId` | — | id do responsável, ou `sem-responsavel` pra ações sem usuário (login falho, recuperação com e-mail inexistente) |
+| `de`, `ate` | — | período, instantes ISO 8601 com fuso (limites inclusivos); `de` não pode ser posterior a `ate` |
+
+Parâmetro inválido → `422` no formato padrão. Response `200`:
+
+```json
+{
+  "itens": [
+    {
+      "id": "…",
+      "acao": "SALA_CRIADA",
+      "detalhe": "sala 17bc33b0-…",
+      "criadoEm": "2026-09-26T02:25:48.684Z",
+      "usuarioId": "…",
+      "atorNome": "Ana Ribeiro"
+    }
+  ],
+  "total": 132,
+  "page": 1,
+  "pageSize": 50,
+  "totalPages": 3
+}
+```
+
+`atorNome` vem já decifrado (`null` se não houve responsável ou se o
+usuário foi removido depois).
+
+`GET /api/logs-auditoria/responsaveis` — quem já aparece na trilha, pra
+montar o filtro: `[{ "id": "…", "nome": "Ana Ribeiro" }]`, ordenado por nome.
 
 ## Eventos
 

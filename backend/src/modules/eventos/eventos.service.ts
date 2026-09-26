@@ -3,7 +3,7 @@ import type { Evento as EventoDb, Prisma } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { paraDominio as paraDominioInscricao } from "../inscricoes/inscricoes.service";
-import { registrarAuditoria } from "../../utils/auditoria";
+import { camposInformados, registrarAuditoria } from "../../utils/auditoria";
 import type { Evento, PerguntaQuestionario } from "../../types/domain";
 import type { EventoInput, EventoUpdateInput } from "./eventos.schemas";
 
@@ -66,7 +66,7 @@ async function criar(dados: EventoInput, atorId: string) {
       questionario: dados.questionario as unknown as Prisma.InputJsonValue,
     },
   });
-  await registrarAuditoria(atorId, "EVENTO_CRIADO", `evento ${evento.id}: ${evento.titulo}`);
+  await registrarAuditoria(atorId, "EVENTO_CRIADO", `evento ${evento.id}`);
   return paraDominio(evento);
 }
 
@@ -86,19 +86,29 @@ async function atualizar(id: string, dados: EventoUpdateInput, atorId: string) {
       questionario: dados.questionario as unknown as Prisma.InputJsonValue | undefined,
     },
   });
-  await registrarAuditoria(atorId, "EVENTO_ATUALIZADO", `evento ${id}`);
+  await registrarAuditoria(atorId, "EVENTO_ATUALIZADO", `evento ${id} (campos: ${camposInformados(dados)})`);
   return paraDominio(evento);
 }
 
-// remove o evento; inscricao/feedback/tentativa vinculados somem juntos (onDelete: Cascade no schema)
+// remove o evento; inscricao/feedback/tentativa vinculados somem juntos (onDelete: Cascade no schema),
+// entao conta o que vai junto antes pra trilha mostrar o tamanho real do estrago
 async function remover(id: string, atorId: string) {
   await buscarOuFalhar(id);
+  const [inscricoes, feedbacks, tentativas] = await Promise.all([
+    prisma.inscricao.count({ where: { eventoId: id } }),
+    prisma.feedback.count({ where: { eventoId: id } }),
+    prisma.tentativaQuestionario.count({ where: { eventoId: id } }),
+  ]);
   await prisma.evento.delete({ where: { id } });
-  await registrarAuditoria(atorId, "EVENTO_REMOVIDO", `evento ${id}`);
+  await registrarAuditoria(
+    atorId,
+    "EVENTO_REMOVIDO",
+    `evento ${id} (removidos junto: ${inscricoes} inscrições, ${feedbacks} feedbacks, ${tentativas} tentativas de questionário)`,
+  );
 }
 
 // autoinscricao do aluno logado: checa duplicidade e vaga antes de criar
-async function autoinscrever(eventoId: string, participanteId: string) {
+async function autoinscrever(eventoId: string, participanteId: string, atorId: string) {
   const evento = await prisma.evento.findUnique({ where: { id: eventoId }, include: { sala: true } });
   if (!evento) throw AppError.naoEncontrado("EVENTO_NAO_ENCONTRADO", "Evento não encontrado.");
 
@@ -117,6 +127,11 @@ async function autoinscrever(eventoId: string, participanteId: string) {
   const inscricao = await prisma.inscricao.create({
     data: { id: randomUUID(), participanteId, eventoId, statusPresenca: "PENDENTE" },
   });
+  await registrarAuditoria(
+    atorId,
+    "INSCRICAO_CRIADA",
+    `inscrição ${inscricao.id} (evento ${eventoId}, participante ${participanteId}) feita pelo próprio aluno`,
+  );
   return paraDominioInscricao(inscricao);
 }
 

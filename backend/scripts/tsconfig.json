@@ -4,5 +4,5 @@
     "rootDir": "..",
     "noEmit": true
   },
-  "include": ["backfill-criptografia.ts"]
+  "include": ["backfill-criptografia.ts", "backfill-auditoria.ts"]
 }

@@ -5,14 +5,18 @@ import { env } from "../../config/env";
 const sendgridPronto = Boolean(env.sendgrid.apiKey && env.sendgrid.from);
 if (env.sendgrid.apiKey) sgMail.setApiKey(env.sendgrid.apiKey);
 
+// "simulado" = SendGrid nao configurado, o e-mail so foi logado no console (quem audita precisa saber a diferenca)
+export type ResultadoEnvio = "enviado" | "simulado";
+
 // manda o email de verdade ou so loga, dependendo se o SendGrid ta configurado
-async function enviar(destinatario: string, assunto: string, html: string): Promise<void> {
+async function enviar(destinatario: string, assunto: string, html: string): Promise<ResultadoEnvio> {
   if (!sendgridPronto) {
     console.info(`[e-mail simulado] Para: ${destinatario} | Assunto: ${assunto}\n${html}\n`);
-    return;
+    return "simulado";
   }
   try {
     await sgMail.send({ from: env.sendgrid.from!, to: destinatario, subject: assunto, html });
+    return "enviado";
   } catch (erro) {
     throw new Error(`Falha ao enviar e-mail via SendGrid: ${erro instanceof Error ? erro.message : String(erro)}`);
   }
@@ -27,7 +31,7 @@ interface DadosConfirmacaoInscricao {
 }
 
 // monta e envia o email de confirmacao depois que a inscricao eh criada
-async function enviarConfirmacaoInscricao(destinatario: string, dados: DadosConfirmacaoInscricao): Promise<void> {
+async function enviarConfirmacaoInscricao(destinatario: string, dados: DadosConfirmacaoInscricao): Promise<ResultadoEnvio> {
   const dataFormatada = dados.eventoHorario.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
   const assunto = `Inscrição confirmada — ${dados.eventoTitulo}`;
   const html = `
@@ -40,18 +44,18 @@ async function enviarConfirmacaoInscricao(destinatario: string, dados: DadosConf
     </p>
     <p>Até lá!</p>
   `;
-  await enviar(destinatario, assunto, html);
+  return enviar(destinatario, assunto, html);
 }
 
 // monta e envia o email com o codigo de recuperacao de senha
-async function enviarCodigoRecuperacao(destinatario: string, codigo: string): Promise<void> {
+async function enviarCodigoRecuperacao(destinatario: string, codigo: string): Promise<ResultadoEnvio> {
   const assunto = "Código de recuperação de senha";
   const html = `
     <p>Use o código abaixo pra redefinir sua senha:</p>
     <p style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">${codigo}</p>
     <p>Esse código expira em 15 minutos. Se você não pediu essa recuperação, ignore este e-mail.</p>
   `;
-  await enviar(destinatario, assunto, html);
+  return enviar(destinatario, assunto, html);
 }
 
 export const emailService = {

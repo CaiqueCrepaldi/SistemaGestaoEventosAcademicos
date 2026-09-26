@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { Prisma, type Palestrante as PalestranteDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
+import { camposInformados, registrarAuditoria } from "../../utils/auditoria";
 import type { Palestrante } from "../../types/domain";
 import type { PalestranteInput, PalestranteUpdateInput } from "./palestrantes.schemas";
 
@@ -29,32 +30,37 @@ function relancarComoConflito(erro: unknown): never {
   throw erro;
 }
 
-async function criar(dados: PalestranteInput) {
+async function criar(dados: PalestranteInput, atorId: string) {
+  let palestrante: PalestranteDb;
   try {
-    const palestrante = await prisma.palestrante.create({ data: { id: randomUUID(), ...dados } });
-    return paraDominio(palestrante);
+    palestrante = await prisma.palestrante.create({ data: { id: randomUUID(), ...dados } });
   } catch (erro) {
     relancarComoConflito(erro);
   }
+  await registrarAuditoria(atorId, "PALESTRANTE_CRIADO", `palestrante ${palestrante.id}`);
+  return paraDominio(palestrante);
 }
 
-async function atualizar(id: string, dados: PalestranteUpdateInput) {
+async function atualizar(id: string, dados: PalestranteUpdateInput, atorId: string) {
   await buscarOuFalhar(id);
+  let palestrante: PalestranteDb;
   try {
-    const palestrante = await prisma.palestrante.update({ where: { id }, data: dados });
-    return paraDominio(palestrante);
+    palestrante = await prisma.palestrante.update({ where: { id }, data: dados });
   } catch (erro) {
     relancarComoConflito(erro);
   }
+  await registrarAuditoria(atorId, "PALESTRANTE_ATUALIZADO", `palestrante ${id} (campos: ${camposInformados(dados)})`);
+  return paraDominio(palestrante);
 }
 
-async function remover(id: string) {
+async function remover(id: string, atorId: string) {
   await buscarOuFalhar(id);
   const eventos = await prisma.evento.count({ where: { palestranteId: id } });
   if (eventos > 0) {
     throw AppError.conflito("CONFLITO_DEPENDENCIA", "Não é possível remover: existem eventos vinculados a este palestrante.");
   }
   await prisma.palestrante.delete({ where: { id } });
+  await registrarAuditoria(atorId, "PALESTRANTE_REMOVIDO", `palestrante ${id}`);
 }
 
 export const palestrantesService = { listar, buscarOuFalhar, criar, atualizar, remover };

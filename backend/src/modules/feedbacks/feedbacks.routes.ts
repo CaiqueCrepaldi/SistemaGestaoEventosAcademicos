@@ -64,7 +64,13 @@ feedbacksRouter.post(
       await feedbacksService.validarParticipacaoPresente(req.body.eventoId, participanteId);
     }
 
-    const feedback = await feedbacksService.criar(req.body.eventoId, participanteId, req.body.nota, req.body.comentario);
+    const feedback = await feedbacksService.criar(
+      req.body.eventoId,
+      participanteId,
+      req.body.nota,
+      req.body.comentario,
+      req.usuario!.sub,
+    );
     res.status(201).json(feedbackParaDTO(feedback));
   }),
 );
@@ -79,7 +85,7 @@ feedbacksRouter.put(
     if (!ehEquipe(req.usuario!.perfil) && feedback.participanteId !== req.usuario!.participanteId) {
       throw AppError.acessoNegado();
     }
-    const atualizado = await feedbacksService.atualizar(req.params.id, req.body);
+    const atualizado = await feedbacksService.atualizar(req.params.id, req.body, req.usuario!.sub);
     res.json(feedbackParaDTO(atualizado));
   }),
 );
@@ -93,8 +99,7 @@ feedbacksRouter.delete(
       throw AppError.acessoNegado("Somente administrador ou secretaria podem excluir feedbacks.");
     }
 
-    await feedbacksService.buscarOuFalhar(req.params.id);
-    await feedbacksService.remover(req.params.id);
+    await feedbacksService.remover(req.params.id, req.usuario!.sub);
     res.status(204).send();
   }),
 );

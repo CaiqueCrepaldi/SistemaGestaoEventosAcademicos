@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { Prisma, type Feedback as FeedbackDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
+import { camposInformados, registrarAuditoria } from "../../utils/auditoria";
 import type { Feedback } from "../../types/domain";
 import type { FeedbackUpdateInput } from "./feedbacks.schemas";
 
@@ -43,7 +44,7 @@ async function validarParticipacaoPresente(eventoId: string, participanteId: str
 }
 
 // cria um feedback novo, bloqueia duplicidade e evento/participante inexistente
-async function criar(eventoId: string, participanteId: string, nota: number, comentario: string) {
+async function criar(eventoId: string, participanteId: string, nota: number, comentario: string, atorId: string) {
   const [evento, participante] = await Promise.all([
     prisma.evento.findUnique({ where: { id: eventoId } }),
     prisma.participante.findUnique({ where: { id: participanteId } }),
@@ -53,30 +54,39 @@ async function criar(eventoId: string, participanteId: string, nota: number, com
   if (!participante) erros.push({ campo: "participanteId", mensagem: "Participante não encontrado." });
   if (erros.length > 0) throw AppError.validacao("Dados inválidos.", erros);
 
+  let feedback: FeedbackDb;
   try {
-    const feedback = await prisma.feedback.create({
+    feedback = await prisma.feedback.create({
       data: { id: randomUUID(), eventoId, participanteId, nota, comentario },
     });
-    return paraDominio(feedback);
   } catch (erro) {
     if (erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === "P2002") {
       throw AppError.conflito("FEEDBACK_JA_ENVIADO", "Você já enviou feedback para este evento.");
     }
     throw erro;
   }
+  // o comentario eh texto livre e pode ter dado pessoal, entao nunca vai pro log
+  await registrarAuditoria(atorId, "FEEDBACK_CRIADO", `feedback ${feedback.id} (evento ${eventoId}, participante ${participanteId})`);
+  return paraDominio(feedback);
 }
 
 // edita nota/comentario de um feedback existente
-async function atualizar(id: string, dados: FeedbackUpdateInput) {
+async function atualizar(id: string, dados: FeedbackUpdateInput, atorId: string) {
   await buscarOuFalhar(id);
   const feedback = await prisma.feedback.update({ where: { id }, data: dados });
+  await registrarAuditoria(atorId, "FEEDBACK_ATUALIZADO", `feedback ${id} (campos: ${camposInformados(dados)})`);
   return paraDominio(feedback);
 }
 
 // remove um feedback
-async function remover(id: string) {
-  await buscarOuFalhar(id);
+async function remover(id: string, atorId: string) {
+  const feedback = await buscarOuFalhar(id);
   await prisma.feedback.delete({ where: { id } });
+  await registrarAuditoria(
+    atorId,
+    "FEEDBACK_REMOVIDO",
+    `feedback ${id} (evento ${feedback.eventoId}, participante ${feedback.participanteId})`,
+  );
 }
 
 export const feedbacksService = { listar, buscarOuFalhar, validarParticipacaoPresente, criar, atualizar, remover };

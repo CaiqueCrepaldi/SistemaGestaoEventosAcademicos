@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import { AppError } from "../errors/AppError";
 import { env } from "../config/env";
+import { registrarAuditoria } from "../utils/auditoria";
 
 // rede de seguranca pra erro de banco que nenhum service tratou explicitamente
 // (os casos comuns — email/rgm duplicado, sala/palestrante em uso — ja viram AppError antes de chegar aqui)
@@ -17,13 +18,19 @@ function paraAppError(err: Prisma.PrismaClientKnownRequestError): AppError {
 // tem que ser o ultimo middleware registrado (assinatura de 4 parametros
 // eh o que faz o express reconhecer como error handler)
 // pega qualquer erro lançado nas rotas e devolve no formato padrao da api
-export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction) {
+export async function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction) {
   const timestamp = new Date().toISOString();
   const path = req.originalUrl;
 
   const erroTratado = err instanceof Prisma.PrismaClientKnownRequestError ? paraAppError(err) : err;
 
   if (erroTratado instanceof AppError) {
+    // usuario autenticado barrado (autorizar() ou regra de posse/check-in nos services): grava so
+    // metodo + rota, sem query string (pode carregar busca com dado pessoal)
+    if (erroTratado.code === "ACESSO_NEGADO" && req.usuario) {
+      await registrarAuditoria(req.usuario.sub, "ACESSO_NEGADO", `${req.method} ${path.split("?")[0]}`);
+    }
+
     return res.status(erroTratado.status).json({
       timestamp,
       status: erroTratado.status,

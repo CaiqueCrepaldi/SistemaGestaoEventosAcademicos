@@ -36,7 +36,7 @@ salasRouter.post(
   autorizar("ADMINISTRADOR", "SECRETARIA"),
   validarCorpo(salaSchema),
   asyncHandler(async (req, res) => {
-    const sala = await salasService.criar(req.body);
+    const sala = await salasService.criar(req.body, req.usuario!.sub);
     res.status(201).json(salaParaDTO(sala));
   }),
 );
@@ -48,7 +48,7 @@ salasRouter.put(
   autorizar("ADMINISTRADOR", "SECRETARIA"),
   validarCorpo(salaUpdateSchema),
   asyncHandler(async (req, res) => {
-    const sala = await salasService.atualizar(req.params.id, req.body);
+    const sala = await salasService.atualizar(req.params.id, req.body, req.usuario!.sub);
     res.json(salaParaDTO(sala));
   }),
 );
@@ -59,7 +59,7 @@ salasRouter.delete(
   autenticar,
   autorizar("ADMINISTRADOR", "SECRETARIA"),
   asyncHandler(async (req, res) => {
-    await salasService.remover(req.params.id);
+    await salasService.remover(req.params.id, req.usuario!.sub);
     res.status(204).send();
   }),
 );

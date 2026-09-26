@@ -78,7 +78,7 @@ eventosRouter.post(
     if (!participanteId) {
       throw AppError.acessoNegado("Esta conta não está vinculada a um participante.");
     }
-    const inscricao = await eventosService.autoinscrever(req.params.eventoId, participanteId);
+    const inscricao = await eventosService.autoinscrever(req.params.eventoId, participanteId, req.usuario!.sub);
     res.status(201).json(inscricaoParaDTO(inscricao));
   }),
 );
@@ -104,7 +104,7 @@ eventosRouter.post(
     if (!participanteId) {
       throw AppError.acessoNegado("Esta conta não está vinculada a um participante.");
     }
-    const tentativa = await questionarioService.responder(req.params.eventoId, participanteId, req.body);
+    const tentativa = await questionarioService.responder(req.params.eventoId, participanteId, req.body, req.usuario!.sub);
     res.status(201).json(tentativaParaDTO(tentativa));
   }),
 );
