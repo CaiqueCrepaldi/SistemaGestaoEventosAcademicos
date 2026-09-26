@@ -9,6 +9,8 @@ function paraAppError(err: Prisma.PrismaClientKnownRequestError): AppError {
   if (err.code === "P2002") return AppError.conflito("REGISTRO_DUPLICADO", "Já existe um registro com esses dados.");
   if (err.code === "P2003") return AppError.conflito("CONFLITO_DEPENDENCIA", "Operação bloqueada por um vínculo existente.");
   if (err.code === "P2025") return AppError.naoEncontrado("REGISTRO_NAO_ENCONTRADO", "Registro não encontrado.");
+  // sem esse log o codigo real do prisma se perde e o 500 generico fica impossivel de diagnosticar
+  console.error("[erro-banco]", { code: err.code, meta: err.meta, message: err.message });
   return new AppError(500, "ERRO_BANCO", "Erro ao acessar o banco de dados.");
 }
 

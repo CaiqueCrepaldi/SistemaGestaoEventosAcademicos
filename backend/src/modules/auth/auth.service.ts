@@ -13,6 +13,7 @@ import type { Usuario } from "../../types/domain";
 import type { ConfirmarRecuperacaoInput, LoginInput, RegistroInput, SolicitarRecuperacaoInput } from "./auth.schemas";
 
 const CODIGO_VALIDADE_MS = 15 * 60 * 1000; // 15 min
+const MAX_TENTATIVAS_CODIGO = 5;
 
 // prisma devolve criadoEm como Date e nome/emailLogin/rgm cifrados — decifra e converte pro
 // formato que o resto do app espera (reaproveitado em usuarios.routes.ts)
@@ -133,7 +134,7 @@ async function solicitarRecuperacaoSenha(dados: SolicitarRecuperacaoInput) {
     data: {
       id: randomUUID(),
       usuarioId: usuario.id,
-      codigo,
+      codigoHash: await gerarHashSenha(codigo),
       expiraEm: new Date(Date.now() + CODIGO_VALIDADE_MS),
     },
   });
@@ -158,11 +159,17 @@ async function confirmarRecuperacaoSenha(dados: ConfirmarRecuperacaoInput) {
     throw AppError.naoEncontrado("USUARIO_NAO_ENCONTRADO", "Não encontramos conta com esse e-mail.");
   }
 
+  // o codigo fica guardado so como hash, entao pega o ultimo pendente e compara por bcrypt
   const pendente = await prisma.recuperacaoSenha.findFirst({
-    where: { usuarioId: usuario.id, codigo: dados.codigo, usadoEm: null, expiraEm: { gt: new Date() } },
+    where: { usuarioId: usuario.id, usadoEm: null, expiraEm: { gt: new Date() } },
     orderBy: { criadoEm: "desc" },
   });
-  if (!pendente) {
+  if (!pendente || pendente.tentativas >= MAX_TENTATIVAS_CODIGO) {
+    throw new AppError(422, "CODIGO_INVALIDO", "Código inválido ou expirado.");
+  }
+
+  if (!(await conferirSenha(dados.codigo, pendente.codigoHash))) {
+    await prisma.recuperacaoSenha.update({ where: { id: pendente.id }, data: { tentativas: { increment: 1 } } });
     throw new AppError(422, "CODIGO_INVALIDO", "Código inválido ou expirado.");
   }
 
