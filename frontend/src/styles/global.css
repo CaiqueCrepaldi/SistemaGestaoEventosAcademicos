@@ -375,6 +375,7 @@ h1, h2, h3 {
   flex-direction: column;
   gap: 6px;
   flex: 1;
+  min-width: 0;
 }
 
 .field span {

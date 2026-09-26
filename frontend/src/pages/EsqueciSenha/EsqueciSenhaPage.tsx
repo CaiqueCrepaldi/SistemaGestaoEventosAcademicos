@@ -91,16 +91,15 @@ export function EsqueciSenhaPage() {
               <input value={codigo} onChange={(e) => setCodigo(e.target.value)} required autoFocus />
             </label>
 
-            <div className="field-row">
-              <label className="field">
-                <span>Nova senha</span>
-                <PasswordInput value={novaSenha} onChange={setNovaSenha} required />
-              </label>
-              <label className="field">
-                <span>Confirmar nova senha</span>
-                <PasswordInput value={confirmarSenha} onChange={setConfirmarSenha} required />
-              </label>
-            </div>
+            <label className="field">
+              <span>Nova senha</span>
+              <PasswordInput value={novaSenha} onChange={setNovaSenha} required />
+            </label>
+
+            <label className="field">
+              <span>Confirmar nova senha</span>
+              <PasswordInput value={confirmarSenha} onChange={setConfirmarSenha} required />
+            </label>
 
             {erro && <p className="form-error">{erro}</p>}
 
