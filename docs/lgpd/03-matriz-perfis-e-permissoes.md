@@ -35,8 +35,8 @@ significa que o middleware `autorizar(...)` barra qualquer outro perfil com
 | `/api/salas` | GET | ✅ | ✅ | ✅ | — |
 | `/api/salas/:id` | GET | ✅ | ✅ | ✅ | — |
 | `/api/salas` | POST / `/api/salas/:id` | ✅ | ✅ | ❌ | PUT/DELETE — bloqueia exclusão se houver evento vinculado |
-| `/api/palestrantes` | GET | ✅ | ✅ | ✅ | Campo `telefone` **removido** da resposta pra ALUNO (`palestranteParaDTO(..., paraAluno)`) |
-| `/api/palestrantes/:id` | GET | ✅ | ✅ | ✅ | idem |
+| `/api/palestrantes` | GET | ✅ (id/nome/e-mail) | ✅ (id/nome/e-mail) | ✅ (só id/nome) | Campo `telefone` foi **removido do sistema** (bloco 1); campo `email` some da resposta pra ALUNO — ele não precisa disso pra nada (minimização, guia 4.3), via `palestranteParaDTO(..., paraAluno)` |
+| `/api/palestrantes/:id` | GET | ✅ | ✅ | ✅ (só id/nome) | idem |
 | `/api/palestrantes` | POST / `/api/palestrantes/:id` | ✅ | ✅ | ❌ | PUT/DELETE |
 | `/api/participantes` | GET | ✅ | ✅ | ❌ | Lista todo mundo — nenhum verbo desse módulo é liberado pro ALUNO, nem leitura do próprio registro (o aluno usa `/usuarios/me`) |
 | `/api/participantes/alunos` | GET | ✅ | ✅ | ❌ | Só quem tem conta `ALUNO`, usado pela tela de Check-in |

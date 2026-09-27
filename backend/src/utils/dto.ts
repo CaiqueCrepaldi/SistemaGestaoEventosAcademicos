@@ -34,8 +34,10 @@ export function salaParaDTO(sala: Sala) {
   };
 }
 
-export function palestranteParaDTO(palestrante: Palestrante) {
-  return { id: palestrante.id, nome: palestrante.nome, email: palestrante.email };
+// paraAluno=true tira o e-mail da resposta (aluno nao precisa dele pra nada, ver docs/lgpd)
+export function palestranteParaDTO(palestrante: Palestrante, paraAluno: boolean) {
+  const base = { id: palestrante.id, nome: palestrante.nome };
+  return paraAluno ? base : { ...base, email: palestrante.email };
 }
 
 // participante tal como esta, sem campo de controle

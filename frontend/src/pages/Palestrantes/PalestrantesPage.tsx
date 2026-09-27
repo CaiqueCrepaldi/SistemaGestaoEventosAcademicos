@@ -42,7 +42,7 @@ export function PalestrantesPage() {
 
   function pedirSalvar() {
     if (!validarNome(form.nome)) return void toast.error("Nome deve conter apenas letras.");
-    if (!validarEmail(form.email)) return void toast.error("E-mail em formato inválido.");
+    if (!validarEmail(form.email ?? "")) return void toast.error("E-mail em formato inválido.");
     if (editando) setConfirmandoSalvar(true);
     else void salvar();
   }
@@ -76,7 +76,7 @@ export function PalestrantesPage() {
     }
   }
 
-  // ALUNO ve uma versao mais simples (so nome e e-mail)
+  // ALUNO ve uma versao mais simples (so nome — o backend nem manda e-mail pra esse perfil)
   if (usuario?.perfil === "ALUNO") {
     return (
       <div>
@@ -86,7 +86,6 @@ export function PalestrantesPage() {
             {palestrantes.map((palestrante) => (
               <li key={palestrante.id} className="simple-list-item">
                 <div className="simple-list-title">{palestrante.nome}</div>
-                <div className="simple-list-sub">{palestrante.email}</div>
               </li>
             ))}
             {palestrantes.length === 0 && <p className="empty-cell">Nenhum palestrante cadastrado.</p>}

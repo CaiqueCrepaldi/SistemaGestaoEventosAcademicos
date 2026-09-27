@@ -20,10 +20,12 @@ export interface Sala {
 }
 
 // pessoa convidada pra ministrar um evento
+// email so vem preenchido pra ADMINISTRADOR/SECRETARIA — pro ALUNO a chave nem aparece
+// na resposta da API (minimizacao, ver docs/lgpd)
 export interface Palestrante {
   id: string;
   nome: string;
-  email: string;
+  email?: string;
 }
 
 // alternativa de resposta de uma pergunta do questionario, so uma por pergunta tem correta: true
