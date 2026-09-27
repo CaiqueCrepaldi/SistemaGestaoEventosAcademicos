@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+*.local.md
 
 # Env files (nenhum arquivo de env é versionado, nem como template)
 .env
@@ -27,3 +28,6 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+
+# PDF de referencia do PFC (material do professor, nao e do projeto)
+docs/lgpd/referencia/
