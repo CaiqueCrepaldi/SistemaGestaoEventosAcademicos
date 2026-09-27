@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { ApiError, auditoriaService, SEM_RESPONSAVEL } from "../../services";
+import { auditoriaService, SEM_RESPONSAVEL } from "../../services";
 import type { PaginaAuditoria, ResponsavelAuditoria } from "../../services";
 
 // traduz o codigo da acao pra um texto legivel na tela (a ordem aqui eh a do filtro de acao)
@@ -92,12 +92,9 @@ export function AuditoriaPage() {
       })
       .catch((e) => {
         if (descartar) return;
-        // 401 = token expirado/invalido (a sessao dura 8h e o app nao derruba a tela sozinho)
-        if (e instanceof ApiError && e.status === 401) {
-          setErroCarga("Sua sessão expirou. Clique em Sair e entre novamente para ver a trilha de auditoria.");
-        } else {
-          setErroCarga(e instanceof Error ? e.message : "Não foi possível carregar a trilha de auditoria.");
-        }
+        // 401 nem chega a aparecer aqui de verdade: o AuthContext desloga e redireciona pro
+        // login antes desse estado importar (ver SESSAO_EXPIRADA_EVENT em services/api.ts)
+        setErroCarga(e instanceof Error ? e.message : "Não foi possível carregar a trilha de auditoria.");
       })
       .finally(() => {
         if (!descartar) setCarregando(false);

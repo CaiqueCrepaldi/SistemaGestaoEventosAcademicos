@@ -13,6 +13,9 @@ export interface UsuarioPerfil {
 // o que fica salvo em localStorage["sgea:session"] depois do login
 export interface SessaoUsuario extends UsuarioPerfil {
   token: string;
+  // Date.now() + expiresIn (o backend manda em segundos) — usado pra deslogar
+  // proativamente sem esperar o servidor recusar a proxima chamada com 401
+  expiraEm: number;
 }
 
 export interface CadastroAlunoInput {
@@ -44,7 +47,7 @@ interface LoginResponseDTO {
 export const authService: AuthService = {
   async login(emailLogin, senha) {
     const res = await api.post<LoginResponseDTO>("/auth/login", { emailLogin, senha });
-    return { ...res.usuario, token: res.token };
+    return { ...res.usuario, token: res.token, expiraEm: Date.now() + res.expiresIn * 1000 };
   },
   cadastrarAluno(dados) {
     return api.post<void>("/auth/registro", dados);

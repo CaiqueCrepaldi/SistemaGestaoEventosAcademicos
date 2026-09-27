@@ -75,7 +75,7 @@ export function Layout() {
               <span>{usuario ? PERFIL_LABEL[usuario.perfil] : ""}</span>
             </div>
           </button>
-          <button className="btn btn-ghost" onClick={logout}>
+          <button className="btn btn-ghost" onClick={() => logout()}>
             Sair
           </button>
         </div>

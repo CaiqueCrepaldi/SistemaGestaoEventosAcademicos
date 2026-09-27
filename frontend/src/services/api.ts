@@ -1,5 +1,16 @@
 export const SESSION_KEY = "sgea:session";
 
+// disparado em qualquer 401 fora das rotas publicas de auth; o AuthContext escuta pra deslogar
+export const SESSAO_EXPIRADA_EVENT = "sgea:sessao-expirada";
+
+// nessas rotas um 401 eh so "e-mail ou senha errados" — nunca desloga ninguem (nem tem sessao ainda)
+const ROTAS_PUBLICAS_AUTH = new Set([
+  "/auth/login",
+  "/auth/registro",
+  "/auth/recuperacao-senha",
+  "/auth/recuperacao-senha/confirmar",
+]);
+
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
 export interface ApiErrorField {
@@ -75,6 +86,14 @@ async function request<T>(path: string, method: string, body?: unknown): Promise
   const payload = contentType.includes("application/json") ? await response.json() : undefined;
 
   if (!response.ok) {
+    // token vencido/invalido numa rota autenticada: limpa a sessao e avisa o AuthContext (evita
+    // ciclo de import direto entre os dois arquivos). Rotas publicas de auth ficam de fora —
+    // la um 401 eh so credencial errada, nunca "sessao expirada"
+    if (response.status === 401 && !ROTAS_PUBLICAS_AUTH.has(path)) {
+      localStorage.removeItem(SESSION_KEY);
+      window.dispatchEvent(new Event(SESSAO_EXPIRADA_EVENT));
+    }
+
     const errorBody = payload as ApiErrorBody | undefined;
     throw new ApiError(
       response.status,
