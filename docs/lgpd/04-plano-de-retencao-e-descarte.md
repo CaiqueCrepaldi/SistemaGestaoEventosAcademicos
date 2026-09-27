@@ -19,7 +19,7 @@ Tabela no formato da seção 4.6 do guia, seguida de como cada descarte é
 | Logs de auditoria | Segurança, investigação, exercício regular de direitos | 5 anos a partir do registro (art. 7º, VI da LGPD; prazo do art. 27 do CDC, por ser relação de consumo aluno–UMC) | Excluir, só pela rotina automática — nunca manualmente (ver `07-medidas-tecnicas-de-seguranca.md`) |
 | Registro de aceite de Termos/Política | Comprovar aceite | Mesmo prazo dos logs (5 anos) | Manter como registro pseudonimizado (data/hora + versão) após a conta ser anonimizada |
 | Dados de demonstração (`[TESTE]`) | Testes acadêmicos do PFC | Até 31/12/2026 (após a apresentação) | Excluir via script de limpeza |
-| Backups do banco (TiDB Cloud) | Recuperação de desastre | Ver seção "Backups" abaixo | Rotação automática do provedor |
+| Backups do banco (TiDB Cloud) | Recuperação de desastre | Backup diário (07:00 UTC), expira em 1 dia — ver "Backups" abaixo | Rotação automática do provedor, sem ação manual necessária |
 
 ## Como o descarte é executado
 
@@ -57,32 +57,21 @@ exclusão sem implementá-la".
 
 ## Backups
 
-O TiDB Cloud (Serverless) mantém backups automáticos geridos pelo próprio
-provedor, fora do controle do código da aplicação. **Isto precisa ser
-confirmado no painel/documentação oficial do TiDB Cloud pra este cluster
-específico antes da entrega final** — a informação abaixo é a política
-publicamente documentada pela TiDB Cloud para o tier Serverless no momento
-da escrita deste documento e deve ser revalidada:
+Confirmado no console do TiDB Cloud (Data > Backup) para este cluster
+específico: o backup automático roda **1 vez por dia, às 07:00 UTC (04:00
+de Brasília)**, e cada backup **expira em 1 dia**. Ou seja, a qualquer
+momento existe no máximo um backup guardado, com no máximo 24 horas de
+idade.
 
-> No plano padrão do TiDB Cloud Serverless, backups automáticos são
-> mantidos por um período determinado pelo provedor (histórico de poucos
-> dias no tier gratuito/serverless), com retenção maior disponível em
-> planos superiores. Ou seja, um dado anonimizado ou excluído no banco
-> principal **pode continuar existindo dentro de um backup já feito** até
-> que esse backup específico seja rotacionado (descartado) pelo próprio
-> ciclo do provedor.
+**Implicação prática:** um dado anonimizado ou excluído no banco principal
+pode continuar existindo dentro do backup do dia por, no máximo, 24 horas
+— depois disso, o próprio ciclo diário substitui aquele backup por um novo
+(que já não vai mais ter o dado, porque a anonimização já tinha acontecido
+no banco principal antes daquele backup ser tirado). Não é preciso nenhuma
+ação manual pra "limpar" o backup — o prazo máximo de 24h já resolve
+sozinho, pela rotação diária.
 
-**Implicação para a Política de Privacidade:** o texto da política (v2)
-precisa deixar isso explícito — anonimização/exclusão são imediatas no
-banco em uso, mas cópias de segurança anteriores àquele momento só saem de
-circulação quando o provedor as rotaciona, não instantaneamente. Isso é
-exatamente o tipo de limitação que o guia pede pra não prometer o que não
-se controla ("o sistema precisa implementar o descarte prometido, inclusive
-para arquivos e cópias de segurança" — o SGEA não controla o ciclo de
-backup do TiDB Cloud, por isso a política declara o limite em vez de
-prometer algo que não pode garantir).
-
-**Ação pendente:** confirmar no painel do TiDB Cloud (ou com o suporte) o
-prazo exato de retenção de backup deste cluster específico, e atualizar
-este documento e a política v2 com o número real antes da entrega final do
-PFC.
+**Implicação para resposta a incidentes:** só é possível restaurar o
+estado das últimas 24 horas. Um problema percebido depois desse prazo não
+tem backup correspondente pra recuperação — ver a limitação registrada em
+`05-plano-de-resposta-a-incidentes.md`.

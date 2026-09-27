@@ -38,8 +38,15 @@ pelos dados tratados).
   resultado (aprovação/reprovação) e feedback enviado sobre as palestras.
 - **Registros de acesso:** login (sucesso e falha), acesso negado e
   alterações em registros críticos, para fins de segurança e auditoria.
-- **Identificação e contato (palestrante):** nome, e-mail e telefone,
-  informados pela secretaria ao cadastrar o evento.
+- **Identificação e contato (palestrante):** nome e e-mail, informados
+  pela secretaria ao cadastrar o evento. Palestrantes também são
+  titulares de dados pessoais: se você foi convidado a ministrar uma
+  palestra no SGEA, seu nome e e-mail ficam armazenados no sistema (nome
+  visível na agenda pública do evento para qualquer pessoa autenticada,
+  e-mail visível só à equipe organizadora e a você mesmo), pelo tempo em
+  que o evento estiver cadastrado. O canal `privacidade@sgeacademicos.com.br`
+  vale também para você, pra qualquer dúvida ou solicitação sobre seus
+  dados.
 
 Não coletamos CPF, endereço, data de nascimento, foto ou dado de saúde. A
 idade do titular não é coletada como dado — em vez disso, o cadastro exige
@@ -101,10 +108,10 @@ resumo:
   desvinculada.
 - Logs de auditoria são mantidos por 5 anos e só removidos por uma rotina
   automática — nunca manualmente.
-- Cópias de segurança (backup) do banco de dados seguem o ciclo do
-  provedor (TiDB Cloud): um dado anonimizado no sistema pode continuar
-  existindo num backup já feito até esse backup ser substituído pelo
-  ciclo normal do provedor.
+- Cópias de segurança (backup) do banco de dados são feitas 1 vez por dia
+  pelo provedor (TiDB Cloud) e cada backup expira em 1 dia: um dado
+  anonimizado ou excluído pode continuar existindo num backup já feito por
+  no máximo 24 horas, até ser substituído pelo ciclo diário seguinte.
 
 ## 7. Seus direitos
 

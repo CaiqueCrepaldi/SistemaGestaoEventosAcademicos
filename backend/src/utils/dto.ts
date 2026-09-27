@@ -34,10 +34,8 @@ export function salaParaDTO(sala: Sala) {
   };
 }
 
-// paraAluno=true tira o telefone da resposta
-export function palestranteParaDTO(palestrante: Palestrante, paraAluno: boolean) {
-  const base = { id: palestrante.id, nome: palestrante.nome, email: palestrante.email };
-  return paraAluno ? base : { ...base, telefone: palestrante.telefone };
+export function palestranteParaDTO(palestrante: Palestrante) {
+  return { id: palestrante.id, nome: palestrante.nome, email: palestrante.email };
 }
 
 // participante tal como esta, sem campo de controle

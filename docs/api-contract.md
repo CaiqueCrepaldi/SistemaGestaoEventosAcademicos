@@ -33,7 +33,7 @@ auto-cadastro.
 |-----------------------------------------|:---:|:---:|:---:|
 | Eventos — listar / detalhe               | ✅ | ✅ | ✅ |
 | Eventos — criar / editar / excluir       | ✅ | ✅ | ❌ |
-| Palestrantes — listar / detalhe          | com telefone | com telefone | sem telefone |
+| Palestrantes — listar / detalhe          | ✅ | ✅ | ✅ (resposta igual pra todo mundo) |
 | Palestrantes — criar / editar / excluir  | ✅ | ✅ | ❌ |
 | Salas — listar / detalhe                 | ✅ | ✅ | ✅ (só nome/capacidade, pra Agenda e listagem de eventos) |
 | Salas — criar / editar / excluir         | ✅ | ✅ | ❌ |
@@ -310,32 +310,23 @@ Aluno chamando POST/PUT/DELETE cai em `403 ACESSO_NEGADO`.
 
 ## Palestrantes
 
-O campo `telefone` nunca pode aparecer no JSON pra aluno — nem como
-`"telefone": null`, a chave some inteira. Isso é decisão do backend (DTO
-por perfil), baseado no perfil do token. Não dá pra confiar que o frontend
-simplesmente não mostra o campo — a checagem de verdade é essa do backend;
-a tela (`PalestrantesPage.tsx`) só reflete o que já vem faltando no JSON.
+`nome`/`email` em texto puro no banco — não é dado sensível, a edição é
+restrita à equipe e o nome já é público na agenda do evento (decisão LGPD,
+ver `docs/lgpd/07-medidas-tecnicas-de-seguranca.md`). O campo `telefone`
+existiu numa versão anterior e foi removido (minimização — não era usado
+em nenhum fluxo automatizado).
 
 ```ts
-// visão admin/secretaria
 interface Palestrante {
   id: string;
   nome: string;
-  curriculo: string;
-  telefone: string;
-}
-
-// visão aluno — telefone some, não fica null
-interface PalestrantePublico {
-  id: string;
-  nome: string;
-  curriculo: string;
+  email: string;
 }
 ```
 
 `GET /api/palestrantes` e `GET /api/palestrantes/{id}` — qualquer perfil
-autenticado, telefone incluído ou não dependendo do perfil do token.
-`POST /api/palestrantes`, `PUT /api/palestrantes/{id}` e
+autenticado, resposta igual pra todo mundo (não há mais campo restrito por
+perfil). `POST /api/palestrantes`, `PUT /api/palestrantes/{id}` e
 `DELETE /api/palestrantes/{id}` — administrador/secretaria. A exclusão é
 bloqueada quando há eventos vinculados ao palestrante.
 

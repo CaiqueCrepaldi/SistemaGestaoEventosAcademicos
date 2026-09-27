@@ -58,18 +58,17 @@ Garantir que os dados cadastrados no sistema (palestrantes, eventos, contas de a
 | Nome | Apenas letras (com acentos), espaços e hífen — sem números |
 | E-mail | Formato válido (`algo@dominio.algo`) |
 | RGM | Exatamente 11 dígitos numéricos, sem espaços ou letras |
-| Telefone (palestrante) | Máscara automática `(00) 00000-0000` |
 
 ### Fluxo do usuário
 
 1. Ao preencher qualquer formulário do sistema (cadastro de palestrante, evento, ou cadastro de conta de aluno) e tentar salvar com um campo inválido ou vazio, uma notificação (toast) aparece no canto da tela explicando exatamente o que está errado.
-2. O campo de RGM já formata automaticamente em maiúsculo enquanto o usuário digita, e o campo de telefone aplica a máscara `(00) 00000-0000` sozinho.
+2. O campo de RGM já formata automaticamente em maiúsculo enquanto o usuário digita.
 3. Nada é salvo enquanto houver um campo inválido — o formulário permanece aberto para correção.
 4. Confirmações de sucesso ("Palestrante cadastrado.", "Evento atualizado.", etc.) também aparecem como notificação, no lugar de um `alert()` do navegador.
 
 ### Como funciona por trás
 
-- As regras de validação (nome, e-mail, RGM, telefone) existem em dois lugares espelhados: `frontend/src/utils/validacao.ts` (checagem imediata na tela) e `backend/src/utils/validacao.ts` + os schemas Zod de cada módulo (segunda barreira, caso a API seja chamada diretamente). Isso segue o princípio de nunca confiar apenas na validação do navegador.
+- As regras de validação (nome, e-mail, RGM) existem em dois lugares espelhados: `frontend/src/utils/validacao.ts` (checagem imediata na tela) e `backend/src/utils/validacao.ts` + os schemas Zod de cada módulo (segunda barreira, caso a API seja chamada diretamente). Isso segue o princípio de nunca confiar apenas na validação do navegador.
 - O sistema de notificação (`frontend/src/components/ui/Toast.tsx`) é um "pub/sub" simples: qualquer parte do código pode chamar `toast.error("mensagem")` ou `toast.success("mensagem")`, e um componente único (`ToastViewport`), montado uma vez na raiz da aplicação, exibe a notificação por alguns segundos e some sozinha.
 - Antes de qualquer edição ou exclusão (palestrante, sala, evento, inscrição), o sistema exibe uma caixa de confirmação (`ConfirmDialog.tsx`) — outra camada de proteção contra ações acidentais, especialmente importante numa aplicação usada por secretaria/administração.
 - No back-end, a validação Zod (`validarCorpo` como middleware) barra a requisição antes mesmo de chegar à lógica de negócio, devolvendo código de erro `422` com a mensagem de qual campo falhou.
@@ -126,7 +125,7 @@ Antes de existir um evento no sistema, é preciso ter pelo menos uma sala e um p
 ### Fluxo do usuário
 
 - **Salas** (`/salas`): cadastro simples de nome e capacidade (número de lugares), usado depois para calcular vagas disponíveis nas inscrições.
-- **Palestrantes** (`/palestrantes`): cadastro de nome, e-mail e telefone (com máscara automática). O aluno enxerga essa tela em modo somente leitura, sem o telefone.
+- **Palestrantes** (`/palestrantes`): cadastro de nome e e-mail. O aluno enxerga essa tela em modo somente leitura.
 - **Eventos** (`/eventos`): título, sala, data/horário, palestrante responsável, tema e carga horária, além do construtor das 10 perguntas do questionário (ver funcionalidade 1). Só é possível abrir o formulário de novo evento se já existir pelo menos uma sala e um palestrante cadastrados.
 - Nas três telas, editar ou excluir um registro pede confirmação antes de gravar ("Confirmar alteração" / "Remover ..."), e qualquer campo inválido ou vazio é avisado por notificação (toast) — nunca por `alert()`.
 

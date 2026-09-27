@@ -15,6 +15,12 @@ function paraAppError(err: Prisma.PrismaClientKnownRequestError): AppError {
   return new AppError(500, "ERRO_BANCO", "Erro ao acessar o banco de dados.");
 }
 
+// corpo maior que o limite configurado em express.json({ limit: ... }) — o body-parser
+// joga isso como erro generico (nao AppError), sem isso viraria 500 em vez de 413
+function ehCorpoGrandeDemais(err: unknown): err is { status: number; type: string } {
+  return typeof err === "object" && err !== null && (err as { type?: string }).type === "entity.too.large";
+}
+
 // tem que ser o ultimo middleware registrado (assinatura de 4 parametros
 // eh o que faz o express reconhecer como error handler)
 // pega qualquer erro lançado nas rotas e devolve no formato padrao da api
@@ -22,7 +28,11 @@ export async function errorHandler(err: unknown, req: Request, res: Response, _n
   const timestamp = new Date().toISOString();
   const path = req.originalUrl;
 
-  const erroTratado = err instanceof Prisma.PrismaClientKnownRequestError ? paraAppError(err) : err;
+  const erroTratado = err instanceof Prisma.PrismaClientKnownRequestError
+    ? paraAppError(err)
+    : ehCorpoGrandeDemais(err)
+      ? new AppError(413, "CORPO_MUITO_GRANDE", "O corpo da requisição excede o tamanho máximo permitido.")
+      : err;
 
   if (erroTratado instanceof AppError) {
     // usuario autenticado barrado (autorizar() ou regra de posse/check-in nos services): grava so

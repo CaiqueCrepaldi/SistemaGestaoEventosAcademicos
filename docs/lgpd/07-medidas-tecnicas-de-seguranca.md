@@ -18,7 +18,8 @@ diz claramente se já está implementado ou se é um plano da Fase 2.
 | Autorização por perfil e por posse | Middleware `autorizar(...)` nega por padrão; toda rota revisada confere perfil e, onde cabe, dono do registro no backend (nunca só no frontend) | Ver `03-matriz-perfis-e-permissoes.md` — cobertura de 100% das rotas |
 | Trilha de auditoria imutável | Cada operação sensível grava um evento; a tabela só recebe `INSERT` em todo o código (sem `UPDATE`/`DELETE` em nenhuma rota, service ou script) | `backend/src/utils/auditoria.ts`, `backend/prisma/schema.prisma` (`onDelete: SetNull` na relação com usuário) |
 | Consulta parametrizada / ORM | 100% do código de aplicação usa Prisma; não há SQL concatenado com entrada do usuário em rota nenhuma | Todos os `*.service.ts` |
-| Segredos fora do código | `ENCRYPTION_KEY`, `JWT_SECRET`, `DATABASE_URL`, `SENDGRID_API_KEY` só existem em variável de ambiente, nunca no repositório (`.gitignore` cobre `.env`/`.env.*`) | `backend/src/config/env.ts` |
+| Segredos fora do código | `ENCRYPTION_KEY`, `JWT_SECRET`, `DATABASE_URL`, `SENDGRID_API_KEY` só existem em variável de ambiente, nunca no repositório (`.gitignore` cobre `.env`/`.env.*`, com exceção proposital de `.env.example`) | `backend/src/config/env.ts` |
+| Backup do banco protegido pelo provedor | TiDB Cloud faz backup automático diário (07:00 UTC) do cluster, com expiração de 1 dia por backup — confirmado no console do provedor | Configuração do provedor, fora do código; documentado em `04-plano-de-retencao-e-descarte.md` |
 | Recuperação de senha com limite de tentativas e expiração | Código de 6 dígitos, hash bcrypt (nunca texto puro no banco), validade de 15 minutos, bloqueado após 5 tentativas erradas | `backend/src/modules/auth/auth.service.ts` |
 | Mensagens genéricas contra enumeração | Login e recuperação de senha respondem igual pra "credencial errada" e "conta não existe", sem dar dica de qual dos dois foi | `auth.service.ts` |
 | HTTPS em produção | Garantido pela plataforma de hospedagem (Vercel) | Nível de infraestrutura |
@@ -38,7 +39,7 @@ que declará-la. Cada uma tem um plano associado.
 | Sem autenticação multifator | Nenhum perfil tem MFA, nem os de maior privilégio (ADMINISTRADOR/SECRETARIA) | Fora de escopo proposto para este PFC — registrado como limitação conhecida |
 | Sem separação de banco dev/teste/produção | `backend/.env` local aponta pro mesmo banco de produção | Fase 2 item 8 |
 | `console.info`/`console.error` que podem expor dado pessoal | Ver detalhe em `00-diagnostico.md` ("Console.log/console.error com dado pessoal") | Fase 2 item 4 |
-| Palestrante em texto puro | `nome`/`email`/`telefone` sem cifra | A decidir (ver `00-diagnostico.md`) |
+~~Palestrante em texto puro~~ | ~~`nome`/`email`/`telefone` sem cifra~~ | **Resolvido:** telefone removido do sistema (não era usado em nenhum fluxo). Nome e e-mail continuam em texto puro por decisão explícita — não são dados sensíveis (art. 5º, II da LGPD), o acesso de edição é restrito à equipe (`ADMINISTRADOR`/`SECRETARIA`), e o nome do palestrante já é informação pública, exibida a qualquer perfil autenticado na agenda do evento. Cifrar traria custo (índice de busca, mais uma migração) sem ganho de proteção proporcional a um dado que a própria finalidade do sistema torna público |
 
 ## Práticas de desenvolvimento seguro adotadas neste PFC
 

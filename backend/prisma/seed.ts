@@ -115,12 +115,12 @@ async function seed() {
   const palestranteMariana = await prisma.palestrante.upsert({
     where: { email: "mariana.costa@umc.br" },
     update: {},
-    create: { id: randomUUID(), nome: "Dra. Mariana Costa", email: "mariana.costa@umc.br", telefone: "(11) 98888-1111" },
+    create: { id: randomUUID(), nome: "Dra. Mariana Costa", email: "mariana.costa@umc.br" },
   });
   const palestranteFelipe = await prisma.palestrante.upsert({
     where: { email: "felipe.andrade@umc.br" },
     update: {},
-    create: { id: randomUUID(), nome: "Msc. Felipe Andrade", email: "felipe.andrade@umc.br", telefone: "(11) 97777-2222" },
+    create: { id: randomUUID(), nome: "Msc. Felipe Andrade", email: "felipe.andrade@umc.br" },
   });
 
   const eventoAbertura = await garantirEvento("Abertura e Palestra Magna: IA na Educação", {

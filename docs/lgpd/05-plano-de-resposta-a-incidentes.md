@@ -34,6 +34,16 @@ Vercel. Preservar evidência aqui significa **não apagar nada da tabela
 `logs_auditoria`** durante a investigação — ela é exatamente a fonte de
 evidência que a arquitetura já garante ser imutável.
 
+**Limitação conhecida de recuperação por backup:** o TiDB Cloud faz backup
+do cluster 1 vez por dia (07:00 UTC), e cada backup expira em 1 dia — ou
+seja, só é possível restaurar o estado de, no máximo, as últimas 24 horas.
+Um incidente que corrompa ou apague dado e só seja percebido depois desse
+prazo **não tem backup correspondente pra recuperação**; a única fonte de
+reconstrução nesse cenário passa a ser a trilha de auditoria
+(`logs_auditoria`, que não depende de backup porque nunca é apagada dentro
+do prazo de retenção de 5 anos) e qualquer log de execução ainda
+disponível na Vercel.
+
 ### 3. Identificar dados e titulares afetados
 
 Consulta direta ao banco (por quem tem acesso de administrador),

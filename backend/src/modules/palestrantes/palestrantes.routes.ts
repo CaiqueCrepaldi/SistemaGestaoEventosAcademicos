@@ -8,14 +8,13 @@ import { palestranteSchema, palestranteUpdateSchema } from "./palestrantes.schem
 
 export const palestrantesRouter = Router();
 
-// leitura liberada pra qualquer perfil, mas telefone some do DTO pro ALUNO
+// leitura liberada pra qualquer perfil (nome/e-mail nao sao dado sensivel, ver docs/lgpd)
 palestrantesRouter.get(
   "/",
   autenticar,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (_req, res) => {
     const palestrantes = await palestrantesService.listar();
-    const paraAluno = req.usuario!.perfil === "ALUNO";
-    res.json(palestrantes.map((p) => palestranteParaDTO(p, paraAluno)));
+    res.json(palestrantes.map(palestranteParaDTO));
   }),
 );
 
@@ -25,8 +24,7 @@ palestrantesRouter.get(
   autenticar,
   asyncHandler(async (req, res) => {
     const palestrante = await palestrantesService.buscarOuFalhar(req.params.id);
-    const paraAluno = req.usuario!.perfil === "ALUNO";
-    res.json(palestranteParaDTO(palestrante, paraAluno));
+    res.json(palestranteParaDTO(palestrante));
   }),
 );
 
@@ -37,7 +35,7 @@ palestrantesRouter.post(
   validarCorpo(palestranteSchema),
   asyncHandler(async (req, res) => {
     const palestrante = await palestrantesService.criar(req.body, req.usuario!.sub);
-    res.status(201).json(palestranteParaDTO(palestrante, false));
+    res.status(201).json(palestranteParaDTO(palestrante));
   }),
 );
 
@@ -46,7 +44,7 @@ palestrantesRouter.put(
   validarCorpo(palestranteUpdateSchema),
   asyncHandler(async (req, res) => {
     const palestrante = await palestrantesService.atualizar(req.params.id, req.body, req.usuario!.sub);
-    res.json(palestranteParaDTO(palestrante, false));
+    res.json(palestranteParaDTO(palestrante));
   }),
 );
 

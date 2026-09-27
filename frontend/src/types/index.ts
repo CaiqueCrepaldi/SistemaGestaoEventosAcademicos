@@ -20,12 +20,10 @@ export interface Sala {
 }
 
 // pessoa convidada pra ministrar um evento
-// telefone nao aparece pro perfil ALUNO (ver PalestrantesPage.tsx)
 export interface Palestrante {
   id: string;
   nome: string;
   email: string;
-  telefone: string;
 }
 
 // alternativa de resposta de uma pergunta do questionario, so uma por pergunta tem correta: true

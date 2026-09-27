@@ -8,17 +8,24 @@ if (env.sendgrid.apiKey) sgMail.setApiKey(env.sendgrid.apiKey);
 // "simulado" = SendGrid nao configurado, o e-mail so foi logado no console (quem audita precisa saber a diferenca)
 export type ResultadoEnvio = "enviado" | "simulado";
 
-// manda o email de verdade ou so loga, dependendo se o SendGrid ta configurado
-async function enviar(destinatario: string, assunto: string, html: string): Promise<ResultadoEnvio> {
+// manda o email de verdade ou so loga, dependendo se o SendGrid ta configurado.
+// "tipo" eh so um rotulo curto pro log (ex.: "recuperacao-senha") — o log NUNCA
+// pode ter destinatario, assunto ou corpo, porque o corpo pode carregar codigo/token
+// (achado da adequacao LGPD: o codigo de recuperacao nao pode aparecer em log de servidor)
+async function enviar(tipo: string, destinatario: string, assunto: string, html: string): Promise<ResultadoEnvio> {
   if (!sendgridPronto) {
-    console.info(`[e-mail simulado] Para: ${destinatario} | Assunto: ${assunto}\n${html}\n`);
+    console.info(`[e-mail simulado] tipo=${tipo} (SendGrid nao configurado; destinatario e conteudo omitidos do log de proposito)`);
     return "simulado";
   }
   try {
     await sgMail.send({ from: env.sendgrid.from!, to: destinatario, subject: assunto, html });
     return "enviado";
   } catch (erro) {
-    throw new Error(`Falha ao enviar e-mail via SendGrid: ${erro instanceof Error ? erro.message : String(erro)}`);
+    // nunca logar o objeto de erro cru do SendGrid: o SDK costuma ecoar o corpo da
+    // requisicao (destinatario, as vezes o html) dentro do proprio erro
+    const mensagem = erro instanceof Error ? erro.message : "erro desconhecido";
+    console.error(`[email] falha ao enviar via SendGrid (tipo=${tipo}):`, mensagem);
+    throw new Error(`Falha ao enviar e-mail via SendGrid: ${mensagem}`);
   }
 }
 
@@ -44,7 +51,7 @@ async function enviarConfirmacaoInscricao(destinatario: string, dados: DadosConf
     </p>
     <p>Até lá!</p>
   `;
-  return enviar(destinatario, assunto, html);
+  return enviar("confirmacao-inscricao", destinatario, assunto, html);
 }
 
 // monta e envia o email com o codigo de recuperacao de senha
@@ -55,7 +62,7 @@ async function enviarCodigoRecuperacao(destinatario: string, codigo: string): Pr
     <p style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">${codigo}</p>
     <p>Esse código expira em 15 minutos. Se você não pediu essa recuperação, ignore este e-mail.</p>
   `;
-  return enviar(destinatario, assunto, html);
+  return enviar("recuperacao-senha", destinatario, assunto, html);
 }
 
 export const emailService = {

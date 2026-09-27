@@ -78,12 +78,13 @@ model Sala {
   @@map("salas")
 }
 
+// nome/email em texto puro por decisao (nao sao sensiveis, edicao restrita a
+// equipe, nome ja e publico na agenda) — ver docs/lgpd/07-medidas-tecnicas-de-seguranca.md
 model Palestrante {
-  id       String   @id
-  nome     String
-  email    String   @unique
-  telefone String
-  eventos  Evento[]
+  id      String   @id
+  nome    String
+  email   String   @unique
+  eventos Evento[]
 
   @@map("palestrantes")
 }

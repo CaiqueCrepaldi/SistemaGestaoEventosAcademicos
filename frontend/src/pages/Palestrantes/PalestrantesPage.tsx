@@ -6,9 +6,9 @@ import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
 import { palestranteService } from "../../services";
 import type { Palestrante } from "../../types";
-import { maskTelefone, validarEmail, validarNome, validarTelefone } from "../../utils/validacao";
+import { validarEmail, validarNome } from "../../utils/validacao";
 
-const VAZIO: Omit<Palestrante, "id"> = { nome: "", email: "", telefone: "" };
+const VAZIO: Omit<Palestrante, "id"> = { nome: "", email: "" };
 
 export function PalestrantesPage() {
   const { usuario } = useAuth();
@@ -36,14 +36,13 @@ export function PalestrantesPage() {
 
   function abrirEdicao(palestrante: Palestrante) {
     setEditando(palestrante);
-    setForm({ nome: palestrante.nome, email: palestrante.email, telefone: palestrante.telefone });
+    setForm({ nome: palestrante.nome, email: palestrante.email });
     setModalAberto(true);
   }
 
   function pedirSalvar() {
     if (!validarNome(form.nome)) return void toast.error("Nome deve conter apenas letras.");
     if (!validarEmail(form.email)) return void toast.error("E-mail em formato inválido.");
-    if (!validarTelefone(form.telefone)) return void toast.error("Telefone deve estar no formato (00) 00000-0000.");
     if (editando) setConfirmandoSalvar(true);
     else void salvar();
   }
@@ -77,7 +76,7 @@ export function PalestrantesPage() {
     }
   }
 
-  // ALUNO ve uma versao mais simples, sem telefone (backend ja tira esse campo pra esse perfil)
+  // ALUNO ve uma versao mais simples (so nome e e-mail)
   if (usuario?.perfil === "ALUNO") {
     return (
       <div>
@@ -107,7 +106,6 @@ export function PalestrantesPage() {
             <tr>
               <th>Nome</th>
               <th>E-mail</th>
-              <th>Telefone</th>
               <th />
             </tr>
           </thead>
@@ -116,7 +114,6 @@ export function PalestrantesPage() {
               <tr key={palestrante.id}>
                 <td>{palestrante.nome}</td>
                 <td>{palestrante.email}</td>
-                <td>{palestrante.telefone}</td>
                 <td className="table-actions">
                   <button className="btn btn-ghost" onClick={() => abrirEdicao(palestrante)}>Editar</button>
                   <button className="btn btn-ghost btn-danger" onClick={() => setExcluindo(palestrante)}>Excluir</button>
@@ -125,7 +122,7 @@ export function PalestrantesPage() {
             ))}
             {palestrantes.length === 0 && (
               <tr>
-                <td colSpan={4} className="empty-cell">
+                <td colSpan={3} className="empty-cell">
                   Nenhum palestrante cadastrado.
                 </td>
               </tr>
@@ -144,10 +141,6 @@ export function PalestrantesPage() {
             <label className="field">
               <span>E-mail</span>
               <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
-            </label>
-            <label className="field">
-              <span>Telefone</span>
-              <input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: maskTelefone(e.target.value) })} placeholder="(00) 00000-0000" required />
             </label>
             <div className="modal-footer">
               <button type="button" className="btn btn-ghost" onClick={() => setModalAberto(false)}>Cancelar</button>

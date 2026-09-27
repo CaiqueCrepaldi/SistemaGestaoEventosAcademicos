@@ -162,7 +162,9 @@ async function solicitarRecuperacaoSenha(dados: SolicitarRecuperacaoInput) {
       `recuperação de senha, usuário ${usuario.id}${resultado === "simulado" ? " (simulado: SendGrid não configurado)" : ""}`,
     );
   } catch (erro) {
-    console.error("[recuperacao-senha] falha ao enviar e-mail:", erro);
+    // email.service.ts ja loga o detalhe sanitizado da falha — aqui so registra o contexto
+    // (qual fluxo falhou), sem repetir o objeto de erro
+    console.error("[recuperacao-senha] falha ao enviar e-mail de recuperacao");
     await registrarAuditoria(usuario.id, "EMAIL_FALHA", `recuperação de senha, usuário ${usuario.id}: falha no envio`);
   }
 

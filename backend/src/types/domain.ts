@@ -35,7 +35,6 @@ export interface Palestrante {
   id: string;
   nome: string;
   email: string;
-  telefone: string;
 }
 
 export interface AlternativaQuestionario {

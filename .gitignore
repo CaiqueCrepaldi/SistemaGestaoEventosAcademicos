@@ -13,9 +13,11 @@ dist-ssr
 *.local
 *.local.md
 
-# Env files (nenhum arquivo de env é versionado, nem como template)
+# Env files (nenhum arquivo de env com segredo e versionado; .env.example e a excecao,
+# de proposito, porque so tem placeholder, sem segredo nenhum — ver Fase 2 da adequacao LGPD)
 .env
 .env.*
+!.env.example
 
 # Editor directories and files
 .vscode/*

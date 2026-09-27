@@ -37,8 +37,8 @@ Três perfis de usuário:
   com estatísticas gerais.
 - **Aluno** — perfil com cadastro público (`/cadastro`, sem precisar de
   admin criar a conta, e-mail institucional obrigatório terminando em
-  `@alunos.umc.br`). Só lê eventos, agenda, salas e palestrantes (sem ver
-  telefone do palestrante); se inscreve sozinho nos eventos que quiser (com
+  `@alunos.umc.br`). Só lê eventos, agenda, salas e palestrantes; se
+  inscreve sozinho nos eventos que quiser (com
   verificação de vaga e de inscrição duplicada); recebe e-mail de
   confirmação; responde ao questionário do evento depois que a presença é
   confirmada no check-in; só emite o próprio certificado se atingir 60% de
@@ -46,9 +46,8 @@ Três perfis de usuário:
 
 As telas de **Salas** (`/salas`) e **Palestrantes** (`/palestrantes`) têm
 cadastro completo (criar, editar, excluir) restrito a administrador/
-secretaria — sala com nome e capacidade, palestrante com nome, e-mail e
-telefone (com máscara automática). Aluno só enxerga as duas listas em modo
-leitura. Cada evento referencia uma sala e um palestrante já existentes,
+secretaria — sala com nome e capacidade, palestrante com nome e e-mail.
+Aluno só enxerga as duas listas em modo leitura. Cada evento referencia uma sala e um palestrante já existentes,
 além de um questionário obrigatório
 de 10 perguntas (4 alternativas, 1 correta cada) definido por
 administrador/secretaria no momento da criação — é esse questionário que o

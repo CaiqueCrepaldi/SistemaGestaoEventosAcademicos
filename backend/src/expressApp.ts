@@ -1,5 +1,6 @@
 import cors from "cors";
 import express from "express";
+import helmet from "helmet";
 import { env } from "./config/env";
 import { errorHandler } from "./middleware/errorHandler";
 import { authRouter } from "./modules/auth/auth.routes";
@@ -17,8 +18,12 @@ import { auditoriaRouter } from "./modules/auditoria/auditoria.routes";
 export function criarApp() {
   const app = express();
 
+  // cabecalhos de seguranca padrao (tambem remove o X-Powered-By, que expunha "Express")
+  app.use(helmet());
   app.use(cors({ origin: env.corsOrigin }));
-  app.use(express.json());
+  // limite explicito (o maior payload legitimo hoje eh o questionario de 10 perguntas,
+  // bem menor que isso) em vez de depender do padrao implicito do express.json()
+  app.use(express.json({ limit: "256kb" }));
 
   // fora do prefixo /api, healthcheck de infra nao precisa de token
   app.get("/health", (_req, res) => res.json({ status: "ok" }));
