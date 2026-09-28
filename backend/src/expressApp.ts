@@ -18,6 +18,10 @@ import { auditoriaRouter } from "./modules/auditoria/auditoria.routes";
 export function criarApp() {
   const app = express();
 
+  // atras do proxy da Vercel: sem isso, req.ip sempre devolveria o IP do proxy, nao o do
+  // cliente de verdade — quebraria o bloqueio por IP (login/recuperacao de senha)
+  app.set("trust proxy", 1);
+
   // cabecalhos de seguranca padrao (tambem remove o X-Powered-By, que expunha "Express")
   app.use(helmet());
   app.use(cors({ origin: env.corsOrigin }));

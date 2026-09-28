@@ -39,11 +39,21 @@ model Usuario {
   // data/hora em que aceitou os termos de uso/politica de privacidade no cadastro (LGPD);
   // null pra contas provisionadas antes desse controle existir (admin/secretaria, seeds antigos)
   consentimentoLgpdEm DateTime?
+  // sobe a cada evento que precisa invalidar sessoes ja emitidas (troca de senha, inativacao,
+  // exclusao) — o token carrega a versao no momento do login; se nao bater mais com esta coluna,
+  // o middleware autenticar recusa mesmo com assinatura/prazo validos. Token antigo (de antes
+  // dessa coluna existir) nao carrega versao nenhuma e e tratado como versao 1, o valor inicial
+  // de toda conta — ninguem e deslogado por causa da migracao em si, so por uma troca de verdade
+  versaoToken    Int      @default(1)
+  // versao dos Termos de Uso/Politica de Privacidade aceita por ultimo (ex.: "2"); null pra quem
+  // aceitou antes desse controle existir — forca reaceite no proximo login (ver auth.service.ts)
+  versaoTermosAceitos String?
   criadoEm       DateTime @default(now())
 
   checkinsFeitos  Inscricao[]        @relation("CheckinFeitoPor")
   recuperacoes    RecuperacaoSenha[]
   logsAuditoria   LogAuditoria[]
+  solicitacoesAtendidas SolicitacaoTitular[]
 
   @@map("usuarios")
 }
@@ -65,6 +75,7 @@ model Participante {
   inscricoes Inscricao[]
   feedbacks  Feedback[]
   tentativas TentativaQuestionario[]
+  solicitacoes SolicitacaoTitular[]
 
   @@map("participantes")
 }
@@ -188,4 +199,39 @@ model LogAuditoria {
 
   @@index([criadoEm])
   @@map("logs_auditoria")
+}
+
+// bloqueio temporario por excesso de tentativas (login e solicitacao de recuperacao de senha),
+// por conta (chave = "login:conta:<emailLoginHash>") e por IP (chave = "login:ip:<ip>") — nao
+// guarda e-mail em texto puro, so o indice de busca ja usado pra login. Zera sozinho: quando o
+// bloqueio expira, a proxima checagem reseta os contadores (nao precisa de rotina agendada)
+model LimiteAcesso {
+  id           String    @id
+  chave        String    @unique
+  tentativas   Int       @default(0)
+  bloqueadoAte DateTime?
+  atualizadoEm DateTime  @updatedAt
+
+  @@map("limites_acesso")
+}
+
+// pedido do titular (art. 18 LGPD) feito pela pagina "Meus dados" ou pelo canal de privacidade.
+// ACESSO/EXPORTACAO/CORRECAO/EXCLUSAO sao resolvidos na hora (status ATENDIDA automatico); so
+// REVISAO_DECISAO_AUTOMATIZADA e OPOSICAO/OUTRO ficam ABERTA ate a equipe responder
+model SolicitacaoTitular {
+  id             String    @id
+  participanteId String
+  participante   Participante @relation(fields: [participanteId], references: [id], onDelete: Cascade)
+  tipo           String
+  status         String    @default("ABERTA")
+  descricao      String?   @db.Text
+  resposta       String?   @db.Text
+  atendidoPorId  String?
+  atendidoPor    Usuario?  @relation(fields: [atendidoPorId], references: [id], onDelete: SetNull)
+  criadoEm       DateTime  @default(now())
+  atendidoEm     DateTime?
+
+  @@index([participanteId])
+  @@index([status])
+  @@map("solicitacoes_titular")
 }

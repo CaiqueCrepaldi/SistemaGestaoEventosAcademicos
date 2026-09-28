@@ -13,6 +13,7 @@ export type AcaoAuditoria =
   | "EMAIL_ENVIADO"
   | "EMAIL_FALHA"
   | "ACESSO_NEGADO"
+  | "BLOQUEIO_LOGIN_REMOVIDO"
   | "SALA_CRIADA"
   | "SALA_ATUALIZADA"
   | "SALA_REMOVIDA"
@@ -34,7 +35,13 @@ export type AcaoAuditoria =
   | "QUESTIONARIO_RESPONDIDO"
   | "FEEDBACK_CRIADO"
   | "FEEDBACK_ATUALIZADO"
-  | "FEEDBACK_REMOVIDO";
+  | "FEEDBACK_REMOVIDO"
+  | "TERMOS_REACEITOS"
+  | "DADOS_EXPORTADOS"
+  | "CONTA_ANONIMIZADA"
+  | "SOLICITACAO_TITULAR_CRIADA"
+  | "SOLICITACAO_TITULAR_ATENDIDA"
+  | "RETENCAO_EXECUTADA";
 
 // grava uma linha na trilha de auditoria; nunca deixa uma falha de log derrubar a operacao
 // de verdade — so registra o erro no console e segue. "detalhe" precisa ser sempre contexto

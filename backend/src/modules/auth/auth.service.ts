@@ -7,7 +7,9 @@ import { assinarToken, duracaoEmSegundos } from "../../utils/jwt";
 import { usuarioParaDTO } from "../../utils/dto";
 import { criptografar, descriptografar, indiceBusca } from "../../utils/criptografia";
 import { registrarAuditoria } from "../../utils/auditoria";
+import { chaveConta, chaveIp, estaBloqueado, incrementarTentativa, limparTentativas } from "../../utils/limiteAcesso";
 import { env } from "../../config/env";
+import { VERSAO_TERMOS_ATUAL } from "../../config/termos";
 import { emailService } from "../email/email.service";
 import type { Usuario } from "../../types/domain";
 import type { ConfirmarRecuperacaoInput, LoginInput, RegistroInput, SolicitarRecuperacaoInput } from "./auth.schemas";
@@ -24,6 +26,7 @@ export function usuarioParaDominio(usuario: UsuarioDb): Usuario {
     emailLogin: descriptografar(usuario.emailLogin),
     rgm: usuario.rgm ? descriptografar(usuario.rgm) : null,
     consentimentoLgpdEm: usuario.consentimentoLgpdEm ? usuario.consentimentoLgpdEm.toISOString() : null,
+    versaoTermosAceitos: usuario.versaoTermosAceitos,
     criadoEm: usuario.criadoEm.toISOString(),
   };
 }
@@ -71,7 +74,9 @@ async function registrarAluno(dados: RegistroInput) {
       rgm: criptografar(dados.rgm),
       participanteId: participante.id,
       // aceiteLgpd ja foi validado como obrigatoriamente true no schema — registra o momento exato
+      // e a versao vigente dos Termos/Politica (ver config/termos.ts)
       consentimentoLgpdEm: consentimentoEm,
+      versaoTermosAceitos: VERSAO_TERMOS_ATUAL,
     },
   });
 
@@ -86,10 +91,25 @@ async function registrarAluno(dados: RegistroInput) {
   return usuarioParaDTO(usuarioParaDominio(usuario));
 }
 
-// confere email+senha e devolve o token assinado
-async function login(dados: LoginInput) {
+// mensagem generica de bloqueio: a mesma pra conta real ou inexistente, pra nao dar pista
+function erroBloqueado(): AppError {
+  return new AppError(429, "MUITAS_TENTATIVAS", "Muitas tentativas. Tente novamente em alguns minutos.");
+}
+
+// confere email+senha e devolve o token assinado. Bloqueia por excesso de tentativas (conta E ip,
+// o que vier primeiro) antes mesmo de consultar o banco, pra nao vazar se a conta existe
+async function login(dados: LoginInput, ip: string) {
+  const emailHash = indiceBusca(dados.emailLogin);
+  const chaveDaConta = chaveConta("login", emailHash);
+  const chaveDoIp = chaveIp("login", ip);
+
+  if ((await estaBloqueado(chaveDaConta)) || (await estaBloqueado(chaveDoIp))) {
+    await registrarAuditoria(null, "LOGIN_FALHA", "bloqueado temporariamente (limite de tentativas)");
+    throw erroBloqueado();
+  }
+
   const usuario = await prisma.usuario.findUnique({
-    where: { emailLoginHash: indiceBusca(dados.emailLogin) },
+    where: { emailLoginHash: emailHash },
     include: { participante: true },
   });
   // mensagem generica pra nao dar dica se foi email ou senha que errou
@@ -97,6 +117,8 @@ async function login(dados: LoginInput) {
   if (!usuario || !senhaOk) {
     // nunca grava o e-mail tentado (PII) no log — so se o usuario existe ou nao
     await registrarAuditoria(usuario?.id ?? null, "LOGIN_FALHA", usuario ? "senha incorreta" : "e-mail nao encontrado");
+    await incrementarTentativa(chaveDaConta);
+    await incrementarTentativa(chaveDoIp);
     throw new AppError(401, "CREDENCIAIS_INVALIDAS", "E-mail ou senha inválidos.");
   }
 
@@ -109,16 +131,33 @@ async function login(dados: LoginInput) {
     );
   }
 
+  await limparTentativas(chaveDaConta);
   await registrarAuditoria(usuario.id, "LOGIN_SUCESSO");
 
-  const token = assinarToken({ sub: usuario.id, perfil: usuario.perfil, participanteId: usuario.participanteId });
+  const token = assinarToken({
+    sub: usuario.id,
+    perfil: usuario.perfil,
+    participanteId: usuario.participanteId,
+    versaoToken: usuario.versaoToken,
+  });
 
   return {
     token,
     tokenType: "Bearer",
     expiresIn: duracaoEmSegundos(env.jwtExpiresIn),
     usuario: usuarioParaDTO(usuarioParaDominio(usuario)),
+    // versao aceita no cadastro/ultimo aceite diverge da vigente: front pede novo aceite antes de liberar a tela
+    precisaAceitarTermos: usuario.versaoTermosAceitos !== VERSAO_TERMOS_ATUAL,
   };
+}
+
+// registra o aceite da versao vigente dos Termos/Politica (reaceite pedido apos mudanca de versao)
+async function aceitarTermos(usuarioId: string) {
+  await prisma.usuario.update({
+    where: { id: usuarioId },
+    data: { consentimentoLgpdEm: new Date(), versaoTermosAceitos: VERSAO_TERMOS_ATUAL },
+  });
+  await registrarAuditoria(usuarioId, "TERMOS_REACEITOS", `versão ${VERSAO_TERMOS_ATUAL}`);
 }
 
 // acha usuario pelo email de login (via indice de busca), usado na recuperacao de senha
@@ -131,8 +170,21 @@ function gerarCodigoNumerico(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-// gera o codigo de recuperacao, salva com validade de 15min e dispara o email
-async function solicitarRecuperacaoSenha(dados: SolicitarRecuperacaoInput) {
+// gera o codigo de recuperacao, salva com validade de 15min e dispara o email. Aqui conta TODA
+// chamada (nao so falha) contra o limite — o que se limita e a frequencia do pedido em si, pra
+// nao deixar alguem inundar a caixa de entrada de outra pessoa nem varrer e-mails cadastrados
+async function solicitarRecuperacaoSenha(dados: SolicitarRecuperacaoInput, ip: string) {
+  const emailHash = indiceBusca(dados.email);
+  const chaveDaConta = chaveConta("recuperacao", emailHash);
+  const chaveDoIp = chaveIp("recuperacao", ip);
+
+  if ((await estaBloqueado(chaveDaConta)) || (await estaBloqueado(chaveDoIp))) {
+    await registrarAuditoria(null, "RECUPERACAO_SENHA_FALHA", "bloqueado temporariamente (limite de tentativas)");
+    throw erroBloqueado();
+  }
+  await incrementarTentativa(chaveDaConta);
+  await incrementarTentativa(chaveDoIp);
+
   const usuario = await buscarUsuarioPorEmail(dados.email);
   if (!usuario) {
     // nunca grava o e-mail digitado (PII) no log
@@ -206,7 +258,8 @@ async function confirmarRecuperacaoSenha(dados: ConfirmarRecuperacaoInput) {
 
   const novaSenhaHash = await gerarHashSenha(dados.novaSenha);
   await prisma.$transaction([
-    prisma.usuario.update({ where: { id: usuario.id }, data: { senhaHash: novaSenhaHash } }),
+    // versaoToken incrementado invalida qualquer sessao ja aberta com a senha antiga
+    prisma.usuario.update({ where: { id: usuario.id }, data: { senhaHash: novaSenhaHash, versaoToken: { increment: 1 } } }),
     prisma.recuperacaoSenha.update({ where: { id: pendente.id }, data: { usadoEm: new Date() } }),
   ]);
   await registrarAuditoria(usuario.id, "SENHA_REDEFINIDA", "senha redefinida com código de recuperação");
@@ -215,6 +268,7 @@ async function confirmarRecuperacaoSenha(dados: ConfirmarRecuperacaoInput) {
 export const authService = {
   registrarAluno,
   login,
+  aceitarTermos,
   solicitarRecuperacaoSenha,
   confirmarRecuperacaoSenha,
 };

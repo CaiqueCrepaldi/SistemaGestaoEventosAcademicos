@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
+import { autenticar } from "../../middleware/auth";
 import { validarCorpo } from "../../middleware/validate";
 import { authController } from "./auth.controller";
 import {
@@ -28,3 +29,5 @@ authRouter.post(
   validarCorpo(confirmarRecuperacaoSchema),
   asyncHandler(authController.confirmarRecuperacao),
 );
+// registra o aceite da versao vigente dos termos/politica (reaceite quando a versao muda)
+authRouter.post("/aceitar-termos", autenticar, asyncHandler(authController.aceitarTermos));

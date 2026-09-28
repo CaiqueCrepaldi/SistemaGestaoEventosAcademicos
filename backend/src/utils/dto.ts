@@ -5,6 +5,7 @@ import type {
   Palestrante,
   Participante,
   Sala,
+  SolicitacaoTitular,
   TentativaQuestionario,
   Usuario,
 } from "../types/domain";
@@ -22,6 +23,23 @@ export function usuarioParaDTO(usuario: Usuario) {
     rgm: usuario.rgm,
     participanteId: usuario.participanteId,
     consentimentoLgpdEm: usuario.consentimentoLgpdEm,
+    versaoTermosAceitos: usuario.versaoTermosAceitos,
+  };
+}
+
+// solicitacao do titular tal como esta, sem campo de controle
+export function solicitacaoParaDTO(solicitacao: SolicitacaoTitular & { participanteNome?: string }) {
+  return {
+    id: solicitacao.id,
+    participanteId: solicitacao.participanteId,
+    participanteNome: solicitacao.participanteNome,
+    tipo: solicitacao.tipo,
+    status: solicitacao.status,
+    descricao: solicitacao.descricao,
+    resposta: solicitacao.resposta,
+    atendidoPorId: solicitacao.atendidoPorId,
+    criadoEm: solicitacao.criadoEm,
+    atendidoEm: solicitacao.atendidoEm,
   };
 }
 

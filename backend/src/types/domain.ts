@@ -12,7 +12,30 @@ export interface Usuario {
   rgm: string | null;
   participanteId: string | null;
   consentimentoLgpdEm: string | null;
+  versaoTermosAceitos: string | null;
   criadoEm: string;
+}
+
+export type TipoSolicitacaoTitular =
+  | "ACESSO"
+  | "CORRECAO"
+  | "EXPORTACAO"
+  | "EXCLUSAO"
+  | "REVISAO_DECISAO_AUTOMATIZADA"
+  | "OPOSICAO"
+  | "OUTRO";
+export type StatusSolicitacaoTitular = "ABERTA" | "EM_ANDAMENTO" | "ATENDIDA" | "NEGADA";
+
+export interface SolicitacaoTitular {
+  id: string;
+  participanteId: string;
+  tipo: TipoSolicitacaoTitular;
+  status: StatusSolicitacaoTitular;
+  descricao: string | null;
+  resposta: string | null;
+  atendidoPorId: string | null;
+  criadoEm: string;
+  atendidoEm: string | null;
 }
 
 export interface Participante {

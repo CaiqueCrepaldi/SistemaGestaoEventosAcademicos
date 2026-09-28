@@ -78,6 +78,9 @@ async function atualizar(id: string, dados: ParticipanteUpdateInput, atorId: str
     const statusMudou = dados.ativo !== undefined && dados.ativo !== atual.ativo;
     // o motivo da inativacao eh texto livre e pode ter dado pessoal: fica so no cadastro, nunca no log
     if (statusMudou && dados.ativo === false) {
+      // inativar tem que derrubar qualquer sessao ja aberta do aluno (guia 4.3: invalidar sessao
+      // ao inativar) — sem isso o token continua valendo ate expirar (ate 8h) mesmo inativado
+      await prisma.usuario.updateMany({ where: { participanteId: id }, data: { versaoToken: { increment: 1 } } });
       await registrarAuditoria(atorId, "PARTICIPANTE_INATIVADO", `participante ${id} (motivo registrado no cadastro)`);
     } else if (statusMudou && dados.ativo === true) {
       await registrarAuditoria(atorId, "PARTICIPANTE_REATIVADO", `participante ${id}`);
