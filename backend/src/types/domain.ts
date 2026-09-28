@@ -13,6 +13,7 @@ export interface Usuario {
   participanteId: string | null;
   consentimentoLgpdEm: string | null;
   versaoTermosAceitos: string | null;
+  mfaAtivo: boolean;
   criadoEm: string;
 }
 

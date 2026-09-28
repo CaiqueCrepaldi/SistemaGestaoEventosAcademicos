@@ -48,12 +48,21 @@ model Usuario {
   // versao dos Termos de Uso/Politica de Privacidade aceita por ultimo (ex.: "2"); null pra quem
   // aceitou antes desse controle existir — forca reaceite no proximo login (ver auth.service.ts)
   versaoTermosAceitos String?
+  // 2FA por aplicativo autenticador (TOTP, RFC 6238). O segredo fica cifrado com criptografar(),
+  // nunca em texto puro nem em log. Segredo preenchido com mfaAtivo=false = configuracao
+  // iniciada e ainda nao confirmada com um codigo valido
+  mfaAtivo          Boolean   @default(false)
+  mfaSegredoCifrado String?   @db.Text
+  // ultimo passo de tempo TOTP aceito (floor(unix/30)): codigo do mesmo passo ou anterior e recusado
+  mfaUltimoPasso    Int?
+  mfaAtivadoEm      DateTime?
   criadoEm       DateTime @default(now())
 
   checkinsFeitos  Inscricao[]        @relation("CheckinFeitoPor")
   recuperacoes    RecuperacaoSenha[]
   logsAuditoria   LogAuditoria[]
   solicitacoesAtendidas SolicitacaoTitular[]
+  codigosRecuperacaoMfa CodigoRecuperacaoMfa[]
 
   @@map("usuarios")
 }
@@ -234,4 +243,18 @@ model SolicitacaoTitular {
   @@index([participanteId])
   @@index([status])
   @@map("solicitacoes_titular")
+}
+
+// codigos de recuperacao do 2FA: 8 por ativacao, mostrados uma vez so, cada um vale uma vez.
+// So o hash (HMAC-SHA256 com a chave do servidor) fica gravado, nunca o codigo
+model CodigoRecuperacaoMfa {
+  id         String    @id
+  usuarioId  String
+  usuario    Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  codigoHash String
+  usadoEm    DateTime?
+  criadoEm   DateTime  @default(now())
+
+  @@index([usuarioId])
+  @@map("codigos_recuperacao_mfa")
 }

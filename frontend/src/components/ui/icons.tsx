@@ -158,6 +158,28 @@ export function AuditoriaIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+// icone de duas pessoas, usado na tela de usuarios
+export function UsuariosIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
+      <path d="M16 4.5a3.5 3.5 0 0 1 0 7" />
+      <path d="M18 14.5a6.5 6.5 0 0 1 3.5 5.5" />
+    </Icon>
+  );
+}
+
+// icone de escudo, usado em minha conta (seguranca)
+export function ContaIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6l7-3Z" />
+      <path d="M9 12l2 2 4-4" />
+    </Icon>
+  );
+}
+
 // icone de olho aberto, usado no botao de mostrar senha
 export function OlhoIcon(props: SVGProps<SVGSVGElement>) {
   return (

@@ -1,6 +1,7 @@
 # Inventário de dados pessoais e fluxo de dados — SGEA
 
-**Data:** 27/09/2026 · **Versão:** 1
+**Data:** 28/09/2026 · **Versão:** 2 (inclui a autenticação em dois fatores,
+o uso do IP no limite de tentativas e a remoção do telefone do palestrante)
 
 Responde, para cada dado pessoal tratado pelo SGEA, às perguntas da seção 1
 do guia. A finalidade específica e a hipótese legal de cada um estão
@@ -47,8 +48,8 @@ detalhadas em `02-matriz-dados-finalidade-base-legal.md`; aqui o foco é
   (nunca confia em timestamp vindo do cliente) — `auth.service.ts`.
 - **Obrigatório:** sim, pra criar conta (`z.literal(true)` no schema de
   registro).
-- **Onde fica:** `usuarios.consentimentoLgpdEm`; a Fase 2 adiciona o campo
-  de qual versão do Termos/Política foi aceita.
+- **Onde fica:** `usuarios.consentimentoLgpdEm` (data/hora) e
+  `usuarios.versaoTermosAceitos` (qual versão do Termos/Política foi aceita).
 - **Quem consulta:** equipe, via trilha de auditoria (`CONSENTIMENTO_LGPD_ACEITO`).
 - **Compartilhado:** não.
 
@@ -101,26 +102,58 @@ detalhadas em `02-matriz-dados-finalidade-base-legal.md`; aqui o foco é
   puro vai só no corpo do e-mail para o próprio titular, nunca fica em log
   do servidor — ver correção do achado (g) na Fase 2).
 
-## 8. Nome, e-mail, telefone do palestrante
+## 8. Nome e e-mail do palestrante
 
 - **De quem é:** de pessoas convidadas a ministrar palestra — não são
   alunos, mas também são titulares de dados pessoais.
 - **Onde é coletado:** tela de Palestrantes, preenchida pela secretaria
   (o próprio palestrante não se cadastra).
-- **Onde fica:** tabela `palestrantes`, **hoje em texto puro** (achado da
-  Fase 0 — telefone em avaliação de minimização).
-- **Quem consulta:** equipe (tudo); ALUNO (nome e e-mail, sem telefone).
+- **Onde fica:** tabela `palestrantes`, em texto puro por decisão
+  justificada em `07-medidas-tecnicas-de-seguranca.md`. O telefone foi
+  **removido do sistema** (minimização: não era usado em nenhum fluxo).
+- **Quem consulta:** equipe (nome e e-mail); ALUNO (só o nome — o e-mail
+  não vem na resposta da API para esse perfil).
 - **Compartilhado:** não.
 
 ## 9. Endereço IP e metadados de requisição
 
 - **De quem é:** de qualquer visitante do sistema, mesmo antes de logar.
-- **Onde "é coletado":** não é coletado pelo código da aplicação — é
-  processado pela infraestrutura da Vercel (que executa a função
-  serverless) como parte de qualquer requisição HTTP.
-- **Onde fica:** logs de execução da própria Vercel, fora do controle
-  direto do código do SGEA.
+- **Onde é tratado:** (1) pela infraestrutura da Vercel, que executa a
+  função serverless, em qualquer requisição HTTP; (2) pelo próprio SGEA,
+  só nas rotas de login e de pedido de código de recuperação de senha,
+  como chave do limite de tentativas por IP
+  (`backend/src/utils/limiteAcesso.ts`).
+- **Onde fica:** (1) logs de execução da Vercel, fora do controle direto
+  do código do SGEA; (2) tabela `limites_acesso`, coluna `chave`
+  (`login:ip:<ip>` ou `recuperacao:ip:<ip>`), com o número de tentativas
+  e o fim do bloqueio — nada além disso é associado ao IP.
+- **Por quanto tempo:** (2) o registro permanece depois que o bloqueio
+  expira (com o contador zerado); o descarte automático depende da rotina
+  de retenção, ainda não implementada.
 - **Compartilhado:** com a Vercel (operador de hospedagem/computação).
+
+## 10. Segredo e códigos de recuperação da autenticação em dois fatores
+
+- **De quem é:** de ADMINISTRADOR e SECRETARIA (obrigatório) e do ALUNO
+  que decidir ativar (opcional).
+- **Onde é gerado:** pelo servidor, quando o titular inicia a configuração
+  (primeiro login da equipe, ou página "Minha conta" do aluno). O QR code
+  com o segredo é gerado no próprio servidor do SGEA e mostrado só na tela
+  de configuração; o titular o escaneia com um aplicativo autenticador
+  instalado no próprio celular, que passa a gerar os códigos de 6 dígitos
+  sem nenhuma conexão com o SGEA.
+- **Obrigatório ou opcional:** obrigatório para ADMINISTRADOR e SECRETARIA;
+  opcional para ALUNO.
+- **Onde fica:** segredo em `usuarios.mfaSegredoCifrado` (AES-256-GCM),
+  junto com `mfaAtivo`, `mfaAtivadoEm` e `mfaUltimoPasso` (contra reuso do
+  mesmo código); os 8 códigos de recuperação em `codigos_recuperacao_mfa`,
+  só como hash (HMAC-SHA256).
+- **Por quanto tempo:** enquanto o 2FA estiver ativo; tudo é apagado
+  quando o aluno desativa ou o administrador reseta.
+- **Quem consulta:** ninguém depois da configuração — a API não devolve
+  mais o segredo, e os códigos de recuperação só aparecem na ativação.
+- **Compartilhado:** não. Não há SMS, e-mail nem API externa de QR code no
+  fluxo.
 
 ## Diagrama do fluxo de dados
 
@@ -148,9 +181,13 @@ flowchart TD
 
     Terceiros["SendGrid (e-mail transacional)"]
     Vercel["Vercel (hospedagem/computação, vê IP e cabeçalhos)"]
+    AppAutenticador["Aplicativo autenticador\n(celular do titular, sem conexão com o SGEA)"]
 
     Titular -->|"nome, e-mail, RGM, senha"| Cadastro --> Auth
-    Titular -->|"e-mail, senha"| Login --> Auth
+    Titular -->|"e-mail, senha, código do 2FA"| Login --> Auth
+    Auth -->|"QR code do 2FA, gerado no servidor (só na configuração)"| Login
+    Titular -.->|"escaneia o QR code"| AppAutenticador
+    AppAutenticador -.->|"gera o código de 6 dígitos no próprio aparelho"| Titular
     Titular -->|"inscrição, check-in, respostas, feedback"| Uso --> Regras
     Titular -.->|"Fase 2: exportar/corrigir/excluir"| MeusDados -.-> Auth
 
@@ -167,4 +204,7 @@ Nenhum dado pessoal sai do trajeto acima: não há chamada a serviço de IA,
 analytics ou CDN de terceiro a partir do frontend (confirmado em
 `frontend/index.html` e `frontend/package.json` — só React, React Router e
 jsPDF, este último rodando inteiramente no navegador do próprio titular
-para gerar o PDF do certificado, sem enviar nada a lugar nenhum).
+para gerar o PDF do certificado, sem enviar nada a lugar nenhum). No
+backend, as bibliotecas do 2FA (`otplib` para o TOTP e `qrcode` para a
+imagem do QR code) rodam dentro da própria função serverless, sem chamar
+serviço externo.

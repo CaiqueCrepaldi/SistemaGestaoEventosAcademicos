@@ -4,6 +4,7 @@ import helmet from "helmet";
 import { env } from "./config/env";
 import { errorHandler } from "./middleware/errorHandler";
 import { authRouter } from "./modules/auth/auth.routes";
+import { mfaRouter } from "./modules/mfa/mfa.routes";
 import { usuariosRouter } from "./modules/usuarios/usuarios.routes";
 import { eventosRouter } from "./modules/eventos/eventos.routes";
 import { salasRouter } from "./modules/salas/salas.routes";
@@ -33,6 +34,7 @@ export function criarApp() {
   app.get("/health", (_req, res) => res.json({ status: "ok" }));
 
   const apiRouter = express.Router();
+  apiRouter.use("/auth/2fa", mfaRouter);
   apiRouter.use("/auth", authRouter);
   apiRouter.use("/usuarios", usuariosRouter);
   apiRouter.use("/eventos", eventosRouter);

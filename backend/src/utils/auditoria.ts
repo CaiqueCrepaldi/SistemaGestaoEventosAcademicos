@@ -41,7 +41,14 @@ export type AcaoAuditoria =
   | "CONTA_ANONIMIZADA"
   | "SOLICITACAO_TITULAR_CRIADA"
   | "SOLICITACAO_TITULAR_ATENDIDA"
-  | "RETENCAO_EXECUTADA";
+  | "RETENCAO_EXECUTADA"
+  | "MFA_ATIVADO"
+  | "MFA_DESATIVADO"
+  | "MFA_VERIFICADO"
+  | "MFA_FALHA"
+  | "MFA_BLOQUEADO"
+  | "MFA_RESETADO"
+  | "CODIGO_RECUPERACAO_USADO";
 
 // grava uma linha na trilha de auditoria; nunca deixa uma falha de log derrubar a operacao
 // de verdade — so registra o erro no console e segue. "detalhe" precisa ser sempre contexto

@@ -24,6 +24,7 @@ export function usuarioParaDTO(usuario: Usuario) {
     participanteId: usuario.participanteId,
     consentimentoLgpdEm: usuario.consentimentoLgpdEm,
     versaoTermosAceitos: usuario.versaoTermosAceitos,
+    mfaAtivo: usuario.mfaAtivo,
   };
 }
 

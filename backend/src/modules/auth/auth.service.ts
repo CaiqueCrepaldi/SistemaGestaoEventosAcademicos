@@ -3,7 +3,7 @@ import type { Usuario as UsuarioDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { conferirSenha, gerarHashSenha } from "../../utils/password";
-import { assinarToken, duracaoEmSegundos } from "../../utils/jwt";
+import { assinarToken, assinarTokenEtapa, duracaoEmSegundos } from "../../utils/jwt";
 import { usuarioParaDTO } from "../../utils/dto";
 import { criptografar, descriptografar, indiceBusca } from "../../utils/criptografia";
 import { registrarAuditoria } from "../../utils/auditoria";
@@ -16,12 +16,19 @@ import type { ConfirmarRecuperacaoInput, LoginInput, RegistroInput, SolicitarRec
 
 const CODIGO_VALIDADE_MS = 15 * 60 * 1000; // 15 min
 const MAX_TENTATIVAS_CODIGO = 5;
+// validade dos tokens da etapa do 2FA: 5 min pra digitar o codigo; 15 min pra configurar
+// (escanear o QR code e confirmar leva mais tempo que so digitar um codigo)
+const VALIDADE_TOKEN_MFA_PENDENTE_S = 5 * 60;
+const VALIDADE_TOKEN_MFA_CONFIGURACAO_S = 15 * 60;
 
 // prisma devolve criadoEm como Date e nome/emailLogin/rgm cifrados — decifra e converte pro
 // formato que o resto do app espera (reaproveitado em usuarios.routes.ts)
 export function usuarioParaDominio(usuario: UsuarioDb): Usuario {
+  // o segredo do 2FA nunca sai daqui, nem cifrado
+  const { mfaSegredoCifrado, ...semSegredo } = usuario;
+  void mfaSegredoCifrado;
   return {
-    ...usuario,
+    ...semSegredo,
     nome: descriptografar(usuario.nome),
     emailLogin: descriptografar(usuario.emailLogin),
     rgm: usuario.rgm ? descriptografar(usuario.rgm) : null,
@@ -132,8 +139,32 @@ async function login(dados: LoginInput, ip: string) {
   }
 
   await limparTentativas(chaveDaConta);
-  await registrarAuditoria(usuario.id, "LOGIN_SUCESSO");
 
+  // senha certa com 2FA ativo: ainda nao e sessao, so um token curto que serve apenas pra rota
+  // de verificar o codigo. LOGIN_SUCESSO so e registrado quando o codigo tambem confere
+  if (usuario.mfaAtivo) {
+    return {
+      mfa: "PENDENTE" as const,
+      tokenEtapa: assinarTokenEtapa(usuario, "mfa_pendente", VALIDADE_TOKEN_MFA_PENDENTE_S),
+      expiresIn: VALIDADE_TOKEN_MFA_PENDENTE_S,
+    };
+  }
+  // 2FA e obrigatorio pra equipe: sem ele configurado, o token so serve pra tela de configuracao
+  if (usuario.perfil !== "ALUNO") {
+    return {
+      mfa: "CONFIGURACAO_OBRIGATORIA" as const,
+      tokenEtapa: assinarTokenEtapa(usuario, "mfa_configuracao", VALIDADE_TOKEN_MFA_CONFIGURACAO_S),
+      expiresIn: VALIDADE_TOKEN_MFA_CONFIGURACAO_S,
+    };
+  }
+
+  await registrarAuditoria(usuario.id, "LOGIN_SUCESSO");
+  return emitirSessao(usuario);
+}
+
+// monta a resposta de login com o token de sessao de verdade — usada no login sem 2FA, depois do
+// codigo do 2FA conferir e quando a sessao precisa ser reemitida (ex.: ao desativar o 2FA)
+export function emitirSessao(usuario: UsuarioDb) {
   const token = assinarToken({
     sub: usuario.id,
     perfil: usuario.perfil,

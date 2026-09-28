@@ -977,3 +977,138 @@ h1, h2, h3 {
 .legal-tabela th {
   background: var(--gray-100);
 }
+
+/* Autenticação em dois fatores */
+.mfa-login-card {
+  max-width: 440px;
+}
+
+.mfa-titulo {
+  margin: 0 0 6px;
+  font-size: 17px;
+}
+
+.mfa-texto {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.mfa-passos {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--gray-700);
+}
+
+.mfa-qr {
+  display: flex;
+  justify-content: center;
+}
+
+.mfa-qr img {
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  image-rendering: pixelated;
+}
+
+.mfa-segredo {
+  display: block;
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: var(--gray-100);
+  border-radius: 6px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 13px;
+  text-align: center;
+  word-break: break-all;
+}
+
+.field input.mfa-codigo-input {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 20px;
+  letter-spacing: 6px;
+  text-align: center;
+}
+
+.mfa-aviso {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--orange-50);
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  color: var(--gray-700);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.mfa-codigos {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mfa-codigos li {
+  padding: 8px;
+  background: var(--gray-100);
+  border-radius: 6px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 15px;
+  text-align: center;
+}
+
+.mfa-botoes {
+  display: flex;
+  gap: 10px;
+}
+
+.mfa-botoes .btn {
+  flex: 1;
+}
+
+.mfa-acoes-secundarias {
+  display: flex;
+  justify-content: space-between;
+}
+
+.btn-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--yellow-text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-link:hover {
+  text-decoration: underline;
+}
+
+.mfa-conta {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+  max-width: 640px;
+}
+
+.mfa-conta-cabecalho {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mfa-conta-cabecalho .mfa-titulo {
+  margin: 0;
+}
+
+.mfa-conta-configuracao {
+  width: 100%;
+  max-width: 420px;
+  padding-top: 12px;
+  border-top: 1px solid var(--gray-200);
+}

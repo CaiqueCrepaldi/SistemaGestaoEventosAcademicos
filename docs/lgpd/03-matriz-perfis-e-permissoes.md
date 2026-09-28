@@ -1,6 +1,7 @@
 # Matriz de perfis e permissões — SGEA
 
-**Data:** 27/09/2026 · **Versão:** 1
+**Data:** 28/09/2026 · **Versão:** 2 (inclui as rotas da autenticação em
+dois fatores, do limite de tentativas e do aceite versionado)
 
 Gerada diretamente das rotas reais do backend (`backend/src/modules/*/*.routes.ts`
 e `backend/src/middleware/auth.ts`), não de uma descrição informal do
@@ -9,20 +10,38 @@ sistema. Toda rota autenticada exige `Authorization: Bearer <token>`
 significa que o middleware `autorizar(...)` barra qualquer outro perfil com
 `403 ACESSO_NEGADO` antes de a rota executar.
 
+Além de assinatura e prazo, `autenticar` recusa com `401`: token temporário
+da etapa do 2FA (só serve na rota da própria etapa); sessão invalidada
+depois de emitida (versão de token); e sessão de ADMINISTRADOR/SECRETARIA
+cujo 2FA não está configurado (`MFA_OBRIGATORIO`).
+
 ## Rotas públicas (sem autenticação)
 
 | Rota | Método | Quem acessa | Observação |
 |---|---|---|---|
-| `/api/auth/registro` | POST | Qualquer pessoa | Cria `Participante` + `Usuario` (perfil `ALUNO`); exige `aceiteLgpd: true` |
-| `/api/auth/login` | POST | Qualquer pessoa | Devolve o JWT |
-| `/api/auth/recuperacao-senha` | POST | Qualquer pessoa | Não revela se o e-mail existe (mesma resposta em ambos os casos) |
-| `/api/auth/recuperacao-senha/confirmar` | POST | Qualquer pessoa | Exige código válido, não vencido, dentro do limite de tentativas |
+| `/api/auth/registro` | POST | Qualquer pessoa | Cria `Participante` + `Usuario` (perfil `ALUNO`); exige `aceiteLgpd: true`; grava data/hora e versão dos Termos/Política aceitos |
+| `/api/auth/login` | POST | Qualquer pessoa | Sem 2FA: devolve a sessão (JWT). Com 2FA ativo: devolve só o token temporário "2FA pendente" (5 min). ADMINISTRADOR/SECRETARIA sem 2FA: devolve só o token de configuração obrigatória (15 min). Limite de 5 tentativas por conta e por IP |
+| `/api/auth/recuperacao-senha` | POST | Qualquer pessoa | Limite de 5 pedidos por conta e por IP. **Responde `404` quando o e-mail não está cadastrado** — limitação registrada em `07-medidas-tecnicas-de-seguranca.md` |
+| `/api/auth/recuperacao-senha/confirmar` | POST | Qualquer pessoa | Exige código válido, não vencido, dentro do limite de tentativas; encerra as sessões abertas da conta |
+
+## Rotas da etapa do 2FA (só com token temporário, ou sessão onde indicado)
+
+| Rota | Método | Token aceito | Observação |
+|---|---|---|---|
+| `/api/auth/2fa/verificar` | POST | Só "2FA pendente" | Código do aplicativo ou código de recuperação; limite de 5 tentativas por conta; devolve a sessão |
+| `/api/auth/2fa/configuracao` | POST | "Configuração obrigatória" (equipe no login) ou sessão de ALUNO | Gera o segredo e o QR code no servidor; sempre da própria conta do token; `409` se o 2FA já estiver ativo |
+| `/api/auth/2fa/configuracao/confirmar` | POST | Idem | Ativa com um código válido; devolve os 8 códigos de recuperação uma única vez (e a sessão, no caso da configuração obrigatória); limite de 5 tentativas |
 
 ## Rotas autenticadas
 
 | Rota | Método | ADMINISTRADOR | SECRETARIA | ALUNO | Regra de propriedade |
 |---|---|:---:|:---:|:---:|---|
-| `/api/usuarios/me` | GET | ✅ | ✅ | ✅ | Sempre os dados do próprio token (`req.usuario.sub`) — não existe `/usuarios/:id` |
+| `/api/usuarios/me` | GET | ✅ | ✅ | ✅ | Sempre os dados do próprio token (`req.usuario.sub`) — não existe `GET /usuarios/:id` |
+| `/api/usuarios` | GET | ✅ | ❌ | ❌ | Lista as contas para a tela Usuários: nome, e-mail, perfil, situação do 2FA e se está bloqueada por tentativas — sem RGM, sem segredo |
+| `/api/usuarios/:id/bloqueio` | DELETE | ✅ | ❌ | ❌ | Remove o bloqueio por tentativas da conta (login, recuperação de senha e código do 2FA; o bloqueio por IP só expira sozinho); registra `BLOQUEIO_LOGIN_REMOVIDO` |
+| `/api/usuarios/:id/2fa` | DELETE | ✅ | ❌ | ❌ | Reset do 2FA de quem perdeu o celular: apaga segredo e códigos de recuperação e encerra as sessões da pessoa; registra `MFA_RESETADO` com quem resetou |
+| `/api/auth/aceitar-termos` | POST | ✅ | ✅ | ✅ | Registra o aceite da versão vigente dos Termos/Política para a própria conta do token |
+| `/api/auth/2fa/desativar` | POST | ❌ (`403`) | ❌ (`403`) | ✅ | Própria conta; exige senha + código atual; encerra as outras sessões e reemite a de quem desativou. Para a equipe o 2FA é obrigatório |
 | `/api/eventos` | GET | ✅ | ✅ | ✅ | Questionário vem sem o campo `correta` para ALUNO (`eventoParaDTO(..., paraAluno)`) |
 | `/api/eventos/:id` | GET | ✅ | ✅ | ✅ | idem |
 | `/api/eventos` | POST | ✅ | ✅ | ❌ | — |
@@ -65,8 +84,15 @@ significa que o middleware `autorizar(...)` barra qualquer outro perfil com
   muda na Fase 2 com a página "Meus dados": o novo endpoint de autoedição
   do aluno precisa continuar sem aceitar `perfil` nem `participanteId`
   alheio, do mesmo jeito que os endpoints de feedback/inscrição já fazem.
-- **Negação por padrão:** toda rota tem `autenticar` explícito; não existe
-  rota "esquecida" sem middleware — confirmado lendo `expressApp.ts` e os
-  nove arquivos de rotas por completo.
+- **Negação por padrão:** toda rota fora de `/api/auth` tem `autenticar`
+  explícito; não existe rota "esquecida" sem middleware — confirmado lendo
+  `expressApp.ts` e todos os arquivos de rotas por completo.
+- **Quem pode resetar o 2FA de outra pessoa:** só ADMINISTRADOR, pela tela
+  Usuários (a tela não oferece o botão para a própria conta). Em
+  emergência — o único administrador perdeu o celular e os códigos de
+  recuperação — quem tem as credenciais de produção roda
+  `backend/scripts/resetar-2fa.ts`, que registra `MFA_RESETADO` na
+  auditoria com a origem "script de emergência". SECRETARIA e ALUNO não
+  resetam o 2FA de ninguém (`403`).
 - **Rotas de log/auditoria** não têm nenhum verbo de escrita (nem
   `PUT`/`PATCH`/`DELETE`) — a trilha é somente leitura por desenho.

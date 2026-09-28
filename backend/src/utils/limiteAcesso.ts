@@ -7,10 +7,10 @@ import { prisma } from "../db/prisma";
 const MAX_TENTATIVAS = 5;
 const BLOQUEIO_MS = 15 * 60 * 1000;
 
-// prefixo da chave identifica o fluxo (login/recuperacao) e o alvo (conta, via indice de busca
-// que ja existe pro login — nunca e-mail em texto puro — ou IP)
-export function chaveConta(fluxo: "login" | "recuperacao", emailHash: string): string {
-  return `${fluxo}:conta:${emailHash}`;
+// prefixo da chave identifica o fluxo e o alvo: login/recuperacao usam o indice de busca do
+// e-mail (nunca e-mail em texto puro), o codigo do 2FA usa o id do usuario — ou o IP
+export function chaveConta(fluxo: "login" | "recuperacao" | "mfa", identificador: string): string {
+  return `${fluxo}:conta:${identificador}`;
 }
 export function chaveIp(fluxo: "login" | "recuperacao", ip: string): string {
   return `${fluxo}:ip:${ip}`;

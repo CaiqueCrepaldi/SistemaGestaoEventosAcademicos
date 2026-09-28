@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { SESSAO_EXPIRADA_EVENT, SESSION_KEY } from "../services/api";
-import { authService, type SessaoUsuario } from "../services/authService";
+import { authService, type ResultadoLogin, type SessaoUsuario } from "../services/authService";
 
 // mostrada na tela de login quando o logout nao foi um clique em "Sair" (ver logout() abaixo)
 export const MENSAGEM_SESSAO_EXPIRADA = "Sua sessão expirou. Entre novamente.";
@@ -9,7 +9,10 @@ interface AuthContextValue {
   usuario: SessaoUsuario | null;
   carregando: boolean;
   erro: string | null;
-  login: (email: string, senha: string) => Promise<void>;
+  // com 2FA a sessao so abre na etapa seguinte: o resultado diz qual etapa a tela de login mostra
+  login: (email: string, senha: string) => Promise<ResultadoLogin>;
+  // abre (ou troca) a sessao: depois do codigo do 2FA, da configuracao obrigatoria ou ao desativar o 2FA
+  definirSessao: (sessao: SessaoUsuario) => void;
   // sem argumento (botao "Sair") nao mostra mensagem nenhuma; com argumento, a mensagem
   // fica visivel na tela de login (usado pelo aviso de sessao expirada, ver useEffect abaixo)
   logout: (mensagem?: string) => void;
@@ -59,14 +62,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener(SESSAO_EXPIRADA_EVENT, aoExpirar);
   }, [logout]);
 
-  // chama o authService, guarda a sessao no estado e no localStorage
+  const definirSessao = useCallback((sessao: SessaoUsuario) => {
+    setUsuario(sessao);
+    localStorage.setItem(SESSION_KEY, JSON.stringify(sessao));
+    setErro(null);
+  }, []);
+
+  // chama o authService; so guarda a sessao se o login ja terminou (sem etapa de 2FA pendente)
   async function login(email: string, senha: string) {
     setCarregando(true);
     setErro(null);
     try {
-      const sessao = await authService.login(email, senha);
-      setUsuario(sessao);
-      localStorage.setItem(SESSION_KEY, JSON.stringify(sessao));
+      const resultado = await authService.login(email, senha);
+      if (resultado.tipo === "sessao") definirSessao(resultado.sessao);
+      return resultado;
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao autenticar");
       throw e;
@@ -76,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ usuario, carregando, erro, login, logout }}>
+    <AuthContext.Provider value={{ usuario, carregando, erro, login, definirSessao, logout }}>
       {children}
     </AuthContext.Provider>
   );

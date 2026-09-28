@@ -1,6 +1,6 @@
 # Política de Privacidade
 
-**Versão 2 — rascunho de 27/09/2026.** Substitui a Versão 1 (25/09/2026)
+**Versão 2 — rascunho de 27/09/2026, atualizado em 28/09/2026.** Substitui a Versão 1 (25/09/2026)
 quando a Fase 2 publicar este texto na página `/politica-de-privacidade` do
 sistema (a Fase 2 importa este arquivo direto na página, pra nunca
 divergirem). Até lá, a página ao vivo continua mostrando a Versão 1.
@@ -38,6 +38,12 @@ pelos dados tratados).
   resultado (aprovação/reprovação) e feedback enviado sobre as palestras.
 - **Registros de acesso:** login (sucesso e falha), acesso negado e
   alterações em registros críticos, para fins de segurança e auditoria.
+  Nas telas de login e de recuperação de senha, o endereço IP de origem é
+  usado só para bloquear temporariamente o excesso de tentativas.
+- **Autenticação em dois fatores:** para quem usa (obrigatória para
+  administrador e secretaria, opcional para aluno), uma chave secreta
+  guardada cifrada e códigos de recuperação guardados apenas em forma
+  irreversível (ver seção 8).
 - **Identificação e contato (palestrante):** nome e e-mail, informados
   pela secretaria ao cadastrar o evento. Palestrantes também são
   titulares de dados pessoais: se você foi convidado a ministrar uma
@@ -63,6 +69,7 @@ Ver a tabela completa em `docs/lgpd/02-matriz-dados-finalidade-base-legal.md`
 | Inscrição, presença, questionário | Controlar vaga e liberar certificado | Execução de contrato (art. 7º, V) |
 | Feedback da palestra | Avaliação do evento, opcional | Consentimento (art. 7º, I) |
 | Logs de acesso/auditoria | Segurança e eventual exercício de direito em disputa | Legítimo interesse em segurança (art. 7º, IX) e exercício regular de direitos (art. 7º, VI) |
+| IP no limite de tentativas; chave e códigos do 2FA | Proteger a conta contra tentativa de adivinhar a senha e contra uso da senha por outra pessoa | Legítimo interesse em segurança (art. 7º, IX) |
 | Aceite de Termos/Política | Comprovar que você teve ciência das regras antes de usar o serviço | Formalização contratual — não é "consentimento" de tratamento de dado |
 
 ## 4. Compartilhamento com terceiros
@@ -78,6 +85,12 @@ Ver a tabela completa em `docs/lgpd/02-matriz-dados-finalidade-base-legal.md`
 
 Nenhum dado é vendido, usado para publicidade ou compartilhado para
 qualquer outra finalidade.
+
+A autenticação em dois fatores usa um aplicativo autenticador instalado no
+seu próprio celular (como Google Authenticator ou Microsoft Authenticator),
+que gera os códigos no aparelho, sem SMS e sem e-mail. O QR code de
+configuração é gerado no nosso servidor, e nenhum dado seu é enviado a
+terceiros por causa do 2FA.
 
 ## 5. Transferência internacional e cookies
 
@@ -135,6 +148,13 @@ Alternativamente, qualquer solicitação pode ser feita para
 - Nome, e-mail e RGM ficam cifrados no banco de dados.
 - Toda regra de acesso é verificada no servidor, nunca só escondendo botão
   na tela.
+- Autenticação em dois fatores por aplicativo autenticador: obrigatória
+  para administrador e secretaria, opcional para aluno (página "Minha
+  conta"). Ao ativar, você recebe códigos de recuperação de uso único,
+  mostrados uma única vez, para o caso de perder o celular.
+- Tentativas de login em excesso bloqueiam o acesso temporariamente, e
+  trocar a senha, inativar a conta ou mexer no 2FA encerra as sessões já
+  abertas.
 - Login, falhas de acesso, acessos negados e alterações críticas ficam
   registrados numa trilha de auditoria imutável.
 - Detalhes técnicos adicionais estão documentados internamente em
@@ -151,7 +171,7 @@ Processo detalhado em `docs/lgpd/05-plano-de-resposta-a-incidentes.md`.
 
 ---
 
-*Versão 2 — 27/09/2026 (rascunho, publicação prevista na Fase 2). Mudanças
+*Versão 2 — rascunho de 27/09/2026, atualizado em 28/09/2026 (publicação prevista na Fase 2). Mudanças
 importantes em relação a versões futuras serão comunicadas e, quando a
 mudança afetar a base do tratamento, um novo aceite será solicitado no
 próximo login.*

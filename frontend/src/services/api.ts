@@ -53,9 +53,10 @@ function getToken(): string | null {
 // sem limite a tela ficaria "carregando" pra sempre se o servidor nao respondesse
 const TIMEOUT_MS = 30_000;
 
-// faz a chamada http de verdade
-async function request<T>(path: string, method: string, body?: unknown): Promise<T> {
-  const token = getToken();
+// faz a chamada http de verdade. tokenEtapa = token temporario do login em duas etapas (2FA),
+// que ainda nao e sessao: vai no lugar do token salvo e nunca dispara o "sessao expirada"
+async function request<T>(path: string, method: string, body?: unknown, tokenEtapa?: string): Promise<T> {
+  const token = tokenEtapa ?? getToken();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -89,7 +90,7 @@ async function request<T>(path: string, method: string, body?: unknown): Promise
     // token vencido/invalido numa rota autenticada: limpa a sessao e avisa o AuthContext (evita
     // ciclo de import direto entre os dois arquivos). Rotas publicas de auth ficam de fora —
     // la um 401 eh so credencial errada, nunca "sessao expirada"
-    if (response.status === 401 && !ROTAS_PUBLICAS_AUTH.has(path)) {
+    if (response.status === 401 && !ROTAS_PUBLICAS_AUTH.has(path) && !tokenEtapa) {
       localStorage.removeItem(SESSION_KEY);
       window.dispatchEvent(new Event(SESSAO_EXPIRADA_EVENT));
     }
@@ -108,7 +109,7 @@ async function request<T>(path: string, method: string, body?: unknown): Promise
 
 export const api = {
   get: <T>(path: string) => request<T>(path, "GET"),
-  post: <T>(path: string, body?: unknown) => request<T>(path, "POST", body),
+  post: <T>(path: string, body?: unknown, tokenEtapa?: string) => request<T>(path, "POST", body, tokenEtapa),
   put: <T>(path: string, body?: unknown) => request<T>(path, "PUT", body),
   del: <T>(path: string) => request<T>(path, "DELETE"),
 };

@@ -59,7 +59,7 @@ gerado a partir do diagrama antigo, pode jogar fora.
 
 ## Autenticação
 
-Toda rota exceto `POST /api/auth/login` e `POST /api/auth/registro` exige
+Toda rota exceto login, registro e recuperação de senha exige
 `Authorization: Bearer <token>`.
 
 O token é opaco pro frontend — o React não decodifica o JWT em nenhum
@@ -144,9 +144,21 @@ Response `200`:
   }
 }
 ```
-Pra administrador/secretaria, `rgm` e `participanteId` vêm `null`.
+Pra administrador/secretaria, `rgm` e `participanteId` vêm `null`. O
+`usuario` também traz `mfaAtivo` e a resposta traz `precisaAceitarTermos`.
 
-Erro: `401 CREDENCIAIS_INVALIDAS` se e-mail ou senha estiverem errados.
+Quando o login ainda não pode abrir sessão, a resposta `200` não tem
+`token` — só um token temporário que serve para a etapa seguinte:
+```json
+{ "mfa": "PENDENTE", "tokenEtapa": "<jwt temporário>", "expiresIn": 300 }
+```
+- `PENDENTE`: 2FA ativo, falta o código (`POST /api/auth/2fa/verificar`).
+- `CONFIGURACAO_OBRIGATORIA` (`expiresIn: 900`): administrador/secretaria
+  sem 2FA configurado — só as rotas de configuração aceitam esse token.
+
+Erros: `401 CREDENCIAIS_INVALIDAS` (e-mail ou senha errados, mesma
+mensagem se a conta não existir); `429 MUITAS_TENTATIVAS` depois de 5
+tentativas erradas da mesma conta ou do mesmo IP (15 min).
 
 ### `POST /api/auth/recuperacao-senha` e `POST /api/auth/recuperacao-senha/confirmar` (endpoints dedicados)
 
@@ -163,21 +175,52 @@ esse e-mail.
 
 `POST /api/auth/recuperacao-senha/confirmar` — Request:
 `{ "email": "...", "codigo": "123456", "novaSenha": "..." }`.
-`200` se der certo. `422 CODIGO_INVALIDO` se o código estiver errado,
-expirado, ou não existir nenhum pendente pra esse usuário.
+`200` se der certo (as sessões abertas da conta são encerradas). `422
+CODIGO_INVALIDO` se o código estiver errado, expirado, ou não existir
+nenhum pendente pra esse usuário.
+
+O pedido de código também tem limite de 5 por conta e por IP (`429`).
+
+### Autenticação em dois fatores (TOTP)
+
+Obrigatória para administrador/secretaria, opcional para aluno. Código de
+6 dígitos de aplicativo autenticador, passo de 30 s, tolerância de ±1
+passo. Erro de código: `422 CODIGO_MFA_INVALIDO`; 5 erros seguidos na
+mesma conta: `429 MUITAS_TENTATIVAS` por 15 min.
+
+- `POST /api/auth/2fa/verificar` — só com o token `PENDENTE`. Request
+  `{ "codigo": "123456" }` ou `{ "codigoRecuperacao": "ABCDE-FGH23" }`.
+  Responde como o login com sessão; com código de recuperação, vem também
+  `codigosRecuperacaoRestantes`.
+- `POST /api/auth/2fa/configuracao` — token `CONFIGURACAO_OBRIGATORIA` ou
+  sessão de aluno. Responde `{ "qrCode": "data:image/png;base64,...",
+  "segredo": "BASE32..." }`. Enquanto não confirmar, chamar de novo devolve
+  o mesmo segredo. `409 MFA_JA_ATIVO` se já estiver ativo.
+- `POST /api/auth/2fa/configuracao/confirmar` — mesmo token. Request
+  `{ "codigo": "123456" }`. Responde `{ "codigosRecuperacao": [8 códigos] }`
+  (mostrados uma única vez) e, na configuração obrigatória, também
+  `"sessao"` no formato da resposta de login.
+- `POST /api/auth/2fa/desativar` — sessão, só aluno (`403` pra equipe).
+  Request `{ "senha": "...", "codigo": "123456" }`. Encerra as outras
+  sessões e responde com uma sessão nova para quem desativou.
+
+O middleware `autenticar` recusa com `401` o token temporário em qualquer
+outra rota, e com `401 MFA_OBRIGATORIO` a sessão de administrador/secretaria
+cujo 2FA não está configurado.
 
 ### `GET /api/usuarios/me`
 
-Qualquer perfil autenticado. Serve pra restaurar a sessão quando a página
-recarrega e revalidar que o token ainda é válido. Mesmo formato do campo
-`usuario` do login. `401` se o token não for mais válido.
+Qualquer perfil autenticado. Mesmo formato do campo `usuario` do login.
+`401` se o token não for mais válido. Chamado pela página "Minha conta"
+pra mostrar a situação do 2FA.
 
-**Ainda não é chamado pelo frontend** — hoje o React confia direto no que
-está salvo em `localStorage["sgea:session"]` depois do login, sem
-revalidar contra o backend a cada reload. Um token expirado só vai falhar
-no primeiro request de verdade que a tela fizer (ex: abrir a lista de
-eventos), não no carregamento inicial — é um ponto de melhoria futura, não
-algo que quebra o fluxo hoje.
+### Tela Usuários (só administrador)
+
+- `GET /api/usuarios` — `[{ id, nome, emailLogin, perfil, mfaAtivo, bloqueado }]`.
+- `DELETE /api/usuarios/{id}/bloqueio` — `204`; remove o bloqueio por
+  tentativas da conta (login, recuperação e 2FA).
+- `DELETE /api/usuarios/{id}/2fa` — `204`; reseta o 2FA (apaga segredo e
+  códigos, encerra as sessões da pessoa).
 
 ## Auditoria
 
@@ -691,8 +734,9 @@ tem permissão — não misturar os dois, e não usar 404 pra esconder um 403
 
 ## Lacunas conhecidas (frontend ainda não fez, backend não precisa esperar)
 
-- `GET /api/usuarios/me` documentado mas não chamado ainda (sessão não é
-  revalidada no reload, só confia no localStorage).
+- A sessão não é revalidada no reload (o React confia no localStorage até
+  a primeira chamada tomar `401`); `GET /api/usuarios/me` só é chamado pela
+  página "Minha conta".
 - Busca de aluno no Check-in é client-side (`GET /api/participantes/alunos`
   carrega tudo, filtra no navegador) — funciona, mas não escala pra uma base
   grande de dados.
