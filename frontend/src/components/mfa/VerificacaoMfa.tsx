@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { ApiError } from "../../services/api";
 import { authService, type SessaoUsuario } from "../../services/authService";
+import { useErrosFormulario } from "../../hooks/useErrosFormulario";
+import { Campo } from "../ui/Campo";
 
 interface VerificacaoMfaProps {
   tokenEtapa: string;
@@ -15,20 +17,13 @@ export function VerificacaoMfa({ tokenEtapa, onConcluir, onExpirar, onVoltar }: 
   const [usarRecuperacao, setUsarRecuperacao] = useState(false);
   const [codigo, setCodigo] = useState("");
   const [codigoRecuperacao, setCodigoRecuperacao] = useState("");
-  const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const { erros, formRef, mostrar, mostrarErroDaApi, limpar, limparAoEditar } = useErrosFormulario();
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setErro(null);
-    if (!usarRecuperacao && codigo.length !== 6) {
-      setErro("Digite os 6 dígitos do aplicativo autenticador.");
-      return;
-    }
-    if (usarRecuperacao && !codigoRecuperacao.trim()) {
-      setErro("Digite um dos seus códigos de recuperação.");
-      return;
-    }
+    if (!usarRecuperacao && mostrar(codigo.length === 6 ? {} : { codigo: "Digite os 6 dígitos do aplicativo autenticador." })) return;
+    if (usarRecuperacao && mostrar(codigoRecuperacao.trim() ? {} : { codigoRecuperacao: "Digite um dos seus códigos de recuperação." })) return;
 
     setEnviando(true);
     try {
@@ -37,12 +32,15 @@ export function VerificacaoMfa({ tokenEtapa, onConcluir, onExpirar, onVoltar }: 
         usarRecuperacao ? { codigoRecuperacao: codigoRecuperacao.trim() } : { codigo },
       );
       onConcluir(sessao, codigosRecuperacaoRestantes);
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 401) {
+    } catch (erro) {
+      if (erro instanceof ApiError && erro.status === 401) {
         onExpirar();
         return;
       }
-      setErro(e instanceof Error ? e.message : "Não foi possível verificar o código.");
+      if (!mostrarErroDaApi(erro)) {
+        // codigo errado/ja usado/bloqueio: a mensagem vai embaixo do campo que a pessoa esta usando
+        mostrar({ [usarRecuperacao ? "codigoRecuperacao" : "codigo"]: erro instanceof Error ? erro.message : "Não foi possível verificar o código." });
+      }
       setCodigo("");
     } finally {
       setEnviando(false);
@@ -51,11 +49,11 @@ export function VerificacaoMfa({ tokenEtapa, onConcluir, onExpirar, onVoltar }: 
 
   function alternarModo() {
     setUsarRecuperacao(!usarRecuperacao);
-    setErro(null);
+    limpar();
   }
 
   return (
-    <form onSubmit={handleSubmit} className="form">
+    <form onSubmit={handleSubmit} onChange={limparAoEditar} className="form" ref={formRef} noValidate>
       <div>
         <h2 className="mfa-titulo">Verificação em duas etapas</h2>
         <p className="form-hint mfa-texto">
@@ -66,8 +64,7 @@ export function VerificacaoMfa({ tokenEtapa, onConcluir, onExpirar, onVoltar }: 
       </div>
 
       {usarRecuperacao ? (
-        <label className="field">
-          <span>Código de recuperação</span>
+        <Campo nome="codigoRecuperacao" rotulo="Código de recuperação" obrigatorio erro={erros.codigoRecuperacao}>
           <input
             value={codigoRecuperacao}
             onChange={(e) => setCodigoRecuperacao(e.target.value.toUpperCase())}
@@ -77,10 +74,9 @@ export function VerificacaoMfa({ tokenEtapa, onConcluir, onExpirar, onVoltar }: 
             autoFocus
             className="mfa-codigo-input"
           />
-        </label>
+        </Campo>
       ) : (
-        <label className="field">
-          <span>Código do aplicativo</span>
+        <Campo nome="codigo" rotulo="Código do aplicativo" obrigatorio erro={erros.codigo}>
           <input
             value={codigo}
             onChange={(e) => setCodigo(e.target.value.replace(/\D/g, "").slice(0, 6))}
@@ -90,10 +86,8 @@ export function VerificacaoMfa({ tokenEtapa, onConcluir, onExpirar, onVoltar }: 
             autoFocus
             className="mfa-codigo-input"
           />
-        </label>
+        </Campo>
       )}
-
-      {erro && <p className="form-error">{erro}</p>}
 
       <button className="btn btn-primary btn-block" type="submit" disabled={enviando}>
         {enviando ? "Verificando…" : "Verificar"}

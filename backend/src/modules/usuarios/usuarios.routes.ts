@@ -4,7 +4,7 @@ import { autenticar, autorizar } from "../../middleware/auth";
 import { AppError } from "../../errors/AppError";
 import { prisma } from "../../db/prisma";
 import { usuarioParaDTO } from "../../utils/dto";
-import { descriptografar } from "../../utils/criptografia";
+import { lerDadoPessoal } from "../../utils/dadosPessoais";
 import { usuarioParaDominio } from "../auth/auth.service";
 import { mfaService } from "../mfa/mfa.service";
 import { registrarAuditoria } from "../../utils/auditoria";
@@ -31,7 +31,17 @@ usuariosRouter.get(
   autorizar("ADMINISTRADOR"),
   asyncHandler(async (_req, res) => {
     const [usuarios, bloqueios] = await Promise.all([
-      prisma.usuario.findMany({ select: { id: true, nome: true, emailLogin: true, emailLoginHash: true, perfil: true, mfaAtivo: true } }),
+      prisma.usuario.findMany({
+        select: {
+          id: true,
+          nome: true,
+          emailLogin: true,
+          emailLoginHash: true,
+          perfil: true,
+          mfaAtivo: true,
+          participante: { select: { ativo: true } },
+        },
+      }),
       prisma.limiteAcesso.findMany({ where: { bloqueadoAte: { gt: new Date() } }, select: { chave: true } }),
     ]);
     const chavesBloqueadas = new Set(bloqueios.map((b) => b.chave));
@@ -39,10 +49,12 @@ usuariosRouter.get(
     const lista = usuarios
       .map((u) => ({
         id: u.id,
-        nome: descriptografar(u.nome),
-        emailLogin: descriptografar(u.emailLogin),
+        nome: lerDadoPessoal(u.nome),
+        emailLogin: lerDadoPessoal(u.emailLogin),
         perfil: u.perfil,
         mfaAtivo: u.mfaAtivo,
+        // so aluno e inativado (pela equipe); conta de equipe nao tem participante
+        inativo: u.participante ? !u.participante.ativo : false,
         bloqueado:
           chavesBloqueadas.has(chaveConta("login", u.emailLoginHash)) ||
           chavesBloqueadas.has(chaveConta("recuperacao", u.emailLoginHash)) ||

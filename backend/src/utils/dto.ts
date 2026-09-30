@@ -81,6 +81,7 @@ export function eventoParaDTO(evento: Evento, paraAluno: boolean) {
     palestranteId: evento.palestranteId,
     tema: evento.tema,
     cargaHoraria: evento.cargaHoraria,
+    inscritos: evento.inscritos,
     questionario: paraAluno
       ? evento.questionario.map((p) => ({
           id: p.id,

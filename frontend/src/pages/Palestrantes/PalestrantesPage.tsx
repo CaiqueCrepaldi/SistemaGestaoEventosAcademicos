@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
+import { Campo, LegendaObrigatorio } from "../../components/ui/Campo";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
-import { palestranteService } from "../../services";
+import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
+import { ApiError, palestranteService } from "../../services";
 import type { Palestrante } from "../../types";
 import { validarEmail, validarNome } from "../../utils/validacao";
 
-const VAZIO: Omit<Palestrante, "id"> = { nome: "", email: "" };
+const VAZIO = { nome: "", email: "" };
 
 export function PalestrantesPage() {
   const { usuario } = useAuth();
@@ -18,6 +20,7 @@ export function PalestrantesPage() {
   const [form, setForm] = useState(VAZIO);
   const [confirmandoSalvar, setConfirmandoSalvar] = useState(false);
   const [excluindo, setExcluindo] = useState<Palestrante | null>(null);
+  const { erros, formRef, mostrar, mostrarErroDaApi, limpar, limparAoEditar } = useErrosFormulario();
 
   useEffect(() => {
     void carregar();
@@ -31,18 +34,28 @@ export function PalestrantesPage() {
   function abrirNovo() {
     setEditando(null);
     setForm(VAZIO);
+    limpar();
     setModalAberto(true);
   }
 
   function abrirEdicao(palestrante: Palestrante) {
     setEditando(palestrante);
-    setForm({ nome: palestrante.nome, email: palestrante.email });
+    setForm({ nome: palestrante.nome, email: palestrante.email ?? "" });
+    limpar();
     setModalAberto(true);
   }
 
+  function validar(): ErrosFormulario {
+    const faltando: ErrosFormulario = {};
+    if (!form.nome.trim()) faltando.nome = "Informe o nome do palestrante.";
+    else if (!validarNome(form.nome)) faltando.nome = "O nome deve conter apenas letras.";
+    if (!form.email.trim()) faltando.email = "Informe o e-mail.";
+    else if (!validarEmail(form.email)) faltando.email = "Informe um e-mail válido.";
+    return faltando;
+  }
+
   function pedirSalvar() {
-    if (!validarNome(form.nome)) return void toast.error("Nome deve conter apenas letras.");
-    if (!validarEmail(form.email ?? "")) return void toast.error("E-mail em formato inválido.");
+    if (mostrar(validar())) return;
     if (editando) setConfirmandoSalvar(true);
     else void salvar();
   }
@@ -60,7 +73,9 @@ export function PalestrantesPage() {
       setModalAberto(false);
       await carregar();
     } catch (erro) {
-      toast.error(erro instanceof Error ? erro.message : "Não foi possível salvar o palestrante.");
+      setConfirmandoSalvar(false);
+      if (erro instanceof ApiError && erro.code === "EMAIL_DUPLICADO") mostrar({ email: erro.message });
+      else if (!mostrarErroDaApi(erro)) toast.error(erro instanceof Error ? erro.message : "Não foi possível salvar o palestrante.");
     }
   }
 
@@ -132,15 +147,23 @@ export function PalestrantesPage() {
 
       {modalAberto && (
         <Modal title={editando ? "Editar palestrante" : "Novo palestrante"} onClose={() => setModalAberto(false)}>
-          <form className="form" onSubmit={(e) => { e.preventDefault(); pedirSalvar(); }}>
-            <label className="field">
-              <span>Nome</span>
-              <input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} required />
-            </label>
-            <label className="field">
-              <span>E-mail</span>
-              <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
-            </label>
+          <form
+            className="form"
+            ref={formRef}
+            noValidate
+            onChange={limparAoEditar}
+            onSubmit={(e) => {
+              e.preventDefault();
+              pedirSalvar();
+            }}
+          >
+            <LegendaObrigatorio />
+            <Campo nome="nome" rotulo="Nome" obrigatorio erro={erros.nome}>
+              <input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} autoFocus />
+            </Campo>
+            <Campo nome="email" rotulo="E-mail" obrigatorio erro={erros.email}>
+              <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            </Campo>
             <div className="modal-footer">
               <button type="button" className="btn btn-ghost" onClick={() => setModalAberto(false)}>Cancelar</button>
               <button type="submit" className="btn btn-primary">Salvar</button>

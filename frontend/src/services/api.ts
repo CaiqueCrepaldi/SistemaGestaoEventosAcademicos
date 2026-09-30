@@ -111,5 +111,5 @@ export const api = {
   get: <T>(path: string) => request<T>(path, "GET"),
   post: <T>(path: string, body?: unknown, tokenEtapa?: string) => request<T>(path, "POST", body, tokenEtapa),
   put: <T>(path: string, body?: unknown) => request<T>(path, "PUT", body),
-  del: <T>(path: string) => request<T>(path, "DELETE"),
+  del: <T>(path: string, body?: unknown) => request<T>(path, "DELETE", body),
 };

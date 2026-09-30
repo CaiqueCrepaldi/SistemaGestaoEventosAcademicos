@@ -16,7 +16,7 @@ Cada evento cadastrado no sistema possui um questionário de múltipla escolha c
 2. O aluno se inscreve no evento e tem a presença confirmada pela equipe (**Check-in**).
 3. Na tela **Certificados**, o aluno vê o evento com um botão **"Questionário"**.
 4. Ao responder as 10 perguntas e enviar, o sistema calcula o percentual de acertos e mostra o resultado na hora.
-5. Se o aproveitamento for igual ou maior que 60%, o botão **"Emitir certificado"** é liberado e o aluno pode baixar o PDF. Caso contrário, o aluno pode clicar em **"Refazer questionário"** e tentar novamente.
+5. Se o aproveitamento for igual ou maior que 60%, o botão **"Emitir certificado"** é liberado e o aluno pode baixar o PDF. Caso contrário, o aluno pode clicar em **"Refazer questionário"** e tentar novamente (são 2 tentativas por evento).
 6. A equipe (administrador/secretaria) enxerga, na tela de Certificados, a nota de todos os alunos em todos os eventos, mas essa liberação é uma regra aplicada apenas à visão do aluno.
 
 ### Como funciona por trás
@@ -26,6 +26,7 @@ Cada evento cadastrado no sistema possui um questionário de múltipla escolha c
 - Cada tentativa é armazenada (não sobrescreve a anterior), e a elegibilidade ao certificado usa sempre a **melhor tentativa** do aluno naquele evento (`certificadoService.ts`, função `enriquecer`).
 - O percentual mínimo (60%) é uma constante única (`PERCENTUAL_APROVACAO`), usada tanto para calcular a liberação quanto para exibir a mensagem ao aluno — evita que as duas partes do sistema fiquem com regras divergentes.
 - No back-end, as rotas do questionário exigem autenticação e, quando aplicável, perfil de ALUNO (`backend/src/modules/eventos/eventos.routes.ts`): um aluno só enxerga e responde ao próprio questionário, nunca o de outra pessoa. A rota que lista a nota de todos os alunos em todos os eventos (usada na tela de gestão) é restrita a ADMINISTRADOR/SECRETARIA.
+- Só responde quem teve a presença confirmada naquele evento e está com a conta ativa — as duas regras são conferidas no servidor (`questionario.service.ts`), não só escondendo o botão.
 
 ### Verificação realizada
 
@@ -38,18 +39,11 @@ Testado via requisições reais à API (não apenas leitura de código):
 
 ---
 
-## 2. Validação de cadastros com avisos visuais (sem `alert`/`console.log`)
-
-> **Atualização:** o cadastro (criar/editar/excluir) de Participantes pela
-> interface foi removido — essa tabela agora é gerida direto no banco de
-> dados. A tela `/participantes` continua existindo, mas só como listagem
-> de leitura com busca. As regras de nome/e-mail/RGM descritas abaixo
-> continuam valendo para o cadastro de conta de aluno, que é quem ainda
-> cria um Participante pela interface.
+## 2. Validação de formulários com erro no próprio campo
 
 ### Objetivo
 
-Garantir que os dados cadastrados no sistema (palestrantes, eventos, contas de aluno) sigam um formato consistente, evitando erros de digitação e dados inválidos, com mensagens de erro claras exibidas na própria tela — nunca em caixas de diálogo do navegador ou apenas no console.
+Garantir que os dados cadastrados no sistema (salas, palestrantes, eventos, inscrições, feedbacks, contas de aluno) sigam um formato consistente, com a mensagem de erro aparecendo embaixo do campo que precisa ser corrigido — nunca em caixas de diálogo do navegador ou apenas no console.
 
 ### Regras aplicadas
 
@@ -61,21 +55,24 @@ Garantir que os dados cadastrados no sistema (palestrantes, eventos, contas de a
 
 ### Fluxo do usuário
 
-1. Ao preencher qualquer formulário do sistema (cadastro de palestrante, evento, ou cadastro de conta de aluno) e tentar salvar com um campo inválido ou vazio, uma notificação (toast) aparece no canto da tela explicando exatamente o que está errado.
-2. O campo de RGM já formata automaticamente em maiúsculo enquanto o usuário digita.
-3. Nada é salvo enquanto houver um campo inválido — o formulário permanece aberto para correção.
-4. Confirmações de sucesso ("Palestrante cadastrado.", "Evento atualizado.", etc.) também aparecem como notificação, no lugar de um `alert()` do navegador.
+1. Todo campo obrigatório tem um asterisco vermelho (`*`) ao lado do rótulo, e o formulário explica o que o asterisco significa.
+2. Ao tentar salvar com um campo vazio ou inválido, o campo fica com a borda vermelha, a mensagem aparece logo embaixo dele e o cursor vai para o primeiro campo com problema.
+3. Se o servidor recusar algum campo (ex.: e-mail já cadastrado), a mensagem dele também aparece embaixo do campo certo.
+4. Ao corrigir o campo, o erro some. Nada é salvo enquanto houver campo inválido — o formulário continua aberto.
+5. Vale para todos os formulários: login, cadastro, esqueci a senha, eventos (incluindo cada pergunta do questionário), salas, palestrantes, participantes, inscrições, feedback, questionário do aluno e 2FA.
+6. Confirmações de sucesso ("Palestrante cadastrado.", "Evento atualizado.", etc.) aparecem como notificação (toast), no lugar de um `alert()` do navegador.
 
 ### Como funciona por trás
 
 - As regras de validação (nome, e-mail, RGM) existem em dois lugares espelhados: `frontend/src/utils/validacao.ts` (checagem imediata na tela) e `backend/src/utils/validacao.ts` + os schemas Zod de cada módulo (segunda barreira, caso a API seja chamada diretamente). Isso segue o princípio de nunca confiar apenas na validação do navegador.
-- O sistema de notificação (`frontend/src/components/ui/Toast.tsx`) é um "pub/sub" simples: qualquer parte do código pode chamar `toast.error("mensagem")` ou `toast.success("mensagem")`, e um componente único (`ToastViewport`), montado uma vez na raiz da aplicação, exibe a notificação por alguns segundos e some sozinha.
+- Todos os formulários usam o mesmo componente de campo (`frontend/src/components/ui/Campo.tsx`: rótulo, asterisco, mensagem de erro e ligação acessível entre campo e mensagem) e o mesmo controle de erros (`frontend/src/hooks/useErrosFormulario.ts`: guarda os erros por campo, foca o primeiro inválido e distribui os `erros` do `422` da API pelos campos). O estilo é um só, em `global.css`.
+- O sistema de notificação (`frontend/src/components/ui/Toast.tsx`) é um "pub/sub" simples: qualquer parte do código pode chamar `toast.error("mensagem")` ou `toast.success("mensagem")`, e um componente único (`ToastViewport`), montado uma vez na raiz da aplicação, exibe a notificação por alguns segundos e some sozinha. Ele fica para avisos gerais e de sucesso; erro de campo aparece no campo.
 - Antes de qualquer edição ou exclusão (palestrante, sala, evento, inscrição), o sistema exibe uma caixa de confirmação (`ConfirmDialog.tsx`) — outra camada de proteção contra ações acidentais, especialmente importante numa aplicação usada por secretaria/administração.
-- No back-end, a validação Zod (`validarCorpo` como middleware) barra a requisição antes mesmo de chegar à lógica de negócio, devolvendo código de erro `422` com a mensagem de qual campo falhou.
+- No back-end, a validação Zod (`validarCorpo` como middleware) barra a requisição antes mesmo de chegar à lógica de negócio, devolvendo código de erro `422` com a lista `erros` (campo + mensagem).
 
 ### Verificação realizada
 
-Testado via requisições reais à API:
+Testado via requisições reais à API e na interface (Playwright, `frontend/testes-interface/`):
 - Nome com número → rejeitado (422).
 - RGM com 10 caracteres → rejeitado (422).
 - E-mail em formato inválido → rejeitado (422).
@@ -141,12 +138,50 @@ Testado via requisições reais à API: criação de sala, palestrante e evento 
 
 ---
 
-## Contas de teste (ambiente de demonstração)
+## 5. Inativação e reativação de aluno
 
-| Perfil | Login | Senha |
-|---|---|---|
-| Administrador | admin@umc.br | admin123 |
-| Secretaria | secretaria@umc.br | secretaria123 |
-| Aluno | aluno@alunos.umc.br | aluno123 |
+### Objetivo
 
-O aluno de demonstração já está inscrito e com presença confirmada no evento "Abertura e Palestra Magna: IA na Educação", pronto para testar o questionário e a emissão do certificado sem precisar repetir os passos de inscrição e check-in.
+Permitir que a secretaria bloqueie o uso do sistema por um aluno (uso indevido, dado incorreto ou a pedido dele) sem apagar nada, e desfaça isso depois.
+
+### Fluxo do usuário
+
+1. Na tela **Participantes**, administrador ou secretaria clica em **"Inativar"**, informa o motivo (obrigatório) e confirma.
+2. A partir daí o aluno aparece com o selo **"Inativo"** nas telas da equipe (Participantes, Inscrições, Check-in, Certificados, Usuários).
+3. Se o aluno estiver logado, a sessão cai. Ao tentar entrar de novo, vê "Sua conta está inativa. Procure a secretaria." — sem o motivo interno.
+4. Ele não consegue se inscrever, fazer check-in nem responder questionário. As inscrições pendentes em eventos futuros são canceladas; os certificados já emitidos continuam valendo.
+5. **"Reativar"** (com confirmação) libera o login de novo.
+
+### Como funciona por trás
+
+- Tudo é conferido no servidor (`participantes.service.ts`, `auth.service.ts`, `eventos.service.ts`, `inscricoes.service.ts`, `questionario.service.ts`). A sessão cai porque a inativação incrementa `versaoToken`.
+- Inativação, reativação e cada inscrição cancelada ficam na auditoria (`PARTICIPANTE_INATIVADO`, `PARTICIPANTE_REATIVADO`, `INSCRICAO_CANCELADA`).
+- "Inativo" é só essa ação da equipe. Conta sem login há 24 meses é outro conceito, chamado **conta sem uso** (critério de retenção da LGPD, ver `docs/lgpd/04-plano-de-retencao-e-descarte.md`).
+
+---
+
+## 6. Feedback sem edição
+
+### Fluxo do usuário
+
+- O aluno envia um feedback (nota de 1 a 5 e comentário) das palestras em que já recebeu o certificado.
+- Depois de enviado, **ninguém edita** o feedback. O aluno pode excluir o dele (com confirmação) e enviar outro.
+- Administrador e secretaria veem todos os feedbacks e só podem excluir, escolhendo o motivo numa lista (conteúdo ofensivo, dado pessoal exposto, fora do tema, pedido do aluno).
+
+### Como funciona por trás
+
+- `PUT /api/feedbacks/:id` responde sempre `403`; o `DELETE` confere se o aluno é o dono, e para a equipe exige o motivo (`feedbacks.routes.ts`, `feedbacks.service.ts`).
+- Toda exclusão gera `FEEDBACK_EXCLUIDO` na auditoria, dizendo se foi o próprio aluno ou a equipe (e o motivo). O motivo é de lista fechada para não gravar texto livre na trilha, que não pode ser apagada.
+
+---
+
+## 7. Senha e autenticação em dois fatores
+
+- Senhas são guardadas só como hash bcrypt, custo 12, com salt aleatório por senha embutido no próprio hash. Contas com hash antigo (custo 10) são atualizadas no próximo login, sem o usuário perceber. Detalhes em `docs/lgpd/07-medidas-tecnicas-de-seguranca.md`.
+- A autenticação em dois fatores (aplicativo autenticador) é **opcional para todos os perfis**: cada pessoa ativa ou desativa na página **Minha conta**. O administrador pode resetar o 2FA de quem perdeu o celular (tela **Usuários**).
+
+---
+
+## Contas de teste
+
+O seed (`backend/prisma/seed.ts`) cria, no banco de desenvolvimento, um administrador, uma secretaria e um aluno de demonstração já inscrito e com presença confirmada no evento "Abertura e Palestra Magna: IA na Educação", pronto para testar o questionário e a emissão do certificado. Logins e senhas no `README.md` (valem só para o banco de desenvolvimento).

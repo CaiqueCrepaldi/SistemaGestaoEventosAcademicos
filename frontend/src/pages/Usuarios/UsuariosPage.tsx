@@ -13,8 +13,8 @@ const PERFIL_LABEL: Record<Perfil, string> = {
   ALUNO: "Aluno",
 };
 
-// so ADMINISTRADOR: situacao do 2FA e do bloqueio de cada conta, com reset do 2FA (perdeu o
-// celular) e remocao do bloqueio por excesso de tentativas
+// so ADMINISTRADOR: situacao de cada conta (aluno inativado, 2FA, bloqueio por tentativas), com reset
+// do 2FA (perdeu o celular) e remocao do bloqueio por excesso de tentativas
 export function UsuariosPage() {
   const { usuario } = useAuth();
   const [usuarios, setUsuarios] = useState<UsuarioResumo[]>([]);
@@ -32,7 +32,7 @@ export function UsuariosPage() {
   async function resetar() {
     if (!resetando) return;
     await usuarioService.resetarMfa(resetando.id);
-    toast.success(`2FA de ${resetando.nome} resetado. A configuração será pedida de novo no próximo login.`);
+    toast.success(`2FA de ${resetando.nome} resetado. A pessoa volta a entrar só com a senha.`);
     setResetando(null);
     await carregar();
   }
@@ -64,13 +64,13 @@ export function UsuariosPage() {
           <tbody>
             {usuarios.map((u) => (
               <tr key={u.id}>
-                <td>{u.nome}</td>
+                <td>
+                  {u.nome} {u.inativo && <Badge tone="red">Inativo</Badge>}
+                </td>
                 <td>{u.emailLogin}</td>
                 <td>{PERFIL_LABEL[u.perfil]}</td>
                 <td>
-                  <Badge tone={u.mfaAtivo ? "green" : u.perfil === "ALUNO" ? "neutral" : "orange"}>
-                    {u.mfaAtivo ? "Ativo" : u.perfil === "ALUNO" ? "Inativo" : "Pendente"}
-                  </Badge>
+                  <Badge tone={u.mfaAtivo ? "green" : "neutral"}>{u.mfaAtivo ? "Ativado" : "Não ativado"}</Badge>
                 </td>
                 <td>{u.bloqueado ? <Badge tone="red">Bloqueado</Badge> : <Badge>Liberado</Badge>}</td>
                 <td className="table-actions">
@@ -101,7 +101,7 @@ export function UsuariosPage() {
       {resetando && (
         <ConfirmDialog
           title="Resetar autenticação em dois fatores"
-          message={`Resetar o 2FA de ${resetando.nome}? As sessões abertas dessa pessoa serão encerradas, os códigos de recuperação deixam de valer e a configuração será pedida de novo no próximo login.`}
+          message={`Resetar o 2FA de ${resetando.nome}? As sessões abertas dessa pessoa serão encerradas e os códigos de recuperação deixam de valer. Ela volta a entrar só com a senha e pode ativar o 2FA de novo em Minha conta.`}
           confirmLabel="Resetar"
           tone="danger"
           onConfirm={() => void resetar()}

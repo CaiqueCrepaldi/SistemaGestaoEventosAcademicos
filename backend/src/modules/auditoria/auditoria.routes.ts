@@ -5,7 +5,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { autenticar, autorizar } from "../../middleware/auth";
 import { AppError } from "../../errors/AppError";
 import { prisma } from "../../db/prisma";
-import { descriptografar } from "../../utils/criptografia";
+import { lerDadoPessoal } from "../../utils/dadosPessoais";
 
 export const auditoriaRouter = Router();
 
@@ -31,7 +31,7 @@ const consultaSchema = z
   });
 
 // lista paginada, mais recente primeiro, com filtros aplicados no banco — nunca exibe dado
-// sensivel, so o nome de quem agiu (decifrado) e o codigo/detalhe da acao.
+// sensivel, so o nome de quem agiu e o codigo/detalhe da acao.
 // So leitura: nenhuma rota, service ou script apaga ou edita logs (TiDB nao tem trigger pra proteger)
 auditoriaRouter.get(
   "/",
@@ -63,21 +63,22 @@ auditoriaRouter.get(
     ]);
 
     res.json({
-      itens: logs.map((log) => ({
-        id: log.id,
-        acao: log.acao,
-        detalhe: log.detalhe,
-        criadoEm: log.criadoEm.toISOString(),
-        usuarioId: log.usuarioId,
-        // usuario existente: nome atual; usuario excluido: cai na copia guardada no proprio log
-        atorNome: log.usuario
-          ? descriptografar(log.usuario.nome)
-          : log.atorNomeCifrado
-            ? descriptografar(log.atorNomeCifrado)
-            : null,
-        // tinha responsavel na epoca, mas a conta nao existe mais
-        atorRemovido: !log.usuario && Boolean(log.atorNomeCifrado),
-      })),
+      itens: logs.map((log) => {
+        // copia do nome guardada no proprio log: atorNome (texto) ou, em log ainda nao convertido,
+        // atorNomeCifrado (formato antigo)
+        const copiaDoNome = log.atorNome ?? (log.atorNomeCifrado ? lerDadoPessoal(log.atorNomeCifrado) : null);
+        return {
+          id: log.id,
+          acao: log.acao,
+          detalhe: log.detalhe,
+          criadoEm: log.criadoEm.toISOString(),
+          usuarioId: log.usuarioId,
+          // usuario existente: nome atual; usuario excluido: cai na copia guardada no proprio log
+          atorNome: log.usuario ? lerDadoPessoal(log.usuario.nome) : copiaDoNome,
+          // tinha responsavel na epoca, mas a conta nao existe mais
+          atorRemovido: !log.usuario && Boolean(copiaDoNome),
+        };
+      }),
       total,
       page,
       pageSize,
@@ -86,7 +87,7 @@ auditoriaRouter.get(
   }),
 );
 
-// quem ja aparece na trilha, pra montar o filtro por responsavel (nome fica cifrado no banco, entao decifra aqui)
+// quem ja aparece na trilha, pra montar o filtro por responsavel
 auditoriaRouter.get(
   "/responsaveis",
   asyncHandler(async (_req, res) => {
@@ -96,7 +97,7 @@ auditoriaRouter.get(
 
     res.json(
       usuarios
-        .map((u) => ({ id: u.id, nome: descriptografar(u.nome) }))
+        .map((u) => ({ id: u.id, nome: lerDadoPessoal(u.nome) }))
         .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
     );
   }),

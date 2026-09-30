@@ -13,8 +13,7 @@ export interface InscricaoDetalhada {
 }
 
 // todos os alunos cadastrados (participantes com conta ALUNO), ja em ordem alfabetica, com o
-// campo "ativo". nome/e-mail/rgm ficam cifrados no banco, entao quem filtra por texto eh a tela,
-// em cima dessa lista ja decifrada pelo backend
+// campo "ativo". quem filtra por texto eh a tela, em cima dessa lista
 function listarAlunos(): Promise<Participante[]> {
   return api.get<Participante[]>("/participantes/alunos");
 }

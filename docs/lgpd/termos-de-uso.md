@@ -1,6 +1,6 @@
 # Termos de Uso
 
-**Versão 2 — rascunho de 27/09/2026.** Substitui a Versão 1 (25/09/2026)
+**Versão 2 — rascunho de 27/09/2026, atualizado em 29/09/2026.** Substitui a Versão 1 (25/09/2026)
 quando a Fase 2 publicar este texto na página `/termos-de-uso` do sistema.
 
 ## 1. O que é o SGEA
@@ -30,8 +30,20 @@ responsabilidade.
   com terceiros.
 - Os dados informados no cadastro (nome, RGM, e-mail) precisam ser
   verdadeiros.
-- A secretaria pode anonimizar sua conta em caso de uso indevido, dado
-  incorreto ou a seu próprio pedido (ver seção 8).
+- A secretaria pode **inativar** sua conta em caso de uso indevido, dado
+  incorreto ou a seu pedido, sempre informando um motivo (que fica
+  visível só para a equipe). Enquanto a conta estiver inativa, você não
+  consegue entrar no sistema, se inscrever, fazer check-in nem responder
+  questionário; suas inscrições pendentes em eventos futuros são
+  canceladas, e os certificados que você já emitiu continuam válidos. A
+  secretaria pode reativar a conta depois, e aí tudo volta a funcionar.
+- Inativação é diferente de **conta sem uso**: uma conta que fica 24
+  meses sem login é anonimizada automaticamente (ver seção 8 e a Política
+  de Privacidade).
+- A autenticação em dois fatores é opcional para todos os perfis; você
+  pode ativar ou desativar na página "Minha conta".
+- A secretaria também pode anonimizar sua conta em caso de uso indevido,
+  dado incorreto ou a seu próprio pedido (ver seção 8).
 
 ## 4. Condutas proibidas
 
@@ -58,7 +70,14 @@ depois que você já tem direito ao certificado daquela palestra (presença
 confirmada e aproveitamento mínimo no questionário). O comentário que você
 escreve é seu, mas ao enviá-lo você autoriza o SGEA a exibi-lo para a
 equipe organizadora do evento avaliar — não é publicado para outros
-alunos nem usado para qualquer outra finalidade. Se sua conta for
+alunos nem usado para qualquer outra finalidade.
+
+Depois de enviado, o feedback **não pode ser editado** — nem por você, nem
+pela equipe. Você pode excluir o seu a qualquer momento (o sistema pede
+confirmação) e, se quiser, enviar um novo. A equipe organizadora só pode
+excluir um feedback informando um motivo (conteúdo ofensivo, dado pessoal
+exposto, fora do tema ou pedido do próprio aluno), e toda exclusão fica
+registrada na auditoria, indicando se foi você ou a equipe. Se sua conta for
 anonimizada, o texto do comentário é apagado; a nota numérica permanece,
 sem vínculo com você.
 
@@ -98,4 +117,4 @@ Defesa do Consumidor. Para saber como seus dados são tratados, veja a
 
 ---
 
-*Versão 2 — 27/09/2026 (rascunho, publicação prevista na Fase 2).*
+*Versão 2 — 27/09/2026, atualizado em 29/09/2026 (rascunho, publicação prevista na Fase 2).*

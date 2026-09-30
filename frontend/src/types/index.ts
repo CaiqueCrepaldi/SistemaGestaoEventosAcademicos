@@ -53,6 +53,8 @@ export interface Evento {
   // questionario obrigatorio definido pelo palestrante e cadastrado por admin/secretaria
   // sempre 10 perguntas, aluno precisa de 60% pra liberar o certificado
   questionario: PerguntaQuestionario[];
+  // quantas inscricoes o evento tem (so vem nas consultas; o aluno nao enxerga as inscricoes dos outros)
+  inscritos?: number;
 }
 
 // pessoa que participa de eventos, pode ou nao ter login

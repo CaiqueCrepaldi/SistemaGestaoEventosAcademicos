@@ -20,7 +20,8 @@ export const env = {
   jwtSecret: obrigatoria("JWT_SECRET"),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "8h",
 
-  // chave AES-256 em base64 (32 bytes decodificados) usada pra criptografar nome/e-mail/rgm em repouso
+  // chave AES-256 em base64 (32 bytes decodificados) usada pra cifrar o segredo do 2FA (e pra ler
+  // nome/e-mail/rgm ainda no formato antigo, ate a conversao dos dados). nunca trocar nem apagar
   encryptionKey: obrigatoria("ENCRYPTION_KEY"),
 
   sendgrid: {

@@ -47,13 +47,11 @@ export interface EventoAgenda {
   capacidade: number;
 }
 
-// todos os eventos com nome da sala e contagem de inscritos, pra tela de Agenda
+// todos os eventos com nome da sala e contagem de inscritos, pra tela de Agenda. A contagem vem
+// pronta da API (campo "inscritos"): o aluno so enxerga as proprias inscricoes, entao contar no
+// navegador mostraria pra ele so 0 ou 1
 async function agendaGeral(): Promise<EventoAgenda[]> {
-  const [eventos, salas, inscricoes] = await Promise.all([
-    eventoService.list(),
-    salaService.list(),
-    inscricaoService.list(),
-  ]);
+  const [eventos, salas] = await Promise.all([eventoService.list(), salaService.list()]);
 
   return eventos
     .map((evento) => {
@@ -65,7 +63,7 @@ async function agendaGeral(): Promise<EventoAgenda[]> {
         horario: evento.horario,
         salaId: evento.salaId,
         salaNome: sala?.nome ?? "—",
-        inscritos: inscricoes.filter((i) => i.eventoId === evento.id).length,
+        inscritos: evento.inscritos ?? 0,
         capacidade: sala?.capacidade ?? 0,
       };
     })

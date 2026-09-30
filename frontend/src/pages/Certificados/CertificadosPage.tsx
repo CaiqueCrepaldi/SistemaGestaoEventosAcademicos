@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Badge } from "../../components/ui/Badge";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { useAuth } from "../../context/AuthContext";
 import { certificadoService, eventoService, type CertificadoDisponivel } from "../../services";
@@ -117,7 +118,9 @@ export function CertificadosPage() {
           <tbody>
             {filtrados.map((c) => (
               <tr key={c.inscricaoId}>
-                <td>{c.participanteNome}</td>
+                <td>
+                  {c.participanteNome} {!c.participanteAtivo && <Badge tone="red">Inativo</Badge>}
+                </td>
                 <td>{c.participanteRgm}</td>
                 <td>{c.eventoTitulo}</td>
                 <td>{c.cargaHoraria}h</td>

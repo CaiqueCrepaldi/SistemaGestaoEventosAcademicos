@@ -7,7 +7,7 @@ export function PoliticaDePrivacidadePage() {
     <div className="login-screen">
       <div className="login-card legal-card">
         <h1>Política de Privacidade</h1>
-        <p className="legal-versao">Versão 1 — atualizada em 25/09/2026.</p>
+        <p className="legal-versao">Versão 1 — atualizada em 29/09/2026.</p>
 
         <h2>1. Quem trata os dados</h2>
         <p>
@@ -87,7 +87,7 @@ export function PoliticaDePrivacidadePage() {
           </li>
           <li>
             <strong>TiDB Cloud</strong> (banco de dados hospedado): armazena os dados descritos
-            acima, com nome/e-mail/RGM cifrados (ver seção 6).
+            acima (ver seção 6).
           </li>
         </ul>
         <p>Nenhum dado é vendido, usado para publicidade ou compartilhado com outras finalidades.</p>
@@ -100,8 +100,19 @@ export function PoliticaDePrivacidadePage() {
 
         <h2>6. Segurança</h2>
         <ul>
-          <li>Senhas são protegidas com hash forte e salt — nunca ficam gravadas em texto puro.</li>
-          <li>Nome, e-mail e RGM ficam cifrados no banco de dados, não em texto legível.</li>
+          <li>
+            Senhas são protegidas com hash forte e salt aleatório por senha (bcrypt) — nunca ficam
+            gravadas em texto puro.
+          </li>
+          <li>
+            Nome, e-mail e RGM são guardados sem criptografia e protegidos por controle de acesso
+            por perfil (cada perfil só vê o que precisa), conexão segura (HTTPS) e banco de dados
+            com acesso restrito, com as ações registradas em auditoria.
+          </li>
+          <li>
+            Autenticação em dois fatores por aplicativo autenticador, opcional para todos (página
+            "Minha conta").
+          </li>
           <li>
             Toda regra de acesso é verificada no servidor, não apenas escondendo botões na tela.
           </li>

@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Campo, LegendaObrigatorio, MarcaObrigatorio } from "../../components/ui/Campo";
 import { PasswordInput } from "../../components/ui/PasswordInput";
-import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
+import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
 import { ApiError } from "../../services/api";
 import { authService } from "../../services/authService";
 import { normalizarRgm, validarEmail, validarNome, validarRgm } from "../../utils/validacao";
@@ -11,24 +12,28 @@ const DOMINIO_INSTITUCIONAL = "@alunos.umc.br";
 
 const VAZIO = { nomeCompleto: "", rgm: "", emailInstitucional: "", senha: "" };
 
-// validacao no navegador, so pra feedback rapido - o backend valida tudo de novo
-function validarCliente(form: typeof VAZIO, confirmarSenha: string): Record<string, string> {
-  const erros: Record<string, string> = {};
+// validacao no navegador, so pra resposta rapida — o backend valida tudo de novo
+function validarCliente(form: typeof VAZIO, confirmarSenha: string, aceite: boolean): ErrosFormulario {
+  const erros: ErrosFormulario = {};
 
-  if (!validarNome(form.nomeCompleto)) {
-    erros.nomeCompleto = "Nome deve conter apenas letras.";
+  if (!form.nomeCompleto.trim()) erros.nomeCompleto = "Informe o nome completo.";
+  else if (!validarNome(form.nomeCompleto)) erros.nomeCompleto = "O nome deve conter apenas letras.";
+
+  if (!form.rgm) erros.rgm = "Informe o RGM.";
+  else if (!validarRgm(form.rgm)) erros.rgm = "O RGM deve ter exatamente 11 dígitos.";
+
+  if (!form.emailInstitucional.trim()) erros.emailInstitucional = "Informe o e-mail institucional.";
+  else if (!validarEmail(form.emailInstitucional) || !form.emailInstitucional.toLowerCase().endsWith(DOMINIO_INSTITUCIONAL)) {
+    erros.emailInstitucional = `Use o e-mail institucional (termina com ${DOMINIO_INSTITUCIONAL}).`;
   }
-  if (!validarEmail(form.emailInstitucional) || !form.emailInstitucional.toLowerCase().endsWith(DOMINIO_INSTITUCIONAL)) {
-    erros.emailInstitucional = `E-mail precisa ser institucional (termina com ${DOMINIO_INSTITUCIONAL})`;
-  }
-  if (!validarRgm(form.rgm)) {
-    erros.rgm = "RGM deve ter exatamente 11 dígitos, sem espaços.";
-  }
-  if (form.senha.length < 8) {
-    erros.senha = "Senha deve ter no mínimo 8 caracteres";
-  } else if (form.senha !== confirmarSenha) {
-    erros.confirmarSenha = "As senhas não coincidem";
-  }
+
+  if (!form.senha) erros.senha = "Crie uma senha.";
+  else if (form.senha.length < 8) erros.senha = "A senha deve ter no mínimo 8 caracteres.";
+
+  if (!confirmarSenha) erros.confirmarSenha = "Repita a senha.";
+  else if (form.senha && confirmarSenha !== form.senha) erros.confirmarSenha = "As senhas não coincidem.";
+
+  if (!aceite) erros.aceiteLgpd = "Para criar a conta, aceite os Termos de Uso.";
 
   return erros;
 }
@@ -39,45 +44,27 @@ export function CadastroPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState(VAZIO);
   const [confirmarSenha, setConfirmarSenha] = useState("");
-  const [errosCampo, setErrosCampo] = useState<Record<string, string>>({});
+  const [aceite, setAceite] = useState(false);
   const [erroGeral, setErroGeral] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
-  const [aceitoLgpd, setAceitoLgpd] = useState(false);
+  const { erros, formRef, mostrar, mostrarErroDaApi, limparAoEditar } = useErrosFormulario();
 
   // valida no cliente, manda pro backend e trata os erros possiveis
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setErroGeral(null);
-
-    const erros = validarCliente(form, confirmarSenha);
-    setErrosCampo(erros);
-    if (Object.keys(erros).length > 0) {
-      toast.error("Corrija os campos destacados antes de continuar.");
-      return;
-    }
-    if (!aceitoLgpd) {
-      toast.error("É necessário aceitar os termos de uso e a política de privacidade.");
-      return;
-    }
+    if (mostrar(validarCliente(form, confirmarSenha, aceite))) return;
 
     setCarregando(true);
     try {
-      await authService.cadastrarAluno({ ...form, aceiteLgpd: aceitoLgpd });
+      await authService.cadastrarAluno({ ...form, aceiteLgpd: aceite });
       await login(form.emailInstitucional, form.senha);
       navigate("/eventos");
     } catch (erro) {
-      // 409 = rgm/email duplicado, 422 = erro de campo vindo do backend
-      if (erro instanceof ApiError && erro.status === 409) {
-        setErroGeral("RGM ou e-mail já cadastrado");
-      } else if (erro instanceof ApiError && erro.status === 422 && erro.errors) {
-        const campos: Record<string, string> = {};
-        erro.errors.forEach((item) => {
-          campos[item.campo] = item.mensagem;
-        });
-        setErrosCampo(campos);
-      } else {
-        setErroGeral(erro instanceof Error ? erro.message : "Erro ao criar conta");
-      }
+      // 409 = rgm/email duplicado (vai no campo certo); 422 = erro de campo vindo do backend
+      if (erro instanceof ApiError && erro.code === "EMAIL_DUPLICADO") mostrar({ emailInstitucional: erro.message });
+      else if (erro instanceof ApiError && erro.code === "RGM_DUPLICADO") mostrar({ rgm: erro.message });
+      else if (!mostrarErroDaApi(erro)) setErroGeral(erro instanceof Error ? erro.message : "Erro ao criar conta.");
     } finally {
       setCarregando(false);
     }
@@ -90,69 +77,62 @@ export function CadastroPage() {
           <p>Criar conta de usuário</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="form">
-          <label className="field">
-            <span>Nome completo</span>
+        <form onSubmit={handleSubmit} onChange={limparAoEditar} className="form" ref={formRef} noValidate>
+          <LegendaObrigatorio />
+          <Campo nome="nomeCompleto" rotulo="Nome completo" obrigatorio erro={erros.nomeCompleto}>
+            <input value={form.nomeCompleto} onChange={(e) => setForm({ ...form, nomeCompleto: e.target.value })} autoComplete="name" autoFocus />
+          </Campo>
+
+          <Campo nome="rgm" rotulo="RGM" obrigatorio erro={erros.rgm} dica="11 dígitos, só números.">
             <input
-              value={form.nomeCompleto}
-              onChange={(e) => setForm({ ...form, nomeCompleto: e.target.value })}
-              required
-              autoFocus
+              value={form.rgm}
+              onChange={(e) => setForm({ ...form, rgm: normalizarRgm(e.target.value) })}
+              inputMode="numeric"
+              maxLength={11}
             />
-          </label>
+          </Campo>
 
-          <div className="field">
-            <label className="field">
-              <span>RGM</span>
+          <Campo nome="emailInstitucional" rotulo="E-mail institucional" obrigatorio erro={erros.emailInstitucional}>
+            <input
+              type="email"
+              value={form.emailInstitucional}
+              onChange={(e) => setForm({ ...form, emailInstitucional: e.target.value })}
+              placeholder={`rgm${DOMINIO_INSTITUCIONAL}`}
+              autoComplete="email"
+            />
+          </Campo>
+
+          <Campo nome="senha" rotulo="Senha" obrigatorio erro={erros.senha} dica="Mínimo de 8 caracteres.">
+            <PasswordInput value={form.senha} onChange={(senha) => setForm({ ...form, senha })} autoComplete="new-password" />
+          </Campo>
+
+          <Campo nome="confirmarSenha" rotulo="Confirmar senha" obrigatorio erro={erros.confirmarSenha}>
+            <PasswordInput value={confirmarSenha} onChange={setConfirmarSenha} autoComplete="new-password" />
+          </Campo>
+
+          <div className={"campo-checkbox" + (erros.aceiteLgpd ? " field-invalido" : "")}>
+            <label className="lgpd-consent">
               <input
-                value={form.rgm}
-                onChange={(e) => setForm({ ...form, rgm: normalizarRgm(e.target.value) })}
-                placeholder="11 dígitos numéricos e sem espaço"
-                inputMode="numeric"
-                maxLength={11}
-                required
+                type="checkbox"
+                name="aceiteLgpd"
+                checked={aceite}
+                onChange={(e) => setAceite(e.target.checked)}
+                aria-invalid={erros.aceiteLgpd ? true : undefined}
+                aria-required
+                aria-describedby={erros.aceiteLgpd ? "aceiteLgpd-mensagem" : undefined}
               />
+              <span>
+                Li e aceito os <Link to="/termos-de-uso" target="_blank" rel="noopener noreferrer">Termos de Uso</Link> e estou
+                ciente da <Link to="/politica-de-privacidade" target="_blank" rel="noopener noreferrer">Política de Privacidade</Link>.
+                <MarcaObrigatorio />
+              </span>
             </label>
-            {errosCampo.rgm && <p className="form-error">{errosCampo.rgm}</p>}
+            {erros.aceiteLgpd && (
+              <p className="form-error" id="aceiteLgpd-mensagem">
+                {erros.aceiteLgpd}
+              </p>
+            )}
           </div>
-
-          <div className="field">
-            <label className="field">
-              <span>E-mail institucional</span>
-              <input
-                type="email"
-                value={form.emailInstitucional}
-                onChange={(e) => setForm({ ...form, emailInstitucional: e.target.value })}
-                placeholder={`rgm${DOMINIO_INSTITUCIONAL}`}
-                required
-              />
-            </label>
-            {errosCampo.emailInstitucional && <p className="form-error">{errosCampo.emailInstitucional}</p>}
-          </div>
-
-          <div className="field">
-            <label className="field">
-              <span>Senha</span>
-              <PasswordInput value={form.senha} onChange={(senha) => setForm({ ...form, senha })} required />
-            </label>
-            {errosCampo.senha && <p className="form-error">{errosCampo.senha}</p>}
-          </div>
-
-          <div className="field">
-            <label className="field">
-              <span>Confirmar senha</span>
-              <PasswordInput value={confirmarSenha} onChange={setConfirmarSenha} required />
-            </label>
-            {errosCampo.confirmarSenha && <p className="form-error">{errosCampo.confirmarSenha}</p>}
-          </div>
-
-          <label className="lgpd-consent">
-            <input type="checkbox" checked={aceitoLgpd} onChange={(e) => setAceitoLgpd(e.target.checked)} required />
-            <span>
-              Li e aceito os <Link to="/termos-de-uso" target="_blank" rel="noopener noreferrer">termos de uso</Link> e a{" "}
-              <Link to="/politica-de-privacidade" target="_blank" rel="noopener noreferrer">política de privacidade</Link> (LGPD).
-            </span>
-          </label>
 
           {erroGeral && <p className="form-error">{erroGeral}</p>}
 

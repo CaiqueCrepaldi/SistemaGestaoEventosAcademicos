@@ -32,7 +32,7 @@ export function CheckinPage() {
   const [selecionado, setSelecionado] = useState<Participante | null>(null);
   const [inscricoes, setInscricoes] = useState<InscricaoDetalhada[]>([]);
 
-  // carrega a lista completa uma vez (o backend ja devolve decifrada e em ordem alfabetica)
+  // carrega a lista completa uma vez (o backend ja devolve em ordem alfabetica)
   useEffect(() => {
     let descartar = false;
     setCarregando(true);

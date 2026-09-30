@@ -24,8 +24,10 @@ enum StatusPresenca {
   AUSENTE
 }
 
-// nome/emailLogin/rgm ficam cifrados (AES-256-GCM, ver backend/src/utils/criptografia.ts);
-// emailLoginHash eh o indice deterministico usado pra login/duplicidade, nunca exibido
+// nome/emailLogin/rgm em texto puro (dados pessoais comuns, art. 5º, I da LGPD — protegidos por
+// controle de acesso por perfil, HTTPS, banco com acesso restrito e auditoria). Registros antigos
+// ainda podem estar no formato cifrado ate rodar scripts/converter-dados-pessoais.ts.
+// emailLoginHash eh o indice usado pra login/duplicidade enquanto a conversao nao termina
 model Usuario {
   id             String   @id
   nome           String   @db.Text
@@ -67,8 +69,8 @@ model Usuario {
   @@map("usuarios")
 }
 
-// nome/email/rgm ficam cifrados; emailHash/rgmHash sao os indices deterministicos
-// usados pra checagem de duplicidade, nunca exibidos
+// nome/email/rgm em texto puro (mesma decisao do Usuario); emailHash/rgmHash sao os indices usados
+// pra checagem de duplicidade enquanto a conversao dos registros antigos nao termina
 model Participante {
   id        String   @id
   nome      String   @db.Text
@@ -77,7 +79,8 @@ model Participante {
   rgm       String   @db.Text
   rgmHash   String   @unique
   ativo     Boolean  @default(true)
-  motivoInativacao String?
+  // 500 e o tamanho real da coluna desde a migration que criou o campo (o schema dizia 191 por engano)
+  motivoInativacao String? @db.VarChar(500)
   criadoEm  DateTime @default(now())
 
   usuarios   Usuario[]
@@ -154,7 +157,7 @@ model Feedback {
   participanteId String
   participante   Participante @relation(fields: [participanteId], references: [id], onDelete: Restrict)
   nota           Int
-  comentario     String
+  comentario     String       @db.Text
   criadoEm       DateTime     @default(now())
 
   @@unique([participanteId, eventoId])
@@ -195,12 +198,14 @@ model TentativaQuestionario {
 // trilha de auditoria (login, mudanca em registro critico) — exigencia de LGPD/seguranca.
 // "acao" eh um codigo curto (LOGIN_SUCESSO, PARTICIPANTE_INATIVADO etc.), "detalhe" nunca
 // guarda dado sensivel (senha, token, PII bruta) — so contexto operacional.
-// o log NUNCA eh apagado nem editado: excluir o usuario so zera usuarioId (SetNull), e
-// atorNomeCifrado (copia do nome cifrado de quem agiu, tirada na hora do log) mantem quem foi
+// o log nao e apagado nem editado: excluir o usuario so zera usuarioId (SetNull), e atorNome
+// (copia do nome de quem agiu, tirada na hora do log) mantem quem foi. atorNomeCifrado e a mesma
+// copia no formato antigo (cifrado): o script de conversao move pra atorNome e a coluna sai depois
 model LogAuditoria {
   id        String   @id
   usuarioId String?
   usuario   Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  atorNome        String? @db.Text
   atorNomeCifrado String? @db.Text
   acao      String
   detalhe   String?  @db.Text

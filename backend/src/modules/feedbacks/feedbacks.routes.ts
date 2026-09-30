@@ -5,7 +5,7 @@ import { validarCorpo } from "../../middleware/validate";
 import { AppError } from "../../errors/AppError";
 import { feedbackParaDTO } from "../../utils/dto";
 import { feedbacksService } from "./feedbacks.service";
-import { feedbackSchema, feedbackUpdateSchema } from "./feedbacks.schemas";
+import { exclusaoPelaEquipeSchema, feedbackSchema } from "./feedbacks.schemas";
 
 export const feedbacksRouter = Router();
 
@@ -58,27 +58,20 @@ feedbacksRouter.get(
   }),
 );
 
-// cria um feedback novo, aluno so em nome dele mesmo
+// so o ALUNO envia feedback, sempre em nome dele mesmo (participanteId do token, nunca do corpo)
+// e so de palestra em que recebeu o certificado. A equipe nao escreve feedback em nome de aluno
 feedbacksRouter.post(
   "/",
   autenticar,
+  autorizar("ALUNO"),
   validarCorpo(feedbackSchema),
   asyncHandler(async (req, res) => {
-    // aluno so cria feedback em nome dele mesmo, participanteId do corpo eh ignorado nesse caso
-    const participanteId = ehEquipe(req.usuario!.perfil)
-      ? req.body.participanteId
-      : req.usuario!.participanteId;
-
+    const participanteId = req.usuario!.participanteId;
     if (!participanteId) {
-      throw AppError.validacao("Dados inválidos.", [
-        { campo: "participanteId", mensagem: "participanteId é obrigatório." },
-      ]);
+      throw AppError.acessoNegado("Esta conta não está vinculada a um participante.");
     }
-
     // 403 se nao tem certificado nesse evento; se ja avaliou, o criar() abaixo responde 409
-    if (!ehEquipe(req.usuario!.perfil)) {
-      await feedbacksService.validarDireitoAoCertificado(req.body.eventoId, participanteId);
-    }
+    await feedbacksService.validarDireitoAoCertificado(req.body.eventoId, participanteId);
 
     const feedback = await feedbacksService.criar(
       req.body.eventoId,
@@ -91,31 +84,34 @@ feedbacksRouter.post(
   }),
 );
 
-// edita um feedback, bloqueia se nao for da equipe nem dono
+// feedback nao e editado por ninguem depois de enviado: o aluno corrige excluindo e enviando outro;
+// a equipe nao altera o conteudo do que o aluno escreveu, so pode excluir (com motivo)
 feedbacksRouter.put(
   "/:id",
   autenticar,
-  validarCorpo(feedbackUpdateSchema),
-  asyncHandler(async (req, res) => {
-    const feedback = await feedbacksService.buscarOuFalhar(req.params.id);
-    if (!ehEquipe(req.usuario!.perfil) && feedback.participanteId !== req.usuario!.participanteId) {
-      throw AppError.acessoNegado();
-    }
-    const atualizado = await feedbacksService.atualizar(req.params.id, req.body, req.usuario!.sub);
-    res.json(feedbackParaDTO(atualizado));
+  asyncHandler(async (req) => {
+    throw AppError.acessoNegado(
+      ehEquipe(req.usuario!.perfil)
+        ? "A equipe não edita feedback de aluno — só pode excluí-lo, informando o motivo."
+        : "O feedback não pode ser editado depois de enviado. Exclua e envie um novo.",
+    );
   }),
 );
 
-// remove feedback somente pela equipe
+// aluno exclui o proprio (sem motivo); equipe exclui qualquer um, com motivo obrigatorio
 feedbacksRouter.delete(
   "/:id",
   autenticar,
+  asyncHandler(async (req, res, next) => {
+    if (ehEquipe(req.usuario!.perfil)) return next();
+    const participanteId = req.usuario!.participanteId;
+    if (!participanteId) throw AppError.acessoNegado("Esta conta não está vinculada a um participante.");
+    await feedbacksService.excluirPeloAluno(req.params.id, participanteId, req.usuario!.sub);
+    res.status(204).send();
+  }),
+  validarCorpo(exclusaoPelaEquipeSchema),
   asyncHandler(async (req, res) => {
-    if (!ehEquipe(req.usuario!.perfil)) {
-      throw AppError.acessoNegado("Somente administrador ou secretaria podem excluir feedbacks.");
-    }
-
-    await feedbacksService.remover(req.params.id, req.usuario!.sub);
+    await feedbacksService.excluirPelaEquipe(req.params.id, req.body.motivo, req.usuario!.sub);
     res.status(204).send();
   }),
 );

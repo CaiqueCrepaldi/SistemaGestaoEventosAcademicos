@@ -1,7 +1,8 @@
 # Diagnóstico LGPD — SGEA (Fase 0)
 
-**Data:** 27/09/2026 · **Versão:** 2 (revisado contra o texto integral do
-guia e com as decisões da Fase 0 já registradas)
+**Data:** 27/09/2026 · **Versão:** 3 (revisado contra o texto integral do
+guia e com as decisões da Fase 0 já registradas; seção "Atualização de
+29/09/2026" no fim, com as mudanças pedidas pelo orientador)
 
 Comparação item a item entre o guia do professor Alessandro Aparecido da
 Silva (seções 1 a 7) e o estado real do código, do schema do banco, das
@@ -341,6 +342,29 @@ corrigido nas Fases 1 e 2.
   alunos de graduação e não coleta dado adicional de menor de idade.
 
 ---
+
+## Atualização de 29/09/2026 (melhorias pedidas pelo orientador)
+
+O diagnóstico acima é o retrato de 27/09/2026 e fica como estava, para
+registro. Estes itens substituem o que está escrito nas linhas indicadas:
+
+| Item do diagnóstico | Como era | Como ficou |
+|---|---|---|
+| 4.2 Hash forte + salt | bcrypt custo 10 | bcrypt custo **12**, com salt aleatório de 16 bytes gerado para cada senha e guardado dentro do próprio hash (`$2a$12$<salt de 22 caracteres><hash de 31 caracteres>`). Hash antigo (custo 10) é refeito com custo 12 no próximo login, sem o usuário perceber (`SENHA_HASH_ATUALIZADO` na auditoria) |
+| 4.2 Limitar tentativas / invalidar sessões | Não atendia | Atende desde a Fase 2 (limite por conta e por IP; `versaoToken` derruba sessões na troca de senha, na inativação e na exclusão) |
+| 4.2 Multifator | Não existia | Autenticação em dois fatores por aplicativo autenticador, **opcional para todos os perfis** (não é obrigatória para administrador nem secretaria) |
+| 4.4 Criptografar dado sensível | Nome, e-mail e RGM de `Usuario`/`Participante` cifrados (AES-256-GCM + índice HMAC) | Nome, e-mail e RGM são **dados pessoais comuns** (não sensíveis, art. 5º, II) e passam a ser guardados **sem criptografia**, inclusive o nome do responsável nos logs (`logs_auditoria.atorNome`). A proteção deles é controle de acesso por perfil, HTTPS, banco com acesso restrito (TLS, credencial fora do código) e auditoria. Continuam protegidos pela aplicação: senha (hash bcrypt), códigos de recuperação de senha e do 2FA (hash) e segredo do 2FA (cifrado com `ENCRYPTION_KEY`) |
+| 4.7 / etapa 3 dos incidentes | Identificar titulares dependia de `descriptografar()` | Consulta direta às colunas (ver `05-plano-de-resposta-a-incidentes.md`) |
+| Serviços externos — TiDB Cloud | "cifrados os campos sensíveis" | Nome, e-mail e RGM em texto; senha, códigos e segredo do 2FA protegidos (ver `06-fornecedores-e-apis-externas.md`) |
+| 1. Prazos — "conta sem login há 24 meses" | Chamado às vezes de "inativa" | Chamado sempre de **conta sem uso**. "Inativo/inativado" passa a significar só a ação da equipe (com motivo, reversível, bloqueia login/inscrição/check-in/questionário e cancela as inscrições pendentes em eventos futuros) — ver `04-plano-de-retencao-e-descarte.md` |
+| 4.3 Feedbacks | Aluno criava/editava/lia o próprio | Ninguém edita feedback depois de enviado. O aluno exclui o próprio (e pode mandar outro); a equipe só exclui, com motivo de uma lista fechada. `FEEDBACK_EXCLUIDO` na auditoria indica se foi o aluno ou a equipe (ver `03-matriz-perfis-e-permissoes.md`) |
+
+A conversão dos registros antigos (cifrados) para texto é feita pelo
+script `backend/scripts/converter-dados-pessoais.ts` (idempotente, com
+modo de simulação), rodado primeiro no banco de desenvolvimento e depois
+em produção, após exportação das tabelas `usuarios`, `participantes` e
+`logs_auditoria`. Evidências em `10-evidencias-de-implementacao-e-testes.md`
+e `docs/verificacao-de-requisitos.md`.
 
 ## Próximos passos
 

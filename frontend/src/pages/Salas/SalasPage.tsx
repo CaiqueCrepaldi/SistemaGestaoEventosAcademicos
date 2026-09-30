@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
+import { Campo, LegendaObrigatorio } from "../../components/ui/Campo";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { toast } from "../../components/ui/Toast";
+import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
 import { eventoService, salaService } from "../../services";
 import type { Sala } from "../../types";
 
-const VAZIO: Omit<Sala, "id"> = { nome: "", capacidade: 0 };
+// capacidade fica como texto no formulario pra campo vazio nao virar 0 sozinho
+const VAZIO = { nome: "", capacidade: "" };
 
 // crud de salas
 export function SalasPage() {
@@ -16,6 +19,7 @@ export function SalasPage() {
   const [form, setForm] = useState(VAZIO);
   const [confirmandoSalvar, setConfirmandoSalvar] = useState(false);
   const [excluindo, setExcluindo] = useState<Sala | null>(null);
+  const { erros, formRef, mostrar, mostrarErroDaApi, limpar, limparAoEditar } = useErrosFormulario();
 
   useEffect(() => {
     void carregar();
@@ -30,41 +34,52 @@ export function SalasPage() {
   function abrirNovo() {
     setEditando(null);
     setForm(VAZIO);
+    limpar();
     setModalAberto(true);
   }
 
   // abre o modal ja preenchido com os dados da sala clicada
   function abrirEdicao(sala: Sala) {
     setEditando(sala);
-    setForm({ nome: sala.nome, capacidade: sala.capacidade });
+    setForm({ nome: sala.nome, capacidade: String(sala.capacidade) });
+    limpar();
     setModalAberto(true);
+  }
+
+  function validar(): ErrosFormulario {
+    const faltando: ErrosFormulario = {};
+    if (!form.nome.trim()) faltando.nome = "Informe o nome da sala.";
+    const capacidade = Number(form.capacidade);
+    if (!form.capacidade.trim()) faltando.capacidade = "Informe a capacidade.";
+    else if (!Number.isInteger(capacidade) || capacidade <= 0) faltando.capacidade = "A capacidade deve ser um número inteiro maior que zero.";
+    return faltando;
   }
 
   // editar pede confirmacao antes de gravar, criar nao
   function pedirSalvar() {
-    if (!form.nome.trim() || !form.capacidade) {
-      toast.error("Preencha nome e capacidade — todos os campos são obrigatórios.");
-      return;
-    }
-    if (editando) {
-      setConfirmandoSalvar(true);
-    } else {
-      void salvar();
-    }
+    if (mostrar(validar())) return;
+    if (editando) setConfirmandoSalvar(true);
+    else void salvar();
   }
 
   // cria ou atualiza dependendo se ta editando
   async function salvar() {
-    if (editando) {
-      await salaService.update(editando.id, form);
-      toast.success("Sala atualizada.");
-    } else {
-      await salaService.create(form);
-      toast.success("Sala cadastrada.");
+    const dados = { nome: form.nome.trim(), capacidade: Number(form.capacidade) };
+    try {
+      if (editando) {
+        await salaService.update(editando.id, dados);
+        toast.success("Sala atualizada.");
+      } else {
+        await salaService.create(dados);
+        toast.success("Sala cadastrada.");
+      }
+      setConfirmandoSalvar(false);
+      setModalAberto(false);
+      await carregar();
+    } catch (erro) {
+      setConfirmandoSalvar(false);
+      if (!mostrarErroDaApi(erro)) toast.error(erro instanceof Error ? erro.message : "Não foi possível salvar a sala.");
     }
-    setConfirmandoSalvar(false);
-    setModalAberto(false);
-    await carregar();
   }
 
   // bloqueia exclusao se tiver evento vinculado, senao remove
@@ -133,25 +148,27 @@ export function SalasPage() {
         <Modal title={editando ? "Editar sala" : "Nova sala"} onClose={() => setModalAberto(false)}>
           <form
             className="form"
+            ref={formRef}
+            noValidate
+            onChange={limparAoEditar}
             onSubmit={(e) => {
               e.preventDefault();
               pedirSalvar();
             }}
           >
-            <label className="field">
-              <span>Nome</span>
-              <input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} required />
-            </label>
-            <label className="field">
-              <span>Capacidade</span>
+            <LegendaObrigatorio />
+            <Campo nome="nome" rotulo="Nome" obrigatorio erro={erros.nome}>
+              <input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} autoFocus />
+            </Campo>
+            <Campo nome="capacidade" rotulo="Capacidade (lugares)" obrigatorio erro={erros.capacidade}>
               <input
                 type="number"
                 min={1}
+                step={1}
                 value={form.capacidade}
-                onChange={(e) => setForm({ ...form, capacidade: Number(e.target.value) })}
-                required
+                onChange={(e) => setForm({ ...form, capacidade: e.target.value })}
               />
-            </label>
+            </Campo>
             <div className="modal-footer">
               <button type="button" className="btn btn-ghost" onClick={() => setModalAberto(false)}>
                 Cancelar

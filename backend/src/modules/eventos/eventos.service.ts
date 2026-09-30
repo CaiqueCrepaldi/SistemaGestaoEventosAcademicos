@@ -7,8 +7,10 @@ import { camposInformados, registrarAuditoria } from "../../utils/auditoria";
 import type { Evento, PerguntaQuestionario } from "../../types/domain";
 import type { EventoInput, EventoUpdateInput } from "./eventos.schemas";
 
-// prisma devolve horario/criadoEm como Date e questionario como Json — converte pro formato que o resto do app espera
-function paraDominio(evento: EventoDb): Evento {
+// prisma devolve horario/criadoEm como Date e questionario como Json — converte pro formato que o resto do app espera.
+// "inscritos" e so a contagem (numero agregado, nao identifica ninguem): a Agenda do aluno precisa
+// dela e ele nao enxerga as inscricoes dos outros pra contar sozinho
+function paraDominio(evento: EventoDb & { _count?: { inscricoes: number } }): Evento {
   return {
     id: evento.id,
     titulo: evento.titulo,
@@ -18,19 +20,22 @@ function paraDominio(evento: EventoDb): Evento {
     tema: evento.tema,
     cargaHoraria: evento.cargaHoraria,
     questionario: evento.questionario as unknown as PerguntaQuestionario[],
+    inscritos: evento._count?.inscricoes,
     criadoEm: evento.criadoEm.toISOString(),
   };
 }
 
+const COM_CONTAGEM = { _count: { select: { inscricoes: true } } } as const;
+
 // lista todos os eventos ordenados por horario
 async function listar() {
-  const eventos = await prisma.evento.findMany({ orderBy: { horario: "asc" } });
+  const eventos = await prisma.evento.findMany({ orderBy: { horario: "asc" }, include: COM_CONTAGEM });
   return eventos.map(paraDominio);
 }
 
 // busca um evento pelo id, 404 se nao existir
 async function buscarOuFalhar(id: string) {
-  const evento = await prisma.evento.findUnique({ where: { id } });
+  const evento = await prisma.evento.findUnique({ where: { id }, include: COM_CONTAGEM });
   if (!evento) throw AppError.naoEncontrado("EVENTO_NAO_ENCONTRADO", "Evento não encontrado.");
   return paraDominio(evento);
 }
@@ -107,10 +112,14 @@ async function remover(id: string, atorId: string) {
   );
 }
 
-// autoinscricao do aluno logado: checa duplicidade e vaga antes de criar
+// autoinscricao do aluno logado: checa conta ativa, duplicidade e vaga antes de criar
 async function autoinscrever(eventoId: string, participanteId: string, atorId: string) {
   const evento = await prisma.evento.findUnique({ where: { id: eventoId }, include: { sala: true } });
   if (!evento) throw AppError.naoEncontrado("EVENTO_NAO_ENCONTRADO", "Evento não encontrado.");
+
+  // o aluno inativado ja nao tem sessao (a inativacao derruba as sessoes), isto e so a segunda barreira
+  const participante = await prisma.participante.findUnique({ where: { id: participanteId }, select: { ativo: true } });
+  if (!participante?.ativo) throw AppError.contaInativa();
 
   const jaInscrito = await prisma.inscricao.findUnique({
     where: { participanteId_eventoId: { participanteId, eventoId } },

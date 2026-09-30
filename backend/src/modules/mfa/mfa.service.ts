@@ -4,11 +4,11 @@ import QRCode from "qrcode";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { criptografar, descriptografar, indiceBusca } from "../../utils/criptografia";
+import { lerDadoPessoal } from "../../utils/dadosPessoais";
 import { conferirSenha } from "../../utils/password";
 import { registrarAuditoria } from "../../utils/auditoria";
 import { chaveConta, estaBloqueado, incrementarTentativa, limparTentativas } from "../../utils/limiteAcesso";
 import { emitirSessao } from "../auth/auth.service";
-import type { Perfil } from "../../types/domain";
 import type { DesativarMfaInput, VerificarMfaInput } from "./mfa.schemas";
 
 const EMISSOR = "SGEA";
@@ -128,7 +128,7 @@ async function iniciarConfiguracao(usuarioId: string) {
 
   const uri = generateURI({
     issuer: EMISSOR,
-    label: descriptografar(usuario.emailLogin),
+    label: lerDadoPessoal(usuario.emailLogin),
     secret: segredo,
     digits: DIGITOS,
     period: PERIODO_S,
@@ -139,9 +139,8 @@ async function iniciarConfiguracao(usuarioId: string) {
 }
 
 // confirma a configuracao com um codigo valido: so aqui o 2FA passa a valer. Gera os 8 codigos de
-// recuperacao (devolvidos uma unica vez, so o hash fica gravado). Se a chamada veio do login da
-// equipe (token de configuracao), ja devolve a sessao junto
-async function confirmarConfiguracao(usuarioId: string, codigo: string, viaEtapaLogin: boolean) {
+// recuperacao (devolvidos uma unica vez, so o hash fica gravado)
+async function confirmarConfiguracao(usuarioId: string, codigo: string) {
   await garantirNaoBloqueado(usuarioId, "configuração");
 
   const usuario = await prisma.usuario.findUnique({ where: { id: usuarioId } });
@@ -157,7 +156,7 @@ async function confirmarConfiguracao(usuarioId: string, codigo: string, viaEtapa
   await limparTentativas(chaveMfa(usuarioId));
 
   const codigosRecuperacao = Array.from({ length: QTD_CODIGOS_RECUPERACAO }, gerarCodigoRecuperacao);
-  const [, , atualizado] = await prisma.$transaction([
+  await prisma.$transaction([
     prisma.codigoRecuperacaoMfa.deleteMany({ where: { usuarioId } }),
     prisma.codigoRecuperacaoMfa.createMany({
       data: codigosRecuperacao.map((c) => ({ id: randomUUID(), usuarioId, codigoHash: hashCodigoRecuperacao(c) })),
@@ -170,10 +169,7 @@ async function confirmarConfiguracao(usuarioId: string, codigo: string, viaEtapa
     `aplicativo autenticador configurado; ${QTD_CODIGOS_RECUPERACAO} códigos de recuperação gerados`,
   );
 
-  if (!viaEtapaLogin) return { codigosRecuperacao };
-
-  await registrarAuditoria(usuarioId, "LOGIN_SUCESSO", "login concluído na configuração obrigatória do 2FA");
-  return { codigosRecuperacao, sessao: emitirSessao(atualizado) };
+  return { codigosRecuperacao };
 }
 
 // segunda etapa do login: codigo do aplicativo ou codigo de recuperacao (cada um vale uma vez)
@@ -214,12 +210,9 @@ async function verificarLogin(usuarioId: string, dados: VerificarMfaInput) {
   return { ...emitirSessao(usuario), codigosRecuperacaoRestantes };
 }
 
-// so ALUNO desativa (pra equipe e obrigatorio). Exige senha + codigo atual e encerra as outras
-// sessoes (versaoToken); a sessao de quem desativou e reemitida na resposta
-async function desativar(usuarioId: string, perfil: Perfil, dados: DesativarMfaInput) {
-  if (perfil !== "ALUNO") {
-    throw AppError.acessoNegado("A autenticação em dois fatores é obrigatória para o seu perfil e não pode ser desativada.");
-  }
+// o 2FA e opcional pra qualquer perfil: quem ativou pode desativar. Exige senha + codigo atual e
+// encerra as outras sessoes (versaoToken); a sessao de quem desativou e reemitida na resposta
+async function desativar(usuarioId: string, dados: DesativarMfaInput) {
   await garantirNaoBloqueado(usuarioId, "desativação");
 
   const usuario = await prisma.usuario.findUnique({ where: { id: usuarioId } });
@@ -244,9 +237,9 @@ async function desativar(usuarioId: string, perfil: Perfil, dados: DesativarMfaI
   return emitirSessao(atualizado);
 }
 
-// zera o 2FA de outro usuario (perdeu o celular): encerra as sessoes dele e, no proximo login, a
-// equipe e levada de novo a configuracao (aluno volta a ter o 2FA opcional). atorId null = script
-// de emergencia pela linha de comando, sem usuario do sistema por tras
+// zera o 2FA de outro usuario (perdeu o celular): encerra as sessoes dele, que volta a entrar so
+// com a senha e pode ativar o 2FA de novo em "Minha conta". atorId null = script de emergencia
+// pela linha de comando, sem usuario do sistema por tras
 async function resetar(alvoId: string, atorId: string | null, origem: string) {
   const usuario = await prisma.usuario.findUnique({ where: { id: alvoId }, select: { id: true } });
   if (!usuario) throw AppError.naoEncontrado("USUARIO_NAO_ENCONTRADO", "Usuário não encontrado.");

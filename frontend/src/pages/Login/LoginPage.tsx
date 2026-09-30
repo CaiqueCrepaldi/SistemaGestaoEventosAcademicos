@@ -1,46 +1,49 @@
 import { useState, type FormEvent } from "react";
 import { Link, Navigate } from "react-router-dom";
-import { ConfiguracaoMfa } from "../../components/mfa/ConfiguracaoMfa";
 import { VerificacaoMfa } from "../../components/mfa/VerificacaoMfa";
+import { Campo, LegendaObrigatorio } from "../../components/ui/Campo";
 import { PasswordInput } from "../../components/ui/PasswordInput";
 import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
+import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
 import type { SessaoUsuario } from "../../services/authService";
 
-type Etapa =
-  | { tipo: "credenciais" }
-  | { tipo: "mfa_pendente"; tokenEtapa: string }
-  | { tipo: "mfa_configuracao"; tokenEtapa: string };
+const MENSAGEM_ETAPA_EXPIRADA = "O tempo para informar o código acabou. Entre novamente.";
 
-const MENSAGEM_ETAPA_EXPIRADA = "O tempo para concluir a verificação acabou. Entre novamente.";
-
-// tela de login em ate duas etapas: e-mail/senha e, se preciso, o 2FA (codigo ou configuracao
-// obrigatoria da equipe). Redireciona quando a sessao abre
+// tela de login em ate duas etapas: e-mail/senha e, se a pessoa ativou o 2FA, o codigo do
+// aplicativo. Redireciona quando a sessao abre
 export function LoginPage() {
   const { usuario, login, definirSessao, carregando, erro } = useAuth();
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
-  const [etapa, setEtapa] = useState<Etapa>({ tipo: "credenciais" });
+  const [tokenEtapa, setTokenEtapa] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const { erros, formRef, mostrar, mostrarErroDaApi, limparAoEditar } = useErrosFormulario();
 
   if (usuario) return <Navigate to="/" replace />;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setAviso(null);
+    const faltando: ErrosFormulario = {};
+    if (!email.trim()) faltando.emailLogin = "Informe o e-mail.";
+    if (!senha) faltando.senha = "Informe a senha.";
+    if (mostrar(faltando)) return;
+
     try {
       const resultado = await login(email, senha);
-      if (resultado.tipo !== "sessao") {
+      if (resultado.tipo === "mfa_pendente") {
         setSenha("");
-        setEtapa({ tipo: resultado.tipo, tokenEtapa: resultado.tokenEtapa });
+        setTokenEtapa(resultado.tokenEtapa);
       }
-    } catch {
-      // erro ja vira mensagem na tela via AuthContext
+    } catch (erroLogin) {
+      // credencial errada/bloqueio viram mensagem geral via AuthContext; 422 cai no campo
+      mostrarErroDaApi(erroLogin);
     }
   }
 
   function voltarParaCredenciais(mensagem?: string) {
-    setEtapa({ tipo: "credenciais" });
+    setTokenEtapa(null);
     setAviso(mensagem ?? null);
   }
 
@@ -53,7 +56,7 @@ export function LoginPage() {
 
   return (
     <div className="login-screen">
-      <div className={"login-card" + (etapa.tipo === "mfa_configuracao" ? " mfa-login-card" : "")}>
+      <div className="login-card">
         <div className="login-brand">
           <p>Universidade de Mogi das Cruzes — UMC</p>
           <p style={{ fontSize: 14, fontWeight: 400, color: "var(--gray-500)", margin: "4px 0 0" }}>
@@ -61,45 +64,23 @@ export function LoginPage() {
           </p>
         </div>
 
-        {etapa.tipo === "mfa_pendente" && (
+        {tokenEtapa ? (
           <VerificacaoMfa
-            tokenEtapa={etapa.tokenEtapa}
+            tokenEtapa={tokenEtapa}
             onConcluir={concluirVerificacao}
             onExpirar={() => voltarParaCredenciais(MENSAGEM_ETAPA_EXPIRADA)}
             onVoltar={() => voltarParaCredenciais()}
           />
-        )}
-
-        {etapa.tipo === "mfa_configuracao" && (
-          <ConfiguracaoMfa
-            tokenEtapa={etapa.tokenEtapa}
-            obrigatoria
-            onConcluir={(sessao) => {
-              if (sessao) definirSessao(sessao);
-              else voltarParaCredenciais();
-            }}
-            onCancelar={() => voltarParaCredenciais()}
-            onExpirar={() => voltarParaCredenciais(MENSAGEM_ETAPA_EXPIRADA)}
-          />
-        )}
-
-        {etapa.tipo === "credenciais" && (
+        ) : (
           <>
-            <form onSubmit={handleSubmit} className="form">
-              <label className="field">
-                <span>E-mail institucional</span>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  autoFocus
-                />
-              </label>
-              <label className="field">
-                <span>Senha</span>
-                <PasswordInput value={senha} onChange={setSenha} required />
-              </label>
+            <form onSubmit={handleSubmit} onChange={limparAoEditar} className="form" ref={formRef} noValidate>
+              <LegendaObrigatorio />
+              <Campo nome="emailLogin" rotulo="E-mail institucional" obrigatorio erro={erros.emailLogin}>
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" autoFocus />
+              </Campo>
+              <Campo nome="senha" rotulo="Senha" obrigatorio erro={erros.senha}>
+                <PasswordInput value={senha} onChange={setSenha} autoComplete="current-password" />
+              </Campo>
 
               {(erro || aviso) && <p className="form-error">{erro ?? aviso}</p>}
 

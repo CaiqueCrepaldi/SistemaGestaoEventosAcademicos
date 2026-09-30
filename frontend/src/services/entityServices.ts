@@ -24,8 +24,27 @@ export const feedbackService = {
     return api.get<EventoParaAvaliar[]>("/feedbacks/elegiveis");
   },
 
-  // aluno nao manda participanteId: o backend usa sempre o do token
+  // so o aluno envia, em nome dele mesmo: o backend usa sempre o participanteId do token
   avaliar(dados: { eventoId: string; nota: number; comentario: string }): Promise<Feedback> {
     return api.post<Feedback>("/feedbacks", dados);
   },
+
+  // o aluno exclui o proprio feedback (e depois pode mandar outro pro mesmo evento)
+  excluirMeu(id: string): Promise<void> {
+    return api.del<void>(`/feedbacks/${id}`);
+  },
+
+  // a equipe so exclui feedback de aluno informando o motivo (lista fechada, ver MOTIVOS_EXCLUSAO_FEEDBACK)
+  excluirPelaEquipe(id: string, motivo: MotivoExclusaoFeedback): Promise<void> {
+    return api.del<void>(`/feedbacks/${id}`, { motivo });
+  },
 };
+
+// mesma lista do backend (feedbacks.schemas.ts): texto livre no log de auditoria poderia ter dado pessoal
+export const MOTIVOS_EXCLUSAO_FEEDBACK = {
+  CONTEUDO_OFENSIVO: "Conteúdo ofensivo ou desrespeitoso",
+  DADO_PESSOAL_EXPOSTO: "Expõe dado pessoal de alguém",
+  FORA_DO_TEMA: "Fora do tema ou spam",
+  PEDIDO_DO_ALUNO: "A pedido do próprio aluno",
+} as const;
+export type MotivoExclusaoFeedback = keyof typeof MOTIVOS_EXCLUSAO_FEEDBACK;

@@ -4,17 +4,17 @@ import { randomUUID } from "crypto";
 import type { Prisma } from "@prisma/client";
 import type { PerguntaQuestionario } from "../src/types/domain";
 import { gerarHashSenha } from "../src/utils/password";
-import { criptografar, indiceBusca } from "../src/utils/criptografia";
+import { indiceBusca } from "../src/utils/criptografia";
 import { prisma } from "../src/db/prisma";
 
-// monta os campos cifrados + indice de busca de um participante, pronto pro "create" do upsert
+// monta os campos de um participante (texto puro + indice de busca), pronto pro "create" do upsert
 function dadosParticipante(nome: string, email: string, rgm: string) {
   return {
     id: randomUUID(),
-    nome: criptografar(nome),
-    email: criptografar(email),
+    nome,
+    email,
     emailHash: indiceBusca(email),
-    rgm: criptografar(rgm),
+    rgm,
     rgmHash: indiceBusca(rgm),
   };
 }
@@ -177,8 +177,8 @@ async function seed() {
     update: {},
     create: {
       id: randomUUID(),
-      nome: criptografar("Ana Ribeiro"),
-      emailLogin: criptografar("admin@umc.br"),
+      nome: "Ana Ribeiro",
+      emailLogin: "admin@umc.br",
       emailLoginHash: indiceBusca("admin@umc.br"),
       senhaHash: await gerarHashSenha("admin123"),
       perfil: "ADMINISTRADOR",
@@ -189,8 +189,8 @@ async function seed() {
     update: {},
     create: {
       id: randomUUID(),
-      nome: criptografar("Carlos Souza"),
-      emailLogin: criptografar("secretaria@umc.br"),
+      nome: "Carlos Souza",
+      emailLogin: "secretaria@umc.br",
       emailLoginHash: indiceBusca("secretaria@umc.br"),
       senhaHash: await gerarHashSenha("secretaria123"),
       perfil: "SECRETARIA",
@@ -201,12 +201,12 @@ async function seed() {
     update: {},
     create: {
       id: randomUUID(),
-      nome: criptografar("João Pedro Lima"),
-      emailLogin: criptografar("aluno@alunos.umc.br"),
+      nome: "João Pedro Lima",
+      emailLogin: "aluno@alunos.umc.br",
       emailLoginHash: indiceBusca("aluno@alunos.umc.br"),
       senhaHash: await gerarHashSenha("aluno123"),
       perfil: "ALUNO",
-      rgm: criptografar("20240100111"),
+      rgm: "20240100111",
       participanteId: participanteJoao.id,
     },
   });

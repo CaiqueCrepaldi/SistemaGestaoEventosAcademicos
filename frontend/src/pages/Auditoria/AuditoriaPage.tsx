@@ -3,16 +3,27 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { auditoriaService, SEM_RESPONSAVEL } from "../../services";
 import type { PaginaAuditoria, ResponsavelAuditoria } from "../../services";
 
-// traduz o codigo da acao pra um texto legivel na tela (a ordem aqui eh a do filtro de acao)
+// traduz o codigo da acao pra um texto legivel na tela (a ordem aqui eh a do filtro de acao).
+// FEEDBACK_ATUALIZADO/FEEDBACK_REMOVIDO nao sao mais gravados, mas continuam nos logs antigos
 const ACAO_LABEL: Record<string, string> = {
   LOGIN_SUCESSO: "Login realizado",
   LOGIN_FALHA: "Falha de login",
   ACESSO_NEGADO: "Acesso negado",
+  BLOQUEIO_LOGIN_REMOVIDO: "Bloqueio de acesso removido",
   USUARIO_REGISTRADO: "Conta registrada",
-  CONSENTIMENTO_LGPD_ACEITO: "Consentimento LGPD aceito",
+  CONSENTIMENTO_LGPD_ACEITO: "Termos de Uso aceitos no cadastro",
+  TERMOS_REACEITOS: "Termos de Uso aceitos de novo",
   RECUPERACAO_SENHA_SOLICITADA: "Recuperação de senha solicitada",
   RECUPERACAO_SENHA_FALHA: "Falha na recuperação de senha",
   SENHA_REDEFINIDA: "Senha redefinida",
+  SENHA_HASH_ATUALIZADO: "Hash da senha atualizado",
+  MFA_ATIVADO: "2FA ativado",
+  MFA_DESATIVADO: "2FA desativado",
+  MFA_VERIFICADO: "Código do 2FA verificado",
+  MFA_FALHA: "Falha no código do 2FA",
+  MFA_BLOQUEADO: "2FA bloqueado por tentativas",
+  MFA_RESETADO: "2FA resetado",
+  CODIGO_RECUPERACAO_USADO: "Código de recuperação do 2FA usado",
   EMAIL_ENVIADO: "E-mail enviado",
   EMAIL_FALHA: "Falha no envio de e-mail",
   SALA_CRIADA: "Sala criada",
@@ -31,12 +42,15 @@ const ACAO_LABEL: Record<string, string> = {
   INSCRICAO_CRIADA: "Inscrição criada",
   INSCRICAO_ATUALIZADA: "Inscrição atualizada",
   INSCRICAO_REMOVIDA: "Inscrição removida",
+  INSCRICAO_CANCELADA: "Inscrição cancelada (inativação)",
   PRESENCA_CONFIRMADA: "Presença confirmada",
   PRESENCA_MARCADA_AUSENTE: "Presença marcada como ausente",
   QUESTIONARIO_RESPONDIDO: "Questionário respondido",
   FEEDBACK_CRIADO: "Feedback criado",
-  FEEDBACK_ATUALIZADO: "Feedback atualizado",
-  FEEDBACK_REMOVIDO: "Feedback removido",
+  FEEDBACK_EXCLUIDO: "Feedback excluído",
+  FEEDBACK_ATUALIZADO: "Feedback atualizado (registro antigo)",
+  FEEDBACK_REMOVIDO: "Feedback removido (registro antigo)",
+  CONVERSAO_DADOS_PESSOAIS: "Conversão de dados pessoais",
 };
 
 const TAMANHOS_PAGINA = [25, 50, 100];

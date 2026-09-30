@@ -1,6 +1,7 @@
 # Procedimento para atender aos direitos dos titulares — SGEA
 
-**Data:** 27/09/2026 · **Versão:** 1
+**Data:** 29/09/2026 · **Versão:** 2 (exclusão do próprio feedback pelo
+aluno implementada)
 
 **Situação ao final da Fase 1:** este procedimento descreve o que a Fase 2
 vai construir (página "Meus dados" + tabela de solicitações). Hoje, antes
@@ -20,7 +21,7 @@ com a evidência correspondente em `10-evidencias-de-implementacao-e-testes.md`.
 | Anonimização/eliminação | Botão "Excluir minha conta": exige confirmação de senha, explica as consequências (ver `04-plano-de-retencao-e-descarte.md`), avisa pra baixar certificados antes, e executa a anonimização (não hard delete) | Imediato após confirmação |
 | Revisão de decisão automatizada (art. 20 — liberação de certificado pelo questionário) | Botão "Pedir revisão humana" na tela onde o resultado aparece; vira uma solicitação na tabela de solicitações, atendida pela equipe | Alvo: até 15 dias corridos (mesmo prazo de referência usado pelo art. 19 da LGPD para outras solicitações, aplicado aqui por analogia) |
 | Oposição ao tratamento / informação sobre compartilhamento | Formulário genérico de "Outras solicitações" na página "Meus dados", vira solicitação registrada | Até 15 dias corridos |
-| Revogação de consentimento (feedback) | O feedback já é opcional e pode ser apagado pelo próprio titular a qualquer momento (`DELETE` — hoje só a equipe apaga; a Fase 2 mantém essa regra, já que apagar o próprio feedback não depende de "revogar consentimento" formalmente, é uma ação direta) | Imediato |
+| Revogação de consentimento (feedback) | **Implementado:** o próprio aluno exclui o feedback dele a qualquer momento na tela Feedback (botão "Excluir", com confirmação; `DELETE /api/feedbacks/:id`), e depois pode enviar outro para o mesmo evento se quiser. Ninguém edita feedback depois de enviado; a equipe só exclui, com motivo de lista fechada. Tudo registrado na auditoria (`FEEDBACK_EXCLUIDO`) | Imediato |
 
 ## Tabela de solicitações do titular (Fase 2)
 

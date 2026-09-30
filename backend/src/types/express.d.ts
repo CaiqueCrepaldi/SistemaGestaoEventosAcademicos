@@ -10,9 +10,8 @@ export interface UsuarioAutenticado {
   versaoToken?: number;
 }
 
-// token temporario do login em duas etapas: "mfa_pendente" so serve pra rota de verificar o
-// codigo, "mfa_configuracao" so pras rotas de configurar o 2FA (admin/secretaria sem 2FA ainda)
-export type TipoTokenEtapa = "mfa_pendente" | "mfa_configuracao";
+// token temporario do login em duas etapas: "mfa_pendente" so serve pra rota de verificar o codigo
+export type TipoTokenEtapa = "mfa_pendente";
 
 declare global {
   namespace Express {

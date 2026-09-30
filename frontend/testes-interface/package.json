@@ -1,0 +1,12 @@
+{
+  "name": "sgea-testes-interface",
+  "private": true,
+  "type": "module",
+  "description": "Teste de interface do SGEA com navegador de verdade (usa o Google Chrome instalado na máquina)",
+  "scripts": {
+    "testar": "node testar-interface.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.63.0"
+  }
+}

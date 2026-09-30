@@ -1,7 +1,8 @@
 import { jsPDF } from "jspdf";
-import type { Inscricao, TentativaQuestionario } from "../types";
+import type { Inscricao, Participante, TentativaQuestionario } from "../types";
 import { PERCENTUAL_APROVACAO } from "../utils/questionario";
 import { api } from "./api";
+import { authService } from "./authService";
 import { eventoService, palestranteService, participanteService } from "./entityServices";
 import { questionarioService } from "./questionarioService";
 
@@ -11,6 +12,8 @@ export interface CertificadoDisponivel {
   participanteId: string;
   participanteNome: string;
   participanteRgm: string;
+  // aluno inativado pela equipe: o certificado de presenca ja confirmada continua valido
+  participanteAtivo: boolean;
   eventoId: string;
   eventoTitulo: string;
   tema: string;
@@ -36,18 +39,17 @@ function gerarCodigoValidacao(inscricaoId: string): string {
   return `SGEA-${prefixo}-${sufixo}`;
 }
 
-// junta cada Inscricao com Evento/Palestrante/Participante, pula dado orfao
+// junta cada Inscricao com Evento/Palestrante/Participante, pula dado orfao.
+// participantes: a equipe passa a lista inteira; o aluno passa so ele mesmo (a lista de
+// participantes e exclusiva da equipe — o aluno recebe 403 nela).
 // todasTentativas: quando informado (visao de equipe, varios alunos de uma vez), filtra localmente
 // porque a rota por evento/aluno eh restrita ao proprio aluno respondendo
 async function enriquecer(
   inscricoes: Inscricao[],
+  participantes: Participante[],
   todasTentativas?: TentativaQuestionario[],
 ): Promise<CertificadoDisponivel[]> {
-  const [eventos, palestrantes, participantes] = await Promise.all([
-    eventoService.list(),
-    palestranteService.list(),
-    participanteService.list(),
-  ]);
+  const [eventos, palestrantes] = await Promise.all([eventoService.list(), palestranteService.list()]);
 
   const certificados: CertificadoDisponivel[] = [];
   for (const inscricao of inscricoes) {
@@ -66,6 +68,7 @@ async function enriquecer(
       participanteId: participante.id,
       participanteNome: participante.nome,
       participanteRgm: participante.rgm,
+      participanteAtivo: participante.ativo !== false,
       eventoId: evento.id,
       eventoTitulo: evento.titulo,
       tema: evento.tema || evento.titulo,
@@ -210,19 +213,25 @@ interface CertificadoService {
 }
 
 export const certificadoService: CertificadoService = {
-  // filtragem por status ja vem da query
+  // visao do aluno: os dados do proprio certificado (nome/RGM) vem da propria conta
   async listarCertificadosDoParticipante(participanteId) {
-    const inscricoes = await api.get<Inscricao[]>(`/inscricoes?participanteId=${participanteId}&status=PRESENTE`);
-    return enriquecer(inscricoes);
+    const [inscricoes, conta] = await Promise.all([
+      api.get<Inscricao[]>(`/inscricoes?participanteId=${participanteId}&status=PRESENTE`),
+      authService.obterMe(),
+    ]);
+    const euMesmo: Participante = { id: participanteId, nome: conta.nome, email: conta.emailLogin, rgm: conta.rgm ?? "" };
+    return enriquecer(inscricoes, [euMesmo]);
   },
   // certificados de todo mundo, usado na tela de gestao
   async listarTodosCertificados() {
-    const [inscricoes, todasTentativas] = await Promise.all([
+    const [inscricoes, todasTentativas, participantes] = await Promise.all([
       api.get<Inscricao[]>("/inscricoes"),
       questionarioService.listarTodasTentativas(),
+      participanteService.list(),
     ]);
     return enriquecer(
       inscricoes.filter((i) => i.statusPresenca === "PRESENTE"),
+      participantes,
       todasTentativas,
     );
   },

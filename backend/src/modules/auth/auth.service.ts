@@ -2,10 +2,11 @@ import { randomUUID } from "crypto";
 import type { Usuario as UsuarioDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
-import { conferirSenha, gerarHashSenha } from "../../utils/password";
+import { conferirSenha, CUSTO_HASH, custoDoHash, gerarHashSenha, precisaRefazerHash } from "../../utils/password";
 import { assinarToken, assinarTokenEtapa, duracaoEmSegundos } from "../../utils/jwt";
 import { usuarioParaDTO } from "../../utils/dto";
-import { criptografar, descriptografar, indiceBusca } from "../../utils/criptografia";
+import { indiceBusca } from "../../utils/criptografia";
+import { lerDadoPessoal, lerDadoPessoalOuNulo } from "../../utils/dadosPessoais";
 import { registrarAuditoria } from "../../utils/auditoria";
 import { chaveConta, chaveIp, estaBloqueado, incrementarTentativa, limparTentativas } from "../../utils/limiteAcesso";
 import { env } from "../../config/env";
@@ -16,30 +17,30 @@ import type { ConfirmarRecuperacaoInput, LoginInput, RegistroInput, SolicitarRec
 
 const CODIGO_VALIDADE_MS = 15 * 60 * 1000; // 15 min
 const MAX_TENTATIVAS_CODIGO = 5;
-// validade dos tokens da etapa do 2FA: 5 min pra digitar o codigo; 15 min pra configurar
-// (escanear o QR code e confirmar leva mais tempo que so digitar um codigo)
+// validade do token da etapa do 2FA: 5 min pra digitar o codigo do aplicativo
 const VALIDADE_TOKEN_MFA_PENDENTE_S = 5 * 60;
-const VALIDADE_TOKEN_MFA_CONFIGURACAO_S = 15 * 60;
 
-// prisma devolve criadoEm como Date e nome/emailLogin/rgm cifrados — decifra e converte pro
-// formato que o resto do app espera (reaproveitado em usuarios.routes.ts)
+// prisma devolve criadoEm como Date — converte pro formato que o resto do app espera
+// (reaproveitado em usuarios.routes.ts). nome/emailLogin/rgm podem estar no formato antigo
+// (cifrado) ate a conversao dos dados, por isso passam por lerDadoPessoal
 export function usuarioParaDominio(usuario: UsuarioDb): Usuario {
   // o segredo do 2FA nunca sai daqui, nem cifrado
   const { mfaSegredoCifrado, ...semSegredo } = usuario;
   void mfaSegredoCifrado;
   return {
     ...semSegredo,
-    nome: descriptografar(usuario.nome),
-    emailLogin: descriptografar(usuario.emailLogin),
-    rgm: usuario.rgm ? descriptografar(usuario.rgm) : null,
+    nome: lerDadoPessoal(usuario.nome),
+    emailLogin: lerDadoPessoal(usuario.emailLogin),
+    rgm: lerDadoPessoalOuNulo(usuario.rgm),
     consentimentoLgpdEm: usuario.consentimentoLgpdEm ? usuario.consentimentoLgpdEm.toISOString() : null,
     versaoTermosAceitos: usuario.versaoTermosAceitos,
     criadoEm: usuario.criadoEm.toISOString(),
   };
 }
 
-// cria o Participante e o Usuario ALUNO vinculado, checa duplicidade de email/rgm antes
-// pelo indice de busca (hash deterministico), ja que email/rgm ficam cifrados no banco
+// cria o Participante e o Usuario ALUNO vinculado, checa duplicidade de email/rgm antes pelo
+// indice de busca (os registros antigos ainda estao cifrados ate a conversao, entao a busca continua
+// pelo indice nessa fase). nome/e-mail/RGM novos ja sao gravados em texto puro
 async function registrarAluno(dados: RegistroInput) {
   const emailHash = indiceBusca(dados.emailInstitucional);
   const rgmHash = indiceBusca(dados.rgm);
@@ -62,10 +63,10 @@ async function registrarAluno(dados: RegistroInput) {
   const participante = await prisma.participante.create({
     data: {
       id: randomUUID(),
-      nome: criptografar(dados.nomeCompleto),
-      email: criptografar(dados.emailInstitucional),
+      nome: dados.nomeCompleto,
+      email: dados.emailInstitucional,
       emailHash,
-      rgm: criptografar(dados.rgm),
+      rgm: dados.rgm,
       rgmHash,
     },
   });
@@ -73,12 +74,12 @@ async function registrarAluno(dados: RegistroInput) {
   const usuario = await prisma.usuario.create({
     data: {
       id: randomUUID(),
-      nome: criptografar(dados.nomeCompleto),
-      emailLogin: criptografar(dados.emailInstitucional),
+      nome: dados.nomeCompleto,
+      emailLogin: dados.emailInstitucional,
       emailLoginHash: emailHash,
       senhaHash,
       perfil: "ALUNO",
-      rgm: criptografar(dados.rgm),
+      rgm: dados.rgm,
       participanteId: participante.id,
       // aceiteLgpd ja foi validado como obrigatoriamente true no schema — registra o momento exato
       // e a versao vigente dos Termos/Politica (ver config/termos.ts)
@@ -129,16 +130,22 @@ async function login(dados: LoginInput, ip: string) {
     throw new AppError(401, "CREDENCIAIS_INVALIDAS", "E-mail ou senha inválidos.");
   }
 
+  // aluno inativado pela equipe: a mensagem nao expoe o motivo interno (fica so no cadastro).
+  // So quem acertou a senha chega aqui, entao isso nao revela a situacao da conta pra quem chuta senha
   if (usuario.perfil === "ALUNO" && usuario.participante && !usuario.participante.ativo) {
     await registrarAuditoria(usuario.id, "LOGIN_FALHA", "conta inativa");
-    throw new AppError(
-      403,
-      "USUARIO_INATIVO",
-      "Seu acesso foi inativado. Entre em contato com a secretaria.",
-    );
+    throw AppError.contaInativa();
   }
 
   await limparTentativas(chaveDaConta);
+
+  // hash de senha gravado com custo menor que o atual: refaz agora, enquanto a senha em texto puro
+  // acabou de ser conferida — o titular nao precisa trocar a senha pra ganhar o custo novo
+  if (precisaRefazerHash(usuario.senhaHash)) {
+    const custoAnterior = custoDoHash(usuario.senhaHash);
+    await prisma.usuario.update({ where: { id: usuario.id }, data: { senhaHash: await gerarHashSenha(dados.senha) } });
+    await registrarAuditoria(usuario.id, "SENHA_HASH_ATUALIZADO", `hash da senha refeito no login: custo ${custoAnterior} → ${CUSTO_HASH}`);
+  }
 
   // senha certa com 2FA ativo: ainda nao e sessao, so um token curto que serve apenas pra rota
   // de verificar o codigo. LOGIN_SUCESSO so e registrado quando o codigo tambem confere
@@ -147,14 +154,6 @@ async function login(dados: LoginInput, ip: string) {
       mfa: "PENDENTE" as const,
       tokenEtapa: assinarTokenEtapa(usuario, "mfa_pendente", VALIDADE_TOKEN_MFA_PENDENTE_S),
       expiresIn: VALIDADE_TOKEN_MFA_PENDENTE_S,
-    };
-  }
-  // 2FA e obrigatorio pra equipe: sem ele configurado, o token so serve pra tela de configuracao
-  if (usuario.perfil !== "ALUNO") {
-    return {
-      mfa: "CONFIGURACAO_OBRIGATORIA" as const,
-      tokenEtapa: assinarTokenEtapa(usuario, "mfa_configuracao", VALIDADE_TOKEN_MFA_CONFIGURACAO_S),
-      expiresIn: VALIDADE_TOKEN_MFA_CONFIGURACAO_S,
     };
   }
 
@@ -236,7 +235,7 @@ async function solicitarRecuperacaoSenha(dados: SolicitarRecuperacaoInput, ip: s
 
   // falha de envio nao pode travar a recuperacao — em demo o codigoDemo abaixo
   // resolve isso mesmo assim, e nem toda falha de provedor deveria bloquear o fluxo
-  // usa dados.email (ja veio em texto puro do request) em vez de descriptografar usuario.emailLogin
+  // usa dados.email (o que a pessoa digitou no pedido) como destinatario
   try {
     const resultado = await emailService.enviarCodigoRecuperacao(dados.email, codigo);
     await registrarAuditoria(

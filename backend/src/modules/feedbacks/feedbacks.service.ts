@@ -2,10 +2,10 @@ import { randomUUID } from "crypto";
 import { Prisma, type Feedback as FeedbackDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
-import { camposInformados, registrarAuditoria } from "../../utils/auditoria";
+import { registrarAuditoria } from "../../utils/auditoria";
 import { eventosComCertificado, temCertificado } from "../../utils/certificado";
 import type { Feedback } from "../../types/domain";
-import type { FeedbackUpdateInput } from "./feedbacks.schemas";
+import { MOTIVOS_EXCLUSAO_FEEDBACK, type MotivoExclusaoFeedback } from "./feedbacks.schemas";
 
 interface FiltrosListagem {
   eventoId?: string;
@@ -41,7 +41,8 @@ async function validarDireitoAoCertificado(eventoId: string, participanteId: str
   }
 }
 
-// eventos que o aluno pode avaliar agora: tem certificado e ainda nao mandou feedback
+// eventos que o aluno pode avaliar agora: tem certificado e ainda nao mandou feedback (quem excluiu
+// o proprio feedback volta a ver o evento aqui — e assim que ele corrige uma avaliacao)
 async function listarEventosElegiveis(participanteId: string) {
   const [comCertificado, jaAvaliados] = await Promise.all([
     eventosComCertificado(participanteId),
@@ -58,16 +59,10 @@ async function listarEventosElegiveis(participanteId: string) {
   return eventos.map((evento) => ({ id: evento.id, titulo: evento.titulo, horario: evento.horario.toISOString() }));
 }
 
-// cria um feedback novo, bloqueia duplicidade e evento/participante inexistente
+// cria um feedback novo, bloqueia duplicidade e evento inexistente
 async function criar(eventoId: string, participanteId: string, nota: number, comentario: string, atorId: string) {
-  const [evento, participante] = await Promise.all([
-    prisma.evento.findUnique({ where: { id: eventoId } }),
-    prisma.participante.findUnique({ where: { id: participanteId } }),
-  ]);
-  const erros: { campo: string; mensagem: string }[] = [];
-  if (!evento) erros.push({ campo: "eventoId", mensagem: "Evento não encontrado." });
-  if (!participante) erros.push({ campo: "participanteId", mensagem: "Participante não encontrado." });
-  if (erros.length > 0) throw AppError.validacao("Dados inválidos.", erros);
+  const evento = await prisma.evento.findUnique({ where: { id: eventoId } });
+  if (!evento) throw AppError.validacao("Dados inválidos.", [{ campo: "eventoId", mensagem: "Palestra não encontrada." }]);
 
   let feedback: FeedbackDb;
   try {
@@ -76,7 +71,7 @@ async function criar(eventoId: string, participanteId: string, nota: number, com
     });
   } catch (erro) {
     if (erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === "P2002") {
-      throw AppError.conflito("FEEDBACK_JA_ENVIADO", "Você já enviou feedback para este evento.");
+      throw AppError.conflito("FEEDBACK_JA_ENVIADO", "Você já enviou feedback para esta palestra.");
     }
     throw erro;
   }
@@ -85,22 +80,29 @@ async function criar(eventoId: string, participanteId: string, nota: number, com
   return paraDominio(feedback);
 }
 
-// edita nota/comentario de um feedback existente
-async function atualizar(id: string, dados: FeedbackUpdateInput, atorId: string) {
-  await buscarOuFalhar(id);
-  const feedback = await prisma.feedback.update({ where: { id }, data: dados });
-  await registrarAuditoria(atorId, "FEEDBACK_ATUALIZADO", `feedback ${id} (campos: ${camposInformados(dados)})`);
-  return paraDominio(feedback);
+// o proprio aluno exclui o feedback dele (depois pode mandar outro pro mesmo evento)
+async function excluirPeloAluno(id: string, participanteIdDoToken: string, atorId: string) {
+  const feedback = await buscarOuFalhar(id);
+  if (feedback.participanteId !== participanteIdDoToken) {
+    throw AppError.acessoNegado("Você só pode excluir o seu próprio feedback.");
+  }
+  await prisma.feedback.delete({ where: { id } });
+  await registrarAuditoria(
+    atorId,
+    "FEEDBACK_EXCLUIDO",
+    `feedback ${id} (evento ${feedback.eventoId}, participante ${feedback.participanteId}) excluído pelo próprio aluno`,
+  );
 }
 
-// remove um feedback
-async function remover(id: string, atorId: string) {
+// a equipe nao edita feedback de aluno, so exclui — e sempre com um motivo da lista fechada
+async function excluirPelaEquipe(id: string, motivo: MotivoExclusaoFeedback, atorId: string) {
   const feedback = await buscarOuFalhar(id);
   await prisma.feedback.delete({ where: { id } });
   await registrarAuditoria(
     atorId,
-    "FEEDBACK_REMOVIDO",
-    `feedback ${id} (evento ${feedback.eventoId}, participante ${feedback.participanteId})`,
+    "FEEDBACK_EXCLUIDO",
+    `feedback ${id} (evento ${feedback.eventoId}, participante ${feedback.participanteId}) excluído pela equipe — ` +
+      `motivo: ${MOTIVOS_EXCLUSAO_FEEDBACK[motivo]}`,
   );
 }
 
@@ -110,6 +112,6 @@ export const feedbacksService = {
   validarDireitoAoCertificado,
   listarEventosElegiveis,
   criar,
-  atualizar,
-  remover,
+  excluirPeloAluno,
+  excluirPelaEquipe,
 };

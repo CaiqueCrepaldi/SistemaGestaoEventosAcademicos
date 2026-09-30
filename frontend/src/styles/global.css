@@ -1112,3 +1112,65 @@ h1, h2, h3 {
   padding-top: 12px;
   border-top: 1px solid var(--gray-200);
 }
+
+/* Campos obrigatorios e erros de validacao — mesmo padrao em todo formulario */
+.field > label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-700);
+}
+
+.campo-obrigatorio,
+.field span.campo-obrigatorio {
+  color: var(--red-600);
+  font-weight: 700;
+}
+
+.form-legenda {
+  margin: 0;
+  font-size: 12px;
+  color: var(--gray-500);
+}
+
+.field-invalido input,
+.field-invalido select,
+.field-invalido textarea,
+.questionario-alternativa input.campo-invalido,
+.questionario-pergunta input.campo-invalido {
+  border-color: var(--red-600);
+}
+
+.field-invalido input:focus,
+.field-invalido select:focus,
+.field-invalido textarea:focus,
+.questionario-alternativa input.campo-invalido:focus,
+.questionario-pergunta input.campo-invalido:focus {
+  border-color: var(--red-600);
+  box-shadow: 0 0 0 3px var(--red-50);
+}
+
+.field-invalido .form-error,
+.grupo-invalido .form-error {
+  margin: 0;
+}
+
+.grupo-invalido {
+  border-color: var(--red-600) !important;
+  background: var(--red-50);
+}
+
+.questionario-resposta.grupo-invalido {
+  border-radius: 8px;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.campo-checkbox {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.campo-checkbox.field-invalido .lgpd-consent {
+  color: var(--red-600);
+}

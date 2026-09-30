@@ -20,8 +20,8 @@ export function assinarToken(payload: UsuarioAutenticado): string {
   return jwt.sign(payload, env.jwtSecret, { expiresIn: duracaoEmSegundos(env.jwtExpiresIn) });
 }
 
-// token curto da etapa do 2FA (codigo pendente ou configuracao obrigatoria). O "tipo" faz o
-// middleware autenticar recusar esse token em qualquer rota que nao seja a da propria etapa
+// token curto da etapa do 2FA (senha certa, falta o codigo). O "tipo" faz o middleware
+// autenticar recusar esse token em qualquer rota que nao seja a da propria etapa
 export function assinarTokenEtapa(
   usuario: { id: string; perfil: UsuarioAutenticado["perfil"]; participanteId: string | null; versaoToken: number },
   tipo: TipoTokenEtapa,

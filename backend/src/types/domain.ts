@@ -81,6 +81,7 @@ export interface Evento {
   tema: string;
   cargaHoraria: number;
   questionario: PerguntaQuestionario[]; // sempre 10 perguntas, minimo 60% pra liberar certificado
+  inscritos?: number; // contagem de inscricoes, preenchida nas consultas de leitura
   criadoEm: string;
 }
 

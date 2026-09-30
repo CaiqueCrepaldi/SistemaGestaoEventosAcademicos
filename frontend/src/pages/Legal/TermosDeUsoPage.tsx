@@ -6,7 +6,7 @@ export function TermosDeUsoPage() {
     <div className="login-screen">
       <div className="login-card legal-card">
         <h1>Termos de Uso</h1>
-        <p className="legal-versao">Versão 1 — atualizada em 25/09/2026.</p>
+        <p className="legal-versao">Versão 1 — atualizada em 29/09/2026.</p>
 
         <h2>1. O que é o SGEA</h2>
         <p>
@@ -30,7 +30,10 @@ export function TermosDeUsoPage() {
           <li>Os dados informados no cadastro (nome, RGM, e-mail) precisam ser verdadeiros.</li>
           <li>
             A secretaria pode inativar uma conta em caso de uso indevido, dado incorreto ou a
-            pedido do próprio titular; a conta inativada pode depois ser excluída definitivamente.
+            pedido do próprio titular, informando o motivo. Enquanto inativa, a conta não faz
+            login, inscrição, check-in nem questionário; as inscrições pendentes em eventos futuros
+            são canceladas, e os certificados já emitidos continuam válidos. A secretaria pode
+            reativar a conta depois, ou excluí-la definitivamente.
           </li>
         </ul>
 
@@ -52,7 +55,10 @@ export function TermosDeUsoPage() {
         <h2>6. Feedback</h2>
         <p>
           O envio de feedback sobre uma palestra é opcional e só está disponível para quem
-          efetivamente compareceu ao evento (com presença confirmada no check-in).
+          efetivamente compareceu ao evento (com presença confirmada no check-in). Depois de
+          enviado, o feedback não pode ser editado: você pode excluí-lo a qualquer momento e enviar
+          outro. A equipe organizadora também não edita feedbacks; ela só pode excluí-los,
+          informando o motivo.
         </p>
 
         <h2>7. Disponibilidade</h2>

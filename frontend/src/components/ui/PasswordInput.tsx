@@ -1,28 +1,19 @@
-import { useState } from "react";
+import { useState, type InputHTMLAttributes } from "react";
 import { OlhoFechadoIcon, OlhoIcon } from "./icons";
 
-interface PasswordInputProps {
+interface PasswordInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type"> {
   value: string;
   onChange: (valor: string) => void;
-  required?: boolean;
-  autoFocus?: boolean;
-  placeholder?: string;
 }
 
-// campo de senha com botao de olhinho pra alternar entre mostrar/ocultar, usado em toda tela com senha
-export function PasswordInput({ value, onChange, required, autoFocus, placeholder }: PasswordInputProps) {
+// campo de senha com botao de olhinho pra alternar entre mostrar/ocultar, usado em toda tela com
+// senha. Repassa id/name/aria-* pro input (o <Campo> usa isso pra ligar rotulo e mensagem de erro)
+export function PasswordInput({ value, onChange, ...resto }: PasswordInputProps) {
   const [visivel, setVisivel] = useState(false);
 
   return (
     <div className="password-field">
-      <input
-        type={visivel ? "text" : "password"}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        required={required}
-        autoFocus={autoFocus}
-        placeholder={placeholder}
-      />
+      <input {...resto} type={visivel ? "text" : "password"} value={value} onChange={(e) => onChange(e.target.value)} />
       <button
         type="button"
         className="password-toggle"

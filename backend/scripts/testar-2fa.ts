@@ -62,7 +62,7 @@ async function codigoErrado(segredo: string): Promise<string> {
 async function main() {
   const { criarApp } = await import("../src/expressApp");
   const { prisma } = await import("../src/db/prisma");
-  const { criptografar, indiceBusca } = await import("../src/utils/criptografia");
+  const { indiceBusca } = await import("../src/utils/criptografia");
   const { gerarHashSenha } = await import("../src/utils/password");
   const { env } = await import("../src/config/env");
 
@@ -78,10 +78,10 @@ async function main() {
       const participante = await prisma.participante.create({
         data: {
           id: randomUUID(),
-          nome: criptografar("Teste Dois Fatores"),
-          email: criptografar(email),
+          nome: "Teste Dois Fatores",
+          email,
           emailHash: indiceBusca(email),
-          rgm: criptografar(rgm),
+          rgm,
           rgmHash: indiceBusca(rgm),
         },
       });
@@ -90,8 +90,8 @@ async function main() {
     const usuario = await prisma.usuario.create({
       data: {
         id: randomUUID(),
-        nome: criptografar(`Teste Dois Fatores ${perfil}`),
-        emailLogin: criptografar(email),
+        nome: `Teste Dois Fatores ${perfil}`,
+        emailLogin: email,
         emailLoginHash: indiceBusca(email),
         senhaHash: await gerarHashSenha(senha),
         perfil,
@@ -202,35 +202,30 @@ async function main() {
     const recuperacaoIntacta = await prisma.codigoRecuperacaoMfa.findFirst({ where: { usuarioId: aluno.id, codigoHash: indiceBusca(`mfa-recuperacao:${codigosAluno[1].replace("-", "")}`) } });
     checar("tentativa bloqueada não gasta o código de recuperação", recuperacaoIntacta?.usadoEm === null);
 
-    // ---------------------------------------------------------------- SECRETARIA (2FA obrigatório)
-    console.log("\n[SECRETARIA] configuração obrigatória no primeiro login");
+    // ---------------------------------------------------------------- SECRETARIA (2FA opcional)
+    console.log("\n[SECRETARIA] 2FA opcional também para a equipe");
     const secretaria = await criarConta("SECRETARIA");
 
-    // sessao aberta antes do deploy do 2FA (formato de token antigo, sem etapa)
+    // sessao aberta antes da mudanca (formato de token antigo, sem etapa): continua valendo
     const tokenAntigoSecretaria = jwt.sign({ sub: secretaria.id, perfil: "SECRETARIA", participanteId: null }, env.jwtSecret, { expiresIn: 3600 });
     r = await chamar("GET", "/eventos", { token: tokenAntigoSecretaria });
-    checar("sessão de secretaria sem 2FA configurado é recusada -> 401 MFA_OBRIGATORIO", r.status === 401 && r.corpo.code === "MFA_OBRIGATORIO");
+    checar("sessão de secretaria sem 2FA não é mais recusada", r.status === 200);
 
     r = await login(secretaria);
-    checar("login da secretaria sem 2FA -> etapa CONFIGURACAO_OBRIGATORIA, sem sessão", r.status === 200 && r.corpo.mfa === "CONFIGURACAO_OBRIGATORIA" && !r.corpo.token);
-    const tokenConfig: string = r.corpo.tokenEtapa;
+    checar("login da secretaria sem 2FA -> sessão direto, sem etapa de configuração", r.status === 200 && !!r.corpo.token && !r.corpo.mfa);
+    let tokenSecretaria: string = r.corpo.token;
 
-    r = await chamar("GET", "/usuarios/me", { token: tokenConfig });
-    checar("token de configuração não acessa outra rota -> 401", r.status === 401);
-    r = await chamar("POST", "/auth/2fa/verificar", { token: tokenConfig, corpo: { codigo: "123456" } });
-    checar("token de configuração não serve pra verificação -> 401", r.status === 401);
-
-    r = await chamar("POST", "/auth/2fa/configuracao", { token: tokenConfig });
+    r = await chamar("POST", "/auth/2fa/configuracao", { token: tokenSecretaria });
     const segredoSecretaria: string = r.corpo.segredo;
-    r = await chamar("POST", "/auth/2fa/configuracao/confirmar", { token: tokenConfig, corpo: { codigo: await totp(segredoSecretaria) } });
-    checar("confirmar na configuração obrigatória devolve códigos E a sessão", r.status === 200 && r.corpo.codigosRecuperacao?.length === 8 && !!r.corpo.sessao?.token);
-    const tokenSecretaria: string = r.corpo.sessao.token;
+    r = await chamar("POST", "/auth/2fa/configuracao/confirmar", { token: tokenSecretaria, corpo: { codigo: await totp(segredoSecretaria) } });
+    checar("secretaria ativa o 2FA por vontade própria -> códigos de recuperação", r.status === 200 && r.corpo.codigosRecuperacao?.length === 8);
 
-    r = await chamar("GET", "/eventos", { token: tokenSecretaria });
-    checar("sessão da secretaria depois de configurar funciona", r.status === 200);
+    r = await login(secretaria);
+    checar("com o 2FA ativo, o login da secretaria pede o código", r.corpo.mfa === "PENDENTE" && !r.corpo.token);
+    r = await chamar("POST", "/auth/2fa/verificar", { token: r.corpo.tokenEtapa, corpo: { codigo: await totp(segredoSecretaria, 1) } });
+    checar("código certo -> sessão da secretaria", r.status === 200 && !!r.corpo.token);
+    tokenSecretaria = r.corpo.token;
 
-    r = await chamar("POST", "/auth/2fa/desativar", { token: tokenSecretaria, corpo: { senha: secretaria.senha, codigo: await totp(segredoSecretaria, 1) } });
-    checar("secretaria não pode desativar o 2FA -> 403", r.status === 403);
     r = await chamar("GET", "/usuarios", { token: tokenSecretaria });
     checar("secretaria não lista usuários -> 403", r.status === 403);
     r = await chamar("DELETE", `/usuarios/${aluno.id}/2fa`, { token: tokenSecretaria });
@@ -240,12 +235,8 @@ async function main() {
     console.log("\n[ADMINISTRADOR] desbloqueio, reset do 2FA de outro usuário, listagem");
     const admin = await criarConta("ADMINISTRADOR");
     r = await login(admin);
-    const tokenConfigAdmin: string = r.corpo.tokenEtapa;
-    r = await chamar("POST", "/auth/2fa/configuracao", { token: tokenConfigAdmin });
-    const segredoAdmin: string = r.corpo.segredo;
-    r = await chamar("POST", "/auth/2fa/configuracao/confirmar", { token: tokenConfigAdmin, corpo: { codigo: await totp(segredoAdmin) } });
-    const tokenAdmin: string = r.corpo.sessao.token;
-    checar("administrador também passa pela configuração obrigatória", r.status === 200 && !!tokenAdmin);
+    const tokenAdmin: string = r.corpo.token;
+    checar("administrador sem 2FA entra direto", r.status === 200 && !!tokenAdmin && !r.corpo.mfa);
 
     r = await chamar("DELETE", `/usuarios/${aluno.id}/bloqueio`, { token: tokenAdmin });
     checar("admin remove o bloqueio (inclui o do 2FA) -> 204", r.status === 204);
@@ -265,9 +256,21 @@ async function main() {
     r = await chamar("GET", "/eventos", { token: tokenSecretaria });
     checar("reset encerra as sessões da secretaria -> 401", r.status === 401);
     const logReset = await prisma.logAuditoria.findFirst({ where: { acao: "MFA_RESETADO", usuarioId: admin.id, detalhe: { contains: secretaria.id } } });
-    checar("auditoria MFA_RESETADO registra quem resetou (admin) e o alvo", !!logReset && !!logReset.atorNomeCifrado);
+    checar("auditoria MFA_RESETADO registra quem resetou (admin) e o alvo", !!logReset && logReset.atorNome === "Teste Dois Fatores ADMINISTRADOR");
     r = await login(secretaria);
-    checar("secretaria resetada volta pra configuração obrigatória no login", r.corpo.mfa === "CONFIGURACAO_OBRIGATORIA");
+    checar("secretaria resetada volta a entrar só com a senha", r.status === 200 && !!r.corpo.token && !r.corpo.mfa);
+
+    // a equipe tambem desativa o proprio 2FA (senha + codigo), como o aluno
+    r = await chamar("POST", "/auth/2fa/configuracao", { token: tokenAdmin });
+    const segredoAdmin: string = r.corpo.segredo;
+    await chamar("POST", "/auth/2fa/configuracao/confirmar", { token: tokenAdmin, corpo: { codigo: await totp(segredoAdmin) } });
+    await avancarRelogio(admin);
+    r = await chamar("POST", "/auth/2fa/desativar", { token: tokenAdmin, corpo: { senha: admin.senha, codigo: await totp(segredoAdmin) } });
+    checar("administrador desativa o próprio 2FA -> 200 com sessão nova", r.status === 200 && !!r.corpo.token);
+    const tokenAdminNovo: string = r.corpo.token;
+    // reativa pra seguir com o teste do script de emergencia (que zera o 2FA do administrador)
+    r = await chamar("POST", "/auth/2fa/configuracao", { token: tokenAdminNovo });
+    await chamar("POST", "/auth/2fa/configuracao/confirmar", { token: tokenAdminNovo, corpo: { codigo: await totp(r.corpo.segredo) } });
 
     // ---------------------------------------------------------------- ALUNO desativa
     console.log("\n[ALUNO] desativação com senha + código");

@@ -1,16 +1,13 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { ApiError } from "../../services/api";
-import { authService, type ConfiguracaoMfa as DadosConfiguracao, type SessaoUsuario } from "../../services/authService";
+import { useEffect, useState, type FormEvent } from "react";
+import { authService, type ConfiguracaoMfa as DadosConfiguracao } from "../../services/authService";
+import { useErrosFormulario } from "../../hooks/useErrosFormulario";
+import { Campo } from "../ui/Campo";
 import { toast } from "../ui/Toast";
 
 interface ConfiguracaoMfaProps {
-  // presente = configuracao obrigatoria da equipe no meio do login; ausente = aluno ja logado ativando
-  tokenEtapa?: string;
-  obrigatoria?: boolean;
   // chamado depois que a pessoa confirma que guardou os codigos de recuperacao
-  onConcluir: (sessao?: SessaoUsuario) => void;
-  onCancelar?: () => void;
-  onExpirar?: () => void;
+  onConcluir: () => void;
+  onCancelar: () => void;
 }
 
 // segredo em grupos de 4 pra facilitar a digitacao manual no aplicativo
@@ -18,58 +15,46 @@ function formatarSegredo(segredo: string): string {
   return segredo.match(/.{1,4}/g)?.join(" ") ?? segredo;
 }
 
-// QR code + confirmacao com um codigo + tela final com os codigos de recuperacao (mostrados uma vez so)
-export function ConfiguracaoMfa({ tokenEtapa, obrigatoria, onConcluir, onCancelar, onExpirar }: ConfiguracaoMfaProps) {
+// ativacao opcional do 2FA (qualquer perfil): QR code + confirmacao com um codigo + tela final com
+// os codigos de recuperacao, mostrados uma vez so
+export function ConfiguracaoMfa({ onConcluir, onCancelar }: ConfiguracaoMfaProps) {
   const [dados, setDados] = useState<DadosConfiguracao | null>(null);
+  const [erroCarga, setErroCarga] = useState<string | null>(null);
   const [codigo, setCodigo] = useState("");
-  const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [codigos, setCodigos] = useState<string[] | null>(null);
-  const [sessao, setSessao] = useState<SessaoUsuario | undefined>(undefined);
   const [guardou, setGuardou] = useState(false);
-  // ref pra nao refazer a chamada do QR code so porque o pai recriou a funcao
-  const onExpirarRef = useRef(onExpirar);
-  useEffect(() => {
-    onExpirarRef.current = onExpirar;
-  }, [onExpirar]);
+  const { erros, formRef, mostrar, mostrarErroDaApi, limparAoEditar } = useErrosFormulario();
 
   // o servidor devolve o mesmo segredo enquanto a configuracao nao for confirmada, entao a chamada
   // repetida do StrictMode (ou uma aba recarregada) nao troca o QR code
   useEffect(() => {
     let ativo = true;
     authService
-      .iniciarConfiguracaoMfa(tokenEtapa)
+      .iniciarConfiguracaoMfa()
       .then((res) => {
         if (ativo) setDados(res);
       })
       .catch((e: unknown) => {
-        if (!ativo) return;
-        if (e instanceof ApiError && e.status === 401 && tokenEtapa && onExpirarRef.current) onExpirarRef.current();
-        else setErro(e instanceof Error ? e.message : "Não foi possível gerar o QR code.");
+        if (ativo) setErroCarga(e instanceof Error ? e.message : "Não foi possível gerar o QR code.");
       });
     return () => {
       ativo = false;
     };
-  }, [tokenEtapa]);
+  }, []);
 
   async function confirmar(e: FormEvent) {
     e.preventDefault();
-    setErro(null);
-    if (codigo.length !== 6) {
-      setErro("Digite os 6 dígitos que aparecem no aplicativo.");
-      return;
-    }
+    if (mostrar(codigo.length === 6 ? {} : { codigo: "Digite os 6 dígitos que aparecem no aplicativo." })) return;
+
     setEnviando(true);
     try {
-      const resultado = await authService.confirmarConfiguracaoMfa(codigo, tokenEtapa);
+      const resultado = await authService.confirmarConfiguracaoMfa(codigo);
       setCodigos(resultado.codigosRecuperacao);
-      setSessao(resultado.sessao);
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 401 && tokenEtapa && onExpirar) {
-        onExpirar();
-        return;
+    } catch (erro) {
+      if (!mostrarErroDaApi(erro)) {
+        mostrar({ codigo: erro instanceof Error ? erro.message : "Não foi possível confirmar o código." });
       }
-      setErro(e instanceof Error ? e.message : "Não foi possível confirmar o código.");
       setCodigo("");
     } finally {
       setEnviando(false);
@@ -138,7 +123,7 @@ export function ConfiguracaoMfa({ tokenEtapa, obrigatoria, onConcluir, onCancela
           <span>Guardei meus códigos de recuperação em um lugar seguro.</span>
         </label>
 
-        <button type="button" className="btn btn-primary btn-block" disabled={!guardou} onClick={() => onConcluir(sessao)}>
+        <button type="button" className="btn btn-primary btn-block" disabled={!guardou} onClick={onConcluir}>
           Continuar
         </button>
       </div>
@@ -146,14 +131,9 @@ export function ConfiguracaoMfa({ tokenEtapa, obrigatoria, onConcluir, onCancela
   }
 
   return (
-    <form onSubmit={confirmar} className="form">
+    <form onSubmit={confirmar} onChange={limparAoEditar} className="form" ref={formRef} noValidate>
       <div>
         <h2 className="mfa-titulo">Configurar autenticação em dois fatores</h2>
-        {obrigatoria && (
-          <p className="mfa-aviso">
-            Obrigatória para administrador e secretaria. Você só acessa o sistema depois de concluir.
-          </p>
-        )}
       </div>
 
       <ol className="mfa-passos">
@@ -171,8 +151,7 @@ export function ConfiguracaoMfa({ tokenEtapa, obrigatoria, onConcluir, onCancela
             <p className="form-hint mfa-texto">Não consegue escanear? Digite esta chave no aplicativo:</p>
             <code className="mfa-segredo">{formatarSegredo(dados.segredo)}</code>
           </div>
-          <label className="field">
-            <span>Código do aplicativo</span>
+          <Campo nome="codigo" rotulo="Código do aplicativo" obrigatorio erro={erros.codigo}>
             <input
               value={codigo}
               onChange={(e) => setCodigo(e.target.value.replace(/\D/g, "").slice(0, 6))}
@@ -181,24 +160,22 @@ export function ConfiguracaoMfa({ tokenEtapa, obrigatoria, onConcluir, onCancela
               placeholder="000000"
               className="mfa-codigo-input"
             />
-          </label>
+          </Campo>
         </>
       ) : (
-        !erro && <p className="form-hint mfa-texto">Gerando QR code…</p>
+        !erroCarga && <p className="form-hint mfa-texto">Gerando QR code…</p>
       )}
 
-      {erro && <p className="form-error">{erro}</p>}
+      {erroCarga && <p className="form-error">{erroCarga}</p>}
 
       <button className="btn btn-primary btn-block" type="submit" disabled={!dados || enviando}>
         {enviando ? "Confirmando…" : "Confirmar e ativar"}
       </button>
-      {onCancelar && (
-        <div className="mfa-acoes-secundarias">
-          <button type="button" className="btn-link" onClick={onCancelar}>
-            {obrigatoria ? "Voltar" : "Cancelar"}
-          </button>
-        </div>
-      )}
+      <div className="mfa-acoes-secundarias">
+        <button type="button" className="btn-link" onClick={onCancelar}>
+          Cancelar
+        </button>
+      </div>
     </form>
   );
 }

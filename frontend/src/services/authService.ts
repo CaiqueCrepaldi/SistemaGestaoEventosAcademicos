@@ -31,11 +31,9 @@ export interface SolicitarRecuperacaoResult {
   codigoDemo?: string;
 }
 
-// login com 2FA ativo (ou equipe sem 2FA configurado) ainda nao abre sessao: devolve um token
-// temporario que so serve pra etapa seguinte
-export type ResultadoLogin =
-  | { tipo: "sessao"; sessao: SessaoUsuario }
-  | { tipo: "mfa_pendente" | "mfa_configuracao"; tokenEtapa: string };
+// login com 2FA ativo ainda nao abre sessao: devolve um token temporario que so serve pra etapa
+// do codigo
+export type ResultadoLogin = { tipo: "sessao"; sessao: SessaoUsuario } | { tipo: "mfa_pendente"; tokenEtapa: string };
 
 export interface ConfiguracaoMfa {
   qrCode: string; // PNG em data URL, gerado no nosso servidor
@@ -44,8 +42,6 @@ export interface ConfiguracaoMfa {
 
 export interface ConfirmacaoMfa {
   codigosRecuperacao: string[];
-  // so vem quando a configuracao foi a obrigatoria, no meio do login
-  sessao?: SessaoUsuario;
 }
 
 export type CodigoSegundaEtapa = { codigo: string } | { codigoRecuperacao: string };
@@ -58,7 +54,7 @@ interface LoginResponseDTO {
 }
 
 interface EtapaMfaDTO {
-  mfa: "PENDENTE" | "CONFIGURACAO_OBRIGATORIA";
+  mfa: "PENDENTE";
   tokenEtapa: string;
   expiresIn: number;
 }
@@ -70,9 +66,7 @@ function paraSessao(res: LoginResponseDTO): SessaoUsuario {
 export const authService = {
   async login(emailLogin: string, senha: string): Promise<ResultadoLogin> {
     const res = await api.post<LoginResponseDTO | EtapaMfaDTO>("/auth/login", { emailLogin, senha });
-    if ("mfa" in res) {
-      return { tipo: res.mfa === "PENDENTE" ? "mfa_pendente" : "mfa_configuracao", tokenEtapa: res.tokenEtapa };
-    }
+    if ("mfa" in res) return { tipo: "mfa_pendente", tokenEtapa: res.tokenEtapa };
     return { tipo: "sessao", sessao: paraSessao(res) };
   },
 
@@ -86,18 +80,13 @@ export const authService = {
     return { sessao: paraSessao(res), codigosRecuperacaoRestantes: res.codigosRecuperacaoRestantes };
   },
 
-  // sem tokenEtapa usa a sessao salva (aluno ativando); com tokenEtapa e a configuracao obrigatoria da equipe
-  iniciarConfiguracaoMfa(tokenEtapa?: string) {
-    return api.post<ConfiguracaoMfa>("/auth/2fa/configuracao", undefined, tokenEtapa);
+  // ativacao opcional do 2FA na propria conta (qualquer perfil), em "Minha conta"
+  iniciarConfiguracaoMfa() {
+    return api.post<ConfiguracaoMfa>("/auth/2fa/configuracao");
   },
 
-  async confirmarConfiguracaoMfa(codigo: string, tokenEtapa?: string): Promise<ConfirmacaoMfa> {
-    const res = await api.post<{ codigosRecuperacao: string[]; sessao?: LoginResponseDTO }>(
-      "/auth/2fa/configuracao/confirmar",
-      { codigo },
-      tokenEtapa,
-    );
-    return { codigosRecuperacao: res.codigosRecuperacao, sessao: res.sessao ? paraSessao(res.sessao) : undefined };
+  confirmarConfiguracaoMfa(codigo: string): Promise<ConfirmacaoMfa> {
+    return api.post<ConfirmacaoMfa>("/auth/2fa/configuracao/confirmar", { codigo });
   },
 
   // devolve a sessao reemitida: as outras sessoes da conta sao encerradas no servidor

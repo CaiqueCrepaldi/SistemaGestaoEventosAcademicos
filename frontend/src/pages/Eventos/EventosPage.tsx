@@ -1,35 +1,63 @@
 import { useEffect, useState } from "react";
+import { Campo, LegendaObrigatorio, MarcaObrigatorio } from "../../components/ui/Campo";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
+import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
 import {
   ApiError,
   emailService,
   eventoService,
-  feedbackService,
   inscricaoAlunoService,
   inscricaoService,
   palestranteService,
-  questionarioService,
   salaService,
 } from "../../services";
-import type { Evento, Inscricao, Palestrante, Sala } from "../../types";
+import type { Evento, Inscricao, Palestrante, PerguntaQuestionario, Sala } from "../../types";
 import { inputLocalParaIso, isoParaInputLocal } from "../../utils/data";
-import { questionarioVazio, validarQuestionario } from "../../utils/questionario";
+import { ALTERNATIVAS_POR_PERGUNTA, questionarioVazio } from "../../utils/questionario";
 
-// formulario em branco pra "novo evento", ja com questionario de 10 perguntas vazias
-function formVazio(salas: Sala[], palestrantes: Palestrante[]): Omit<Evento, "id"> {
-  return {
-    titulo: "",
-    horario: "",
-    salaId: salas[0]?.id ?? "",
-    palestranteId: palestrantes[0]?.id ?? "",
-    tema: "",
-    cargaHoraria: 1,
-    questionario: questionarioVazio(),
-  };
+interface FormEvento {
+  titulo: string;
+  horario: string;
+  salaId: string;
+  palestranteId: string;
+  tema: string;
+  // texto no formulario pra campo vazio nao virar 0 sozinho
+  cargaHoraria: string;
+  questionario: PerguntaQuestionario[];
+}
+
+function formVazio(): FormEvento {
+  return { titulo: "", horario: "", salaId: "", palestranteId: "", tema: "", cargaHoraria: "", questionario: questionarioVazio() };
+}
+
+// chaves de erro do questionario seguem o caminho que o backend devolve (questionario.3.enunciado...)
+const chaveEnunciado = (i: number) => `questionario.${i}.enunciado`;
+const chaveAlternativa = (i: number, j: number) => `questionario.${i}.alternativas.${j}.texto`;
+const chaveCorreta = (i: number) => `questionario.${i}.correta`;
+
+function validarEvento(form: FormEvento): ErrosFormulario {
+  const erros: ErrosFormulario = {};
+  if (!form.titulo.trim()) erros.titulo = "Informe o título do evento.";
+  if (!form.salaId) erros.salaId = "Selecione a sala.";
+  if (!form.horario) erros.horario = "Informe a data e o horário.";
+  if (!form.palestranteId) erros.palestranteId = "Selecione o palestrante responsável.";
+  if (!form.tema.trim()) erros.tema = "Informe o tema do evento.";
+  const carga = Number(form.cargaHoraria);
+  if (!form.cargaHoraria.trim()) erros.cargaHoraria = "Informe a carga horária.";
+  else if (!(carga > 0)) erros.cargaHoraria = "A carga horária deve ser maior que zero.";
+
+  form.questionario.forEach((pergunta, i) => {
+    if (!pergunta.enunciado.trim()) erros[chaveEnunciado(i)] = `Escreva o enunciado da pergunta ${i + 1}.`;
+    pergunta.alternativas.forEach((alternativa, j) => {
+      if (!alternativa.texto.trim()) erros[chaveAlternativa(i, j)] = `Preencha a alternativa ${j + 1}.`;
+    });
+    if (pergunta.alternativas.filter((a) => a.correta).length !== 1) erros[chaveCorreta(i)] = "Marque qual alternativa é a correta.";
+  });
+  return erros;
 }
 
 // crud de eventos pra equipe, lista + inscricao pro aluno
@@ -42,9 +70,10 @@ export function EventosPage() {
   const [avisoPorEvento, setAvisoPorEvento] = useState<Record<string, string>>({});
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<Evento | null>(null);
-  const [form, setForm] = useState<Omit<Evento, "id">>(formVazio([], []));
+  const [form, setForm] = useState<FormEvento>(formVazio());
   const [confirmandoSalvar, setConfirmandoSalvar] = useState(false);
   const [excluindo, setExcluindo] = useState<Evento | null>(null);
+  const { erros, formRef, mostrar, mostrarErroDaApi, limpar, limparAoEditar } = useErrosFormulario();
 
   useEffect(() => {
     void carregar();
@@ -138,10 +167,11 @@ export function EventosPage() {
     );
   }
 
-  // abre o modal em branco
+  // abre o modal em branco (sala e palestrante escolhidos de proposito, nao pre-selecionados)
   function abrirNovo() {
     setEditando(null);
-    setForm(formVazio(salas, palestrantes));
+    setForm(formVazio());
+    limpar();
     setModalAberto(true);
   }
 
@@ -154,9 +184,10 @@ export function EventosPage() {
       salaId: evento.salaId,
       palestranteId: evento.palestranteId,
       tema: evento.tema ?? "",
-      cargaHoraria: evento.cargaHoraria ?? 1,
+      cargaHoraria: String(evento.cargaHoraria ?? ""),
       questionario: evento.questionario ?? questionarioVazio(),
     });
+    limpar();
     setModalAberto(true);
   }
 
@@ -182,6 +213,7 @@ export function EventosPage() {
 
   // marca uma alternativa como correta, as outras 3 da mesma pergunta viram falsas
   function marcarCorreta(indicePergunta: number, indiceAlternativa: number) {
+    limpar(chaveCorreta(indicePergunta));
     setForm({
       ...form,
       questionario: form.questionario.map((p, i) =>
@@ -192,35 +224,16 @@ export function EventosPage() {
     });
   }
 
-  // checa titulo/tema/palestrante e valida o questionario inteiro
-  function validar(): string | null {
-    if (!form.titulo.trim()) return "Preencha o título do evento.";
-    if (!form.tema.trim()) return "Preencha o tema do evento.";
-    if (!form.palestranteId) return "Selecione o palestrante responsável.";
-    const indicePergunta = validarQuestionario(form.questionario);
-    if (indicePergunta) {
-      return `Preencha a pergunta ${indicePergunta}: enunciado, as 4 alternativas e marque qual é a correta.`;
-    }
-    return null;
-  }
-
   // valida, e se for edicao pede confirmacao antes de gravar
   function pedirSalvar() {
-    const erro = validar();
-    if (erro) {
-      toast.error(erro);
-      return;
-    }
-    if (editando) {
-      setConfirmandoSalvar(true);
-    } else {
-      void salvar();
-    }
+    if (mostrar(validarEvento(form))) return;
+    if (editando) setConfirmandoSalvar(true);
+    else void salvar();
   }
 
   // cria ou atualiza dependendo se ta editando, convertendo o horario do input (fuso local) pra ISO
   async function salvar() {
-    const dados = { ...form, horario: inputLocalParaIso(form.horario) };
+    const dados = { ...form, cargaHoraria: Number(form.cargaHoraria), horario: inputLocalParaIso(form.horario) };
     try {
       if (editando) {
         await eventoService.update(editando.id, dados);
@@ -234,27 +247,23 @@ export function EventosPage() {
       await carregar();
     } catch (e) {
       setConfirmandoSalvar(false);
-      toast.error(e instanceof ApiError ? e.message : "Não foi possível salvar o evento.");
+      // a regra de "exatamente 1 correta" o backend devolve em questionario.N.alternativas
+      const tratou = mostrarErroDaApi(e, (campo) => campo.replace(/^(questionario\.\d+)\.alternativas$/, "$1.correta"));
+      if (!tratou) toast.error(e instanceof ApiError ? e.message : "Não foi possível salvar o evento.");
     }
   }
 
-  // remove o evento e tudo que depende dele (inscricao, feedback, tentativa de questionario)
+  // o backend remove junto as inscricoes, feedbacks e tentativas de questionario do evento
   async function excluir() {
     if (!excluindo) return;
-    const eventoId = excluindo.id;
-    const [inscricoesDoEvento, feedbacksDoEvento] = await Promise.all([
-      inscricaoService.list().then((lista) => lista.filter((i) => i.eventoId === eventoId)),
-      feedbackService.list().then((lista) => lista.filter((f) => f.eventoId === eventoId)),
-    ]);
-    await Promise.all([
-      ...inscricoesDoEvento.map((i) => inscricaoService.remove(i.id)),
-      ...feedbacksDoEvento.map((f) => feedbackService.remove(f.id)),
-      questionarioService.removerTentativasDoEvento(eventoId),
-    ]);
-    await eventoService.remove(eventoId);
-    toast.success("Evento removido.");
-    setExcluindo(null);
-    await carregar();
+    try {
+      await eventoService.remove(excluindo.id);
+      toast.success("Evento removido.");
+      setExcluindo(null);
+      await carregar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível remover o evento.");
+    }
   }
 
   return (
@@ -315,98 +324,122 @@ export function EventosPage() {
         <Modal title={editando ? "Editar evento" : "Novo evento"} onClose={() => setModalAberto(false)} wide>
           <form
             className="form"
+            ref={formRef}
+            noValidate
+            onChange={limparAoEditar}
             onSubmit={(e) => {
               e.preventDefault();
               pedirSalvar();
             }}
           >
-            <label className="field">
-              <span>Título</span>
-              <input value={form.titulo} onChange={(e) => setForm({ ...form, titulo: e.target.value })} required />
-            </label>
+            <LegendaObrigatorio />
+            <Campo nome="titulo" rotulo="Título" obrigatorio erro={erros.titulo}>
+              <input value={form.titulo} onChange={(e) => setForm({ ...form, titulo: e.target.value })} autoFocus />
+            </Campo>
             <div className="field-row">
-              <label className="field">
-                <span>Sala</span>
-                <select value={form.salaId} onChange={(e) => setForm({ ...form, salaId: e.target.value })} required>
+              <Campo nome="salaId" rotulo="Sala" obrigatorio erro={erros.salaId}>
+                <select value={form.salaId} onChange={(e) => setForm({ ...form, salaId: e.target.value })}>
+                  <option value="">Selecione…</option>
                   {salas.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.nome} ({s.capacidade} lugares)
                     </option>
                   ))}
                 </select>
-              </label>
-              <label className="field">
-                <span>Data/Horário</span>
-                <input
-                  type="datetime-local"
-                  value={form.horario}
-                  onChange={(e) => setForm({ ...form, horario: e.target.value })}
-                  required
-                />
-              </label>
+              </Campo>
+              <Campo nome="horario" rotulo="Data/Horário" obrigatorio erro={erros.horario}>
+                <input type="datetime-local" value={form.horario} onChange={(e) => setForm({ ...form, horario: e.target.value })} />
+              </Campo>
             </div>
             <div className="field-row">
-              <label className="field">
-                <span>Palestrante</span>
-                <select
-                  value={form.palestranteId}
-                  onChange={(e) => setForm({ ...form, palestranteId: e.target.value })}
-                  required
-                >
+              <Campo nome="palestranteId" rotulo="Palestrante" obrigatorio erro={erros.palestranteId}>
+                <select value={form.palestranteId} onChange={(e) => setForm({ ...form, palestranteId: e.target.value })}>
+                  <option value="">Selecione…</option>
                   {palestrantes.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.nome}
                     </option>
                   ))}
                 </select>
-              </label>
-              <label className="field">
-                <span>Tema</span>
-                <input value={form.tema} onChange={(e) => setForm({ ...form, tema: e.target.value })} required />
-              </label>
+              </Campo>
+              <Campo nome="tema" rotulo="Tema" obrigatorio erro={erros.tema}>
+                <input value={form.tema} onChange={(e) => setForm({ ...form, tema: e.target.value })} />
+              </Campo>
             </div>
-            <label className="field">
-              <span>Carga horária (horas)</span>
+            <Campo nome="cargaHoraria" rotulo="Carga horária (horas)" obrigatorio erro={erros.cargaHoraria}>
               <input
                 type="number"
-                min={1}
+                min={0.5}
                 step={0.5}
                 value={form.cargaHoraria}
-                onChange={(e) => setForm({ ...form, cargaHoraria: Number(e.target.value) })}
-                required
+                onChange={(e) => setForm({ ...form, cargaHoraria: e.target.value })}
               />
-            </label>
+            </Campo>
 
             <div className="field">
-              <span>Questionário obrigatório (10 perguntas, definidas pelo palestrante)</span>
+              <span>
+                Questionário obrigatório (10 perguntas, definidas pelo palestrante)
+                <MarcaObrigatorio />
+              </span>
+              <p className="form-hint" style={{ margin: 0 }}>
+                Em cada pergunta, preencha o enunciado e as 4 alternativas e marque a correta.
+              </p>
               <div className="questionario-builder">
-                {form.questionario.map((pergunta, indicePergunta) => (
-                  <div className="questionario-pergunta" key={pergunta.id}>
-                    <div className="questionario-pergunta-titulo">Pergunta {indicePergunta + 1} de 10</div>
-                    <input
-                      value={pergunta.enunciado}
-                      onChange={(e) => atualizarEnunciado(indicePergunta, e.target.value)}
-                      placeholder="Enunciado da pergunta"
-                    />
-                    {pergunta.alternativas.map((alternativa, indiceAlternativa) => (
-                      <div className="questionario-alternativa" key={indiceAlternativa}>
-                        <input
-                          type="radio"
-                          name={`correta-${pergunta.id}`}
-                          checked={alternativa.correta}
-                          onChange={() => marcarCorreta(indicePergunta, indiceAlternativa)}
-                          aria-label={`Marcar alternativa ${indiceAlternativa + 1} como correta`}
-                        />
-                        <input
-                          type="text"
-                          value={alternativa.texto}
-                          onChange={(e) => atualizarAlternativa(indicePergunta, indiceAlternativa, e.target.value)}
-                          placeholder={`Alternativa ${indiceAlternativa + 1}`}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                ))}
+                {form.questionario.map((pergunta, indicePergunta) => {
+                  const erroEnunciado = erros[chaveEnunciado(indicePergunta)];
+                  const alternativasComErro = pergunta.alternativas
+                    .map((_, j) => j)
+                    .filter((j) => erros[chaveAlternativa(indicePergunta, j)]);
+                  const erroCorreta = erros[chaveCorreta(indicePergunta)];
+                  const temErro = Boolean(erroEnunciado || alternativasComErro.length || erroCorreta);
+                  return (
+                    <div className={"questionario-pergunta" + (temErro ? " grupo-invalido" : "")} key={pergunta.id}>
+                      <div className="questionario-pergunta-titulo">Pergunta {indicePergunta + 1} de 10</div>
+                      <input
+                        name={chaveEnunciado(indicePergunta)}
+                        value={pergunta.enunciado}
+                        onChange={(e) => atualizarEnunciado(indicePergunta, e.target.value)}
+                        placeholder="Enunciado da pergunta"
+                        aria-label={`Enunciado da pergunta ${indicePergunta + 1}`}
+                        aria-invalid={erroEnunciado ? true : undefined}
+                        className={erroEnunciado ? "campo-invalido" : undefined}
+                      />
+                      {erroEnunciado && <p className="form-error">{erroEnunciado}</p>}
+                      {pergunta.alternativas.map((alternativa, indiceAlternativa) => {
+                        const erroAlternativa = erros[chaveAlternativa(indicePergunta, indiceAlternativa)];
+                        return (
+                          <div className="questionario-alternativa" key={indiceAlternativa}>
+                            <input
+                              type="radio"
+                              name={`correta-${pergunta.id}`}
+                              checked={alternativa.correta}
+                              onChange={() => marcarCorreta(indicePergunta, indiceAlternativa)}
+                              aria-label={`Marcar alternativa ${indiceAlternativa + 1} como correta`}
+                              aria-invalid={erroCorreta && indiceAlternativa === 0 ? true : undefined}
+                            />
+                            <input
+                              type="text"
+                              name={chaveAlternativa(indicePergunta, indiceAlternativa)}
+                              value={alternativa.texto}
+                              onChange={(e) => atualizarAlternativa(indicePergunta, indiceAlternativa, e.target.value)}
+                              placeholder={`Alternativa ${indiceAlternativa + 1}`}
+                              aria-invalid={erroAlternativa ? true : undefined}
+                              className={erroAlternativa ? "campo-invalido" : undefined}
+                            />
+                          </div>
+                        );
+                      })}
+                      {alternativasComErro.length > 0 && (
+                        <p className="form-error">
+                          {alternativasComErro.length === ALTERNATIVAS_POR_PERGUNTA
+                            ? "Preencha as 4 alternativas."
+                            : `Preencha a(s) alternativa(s) ${alternativasComErro.map((j) => j + 1).join(", ")}.`}
+                        </p>
+                      )}
+                      {erroCorreta && <p className="form-error">{erroCorreta}</p>}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -434,7 +467,7 @@ export function EventosPage() {
       {excluindo && (
         <ConfirmDialog
           title="Remover evento"
-          message={`Tem certeza que deseja remover "${excluindo.titulo}"? Inscrições e feedbacks vinculados também serão removidos.`}
+          message={`Tem certeza que deseja remover "${excluindo.titulo}"? Inscrições, feedbacks e tentativas de questionário vinculados também serão removidos.`}
           confirmLabel="Remover"
           tone="danger"
           onConfirm={() => void excluir()}

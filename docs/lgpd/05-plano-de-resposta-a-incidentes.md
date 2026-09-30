@@ -1,6 +1,7 @@
 # Plano de resposta a incidentes de segurança — SGEA
 
-**Data:** 27/09/2026 · **Versão:** 1
+**Data:** 29/09/2026 · **Versão:** 2 (etapa 3 atualizada: nome, e-mail e
+RGM deixaram de ser criptografados)
 
 Aplica as 6 etapas da seção 4.7 do guia ao SGEA, com responsável por etapa
 e o prazo regulatório vigente, conferido na fonte oficial da ANPD (ver
@@ -47,12 +48,15 @@ disponível na Vercel.
 ### 3. Identificar dados e titulares afetados
 
 Consulta direta ao banco (por quem tem acesso de administrador),
-cruzando `logs_auditoria` com o período do incidente. Como nome/e-mail/RGM
-ficam cifrados, decifrar pra identificar o titular afetado é uma operação
-sensível em si — só deve ser feita pelo responsável técnico, e o próprio
-ato de decifrar em resposta a um incidente deveria virar um registro de
-auditoria à parte (documentado, mesmo que não seja uma ação do usuário
-comum do sistema).
+cruzando `logs_auditoria` com o período do incidente. Nome, e-mail e RGM
+ficam em texto puro desde 29/09/2026 (ver `07-medidas-tecnicas-de-seguranca.md`),
+então a identificação dos titulares afetados não depende de decifrar nada
+— e, pelo mesmo motivo, um vazamento do banco expõe esses dados
+diretamente, o que pesa na avaliação de risco da etapa 4. A consulta deve
+ser feita só pelo responsável técnico, registrando fora do sistema quem
+consultou, quando e com que finalidade. Senhas (hash bcrypt), códigos de
+recuperação (hash) e o segredo do 2FA (cifrado) continuam protegidos
+mesmo num vazamento do banco.
 
 ### 4. Avaliar risco ou dano relevante
 

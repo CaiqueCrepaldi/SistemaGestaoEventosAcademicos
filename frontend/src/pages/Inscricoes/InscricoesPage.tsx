@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Badge } from "../../components/ui/Badge";
+import { Campo, LegendaObrigatorio } from "../../components/ui/Campo";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { toast } from "../../components/ui/Toast";
-import { eventoService, inscricaoService, participanteService, salaService } from "../../services";
+import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
+import { ApiError, eventoService, inscricaoService, participanteService, salaService } from "../../services";
 import type { Evento, Inscricao, Participante, Sala, StatusPresenca } from "../../types";
 
 // traduz o status em cor pra Badge
@@ -32,6 +34,7 @@ export function InscricoesPage() {
   const [participanteSelecionado, setParticipanteSelecionado] = useState<Participante | null>(null);
   const [eventoId, setEventoId] = useState("");
   const [excluindo, setExcluindo] = useState<Inscricao | null>(null);
+  const { erros, formRef, mostrar, mostrarErroDaApi, limpar, limparAoEditar } = useErrosFormulario();
 
   useEffect(() => {
     void carregar();
@@ -51,11 +54,12 @@ export function InscricoesPage() {
     setSalas(sa);
   }
 
-  // abre o modal de nova inscricao ja com o primeiro evento selecionado
+  // abre o modal de nova inscricao sem evento escolhido (a pessoa escolhe de proposito)
   function abrirNova() {
     setBuscaParticipante("");
     setParticipanteSelecionado(null);
-    setEventoId(eventos[0]?.id ?? "");
+    setEventoId("");
+    limpar();
     setModalAberto(true);
   }
 
@@ -68,39 +72,41 @@ export function InscricoesPage() {
     return sala.capacidade - ocupadas;
   }
 
+  function validar(): ErrosFormulario {
+    const faltando: ErrosFormulario = {};
+    if (!participanteSelecionado) faltando.participanteId = "Busque e selecione o aluno.";
+    else if (participanteSelecionado.ativo === false) faltando.participanteId = "Aluno inativo: não é possível inscrevê-lo em eventos.";
+    if (!eventoId) faltando.eventoId = "Selecione o evento.";
+    if (participanteSelecionado && eventoId) {
+      if (inscricoes.some((i) => i.participanteId === participanteSelecionado.id && i.eventoId === eventoId)) {
+        faltando.eventoId = "Este aluno já está inscrito neste evento.";
+      } else {
+        const vagas = vagasDisponiveis(eventos.find((e) => e.id === eventoId));
+        if (vagas !== null && vagas <= 0) faltando.eventoId = "Não há vagas disponíveis para este evento.";
+      }
+    }
+    return faltando;
+  }
+
   // valida selecao/vaga/duplicidade e cria a inscricao
   async function salvar() {
-    if (!participanteSelecionado) {
-      toast.error("Busque e selecione um aluno por nome, e-mail ou RGM.");
-      return;
+    if (mostrar(validar())) return;
+    try {
+      await inscricaoService.create({
+        participanteId: participanteSelecionado!.id,
+        eventoId,
+        statusPresenca: "PENDENTE",
+        dataCheckin: null,
+        usuarioId: null,
+      });
+      toast.success("Inscrição registrada.");
+      setModalAberto(false);
+      await carregar();
+    } catch (erro) {
+      if (erro instanceof ApiError && erro.code === "PARTICIPANTE_INATIVO") mostrar({ participanteId: erro.message });
+      else if (erro instanceof ApiError && (erro.code === "JA_INSCRITO" || erro.code === "EVENTO_LOTADO")) mostrar({ eventoId: erro.message });
+      else if (!mostrarErroDaApi(erro)) toast.error(erro instanceof Error ? erro.message : "Não foi possível registrar a inscrição.");
     }
-    if (!eventoId) {
-      toast.error("Selecione um evento.");
-      return;
-    }
-    const jaInscrito = inscricoes.some(
-      (i) => i.participanteId === participanteSelecionado.id && i.eventoId === eventoId,
-    );
-    if (jaInscrito) {
-      toast.error("Este participante já está inscrito neste evento.");
-      return;
-    }
-    const evento = eventos.find((e) => e.id === eventoId);
-    const vagas = vagasDisponiveis(evento);
-    if (vagas !== null && vagas <= 0) {
-      toast.error("Não há vagas disponíveis para este evento.");
-      return;
-    }
-    await inscricaoService.create({
-      participanteId: participanteSelecionado.id,
-      eventoId,
-      statusPresenca: "PENDENTE",
-      dataCheckin: null,
-      usuarioId: null,
-    });
-    toast.success("Inscrição registrada.");
-    setModalAberto(false);
-    await carregar();
   }
 
   // remove a inscricao marcada pra exclusao
@@ -158,7 +164,9 @@ export function InscricoesPage() {
               const evento = eventos.find((e) => e.id === inscricao.eventoId);
               return (
                 <tr key={inscricao.id}>
-                  <td>{participante?.nome ?? "—"}</td>
+                  <td>
+                    {participante?.nome ?? "—"} {participante?.ativo === false && <Badge tone="red">Inativo</Badge>}
+                  </td>
                   <td>{evento?.titulo ?? "—"}</td>
                   <td>
                     <Badge tone={badgeTone(inscricao.statusPresenca)}>{badgeLabel(inscricao.statusPresenca)}</Badge>
@@ -187,13 +195,21 @@ export function InscricoesPage() {
         <Modal title="Nova inscrição" onClose={() => setModalAberto(false)}>
           <form
             className="form"
+            ref={formRef}
+            noValidate
+            onChange={limparAoEditar}
             onSubmit={(e) => {
               e.preventDefault();
               void salvar();
             }}
           >
-            <div className="field">
-              <span>Aluno (busque por nome, e-mail ou RGM)</span>
+            <LegendaObrigatorio />
+            <Campo
+              nome="participanteId"
+              rotulo="Aluno (busque por nome, e-mail ou RGM)"
+              obrigatorio
+              erro={erros.participanteId}
+            >
               <input
                 className="search-input"
                 style={{ marginBottom: 0 }}
@@ -203,47 +219,52 @@ export function InscricoesPage() {
                   setBuscaParticipante(e.target.value);
                 }}
                 placeholder="Nome, e-mail ou RGM…"
+                autoComplete="off"
                 autoFocus
-                required
               />
-              {!participanteSelecionado && resultadosBusca.length > 0 && (
-                <ul className="simple-list">
-                  {resultadosBusca.map((p) => (
-                    <li
-                      key={p.id}
-                      className="simple-list-item clickable"
-                      onClick={() => {
-                        setParticipanteSelecionado(p);
-                        setBuscaParticipante("");
-                      }}
-                    >
+            </Campo>
+            {!participanteSelecionado && resultadosBusca.length > 0 && (
+              <ul className="simple-list">
+                {resultadosBusca.map((p) => (
+                  <li
+                    key={p.id}
+                    className="simple-list-item clickable"
+                    onClick={() => {
+                      setParticipanteSelecionado(p);
+                      setBuscaParticipante("");
+                      limpar("participanteId");
+                    }}
+                  >
+                    <div className="simple-list-item-row">
                       <div className="simple-list-title">{p.nome}</div>
-                      <div className="simple-list-sub">
-                        {p.email} · RGM {p.rgm}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {!participanteSelecionado && alvoBusca && resultadosBusca.length === 0 && (
-                <p className="form-hint">Nenhum participante encontrado.</p>
-              )}
-            </div>
-            <label className="field">
-              <span>Evento</span>
-              <select value={eventoId} onChange={(e) => setEventoId(e.target.value)} required>
+                      {p.ativo === false && <Badge tone="red">Inativo</Badge>}
+                    </div>
+                    <div className="simple-list-sub">
+                      {p.email} · RGM {p.rgm}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {!participanteSelecionado && alvoBusca && resultadosBusca.length === 0 && (
+              <p className="form-hint">Nenhum participante encontrado.</p>
+            )}
+            <Campo
+              nome="eventoId"
+              rotulo="Evento"
+              obrigatorio
+              erro={erros.eventoId}
+              dica={vagas !== null ? (vagas > 0 ? `${vagas} vaga(s) disponível(is) neste evento.` : "Evento sem vagas disponíveis.") : undefined}
+            >
+              <select value={eventoId} onChange={(e) => setEventoId(e.target.value)}>
+                <option value="">Selecione…</option>
                 {eventos.map((e) => (
                   <option key={e.id} value={e.id}>
                     {e.titulo}
                   </option>
                 ))}
               </select>
-            </label>
-            {vagas !== null && (
-              <p className={vagas <= 0 ? "form-error" : "form-hint"}>
-                {vagas > 0 ? `${vagas} vaga(s) disponível(is) neste evento.` : "Evento sem vagas disponíveis."}
-              </p>
-            )}
+            </Campo>
             <div className="modal-footer">
               <button type="button" className="btn btn-ghost" onClick={() => setModalAberto(false)}>
                 Cancelar

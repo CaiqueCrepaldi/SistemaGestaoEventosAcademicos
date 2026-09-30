@@ -1,6 +1,7 @@
 # Fornecedores e APIs externas — SGEA
 
-**Data:** 27/09/2026 · **Versão:** 1
+**Data:** 29/09/2026 · **Versão:** 2 (TiDB Cloud: nome, e-mail e RGM
+deixaram de ser criptografados pela aplicação)
 
 Todo serviço de terceiro identificado no diagnóstico da Fase 0 (código
 completo revisado — backend, frontend, deploy). Os três são também os
@@ -10,11 +11,12 @@ completo revisado — backend, frontend, deploy). Os três são também os
 
 - **Finalidade:** banco de dados relacional (MySQL-compatível) que
   armazena todos os dados do sistema.
-- **Dados enviados:** todos os dados pessoais tratados pelo SGEA — os
-  sensíveis (nome/e-mail/RGM de aluno e usuário) cifrados em repouso pela
-  própria aplicação antes de chegar ao banco; os demais (evento, sala,
-  inscrição, log) em texto claro no nível do banco, mas atrás de
-  autenticação e TLS na conexão.
+- **Dados enviados:** todos os dados pessoais tratados pelo SGEA. Nome,
+  e-mail e RGM ficam em texto puro desde 29/09/2026 (dados pessoais comuns;
+  ver `07-medidas-tecnicas-de-seguranca.md`), como o restante (evento,
+  sala, inscrição, log), atrás de autenticação e TLS na conexão. Continuam
+  protegidos pela própria aplicação antes de chegar ao banco: senhas (hash
+  bcrypt), códigos de recuperação (hash) e o segredo do 2FA (cifrado).
 - **País:** Estados Unidos (região `us-east-1`, AWS), confirmado no host
   de conexão (`gateway01.us-east-1.prod.aws.tidbcloud.com`).
 - **Salvaguardas:** conexão cifrada (TLS) entre o backend e o banco;

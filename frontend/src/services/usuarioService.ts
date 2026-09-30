@@ -9,6 +9,8 @@ export interface UsuarioResumo {
   perfil: Perfil;
   mfaAtivo: boolean;
   bloqueado: boolean;
+  // aluno inativado pela equipe (conta de equipe nunca e inativada)
+  inativo: boolean;
 }
 
 export const usuarioService = {

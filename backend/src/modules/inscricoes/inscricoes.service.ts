@@ -3,7 +3,7 @@ import type { Inscricao as InscricaoDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { emailService } from "../email/email.service";
-import { descriptografar } from "../../utils/criptografia";
+import { lerDadoPessoal } from "../../utils/dadosPessoais";
 import { registrarAuditoria } from "../../utils/auditoria";
 import type { Inscricao, Perfil, StatusPresenca } from "../../types/domain";
 import type { InscricaoCheckinInput, InscricaoInput } from "./inscricoes.schemas";
@@ -54,6 +54,10 @@ async function criarManual(dados: InscricaoInput, ator: { id: string; perfil: Pe
   if (!participante) erros.push({ campo: "participanteId", mensagem: "Participante não encontrado." });
   if (!evento) erros.push({ campo: "eventoId", mensagem: "Evento não encontrado." });
   if (erros.length > 0) throw AppError.validacao("Dados inválidos.", erros);
+  // aluno inativado nao se inscreve em nada, nem pela secretaria
+  if (!participante!.ativo) {
+    throw AppError.conflito("PARTICIPANTE_INATIVO", "Aluno inativo: não é possível inscrevê-lo em eventos.");
+  }
 
   const jaInscrito = await prisma.inscricao.findUnique({
     where: { participanteId_eventoId: { participanteId: dados.participanteId, eventoId: dados.eventoId } },
@@ -139,11 +143,11 @@ async function confirmarEmail(id: string, participanteIdDoToken: string, atorId:
     throw AppError.acessoNegado("Esta inscrição não pertence a você.");
   }
 
-  const emailParticipante = descriptografar(inscricao.participante.email);
+  const emailParticipante = lerDadoPessoal(inscricao.participante.email);
 
   try {
     const resultado = await emailService.enviarConfirmacaoInscricao(emailParticipante, {
-      participanteNome: descriptografar(inscricao.participante.nome),
+      participanteNome: lerDadoPessoal(inscricao.participante.nome),
       eventoTitulo: inscricao.evento.titulo,
       eventoTema: inscricao.evento.tema,
       palestranteNome: inscricao.evento.palestrante.nome,

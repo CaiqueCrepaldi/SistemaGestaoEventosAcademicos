@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { MarcaObrigatorio } from "../../components/ui/Campo";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
+import { useErrosFormulario } from "../../hooks/useErrosFormulario";
 import { ApiError, eventoService } from "../../services";
 import type { PerguntaSemGabarito } from "../../services/questionarioService";
 import { questionarioService } from "../../services/questionarioService";
@@ -26,6 +28,7 @@ export function QuestionarioPage() {
   const [respostas, setRespostas] = useState<Record<number, number>>({});
   const [resultado, setResultado] = useState<TentativaQuestionario | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const { erros, formRef, mostrar, limpar } = useErrosFormulario();
 
   useEffect(() => {
     if (!eventoId || !usuario?.participanteId) return;
@@ -47,16 +50,19 @@ export function QuestionarioPage() {
 
   // guarda a alternativa escolhida pra aquela pergunta
   function escolher(indicePergunta: number, indiceAlternativa: number) {
+    limpar(`resposta-${indicePergunta}`);
     setRespostas((prev) => ({ ...prev, [indicePergunta]: indiceAlternativa }));
   }
 
   // confere se respondeu tudo, envia e mostra o resultado
   async function enviar() {
     if (!eventoId || !usuario?.participanteId) return;
-    if (Object.keys(respostas).length !== perguntas.length) {
-      toast.error("Responda todas as 10 perguntas antes de enviar.");
-      return;
-    }
+    // toda pergunta e obrigatoria: as que ficaram sem resposta ganham destaque e o foco vai pra primeira
+    const semResposta: Record<string, string> = {};
+    perguntas.forEach((_, indice) => {
+      if (respostas[indice] === undefined) semResposta[`resposta-${indice}`] = "Escolha uma alternativa.";
+    });
+    if (mostrar(semResposta)) return;
 
     setEnviando(true);
     try {
@@ -162,37 +168,62 @@ export function QuestionarioPage() {
             </div>
           </div>
         ) : (
-          <>
+          <form
+            ref={formRef}
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              void enviar();
+            }}
+          >
             <p className="form-hint" style={{ marginTop: 0 }}>
-              Tentativa {tentativasUsadas + 1} de {MAX_TENTATIVAS_QUESTIONARIO}.
+              Tentativa {tentativasUsadas + 1} de {MAX_TENTATIVAS_QUESTIONARIO}. Todas as perguntas são obrigatórias
+              <MarcaObrigatorio />.
             </p>
-            {perguntas.map((pergunta, indicePergunta) => (
-              <div className="questionario-resposta" key={pergunta.id}>
-                <strong>
-                  {indicePergunta + 1}. {pergunta.enunciado}
-                </strong>
-                {pergunta.alternativas.map((alternativa, indiceAlternativa) => (
-                  <label className="questionario-resposta-opcao" key={indiceAlternativa}>
-                    <input
-                      type="radio"
-                      name={`pergunta-${pergunta.id}`}
-                      checked={respostas[indicePergunta] === indiceAlternativa}
-                      onChange={() => escolher(indicePergunta, indiceAlternativa)}
-                    />
-                    {alternativa.texto}
-                  </label>
-                ))}
-              </div>
-            ))}
+            {perguntas.map((pergunta, indicePergunta) => {
+              const erro = erros[`resposta-${indicePergunta}`];
+              return (
+                <fieldset
+                  className={"questionario-resposta" + (erro ? " grupo-invalido" : "")}
+                  key={pergunta.id}
+                  aria-describedby={erro ? `resposta-${indicePergunta}-mensagem` : undefined}
+                  style={{ border: erro ? "1px solid" : "none", margin: 0 }}
+                >
+                  <legend style={{ padding: 0 }}>
+                    <strong>
+                      {indicePergunta + 1}. {pergunta.enunciado}
+                    </strong>
+                    <MarcaObrigatorio />
+                  </legend>
+                  {pergunta.alternativas.map((alternativa, indiceAlternativa) => (
+                    <label className="questionario-resposta-opcao" key={indiceAlternativa}>
+                      <input
+                        type="radio"
+                        name={`pergunta-${pergunta.id}`}
+                        checked={respostas[indicePergunta] === indiceAlternativa}
+                        onChange={() => escolher(indicePergunta, indiceAlternativa)}
+                        aria-invalid={erro && indiceAlternativa === 0 ? true : undefined}
+                      />
+                      {alternativa.texto}
+                    </label>
+                  ))}
+                  {erro && (
+                    <p className="form-error" id={`resposta-${indicePergunta}-mensagem`}>
+                      {erro}
+                    </p>
+                  )}
+                </fieldset>
+              );
+            })}
             <div className="modal-footer" style={{ justifyContent: "flex-end", marginTop: 8 }}>
               <Link className="btn btn-ghost" to="/certificados">
                 Cancelar
               </Link>
-              <button className="btn btn-primary" onClick={() => void enviar()} disabled={enviando}>
+              <button type="submit" className="btn btn-primary" disabled={enviando}>
                 {enviando ? "Enviando…" : "Enviar respostas"}
               </button>
             </div>
-          </>
+          </form>
         )}
       </div>
     </div>

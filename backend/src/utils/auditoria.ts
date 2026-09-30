@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { prisma } from "../db/prisma";
+import { lerDadoPessoal } from "./dadosPessoais";
 
 // codigos de acao registrados na trilha de auditoria — mantidos curtos e sem PII no proprio codigo
 export type AcaoAuditoria =
@@ -30,12 +31,14 @@ export type AcaoAuditoria =
   | "INSCRICAO_CRIADA"
   | "INSCRICAO_ATUALIZADA"
   | "INSCRICAO_REMOVIDA"
+  | "INSCRICAO_CANCELADA"
   | "PRESENCA_CONFIRMADA"
   | "PRESENCA_MARCADA_AUSENTE"
   | "QUESTIONARIO_RESPONDIDO"
   | "FEEDBACK_CRIADO"
-  | "FEEDBACK_ATUALIZADO"
-  | "FEEDBACK_REMOVIDO"
+  | "FEEDBACK_EXCLUIDO"
+  | "SENHA_HASH_ATUALIZADO"
+  | "CONVERSAO_DADOS_PESSOAIS"
   | "TERMOS_REACEITOS"
   | "DADOS_EXPORTADOS"
   | "CONTA_ANONIMIZADA"
@@ -55,7 +58,8 @@ export type AcaoAuditoria =
 // operacional (tipo da entidade + id, motivo curto), nunca dado sensivel (nome, e-mail, RGM,
 // senha, codigo de recuperacao, token). "criadoEm" so eh passado quando o log precisa carregar
 // exatamente o mesmo instante de outro registro (ex.: o aceite LGPD).
-// Logs so sao criados aqui: nada no sistema apaga ou edita uma linha de logs_auditoria.
+// Logs so sao criados aqui. A unica alteracao de linha existente e a conversao unica do nome do
+// responsavel de cifrado pra texto puro (scripts/converter-dados-pessoais.ts), sem mudar o conteudo
 export async function registrarAuditoria(
   usuarioId: string | null,
   acao: AcaoAuditoria,
@@ -63,14 +67,16 @@ export async function registrarAuditoria(
   criadoEm?: Date,
 ): Promise<void> {
   try {
-    // copia o nome (ja cifrado no cadastro, mesma chave/formato de criptografar()) de quem agiu:
-    // se o usuario for excluido depois, o log mantem o responsavel mesmo com usuarioId nulo
+    // copia o nome de quem agiu: se o usuario for excluido depois, o log mantem o responsavel
+    // mesmo com usuarioId nulo
     const ator = usuarioId ? await prisma.usuario.findUnique({ where: { id: usuarioId }, select: { nome: true } }) : null;
     await prisma.logAuditoria.create({
-      data: { id: randomUUID(), usuarioId, atorNomeCifrado: ator?.nome ?? null, acao, detalhe, criadoEm },
+      data: { id: randomUUID(), usuarioId, atorNome: ator ? lerDadoPessoal(ator.nome) : null, acao, detalhe, criadoEm },
     });
   } catch (erro) {
-    console.error("[auditoria] falha ao registrar log:", erro);
+    // so o tipo do erro: a mensagem do Prisma repete os valores da gravacao (nome de quem agiu)
+    const codigo = erro instanceof Error ? ((erro as { code?: string }).code ?? erro.name) : "erro desconhecido";
+    console.error(`[auditoria] falha ao registrar log ${acao}: ${codigo}`);
   }
 }
 

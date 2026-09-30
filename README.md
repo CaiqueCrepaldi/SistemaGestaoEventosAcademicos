@@ -30,8 +30,9 @@ docs/       contrato de API e detalhamento das funcionalidades principais
 Três perfis de usuário:
 
 - **Administrador** e **Secretaria** — acesso igual, total: CRUD de
-  eventos, salas e palestrantes; leitura (com busca) da lista de
-  participantes; gestão de inscrições; check-in (confirmar
+  eventos, salas e palestrantes; lista de participantes com busca,
+  correção de dados e inativação/reativação de aluno (com motivo);
+  gestão de inscrições; exclusão de feedback (com motivo); check-in (confirmar
   presença/ausência); consulta da nota de todos os alunos no questionário de
   cada evento; emissão de certificado de qualquer participante; dashboard
   com estatísticas gerais.
@@ -64,15 +65,24 @@ linha, ignorar valor forjado no corpo, esconder o gabarito do questionário
 antes da resposta) — então testar só pela tela não basta, a validação de
 verdade tem que estar no backend.
 
-Todo formulário de cadastro (evento, conta de aluno) valida nome (só
-letras), e-mail e RGM (11 caracteres, normalizado em maiúsculo) e avisa
-qualquer erro por notificação na tela — nunca por `alert()` ou só no
-console — com a mesma regra espelhada no backend via Zod. Editar ou excluir
-qualquer cadastro pede confirmação antes de gravar. Participantes não têm
-mais cadastro manual pela interface — a tabela é gerida direto no banco, e
-todo Participante hoje nasce automaticamente do cadastro de conta de aluno.
+Todo formulário marca os campos obrigatórios com `*` e, ao salvar com
+algum campo vazio ou inválido, mostra o erro embaixo do próprio campo (borda
+vermelha, foco no primeiro campo com problema) — nunca por `alert()` ou só
+no console — com a mesma regra espelhada no backend via Zod (os erros do
+backend também aparecem no campo certo). Editar ou excluir qualquer
+cadastro pede confirmação antes de gravar. Participantes não têm cadastro
+manual — todo Participante nasce do cadastro de conta de aluno; a equipe
+corrige os dados e inativa/reativa o aluno pela tela Participantes.
 
-Contas de demonstração:
+Senhas ficam só como hash bcrypt (custo 12, salt aleatório por senha). A
+autenticação em dois fatores é opcional para todos os perfis. Nome, e-mail
+e RGM ficam sem criptografia, protegidos por controle de acesso por perfil,
+HTTPS, banco com acesso restrito e auditoria (ver
+[`docs/lgpd/07-medidas-tecnicas-de-seguranca.md`](docs/lgpd/07-medidas-tecnicas-de-seguranca.md)).
+
+Contas de demonstração (criadas pelo seed, só no banco de desenvolvimento
+— em produção as senhas precisam ser outras, e o ideal é ativar o 2FA nas
+contas da equipe):
 
 | Perfil | Login | Senha |
 |---|---|---|

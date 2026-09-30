@@ -1,19 +1,23 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
+import { Badge } from "../../components/ui/Badge";
+import { Campo, LegendaObrigatorio } from "../../components/ui/Campo";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
 import { toast } from "../../components/ui/Toast";
-import { eventoService, feedbackService, participanteService } from "../../services";
-import type { EventoParaAvaliar } from "../../services";
+import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
+import { ApiError, eventoService, feedbackService, MOTIVOS_EXCLUSAO_FEEDBACK, participanteService } from "../../services";
+import type { EventoParaAvaliar, MotivoExclusaoFeedback } from "../../services";
 import type { Evento, Feedback, Participante } from "../../types";
 
 const SEM_EVENTO_PARA_AVALIAR = "Você poderá avaliar uma palestra depois de receber o certificado dela.";
+const ROTULOS_NOTA: Record<number, string> = { 1: "1 — Ruim", 2: "2 — Regular", 3: "3 — Boa", 4: "4 — Muito boa", 5: "5 — Excelente" };
 
-// lista de avaliacoes por evento, com media e formulario de novo feedback.
-// aluno so avalia palestra em que ja recebeu o certificado — a regra eh do backend
-// (GET /feedbacks/elegiveis e o 403 no POST); a tela so reflete o que a API liberou
+// feedback e do aluno: so ele envia (de palestra em que recebeu o certificado) e ninguem edita
+// depois de enviado. O aluno corrige excluindo o proprio e enviando outro; a equipe nao altera o que
+// o aluno escreveu, so exclui — sempre com um motivo. As regras valem no backend; a tela so reflete
 export function FeedbackPage() {
   const { usuario } = useAuth();
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
@@ -24,11 +28,15 @@ export function FeedbackPage() {
   const [paraAvaliar, setParaAvaliar] = useState<EventoParaAvaliar[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erroCarga, setErroCarga] = useState<string | null>(null);
-  const [eventoId, setEventoId] = useState("");
+  const [filtroEventoId, setFiltroEventoId] = useState("");
   const [modalAberto, setModalAberto] = useState(false);
   const [salvando, setSalvando] = useState(false);
-  const [feedbackExcluindo, setFeedbackExcluindo] = useState<Feedback | null>(null);
-  const [form, setForm] = useState({ eventoId: "", participanteId: "", nota: 5, comentario: "" });
+  const [form, setForm] = useState({ eventoId: "", nota: "", comentario: "" });
+  const [excluindoMeu, setExcluindoMeu] = useState<Feedback | null>(null);
+  const [excluindoPelaEquipe, setExcluindoPelaEquipe] = useState<Feedback | null>(null);
+  const [motivo, setMotivo] = useState<MotivoExclusaoFeedback | "">("");
+  const novo = useErrosFormulario();
+  const exclusao = useErrosFormulario();
 
   const isEquipe = usuario?.perfil === "ADMINISTRADOR" || usuario?.perfil === "SECRETARIA";
 
@@ -46,7 +54,6 @@ export function FeedbackPage() {
         setFeedbacks(f);
         setEventos(e);
         setParticipantes(p);
-        setEventoId((atual) => atual || e[0]?.id || "");
       } else {
         const [f, e, avaliaveis] = await Promise.all([
           feedbackService.list(),
@@ -64,89 +71,87 @@ export function FeedbackPage() {
     }
   }
 
-  // abre o modal em branco: aluno escolhe entre as palestras liberadas, equipe entre evento x participante sem feedback
+  // so o aluno abre o formulario: a palestra ele escolhe entre as liberadas pra ele
   function abrirNovo() {
-    if (!isEquipe) {
-      if (paraAvaliar.length === 0) return;
-      setForm({ eventoId: paraAvaliar[0].id, participanteId: "", nota: 5, comentario: "" });
-      setModalAberto(true);
-      return;
-    }
-
-    const combinacaoDisponivel = eventos
-      .flatMap((evento) => participantes.map((participante) => ({ evento, participante })))
-      .find(
-        ({ evento, participante }) =>
-          !feedbacks.some((feedback) => feedback.eventoId === evento.id && feedback.participanteId === participante.id),
-      );
-
-    if (!combinacaoDisponivel) {
-      toast.info("Não há uma palestra disponível para receber um novo feedback.");
-      return;
-    }
-
-    setForm({
-      eventoId: combinacaoDisponivel.evento.id,
-      participanteId: combinacaoDisponivel.participante.id,
-      nota: 5,
-      comentario: "",
-    });
+    if (paraAvaliar.length === 0) return;
+    setForm({ eventoId: paraAvaliar.length === 1 ? paraAvaliar[0].id : "", nota: "", comentario: "" });
+    novo.limpar();
     setModalAberto(true);
   }
 
-  // valida o comentario e grava o feedback (403/409 do backend voltam como mensagem)
+  function validar(): ErrosFormulario {
+    const faltando: ErrosFormulario = {};
+    if (!form.eventoId) faltando.eventoId = "Selecione a palestra.";
+    if (!form.nota) faltando.nota = "Escolha uma nota de 1 a 5.";
+    if (!form.comentario.trim()) faltando.comentario = "Escreva um comentário.";
+    return faltando;
+  }
+
+  // grava o feedback (403/409 do backend voltam como mensagem)
   async function salvar() {
-    if (!form.comentario.trim()) {
-      toast.error("Preencha o comentário — todos os campos são obrigatórios.");
-      return;
-    }
+    if (novo.mostrar(validar())) return;
 
     setSalvando(true);
     try {
-      if (isEquipe) {
-        await feedbackService.create(form);
-      } else {
-        await feedbackService.avaliar({ eventoId: form.eventoId, nota: form.nota, comentario: form.comentario });
-      }
-      toast.success("Feedback registrado.");
+      await feedbackService.avaliar({ eventoId: form.eventoId, nota: Number(form.nota), comentario: form.comentario.trim() });
+      toast.success("Feedback enviado.");
       setModalAberto(false);
       await carregar();
     } catch (erro) {
-      toast.error(erro instanceof Error ? erro.message : "Não foi possível registrar o feedback.");
+      if (erro instanceof ApiError && (erro.code === "FEEDBACK_JA_ENVIADO" || erro.status === 403)) novo.mostrar({ eventoId: erro.message });
+      else if (!novo.mostrarErroDaApi(erro)) toast.error(erro instanceof Error ? erro.message : "Não foi possível enviar o feedback.");
     } finally {
       setSalvando(false);
     }
   }
 
-  async function excluir() {
-    if (!feedbackExcluindo) return;
-
+  async function excluirMeu() {
+    if (!excluindoMeu) return;
     try {
-      await feedbackService.remove(feedbackExcluindo.id);
-      toast.success("Feedback removido.");
-      setFeedbackExcluindo(null);
+      await feedbackService.excluirMeu(excluindoMeu.id);
+      toast.success("Feedback excluído. Se quiser, envie um novo para essa palestra.");
+      setExcluindoMeu(null);
       await carregar();
     } catch (erro) {
-      toast.error(erro instanceof Error ? erro.message : "Não foi possível remover o feedback.");
+      toast.error(erro instanceof Error ? erro.message : "Não foi possível excluir o feedback.");
+    }
+  }
+
+  function abrirExclusaoPelaEquipe(feedback: Feedback) {
+    setExcluindoPelaEquipe(feedback);
+    setMotivo("");
+    exclusao.limpar();
+  }
+
+  async function excluirPelaEquipe() {
+    if (!excluindoPelaEquipe) return;
+    if (exclusao.mostrar(motivo ? {} : { motivo: "Selecione o motivo da exclusão." })) return;
+    try {
+      await feedbackService.excluirPelaEquipe(excluindoPelaEquipe.id, motivo as MotivoExclusaoFeedback);
+      toast.success("Feedback excluído. O motivo ficou registrado na auditoria.");
+      setExcluindoPelaEquipe(null);
+      await carregar();
+    } catch (erro) {
+      if (!exclusao.mostrarErroDaApi(erro)) toast.error(erro instanceof Error ? erro.message : "Não foi possível excluir o feedback.");
     }
   }
 
   // aluno: o filtro lista so os eventos em que ele ja avaliou; equipe: todos
   const opcoesFiltro = isEquipe ? eventos : eventos.filter((e) => feedbacks.some((f) => f.eventoId === e.id));
-  const filtrados = feedbacks.filter((f) => !eventoId || f.eventoId === eventoId);
+  const filtrados = feedbacks.filter((f) => !filtroEventoId || f.eventoId === filtroEventoId);
   const media = filtrados.length > 0 ? filtrados.reduce((acc, f) => acc + f.nota, 0) / filtrados.length : null;
-
-  const opcoesModal: { id: string; titulo: string }[] = isEquipe ? eventos : paraAvaliar;
-  const podeCriar = isEquipe ? eventos.length > 0 && participantes.length > 0 : paraAvaliar.length > 0;
+  const colunas = isEquipe ? 5 : 4;
 
   return (
     <div>
       <PageHeader
         title="Feedback"
         actions={
-          <button className="btn btn-primary" onClick={abrirNovo} disabled={carregando || !podeCriar}>
-            + Novo feedback
-          </button>
+          !isEquipe && (
+            <button className="btn btn-primary" onClick={abrirNovo} disabled={carregando || paraAvaliar.length === 0}>
+              + Novo feedback
+            </button>
+          )
         }
       />
 
@@ -173,7 +178,7 @@ export function FeedbackPage() {
       {!erroCarga && (
         <>
           <div className="card">
-            <select className="search-input" value={eventoId} onChange={(e) => setEventoId(e.target.value)}>
+            <select className="search-input" value={filtroEventoId} onChange={(e) => setFiltroEventoId(e.target.value)} aria-label="Filtrar por evento">
               <option value="">Todos os eventos</option>
               {opcoesFiltro.map((e) => (
                 <option key={e.id} value={e.id}>
@@ -196,36 +201,45 @@ export function FeedbackPage() {
                   <th>Evento</th>
                   <th>Nota</th>
                   <th>Comentário</th>
-                  {isEquipe && <th>Ações</th>}
+                  <th />
                 </tr>
               </thead>
               <tbody>
                 {carregando ? (
                   <tr>
-                    <td colSpan={isEquipe ? 5 : 3} className="empty-cell">
+                    <td colSpan={colunas} className="empty-cell">
                       Carregando…
                     </td>
                   </tr>
                 ) : (
                   <>
-                    {filtrados.map((f) => (
-                      <tr key={f.id}>
-                        {isEquipe && <td>{participantes.find((p) => p.id === f.participanteId)?.nome ?? "—"}</td>}
-                        <td>{eventos.find((e) => e.id === f.eventoId)?.titulo ?? "—"}</td>
-                        <td>{"★".repeat(f.nota)}</td>
-                        <td>{f.comentario}</td>
-                        {isEquipe && (
-                          <td>
-                            <button type="button" className="btn btn-ghost btn-danger" onClick={() => setFeedbackExcluindo(f)}>
+                    {filtrados.map((f) => {
+                      const participante = participantes.find((p) => p.id === f.participanteId);
+                      return (
+                        <tr key={f.id}>
+                          {isEquipe && (
+                            <td>
+                              {participante?.nome ?? "—"} {participante?.ativo === false && <Badge tone="red">Inativo</Badge>}
+                            </td>
+                          )}
+                          <td>{eventos.find((e) => e.id === f.eventoId)?.titulo ?? "—"}</td>
+                          <td>{"★".repeat(f.nota)}</td>
+                          <td>{f.comentario}</td>
+                          <td className="table-actions">
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-danger"
+                              onClick={() => (isEquipe ? abrirExclusaoPelaEquipe(f) : setExcluindoMeu(f))}
+                            >
                               Excluir
                             </button>
                           </td>
-                        )}
-                      </tr>
-                    ))}
+                        </tr>
+                      );
+                    })}
                     {filtrados.length === 0 && (
                       <tr>
-                        <td colSpan={isEquipe ? 5 : 3} className="empty-cell">
+                        <td colSpan={colunas} className="empty-cell">
                           Nenhum feedback registrado.
                         </td>
                       </tr>
@@ -242,78 +256,101 @@ export function FeedbackPage() {
         <Modal title="Novo feedback" onClose={() => setModalAberto(false)}>
           <form
             className="form"
+            ref={novo.formRef}
+            noValidate
+            onChange={novo.limparAoEditar}
             onSubmit={(e) => {
               e.preventDefault();
               void salvar();
             }}
           >
-            <label className="field">
-              <span>Evento</span>
-              <select value={form.eventoId} onChange={(e) => setForm({ ...form, eventoId: e.target.value })} required>
-                {opcoesModal.map((e) => (
+            <p className="form-hint" style={{ margin: 0 }}>
+              Depois de enviado, o feedback não pode ser editado — só excluído (aí você pode enviar outro).
+            </p>
+            <LegendaObrigatorio />
+            <Campo nome="eventoId" rotulo="Palestra" obrigatorio erro={novo.erros.eventoId}>
+              <select value={form.eventoId} onChange={(e) => setForm({ ...form, eventoId: e.target.value })} autoFocus>
+                <option value="">Selecione…</option>
+                {paraAvaliar.map((e) => (
                   <option key={e.id} value={e.id}>
                     {e.titulo}
                   </option>
                 ))}
               </select>
-            </label>
-            {isEquipe && (
-              <label className="field">
-                <span>Participante</span>
-                <select
-                  value={form.participanteId}
-                  onChange={(e) => setForm({ ...form, participanteId: e.target.value })}
-                  required
-                >
-                  {participantes.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nome}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <label className="field">
-              <span>Nota (1 a 5)</span>
-              <input
-                type="number"
-                min={1}
-                max={5}
-                value={form.nota}
-                onChange={(e) => setForm({ ...form, nota: Number(e.target.value) })}
-                required
-              />
-            </label>
-            <label className="field">
-              <span>Comentário</span>
-              <textarea
-                value={form.comentario}
-                onChange={(e) => setForm({ ...form, comentario: e.target.value })}
-                rows={3}
-                required
-              />
-            </label>
+            </Campo>
+            <Campo nome="nota" rotulo="Nota" obrigatorio erro={novo.erros.nota}>
+              <select value={form.nota} onChange={(e) => setForm({ ...form, nota: e.target.value })}>
+                <option value="">Selecione…</option>
+                {[5, 4, 3, 2, 1].map((n) => (
+                  <option key={n} value={n}>
+                    {ROTULOS_NOTA[n]}
+                  </option>
+                ))}
+              </select>
+            </Campo>
+            <Campo nome="comentario" rotulo="Comentário" obrigatorio erro={novo.erros.comentario} dica="Até 1000 caracteres.">
+              <textarea value={form.comentario} onChange={(e) => setForm({ ...form, comentario: e.target.value })} rows={3} maxLength={1000} />
+            </Campo>
             <div className="modal-footer">
               <button type="button" className="btn btn-ghost" onClick={() => setModalAberto(false)}>
                 Cancelar
               </button>
               <button type="submit" className="btn btn-primary" disabled={salvando}>
-                {salvando ? "Salvando…" : "Salvar"}
+                {salvando ? "Enviando…" : "Enviar"}
               </button>
             </div>
           </form>
         </Modal>
       )}
 
-      {feedbackExcluindo && (
+      {excluindoMeu && (
         <ConfirmDialog
-          title="Excluir feedback"
-          message="Deseja realmente excluir este feedback? Esta ação não pode ser desfeita."
+          title="Excluir meu feedback"
+          message="Excluir este feedback? Essa ação não pode ser desfeita, mas depois você pode enviar um novo para a mesma palestra."
           confirmLabel="Excluir"
           tone="danger"
-          onConfirm={() => void excluir()}
-          onCancel={() => setFeedbackExcluindo(null)}
+          onConfirm={() => void excluirMeu()}
+          onCancel={() => setExcluindoMeu(null)}
         />
+      )}
+
+      {excluindoPelaEquipe && (
+        <Modal title="Excluir feedback de aluno" onClose={() => setExcluindoPelaEquipe(null)}>
+          <form
+            className="form"
+            ref={exclusao.formRef}
+            noValidate
+            onChange={exclusao.limparAoEditar}
+            onSubmit={(e) => {
+              e.preventDefault();
+              void excluirPelaEquipe();
+            }}
+          >
+            <p style={{ margin: 0 }}>
+              A equipe não edita o que o aluno escreveu; pode apenas excluir, informando o motivo. O motivo fica registrado
+              na auditoria. Essa ação não pode ser desfeita.
+            </p>
+            <LegendaObrigatorio />
+            <Campo nome="motivo" rotulo="Motivo da exclusão" obrigatorio erro={exclusao.erros.motivo}>
+              <select value={motivo} onChange={(e) => setMotivo(e.target.value as MotivoExclusaoFeedback | "")} autoFocus>
+                <option value="">Selecione…</option>
+                {Object.entries(MOTIVOS_EXCLUSAO_FEEDBACK).map(([codigo, rotulo]) => (
+                  <option key={codigo} value={codigo}>
+                    {rotulo}
+                  </option>
+                ))}
+              </select>
+            </Campo>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-ghost" onClick={() => setExcluindoPelaEquipe(null)}>
+                Cancelar
+              </button>
+              <button type="submit" className="btn btn-danger-solid">
+                Excluir
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

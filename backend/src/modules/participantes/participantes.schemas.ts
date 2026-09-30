@@ -3,7 +3,7 @@ import { REGEX_NOME, REGEX_RGM, normalizarRgm } from "../../utils/validacao";
 
 export const participanteSchema = z.object({
   nome: z.string().trim().regex(REGEX_NOME, "Nome deve conter apenas letras."),
-  email: z.string().trim().email("E-mail inválido."),
+  email: z.string().trim().email("E-mail inválido.").toLowerCase(),
   rgm: z
     .string()
     .trim()

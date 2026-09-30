@@ -43,4 +43,10 @@ export class AppError extends Error {
   static conflito(code: string, mensagem: string): AppError {
     return new AppError(409, code, mensagem);
   }
+
+  // 403, aluno inativado pela equipe tentando entrar ou agir (mesma mensagem em todo lugar, sem
+  // expor o motivo interno da inativacao)
+  static contaInativa(): AppError {
+    return new AppError(403, "CONTA_INATIVA", "Sua conta está inativa. Procure a secretaria.");
+  }
 }

@@ -1,14 +1,16 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ConfiguracaoMfa } from "../../components/mfa/ConfiguracaoMfa";
 import { Badge } from "../../components/ui/Badge";
+import { Campo, LegendaObrigatorio } from "../../components/ui/Campo";
 import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { PasswordInput } from "../../components/ui/PasswordInput";
 import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
+import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
 import { authService, type UsuarioPerfil } from "../../services/authService";
 
-// seguranca da conta: 2FA opcional pro aluno (ativa/desativa aqui), obrigatorio pra equipe
+// seguranca da conta: o 2FA e opcional pra qualquer perfil — cada um ativa ou desativa o proprio aqui
 export function MinhaContaPage() {
   const { definirSessao } = useAuth();
   const [perfil, setPerfil] = useState<UsuarioPerfil | null>(null);
@@ -16,8 +18,8 @@ export function MinhaContaPage() {
   const [desativando, setDesativando] = useState(false);
   const [senha, setSenha] = useState("");
   const [codigo, setCodigo] = useState("");
-  const [erroDesativar, setErroDesativar] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const { erros, formRef, mostrar, mostrarErroDaApi, limpar, limparAoEditar } = useErrosFormulario();
 
   useEffect(() => {
     void carregar();
@@ -32,16 +34,16 @@ export function MinhaContaPage() {
     setDesativando(false);
     setSenha("");
     setCodigo("");
-    setErroDesativar(null);
+    limpar();
   }
 
   async function desativar(e: FormEvent) {
     e.preventDefault();
-    setErroDesativar(null);
-    if (!senha || codigo.length !== 6) {
-      setErroDesativar("Informe sua senha e o código de 6 dígitos do aplicativo.");
-      return;
-    }
+    const faltando: ErrosFormulario = {};
+    if (!senha) faltando.senha = "Informe sua senha.";
+    if (codigo.length !== 6) faltando.codigo = "Digite os 6 dígitos do aplicativo autenticador.";
+    if (mostrar(faltando)) return;
+
     setEnviando(true);
     try {
       // o servidor encerra as outras sessoes e devolve uma nova pra esta aba
@@ -50,7 +52,9 @@ export function MinhaContaPage() {
       fecharDesativar();
       await carregar();
     } catch (erro) {
-      setErroDesativar(erro instanceof Error ? erro.message : "Não foi possível desativar.");
+      if (!mostrarErroDaApi(erro)) {
+        mostrar({ codigo: erro instanceof Error ? erro.message : "Não foi possível desativar." });
+      }
       setCodigo("");
     } finally {
       setEnviando(false);
@@ -58,8 +62,6 @@ export function MinhaContaPage() {
   }
 
   if (!perfil) return <PageHeader title="Minha conta" />;
-
-  const ehAluno = perfil.perfil === "ALUNO";
 
   return (
     <div>
@@ -72,25 +74,18 @@ export function MinhaContaPage() {
         </div>
 
         <p className="form-hint mfa-texto">
-          Além da senha, o login pede um código de 6 dígitos gerado por um aplicativo autenticador instalado no seu
-          celular. O código é gerado no próprio aparelho: não depende de SMS nem de e-mail, e nenhum dado seu é enviado a
-          terceiros por causa disso.
+          Opcional. Com ela ativa, além da senha o login pede um código de 6 dígitos gerado por um aplicativo
+          autenticador instalado no seu celular. O código é gerado no próprio aparelho: não depende de SMS nem de
+          e-mail, e nenhum dado seu é enviado a terceiros por causa disso.
         </p>
 
-        {!ehAluno && (
-          <p className="form-hint mfa-texto">
-            Obrigatória para o seu perfil. Se perder o celular e os códigos de recuperação, peça a um administrador para
-            resetar a sua autenticação em dois fatores.
-          </p>
-        )}
-
-        {ehAluno && !perfil.mfaAtivo && !configurando && (
+        {!perfil.mfaAtivo && !configurando && (
           <button className="btn btn-primary" onClick={() => setConfigurando(true)}>
             Ativar
           </button>
         )}
 
-        {ehAluno && perfil.mfaAtivo && (
+        {perfil.mfaAtivo && (
           <button className="btn btn-ghost btn-danger" onClick={() => setDesativando(true)}>
             Desativar
           </button>
@@ -112,17 +107,16 @@ export function MinhaContaPage() {
 
       {desativando && (
         <Modal title="Desativar autenticação em dois fatores" onClose={fecharDesativar}>
-          <form className="form" onSubmit={desativar}>
+          <form className="form" onSubmit={desativar} onChange={limparAoEditar} ref={formRef} noValidate>
             <p className="form-hint mfa-texto">
               Confirme com sua senha e o código atual do aplicativo. As outras sessões abertas da sua conta serão
               encerradas e seus códigos de recuperação deixam de valer.
             </p>
-            <label className="field">
-              <span>Senha</span>
-              <PasswordInput value={senha} onChange={setSenha} required />
-            </label>
-            <label className="field">
-              <span>Código do aplicativo</span>
+            <LegendaObrigatorio />
+            <Campo nome="senha" rotulo="Senha" obrigatorio erro={erros.senha}>
+              <PasswordInput value={senha} onChange={setSenha} autoComplete="current-password" autoFocus />
+            </Campo>
+            <Campo nome="codigo" rotulo="Código do aplicativo" obrigatorio erro={erros.codigo}>
               <input
                 value={codigo}
                 onChange={(e) => setCodigo(e.target.value.replace(/\D/g, "").slice(0, 6))}
@@ -131,8 +125,7 @@ export function MinhaContaPage() {
                 placeholder="000000"
                 className="mfa-codigo-input"
               />
-            </label>
-            {erroDesativar && <p className="form-error">{erroDesativar}</p>}
+            </Campo>
             <div className="modal-footer">
               <button type="button" className="btn btn-ghost" onClick={fecharDesativar}>
                 Cancelar

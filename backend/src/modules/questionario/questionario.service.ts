@@ -23,10 +23,22 @@ async function buscarEventoOuFalhar(eventoId: string) {
   return evento;
 }
 
-// corrige contra o gabarito do evento e salva a tentativa
-// no maximo 2 tentativas por aluno/evento; aprovou uma vez (>= PERCENTUAL_APROVACAO), nao pode mais refazer
+// corrige contra o gabarito do evento e salva a tentativa. So responde quem esta com a conta ativa
+// e teve a presenca confirmada no check-in daquele evento (o questionario existe pra liberar o
+// certificado de quem participou). No maximo 2 tentativas; aprovou uma vez, nao pode mais refazer
 async function responder(eventoId: string, participanteId: string, dados: RespostasQuestionarioInput, atorId: string) {
   const evento = await buscarEventoOuFalhar(eventoId);
+
+  const participante = await prisma.participante.findUnique({ where: { id: participanteId }, select: { ativo: true } });
+  if (!participante?.ativo) throw AppError.contaInativa();
+  const inscricao = await prisma.inscricao.findUnique({
+    where: { participanteId_eventoId: { participanteId, eventoId } },
+    select: { statusPresenca: true },
+  });
+  if (inscricao?.statusPresenca !== "PRESENTE") {
+    throw AppError.acessoNegado("Você só pode responder o questionário de eventos em que sua presença foi confirmada.");
+  }
+
   const questionario = evento.questionario as unknown as PerguntaQuestionario[];
   if (dados.respostas.length !== questionario.length) {
     throw AppError.validacao("Responda todas as perguntas do questionário antes de enviar.");
