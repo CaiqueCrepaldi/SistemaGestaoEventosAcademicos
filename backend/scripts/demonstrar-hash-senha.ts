@@ -21,7 +21,6 @@ function decompor(hash: string) {
 
 async function main() {
   const { prisma } = await import("../src/db/prisma");
-  const { indiceBusca } = await import("../src/utils/criptografia");
   const { conferirSenha, gerarHashSenha, CUSTO_HASH } = await import("../src/utils/password");
 
   const ids: string[] = [];
@@ -33,7 +32,6 @@ async function main() {
           id: randomUUID(),
           nome: `Exemplo Hash ${n}`,
           emailLogin: email,
-          emailLoginHash: indiceBusca(email),
           senhaHash: await gerarHashSenha(SENHA_DE_EXEMPLO),
           perfil: "SECRETARIA",
         },

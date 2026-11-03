@@ -16,15 +16,17 @@ detalhadas em `02-matriz-dados-finalidade-base-legal.md`; aqui o foco é
 - **Onde é coletado:** tela pública de Cadastro (`frontend/src/pages/Cadastro/CadastroPage.tsx`),
   enviado a `POST /api/auth/registro`.
 - **Obrigatório ou opcional:** obrigatório — não é possível criar conta sem os três.
-- **Onde fica armazenado:** tabelas `usuarios` e `participantes`, colunas
-  `nome`/`emailLogin`/`email`/`rgm`, em texto puro (dados pessoais comuns,
-  art. 5º, I da LGPD), protegidas por controle de acesso por perfil, HTTPS,
-  conexão com o banco por TLS, banco com acesso restrito e auditoria (ver
-  `07-medidas-tecnicas-de-seguranca.md`). Até 29/09/2026 essas colunas
-  eram cifradas; os registros antigos são convertidos uma única vez pelo
-  script `backend/scripts/converter-dados-pessoais.ts`, e até lá o sistema
-  lê os dois formatos. Os índices de busca (`emailLoginHash`, `emailHash`,
-  `rgmHash`, HMAC) continuam até a conversão terminar.
+- **Onde fica armazenado:** cada dado numa tabela só, sem cópia — nome e
+  e-mail em `usuarios` (`nome`, `emailLogin`, que é também o e-mail de
+  login, único e sempre em minúsculo) e RGM em `participantes` (`rgm`,
+  único). Em texto puro (dados pessoais comuns, art. 5º, I da LGPD),
+  protegidos por controle de acesso por perfil, HTTPS, conexão com o banco
+  por TLS, banco com acesso restrito e auditoria (ver
+  `07-medidas-tecnicas-de-seguranca.md`). Até 29/09/2026 esses campos eram
+  cifrados e repetidos nas duas tabelas, com índices de busca HMAC
+  (`emailLoginHash`, `emailHash`, `rgmHash`); a migration
+  `20261103150000_dados_pessoais_sem_duplicacao` tirou as cópias e os
+  índices, depois da conversão única dos registros antigos para texto.
 - **Por quanto tempo:** ver `04-plano-de-retencao-e-descarte.md`.
 - **Quem consulta/altera:** o próprio titular (visão própria, hoje limitada
   a `GET /usuarios/me`; a Fase 2 adiciona edição na página "Meus dados");

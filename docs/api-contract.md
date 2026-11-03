@@ -316,9 +316,7 @@ Parâmetro inválido → `422` no formato padrão. Response `200`:
 ```
 
 Cada log guarda uma cópia do nome de quem agiu (coluna `atorNome`, em texto,
-tirada na hora do log; logs antigos têm essa cópia cifrada em
-`atorNomeCifrado` até a conversão dos dados, e a API devolve os dois
-formatos já em texto): se a conta for excluída depois, o log continua
+tirada na hora do log): se a conta for excluída depois, o log continua
 existindo com `usuarioId: null` (a FK é `ON DELETE SET NULL`; nada apaga log
 em cascata), `atorNome` vem dessa cópia e
 `atorRemovido` fica `true` (a tela mostra "(conta removida)"). `atorNome` só é

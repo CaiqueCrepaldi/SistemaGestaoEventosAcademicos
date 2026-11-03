@@ -3,7 +3,7 @@ import type { Inscricao as InscricaoDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { emailService } from "../email/email.service";
-import { lerDadoPessoal } from "../../utils/dadosPessoais";
+import { COM_CONTA_DO_ALUNO, paraDominio as participanteParaDominio } from "../participantes/participantes.service";
 import { registrarAuditoria } from "../../utils/auditoria";
 import type { Inscricao, Perfil, StatusPresenca } from "../../types/domain";
 import type { InscricaoCheckinInput, InscricaoInput } from "./inscricoes.schemas";
@@ -136,18 +136,19 @@ async function remover(id: string, atorId: string) {
 async function confirmarEmail(id: string, participanteIdDoToken: string, atorId: string) {
   const inscricao = await prisma.inscricao.findUnique({
     where: { id },
-    include: { participante: true, evento: { include: { palestrante: true } } },
+    include: { participante: { include: COM_CONTA_DO_ALUNO }, evento: { include: { palestrante: true } } },
   });
   if (!inscricao) throw AppError.naoEncontrado("INSCRICAO_NAO_ENCONTRADA", "Inscrição não encontrada.");
   if (inscricao.participanteId !== participanteIdDoToken) {
     throw AppError.acessoNegado("Esta inscrição não pertence a você.");
   }
 
-  const emailParticipante = lerDadoPessoal(inscricao.participante.email);
+  // nome e e-mail do aluno vem da conta dele (o participante so guarda o RGM)
+  const participante = participanteParaDominio(inscricao.participante);
 
   try {
-    const resultado = await emailService.enviarConfirmacaoInscricao(emailParticipante, {
-      participanteNome: lerDadoPessoal(inscricao.participante.nome),
+    const resultado = await emailService.enviarConfirmacaoInscricao(participante.email, {
+      participanteNome: participante.nome,
       eventoTitulo: inscricao.evento.titulo,
       eventoTema: inscricao.evento.tema,
       palestranteNome: inscricao.evento.palestrante.nome,
@@ -163,7 +164,7 @@ async function confirmarEmail(id: string, participanteIdDoToken: string, atorId:
     throw erro;
   }
 
-  return { destinatario: emailParticipante, enviadoEm: new Date().toISOString() };
+  return { destinatario: participante.email, enviadoEm: new Date().toISOString() };
 }
 
 export const inscricoesService = { listar, buscarOuFalhar, criarManual, atualizarCheckin, remover, confirmarEmail };

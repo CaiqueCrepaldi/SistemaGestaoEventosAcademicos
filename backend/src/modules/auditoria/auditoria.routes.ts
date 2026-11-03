@@ -5,7 +5,6 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { autenticar, autorizar } from "../../middleware/auth";
 import { AppError } from "../../errors/AppError";
 import { prisma } from "../../db/prisma";
-import { lerDadoPessoal } from "../../utils/dadosPessoais";
 
 export const auditoriaRouter = Router();
 
@@ -64,9 +63,8 @@ auditoriaRouter.get(
 
     res.json({
       itens: logs.map((log) => {
-        // copia do nome guardada no proprio log: atorNome (texto) ou, em log ainda nao convertido,
-        // atorNomeCifrado (formato antigo)
-        const copiaDoNome = log.atorNome ?? (log.atorNomeCifrado ? lerDadoPessoal(log.atorNomeCifrado) : null);
+        // copia do nome guardada no proprio log na hora da acao
+        const copiaDoNome = log.atorNome;
         return {
           id: log.id,
           acao: log.acao,
@@ -74,7 +72,7 @@ auditoriaRouter.get(
           criadoEm: log.criadoEm.toISOString(),
           usuarioId: log.usuarioId,
           // usuario existente: nome atual; usuario excluido: cai na copia guardada no proprio log
-          atorNome: log.usuario ? lerDadoPessoal(log.usuario.nome) : copiaDoNome,
+          atorNome: log.usuario ? log.usuario.nome : copiaDoNome,
           // tinha responsavel na epoca, mas a conta nao existe mais
           atorRemovido: !log.usuario && Boolean(copiaDoNome),
         };
@@ -97,7 +95,7 @@ auditoriaRouter.get(
 
     res.json(
       usuarios
-        .map((u) => ({ id: u.id, nome: lerDadoPessoal(u.nome) }))
+        .map((u) => ({ id: u.id, nome: u.nome }))
         .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
     );
   }),

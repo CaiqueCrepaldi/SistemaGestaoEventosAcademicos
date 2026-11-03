@@ -4,11 +4,10 @@ import QRCode from "qrcode";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { criptografar, descriptografar, indiceBusca } from "../../utils/criptografia";
-import { lerDadoPessoal } from "../../utils/dadosPessoais";
 import { conferirSenha } from "../../utils/password";
 import { registrarAuditoria } from "../../utils/auditoria";
 import { chaveConta, estaBloqueado, incrementarTentativa, limparTentativas } from "../../utils/limiteAcesso";
-import { emitirSessao } from "../auth/auth.service";
+import { COM_RGM, emitirSessao } from "../auth/auth.service";
 import type { DesativarMfaInput, VerificarMfaInput } from "./mfa.schemas";
 
 const EMISSOR = "SGEA";
@@ -128,7 +127,7 @@ async function iniciarConfiguracao(usuarioId: string) {
 
   const uri = generateURI({
     issuer: EMISSOR,
-    label: lerDadoPessoal(usuario.emailLogin),
+    label: usuario.emailLogin,
     secret: segredo,
     digits: DIGITOS,
     period: PERIODO_S,
@@ -176,7 +175,8 @@ async function confirmarConfiguracao(usuarioId: string, codigo: string) {
 async function verificarLogin(usuarioId: string, dados: VerificarMfaInput) {
   await garantirNaoBloqueado(usuarioId, "login");
 
-  const usuario = await prisma.usuario.findUnique({ where: { id: usuarioId } });
+  // vira sessao no fim: precisa do RGM do participante vinculado (ver COM_RGM)
+  const usuario = await prisma.usuario.findUnique({ where: { id: usuarioId }, include: { participante: { select: COM_RGM } } });
   if (!usuario || !usuario.mfaAtivo) throw AppError.naoAutenticado("Sessão inválida. Faça login novamente.");
 
   let codigosRecuperacaoRestantes: number | undefined;
@@ -230,7 +230,11 @@ async function desativar(usuarioId: string, dados: DesativarMfaInput) {
 
   const [, atualizado] = await prisma.$transaction([
     prisma.codigoRecuperacaoMfa.deleteMany({ where: { usuarioId } }),
-    prisma.usuario.update({ where: { id: usuarioId }, data: { ...MFA_ZERADO, versaoToken: { increment: 1 } } }),
+    prisma.usuario.update({
+      where: { id: usuarioId },
+      data: { ...MFA_ZERADO, versaoToken: { increment: 1 } },
+      include: { participante: { select: COM_RGM } },
+    }),
   ]);
   await registrarAuditoria(usuarioId, "MFA_DESATIVADO", "desativado pelo próprio titular; outras sessões encerradas");
 

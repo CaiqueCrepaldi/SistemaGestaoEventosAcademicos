@@ -5,10 +5,9 @@ import { AppError } from "../../errors/AppError";
 import { conferirSenha, CUSTO_HASH, custoDoHash, gerarHashSenha, precisaRefazerHash } from "../../utils/password";
 import { assinarToken, assinarTokenEtapa, duracaoEmSegundos } from "../../utils/jwt";
 import { usuarioParaDTO } from "../../utils/dto";
-import { indiceBusca } from "../../utils/criptografia";
-import { lerDadoPessoal, lerDadoPessoalOuNulo } from "../../utils/dadosPessoais";
+import { normalizarEmail } from "../../utils/validacao";
 import { registrarAuditoria } from "../../utils/auditoria";
-import { chaveConta, chaveIp, estaBloqueado, incrementarTentativa, limparTentativas } from "../../utils/limiteAcesso";
+import { chaveConta, chaveIp, estaBloqueado, idDoEmail, incrementarTentativa, limparTentativas } from "../../utils/limiteAcesso";
 import { env } from "../../config/env";
 import { VERSAO_TERMOS_ATUAL } from "../../config/termos";
 import { emailService } from "../email/email.service";
@@ -20,37 +19,37 @@ const MAX_TENTATIVAS_CODIGO = 5;
 // validade do token da etapa do 2FA: 5 min pra digitar o codigo do aplicativo
 const VALIDADE_TOKEN_MFA_PENDENTE_S = 5 * 60;
 
+// conta com o RGM do aluno vinculado (o RGM mora so no Participante). Toda consulta que vai virar
+// sessao ou "minha conta" precisa trazer isto: include { participante: { select: COM_RGM } }
+export const COM_RGM = { rgm: true, ativo: true } as const;
+export type UsuarioComParticipante = UsuarioDb & { participante: { rgm: string; ativo: boolean } | null };
+
 // prisma devolve criadoEm como Date — converte pro formato que o resto do app espera
-// (reaproveitado em usuarios.routes.ts). nome/emailLogin/rgm podem estar no formato antigo
-// (cifrado) ate a conversao dos dados, por isso passam por lerDadoPessoal
-export function usuarioParaDominio(usuario: UsuarioDb): Usuario {
+// (reaproveitado em usuarios.routes.ts)
+export function usuarioParaDominio(usuario: UsuarioComParticipante): Usuario {
   // o segredo do 2FA nunca sai daqui, nem cifrado
-  const { mfaSegredoCifrado, ...semSegredo } = usuario;
+  const { mfaSegredoCifrado, participante, ...semSegredo } = usuario;
   void mfaSegredoCifrado;
   return {
     ...semSegredo,
-    nome: lerDadoPessoal(usuario.nome),
-    emailLogin: lerDadoPessoal(usuario.emailLogin),
-    rgm: lerDadoPessoalOuNulo(usuario.rgm),
+    rgm: participante?.rgm ?? null,
     consentimentoLgpdEm: usuario.consentimentoLgpdEm ? usuario.consentimentoLgpdEm.toISOString() : null,
     versaoTermosAceitos: usuario.versaoTermosAceitos,
     criadoEm: usuario.criadoEm.toISOString(),
   };
 }
 
-// cria o Participante e o Usuario ALUNO vinculado, checa duplicidade de email/rgm antes pelo
-// indice de busca (os registros antigos ainda estao cifrados ate a conversao, entao a busca continua
-// pelo indice nessa fase). nome/e-mail/RGM novos ja sao gravados em texto puro
+// cria o Participante (RGM) e a conta ALUNO vinculada (nome e e-mail), checando antes se o e-mail
+// ou o RGM ja existem. Os dois indices unicos do banco garantem isso tambem em corrida (P2002 -> 409)
 async function registrarAluno(dados: RegistroInput) {
-  const emailHash = indiceBusca(dados.emailInstitucional);
-  const rgmHash = indiceBusca(dados.rgm);
+  const emailLogin = normalizarEmail(dados.emailInstitucional);
 
-  const emailDuplicado = await prisma.usuario.findUnique({ where: { emailLoginHash: emailHash } });
+  const emailDuplicado = await prisma.usuario.findUnique({ where: { emailLogin } });
   if (emailDuplicado) {
     throw AppError.conflito("EMAIL_DUPLICADO", "Já existe uma conta com este e-mail.");
   }
 
-  const rgmDuplicado = await prisma.participante.findUnique({ where: { rgmHash } });
+  const rgmDuplicado = await prisma.participante.findUnique({ where: { rgm: dados.rgm } });
   if (rgmDuplicado) {
     throw AppError.conflito("RGM_DUPLICADO", "Já existe um cadastro com este RGM.");
   }
@@ -59,34 +58,26 @@ async function registrarAluno(dados: RegistroInput) {
 
   // instante unico do aceite: vai igual pra usuarios.consentimentoLgpdEm e pro log de auditoria
   const consentimentoEm = new Date();
+  const participanteId = randomUUID();
 
-  const participante = await prisma.participante.create({
-    data: {
-      id: randomUUID(),
-      nome: dados.nomeCompleto,
-      email: dados.emailInstitucional,
-      emailHash,
-      rgm: dados.rgm,
-      rgmHash,
-    },
-  });
-
-  const usuario = await prisma.usuario.create({
-    data: {
-      id: randomUUID(),
-      nome: dados.nomeCompleto,
-      emailLogin: dados.emailInstitucional,
-      emailLoginHash: emailHash,
-      senhaHash,
-      perfil: "ALUNO",
-      rgm: dados.rgm,
-      participanteId: participante.id,
-      // aceiteLgpd ja foi validado como obrigatoriamente true no schema — registra o momento exato
-      // e a versao vigente dos Termos/Politica (ver config/termos.ts)
-      consentimentoLgpdEm: consentimentoEm,
-      versaoTermosAceitos: VERSAO_TERMOS_ATUAL,
-    },
-  });
+  // os dois juntos ou nenhum: participante sem conta ficaria sem nome nem e-mail
+  const [participante, usuario] = await prisma.$transaction([
+    prisma.participante.create({ data: { id: participanteId, rgm: dados.rgm } }),
+    prisma.usuario.create({
+      data: {
+        id: randomUUID(),
+        nome: dados.nomeCompleto,
+        emailLogin,
+        senhaHash,
+        perfil: "ALUNO",
+        participanteId,
+        // aceiteLgpd ja foi validado como obrigatoriamente true no schema — registra o momento exato
+        // e a versao vigente dos Termos/Politica (ver config/termos.ts)
+        consentimentoLgpdEm: consentimentoEm,
+        versaoTermosAceitos: VERSAO_TERMOS_ATUAL,
+      },
+    }),
+  ]);
 
   await registrarAuditoria(usuario.id, "USUARIO_REGISTRADO", "cadastro publico de aluno");
   await registrarAuditoria(
@@ -96,7 +87,7 @@ async function registrarAluno(dados: RegistroInput) {
     consentimentoEm,
   );
 
-  return usuarioParaDTO(usuarioParaDominio(usuario));
+  return usuarioParaDTO(usuarioParaDominio({ ...usuario, participante }));
 }
 
 // mensagem generica de bloqueio: a mesma pra conta real ou inexistente, pra nao dar pista
@@ -107,8 +98,7 @@ function erroBloqueado(): AppError {
 // confere email+senha e devolve o token assinado. Bloqueia por excesso de tentativas (conta E ip,
 // o que vier primeiro) antes mesmo de consultar o banco, pra nao vazar se a conta existe
 async function login(dados: LoginInput, ip: string) {
-  const emailHash = indiceBusca(dados.emailLogin);
-  const chaveDaConta = chaveConta("login", emailHash);
+  const chaveDaConta = chaveConta("login", idDoEmail(dados.emailLogin));
   const chaveDoIp = chaveIp("login", ip);
 
   if ((await estaBloqueado(chaveDaConta)) || (await estaBloqueado(chaveDoIp))) {
@@ -117,8 +107,8 @@ async function login(dados: LoginInput, ip: string) {
   }
 
   const usuario = await prisma.usuario.findUnique({
-    where: { emailLoginHash: emailHash },
-    include: { participante: true },
+    where: { emailLogin: normalizarEmail(dados.emailLogin) },
+    include: { participante: { select: COM_RGM } },
   });
   // mensagem generica pra nao dar dica se foi email ou senha que errou
   const senhaOk = usuario ? await conferirSenha(dados.senha, usuario.senhaHash) : false;
@@ -163,7 +153,7 @@ async function login(dados: LoginInput, ip: string) {
 
 // monta a resposta de login com o token de sessao de verdade — usada no login sem 2FA, depois do
 // codigo do 2FA conferir e quando a sessao precisa ser reemitida (ex.: ao desativar o 2FA)
-export function emitirSessao(usuario: UsuarioDb) {
+export function emitirSessao(usuario: UsuarioComParticipante) {
   const token = assinarToken({
     sub: usuario.id,
     perfil: usuario.perfil,
@@ -190,9 +180,9 @@ async function aceitarTermos(usuarioId: string) {
   await registrarAuditoria(usuarioId, "TERMOS_REACEITOS", `versão ${VERSAO_TERMOS_ATUAL}`);
 }
 
-// acha usuario pelo email de login (via indice de busca), usado na recuperacao de senha
+// acha usuario pelo email de login (normalizado), usado na recuperacao de senha
 function buscarUsuarioPorEmail(email: string) {
-  return prisma.usuario.findUnique({ where: { emailLoginHash: indiceBusca(email) } });
+  return prisma.usuario.findUnique({ where: { emailLogin: normalizarEmail(email) } });
 }
 
 // gera um codigo numerico de 6 digitos
@@ -204,8 +194,7 @@ function gerarCodigoNumerico(): string {
 // chamada (nao so falha) contra o limite — o que se limita e a frequencia do pedido em si, pra
 // nao deixar alguem inundar a caixa de entrada de outra pessoa nem varrer e-mails cadastrados
 async function solicitarRecuperacaoSenha(dados: SolicitarRecuperacaoInput, ip: string) {
-  const emailHash = indiceBusca(dados.email);
-  const chaveDaConta = chaveConta("recuperacao", emailHash);
+  const chaveDaConta = chaveConta("recuperacao", idDoEmail(dados.email));
   const chaveDoIp = chaveIp("recuperacao", ip);
 
   if ((await estaBloqueado(chaveDaConta)) || (await estaBloqueado(chaveDoIp))) {

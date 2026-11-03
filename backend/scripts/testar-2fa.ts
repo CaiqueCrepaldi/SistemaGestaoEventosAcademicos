@@ -74,17 +74,9 @@ async function main() {
     const senha = "SenhaTeste123";
     let participanteId: string | null = null;
     if (perfil === "ALUNO") {
+      // participante so guarda o RGM; nome e e-mail ficam na conta criada logo abaixo
       const rgm = `9${Date.now().toString().slice(-10)}`;
-      const participante = await prisma.participante.create({
-        data: {
-          id: randomUUID(),
-          nome: "Teste Dois Fatores",
-          email,
-          emailHash: indiceBusca(email),
-          rgm,
-          rgmHash: indiceBusca(rgm),
-        },
-      });
+      const participante = await prisma.participante.create({ data: { id: randomUUID(), rgm } });
       participanteId = participante.id;
     }
     const usuario = await prisma.usuario.create({
@@ -92,7 +84,6 @@ async function main() {
         id: randomUUID(),
         nome: `Teste Dois Fatores ${perfil}`,
         emailLogin: email,
-        emailLoginHash: indiceBusca(email),
         senhaHash: await gerarHashSenha(senha),
         perfil,
         participanteId,

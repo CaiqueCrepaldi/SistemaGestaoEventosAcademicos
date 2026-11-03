@@ -10,3 +10,8 @@ export const RGM_TAMANHO = 11;
 export function normalizarRgm(valor: string): string {
   return valor.replace(/\D/g, "");
 }
+
+// e-mail de login e gravado e buscado sempre assim (usuarios.emailLogin e a chave unica): "Fulano@UMC.br " = "fulano@umc.br"
+export function normalizarEmail(valor: string): string {
+  return valor.trim().toLowerCase();
+}

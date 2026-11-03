@@ -5,6 +5,11 @@ import bcrypt from "bcryptjs";
 // mesmo hash. Custo 12 = 2^12 rodadas; hash antigo com custo menor e refeito no proximo login
 export const CUSTO_HASH = 12;
 
+// "hash" que nunca confere com senha nenhuma (bcrypt so compara hash de 60 caracteres): conta que
+// existe pra guardar nome/e-mail mas ainda nao tem senha — a pessoa entra pela recuperacao de senha.
+// Usado na seed e na migration 20261103150000 (participante antigo que nao tinha conta)
+export const SENHA_INUTILIZAVEL = "!";
+
 // gera o hash bcrypt da senha em texto puro
 export function gerarHashSenha(senha: string): Promise<string> {
   return bcrypt.hash(senha, CUSTO_HASH);

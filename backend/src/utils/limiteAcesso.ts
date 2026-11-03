@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { prisma } from "../db/prisma";
+import { indiceBusca } from "./criptografia";
 
 // mesmo limite pra login e pra solicitar recuperacao de senha — 5 tentativas, 15 min de bloqueio
 // (mesma janela ja usada no codigo de recuperacao, so que ali o limite eh sobre o CODIGO em si;
@@ -7,8 +8,8 @@ import { prisma } from "../db/prisma";
 const MAX_TENTATIVAS = 5;
 const BLOQUEIO_MS = 15 * 60 * 1000;
 
-// prefixo da chave identifica o fluxo e o alvo: login/recuperacao usam o indice de busca do
-// e-mail (nunca e-mail em texto puro), o codigo do 2FA usa o id do usuario — ou o IP
+// prefixo da chave identifica o fluxo e o alvo: login/recuperacao usam o HMAC do e-mail
+// (idDoEmail, nunca e-mail em texto puro), o codigo do 2FA usa o id do usuario — ou o IP
 export function chaveConta(fluxo: "login" | "recuperacao" | "mfa", identificador: string): string {
   return `${fluxo}:conta:${identificador}`;
 }
@@ -45,12 +46,18 @@ export async function limparTentativas(chave: string): Promise<void> {
   await prisma.limiteAcesso.deleteMany({ where: { chave } });
 }
 
+// identificador da conta nas chaves de login/recuperacao: HMAC do e-mail (indiceBusca), calculado na
+// hora — a tabela limites_acesso nunca guarda o e-mail em texto puro, nem de quem nao tem conta
+export function idDoEmail(email: string): string {
+  return indiceBusca(email);
+}
+
 // chaves POR CONTA (nao por IP) que travam o acesso de um usuario: login e recuperacao de senha
-// pelo indice do e-mail, codigo do 2FA pelo id. Fonte unica pra listar e pra desbloquear
-export function chavesDaConta(usuario: { id: string; emailLoginHash: string }): string[] {
+// pelo HMAC do e-mail, codigo do 2FA pelo id. Fonte unica pra listar e pra desbloquear
+export function chavesDaConta(usuario: { id: string; emailLogin: string }): string[] {
   return [
-    chaveConta("login", usuario.emailLoginHash),
-    chaveConta("recuperacao", usuario.emailLoginHash),
+    chaveConta("login", idDoEmail(usuario.emailLogin)),
+    chaveConta("recuperacao", idDoEmail(usuario.emailLogin)),
     chaveConta("mfa", usuario.id),
   ];
 }
@@ -61,6 +68,6 @@ export async function chavesBloqueadasAgora(): Promise<Set<string>> {
   return new Set(bloqueios.map((bloqueio) => bloqueio.chave));
 }
 
-export function contaBloqueada(chavesBloqueadas: Set<string>, usuario: { id: string; emailLoginHash: string }): boolean {
+export function contaBloqueada(chavesBloqueadas: Set<string>, usuario: { id: string; emailLogin: string }): boolean {
   return chavesDaConta(usuario).some((chave) => chavesBloqueadas.has(chave));
 }

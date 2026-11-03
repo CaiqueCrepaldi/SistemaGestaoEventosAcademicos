@@ -1,40 +1,49 @@
-import { Prisma, type Participante as ParticipanteDb } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
-import { indiceBusca } from "../../utils/criptografia";
-import { lerDadoPessoal } from "../../utils/dadosPessoais";
 import { registrarAuditoria } from "../../utils/auditoria";
 import { chavesBloqueadasAgora, contaBloqueada } from "../../utils/limiteAcesso";
+import { normalizarEmail } from "../../utils/validacao";
 import type { Participante, SituacaoConta } from "../../types/domain";
 import type { ParticipanteUpdateInput } from "./participantes.schemas";
 
-// prisma devolve criadoEm como Date — converte pro formato do resto do app. nome/email/rgm podem
-// estar no formato antigo (cifrado) ate a conversao dos dados, por isso passam por lerDadoPessoal
-function paraDominio(participante: ParticipanteDb): Participante {
+// a conta ALUNO vinculada: e dela que saem o nome e o e-mail do participante (o participante so
+// guarda RGM e situacao). Toda leitura de participante que vira resposta da API inclui isto
+export const COM_CONTA_DO_ALUNO = {
+  usuarios: {
+    where: { perfil: "ALUNO" },
+    select: { id: true, nome: true, emailLogin: true, mfaAtivo: true },
+    take: 1,
+  },
+} satisfies Prisma.ParticipanteInclude;
+
+type ParticipanteComConta = Prisma.ParticipanteGetPayload<{ include: typeof COM_CONTA_DO_ALUNO }>;
+
+// monta o participante no formato de sempre da API (nome/e-mail/rgm), juntando as duas tabelas.
+// criadoEm vem como Date do prisma e vira ISO
+export function paraDominio({ usuarios, ...participante }: ParticipanteComConta): Participante {
+  const conta = usuarios[0];
   return {
     ...participante,
-    nome: lerDadoPessoal(participante.nome),
-    email: lerDadoPessoal(participante.email),
-    rgm: lerDadoPessoal(participante.rgm),
+    // participante sem conta nao deveria existir (todo participante nasce do cadastro da conta)
+    nome: conta?.nome ?? "",
+    email: conta?.emailLogin ?? "",
     criadoEm: participante.criadoEm.toISOString(),
   };
 }
 
-// lista participantes ordenados por nome (ordenado depois de ler, pra valer tambem pros registros
-// que ainda estao no formato antigo), junto com a situacao da conta de acesso do aluno: 2FA ativo e
-// bloqueio por excesso de tentativas agora. Do Usuario so sai id/mfaAtivo/emailLoginHash (este
-// ultimo so pra montar a chave do bloqueio, nao vai pra resposta)
+// lista participantes ordenados por nome, junto com a situacao da conta de acesso do aluno: 2FA
+// ativo e bloqueio por excesso de tentativas agora (o e-mail da conta so serve pra montar a chave
+// do bloqueio; segredo do 2FA e hash de senha nem sao lidos)
 async function listar(): Promise<(Participante & SituacaoConta)[]> {
   const [participantes, chavesBloqueadas] = await Promise.all([
-    prisma.participante.findMany({
-      include: { usuarios: { where: { perfil: "ALUNO" }, select: { id: true, mfaAtivo: true, emailLoginHash: true }, take: 1 } },
-    }),
+    prisma.participante.findMany({ include: COM_CONTA_DO_ALUNO }),
     chavesBloqueadasAgora(),
   ]);
 
   return participantes
-    .map(({ usuarios, ...participante }) => {
-      const conta = usuarios[0];
+    .map((participante) => {
+      const conta = participante.usuarios[0];
       return {
         ...paraDominio(participante),
         usuarioId: conta?.id ?? null,
@@ -50,13 +59,14 @@ async function listar(): Promise<(Participante & SituacaoConta)[]> {
 async function listarAlunos() {
   const participantes = await prisma.participante.findMany({
     where: { usuarios: { some: { perfil: "ALUNO" } } },
+    include: COM_CONTA_DO_ALUNO,
   });
   return participantes.map(paraDominio).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
 // busca um participante pelo id, 404 se nao existir
 async function buscarOuFalhar(id: string) {
-  const participante = await prisma.participante.findUnique({ where: { id } });
+  const participante = await prisma.participante.findUnique({ where: { id }, include: COM_CONTA_DO_ALUNO });
   if (!participante) throw AppError.naoEncontrado("PARTICIPANTE_NAO_ENCONTRADO", "Participante não encontrado.");
   return paraDominio(participante);
 }
@@ -98,34 +108,25 @@ async function atualizar(id: string, dados: ParticipanteUpdateInput, atorId: str
     ]);
   }
 
-  // nome/email/rgm gravados em texto puro; o indice de busca de e-mail/RGM continua sendo mantido
-  // enquanto os registros antigos (cifrados) nao forem convertidos
-  const dadosGravados: Prisma.ParticipanteUpdateInput = { ...dados };
-  if (dados.email !== undefined) dadosGravados.emailHash = indiceBusca(dados.email);
-  if (dados.rgm !== undefined) dadosGravados.rgmHash = indiceBusca(dados.rgm);
-
-  // a conta de login do aluno guarda uma copia de nome/e-mail/RGM: corrigir so o participante
-  // deixaria o login com o e-mail antigo e o nome antigo no topo da tela e na auditoria
+  // cada dado na sua tabela, sem copia: nome e e-mail (tambem o de login) na conta do aluno; RGM e
+  // situacao no participante. Os dois juntos ou nenhum. E-mail ou RGM repetido -> P2002 -> 409
+  const { nome, email, ...dadosDoParticipante } = dados;
   const dadosDaConta: Prisma.UsuarioUpdateManyMutationInput = {};
-  if (dados.nome !== undefined) dadosDaConta.nome = dados.nome;
-  if (dados.email !== undefined) {
-    dadosDaConta.emailLogin = dados.email;
-    dadosDaConta.emailLoginHash = indiceBusca(dados.email);
-  }
-  if (dados.rgm !== undefined) dadosDaConta.rgm = dados.rgm;
+  if (nome !== undefined) dadosDaConta.nome = nome;
+  if (email !== undefined) dadosDaConta.emailLogin = normalizarEmail(email);
 
   try {
-    const atualizacao = prisma.participante.update({
-      where: { id },
-      data: dados.ativo === true ? { ...dadosGravados, motivoInativacao: null } : dadosGravados,
+    const participante = await prisma.$transaction(async (tx) => {
+      if (Object.keys(dadosDaConta).length > 0) {
+        await tx.usuario.updateMany({ where: { participanteId: id, perfil: "ALUNO" }, data: dadosDaConta });
+      }
+      // depois da conta, pra ja voltar com o nome/e-mail novos
+      return tx.participante.update({
+        where: { id },
+        data: dados.ativo === true ? { ...dadosDoParticipante, motivoInativacao: null } : dadosDoParticipante,
+        include: COM_CONTA_DO_ALUNO,
+      });
     });
-    const [participante] =
-      Object.keys(dadosDaConta).length > 0
-        ? await prisma.$transaction([
-            atualizacao,
-            prisma.usuario.updateMany({ where: { participanteId: id, perfil: "ALUNO" }, data: dadosDaConta }),
-          ])
-        : [await atualizacao];
 
     // so conta como mudanca de status se o valor de fato mudou (o formulario manda "ativo" em toda edicao)
     const statusMudou = dados.ativo !== undefined && dados.ativo !== atual.ativo;

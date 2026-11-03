@@ -3,8 +3,9 @@ import { env } from "../config/env";
 
 // AES-256-GCM com IV aleatorio a cada chamada: o mesmo texto de entrada gera
 // uma saida diferente sempre que criptografado de novo (protege contra analise
-// de padrao/frequencia em cima do banco, mas por isso nao da pra buscar por
-// igualdade direto na coluna cifrada — usar indiceBusca() pra isso)
+// de padrao/frequencia em cima do banco). Hoje so o segredo do 2FA passa por aqui:
+// e uma credencial que o servidor precisa ler de volta. Nome, e-mail e RGM ficam
+// em texto puro (dados pessoais comuns) e senhas/codigos ficam so como hash
 const ALGORITMO = "aes-256-gcm";
 const TAMANHO_IV = 12;
 const TAMANHO_TAG = 16;
@@ -37,8 +38,8 @@ export function descriptografar(textoCifrado: string): string {
   return Buffer.concat([decipher.update(cifrado), decipher.final()]).toString("utf8");
 }
 
-// hash deterministico (HMAC-SHA256, normalizado trim+minusculo) usado so como indice
-// de busca exata (login por e-mail, checagem de duplicidade) — nunca pra exibir/decifrar
+// hash deterministico (HMAC-SHA256, normalizado trim+minusculo), sem volta: identifica o e-mail
+// nas chaves do limite de tentativas (sem guardar o e-mail) e guarda os codigos de recuperacao do 2FA
 export function indiceBusca(texto: string): string {
   return createHmac("sha256", chave()).update(texto.trim().toLowerCase()).digest("hex");
 }

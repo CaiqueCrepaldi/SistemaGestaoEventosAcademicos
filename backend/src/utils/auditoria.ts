@@ -1,6 +1,5 @@
 import { randomUUID } from "crypto";
 import { prisma } from "../db/prisma";
-import { lerDadoPessoal } from "./dadosPessoais";
 
 // codigos de acao registrados na trilha de auditoria — mantidos curtos e sem PII no proprio codigo
 export type AcaoAuditoria =
@@ -58,8 +57,9 @@ export type AcaoAuditoria =
 // operacional (tipo da entidade + id, motivo curto), nunca dado sensivel (nome, e-mail, RGM,
 // senha, codigo de recuperacao, token). "criadoEm" so eh passado quando o log precisa carregar
 // exatamente o mesmo instante de outro registro (ex.: o aceite LGPD).
-// Logs so sao criados aqui. A unica alteracao de linha existente e a conversao unica do nome do
-// responsavel de cifrado pra texto puro (scripts/converter-dados-pessoais.ts), sem mudar o conteudo
+// Logs so sao criados aqui: nenhuma rota edita ou apaga linha existente (a conversao unica do nome do
+// responsavel de cifrado pra texto puro, feita uma vez antes da migration
+// 20261103150000_dados_pessoais_sem_duplicacao, nao mudou o conteudo)
 export async function registrarAuditoria(
   usuarioId: string | null,
   acao: AcaoAuditoria,
@@ -71,7 +71,7 @@ export async function registrarAuditoria(
     // mesmo com usuarioId nulo
     const ator = usuarioId ? await prisma.usuario.findUnique({ where: { id: usuarioId }, select: { nome: true } }) : null;
     await prisma.logAuditoria.create({
-      data: { id: randomUUID(), usuarioId, atorNome: ator ? lerDadoPessoal(ator.nome) : null, acao, detalhe, criadoEm },
+      data: { id: randomUUID(), usuarioId, atorNome: ator?.nome ?? null, acao, detalhe, criadoEm },
     });
   } catch (erro) {
     // so o tipo do erro: a mensagem do Prisma repete os valores da gravacao (nome de quem agiu)

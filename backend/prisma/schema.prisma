@@ -24,18 +24,16 @@ enum StatusPresenca {
   AUSENTE
 }
 
-// nome/emailLogin/rgm em texto puro (dados pessoais comuns, art. 5º, I da LGPD — protegidos por
-// controle de acesso por perfil, HTTPS, banco com acesso restrito e auditoria). Registros antigos
-// ainda podem estar no formato cifrado ate rodar scripts/converter-dados-pessoais.ts.
-// emailLoginHash eh o indice usado pra login/duplicidade enquanto a conversao nao termina
+// a CONTA de acesso de qualquer perfil e a fonte unica do nome e do e-mail da pessoa — o aluno nao
+// repete esses dados no Participante. nome/emailLogin em texto puro (dados pessoais comuns, art. 5º,
+// I da LGPD — protegidos por controle de acesso por perfil, HTTPS, banco com acesso restrito e
+// auditoria). emailLogin sempre minusculo e sem espaco (normalizado na gravacao e na busca)
 model Usuario {
   id             String   @id
   nome           String   @db.Text
-  emailLogin     String   @db.Text
-  emailLoginHash String   @unique
+  emailLogin     String   @unique @db.VarChar(255)
   senhaHash      String
   perfil         Perfil
-  rgm            String?  @db.Text
   participanteId String?
   participante   Participante? @relation(fields: [participanteId], references: [id], onDelete: SetNull)
   // data/hora em que aceitou os termos de uso/politica de privacidade no cadastro (LGPD);
@@ -69,15 +67,11 @@ model Usuario {
   @@map("usuarios")
 }
 
-// nome/email/rgm em texto puro (mesma decisao do Usuario); emailHash/rgmHash sao os indices usados
-// pra checagem de duplicidade enquanto a conversao dos registros antigos nao termina
+// os dados de ALUNO (RGM, situacao, inscricoes...). Nome e e-mail ficam so na conta vinculada
+// (Usuario ALUNO com participanteId = este id): todo Participante nasce do cadastro da conta
 model Participante {
   id        String   @id
-  nome      String   @db.Text
-  email     String   @db.Text
-  emailHash String   @unique
-  rgm       String   @db.Text
-  rgmHash   String   @unique
+  rgm       String   @unique @db.VarChar(20)
   ativo     Boolean  @default(true)
   // 500 e o tamanho real da coluna desde a migration que criou o campo (o schema dizia 191 por engano)
   motivoInativacao String? @db.VarChar(500)
@@ -199,14 +193,12 @@ model TentativaQuestionario {
 // "acao" eh um codigo curto (LOGIN_SUCESSO, PARTICIPANTE_INATIVADO etc.), "detalhe" nunca
 // guarda dado sensivel (senha, token, PII bruta) — so contexto operacional.
 // o log nao e apagado nem editado: excluir o usuario so zera usuarioId (SetNull), e atorNome
-// (copia do nome de quem agiu, tirada na hora do log) mantem quem foi. atorNomeCifrado e a mesma
-// copia no formato antigo (cifrado): o script de conversao move pra atorNome e a coluna sai depois
+// (copia do nome de quem agiu, tirada na hora do log) mantem quem foi
 model LogAuditoria {
   id        String   @id
   usuarioId String?
   usuario   Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
-  atorNome        String? @db.Text
-  atorNomeCifrado String? @db.Text
+  atorNome  String?  @db.Text
   acao      String
   detalhe   String?  @db.Text
   criadoEm  DateTime @default(now())
@@ -216,8 +208,8 @@ model LogAuditoria {
 }
 
 // bloqueio temporario por excesso de tentativas (login e solicitacao de recuperacao de senha),
-// por conta (chave = "login:conta:<emailLoginHash>") e por IP (chave = "login:ip:<ip>") — nao
-// guarda e-mail em texto puro, so o indice de busca ja usado pra login. Zera sozinho: quando o
+// por conta (chave = "login:conta:<HMAC do e-mail>") e por IP (chave = "login:ip:<ip>") — nao
+// guarda e-mail em texto puro, so o HMAC dele (indiceBusca, calculado na hora). Zera sozinho: quando o
 // bloqueio expira, a proxima checagem reseta os contadores (nao precisa de rotina agendada)
 model LimiteAcesso {
   id           String    @id

@@ -4,7 +4,7 @@ import { autenticar, autorizar } from "../../middleware/auth";
 import { AppError } from "../../errors/AppError";
 import { prisma } from "../../db/prisma";
 import { usuarioParaDTO } from "../../utils/dto";
-import { usuarioParaDominio } from "../auth/auth.service";
+import { COM_RGM, usuarioParaDominio } from "../auth/auth.service";
 import { mfaService } from "../mfa/mfa.service";
 import { registrarAuditoria } from "../../utils/auditoria";
 import { chavesDaConta, limparTentativas } from "../../utils/limiteAcesso";
@@ -16,7 +16,10 @@ usuariosRouter.get(
   "/me",
   autenticar,
   asyncHandler(async (req, res) => {
-    const usuario = await prisma.usuario.findUnique({ where: { id: req.usuario!.sub } });
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: req.usuario!.sub },
+      include: { participante: { select: COM_RGM } },
+    });
     if (!usuario) throw AppError.naoAutenticado();
     res.status(200).json(usuarioParaDTO(usuarioParaDominio(usuario)));
   }),

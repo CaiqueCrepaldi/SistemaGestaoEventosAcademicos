@@ -20,7 +20,6 @@ const ARQUIVO = join(__dirname, "..", "..", "frontend", "testes-interface", "dad
 
 async function main() {
   const { prisma } = await import("../src/db/prisma");
-  const { indiceBusca } = await import("../src/utils/criptografia");
   const { gerarHashSenha } = await import("../src/utils/password");
   const acao = process.argv[2];
 
@@ -36,7 +35,6 @@ async function main() {
             id: randomUUID(),
             nome: `Equipe UI ${perfil === "ADMINISTRADOR" ? "Admin" : "Secretaria"}`,
             emailLogin: email,
-            emailLoginHash: indiceBusca(email),
             senhaHash: await gerarHashSenha(senha),
             perfil,
           },

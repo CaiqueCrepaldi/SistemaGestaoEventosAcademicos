@@ -60,9 +60,9 @@ admin). Deixe `SENDGRID_API_KEY`/`EMAIL_FROM` em branco em dev: sem eles, o
 backend só imprime o e-mail no console em vez de enviar de verdade.
 
 `ENCRYPTION_KEY` cifra o segredo do 2FA (AES-256-GCM, ver
-`src/utils/criptografia.ts`) e, até a conversão dos dados, também serve pra
-ler nome/e-mail/rgm antigos que ainda estejam cifrados (os novos já são
-gravados em texto) — precisa ser uma chave de 32 bytes em base64:
+`src/utils/criptografia.ts`) e assina o HMAC dos códigos de recuperação do
+2FA e das chaves do limite de tentativas. Nome, e-mail e RGM ficam em texto
+puro. Precisa ser uma chave de 32 bytes em base64:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
@@ -111,6 +111,62 @@ desenvolvimento, criadas pelo seed — em produção use outras senhas):
 | Administrador | admin@umc.br | admin123 |
 | Secretaria | secretaria@umc.br | secretaria123 |
 | Aluno | aluno@alunos.umc.br | aluno123 |
+
+## Implantação em produção: dados pessoais sem duplicação (migration de 03/11/2026)
+
+A migration `20261103150000_dados_pessoais_sem_duplicacao` tira as cópias de
+nome/e-mail/RGM entre `usuarios` e `participantes` e os índices de busca da
+época da criptografia. Ela **só pode ser aplicada depois que nenhum registro
+antigo estiver cifrado** — senão quem tem cadastro antigo não consegue mais
+entrar. Siga a ordem:
+
+1. **Backup** (SQL Editor do TiDB Cloud, database `SGEA`; o TiDB não aceita
+   `CREATE TABLE ... AS SELECT`, por isso `LIKE` + `INSERT`):
+   ```sql
+   CREATE TABLE usuarios_bkp_20261103 LIKE usuarios;
+   INSERT INTO usuarios_bkp_20261103 SELECT * FROM usuarios;
+   CREATE TABLE participantes_bkp_20261103 LIKE participantes;
+   INSERT INTO participantes_bkp_20261103 SELECT * FROM participantes;
+   CREATE TABLE logs_auditoria_bkp_20261103 LIKE logs_auditoria;
+   INSERT INTO logs_auditoria_bkp_20261103 SELECT * FROM logs_auditoria;
+   ```
+2. **Conversão dos registros antigos.** A `ENCRYPTION_KEY` de produção só
+   existe na Vercel (variável Secret, ninguém consegue ler o valor), então a
+   conversão roda dentro do servidor, pela rota temporária
+   `POST /api/manutencao/conversao-dados-pessoais` (commit `3ef98dd`, só
+   ADMINISTRADOR). Publique essa versão (merge da branch
+   `conversao-dados-pessoais` na `main`) e, logado como administrador, chame a
+   rota três vezes:
+   - corpo `{}` → simulação: `situacao: "SIMULACAO"`, com `falhas` e
+     `indiceNaoConfere` zerados em tudo (se vier `BLOQUEADA_POR_PROBLEMAS`,
+     pare: nada foi gravado);
+   - corpo `{ "aplicar": true, "confirmoBackup": true }` → `situacao:
+     "CONVERTIDO"` e `restantesNoFormatoAntigo: 0`;
+   - corpo `{}` de novo → `situacao: "NADA_A_CONVERTER"`.
+
+   Quem tiver a chave localmente pode, em vez disso, rodar o script
+   `scripts/converter-dados-pessoais.ts --producao` do commit `8c2e7df`.
+3. **Conferência** no SQL Editor — as três contagens têm que dar `0`:
+   ```sql
+   SELECT COUNT(*) FROM usuarios WHERE emailLogin NOT LIKE '%@%';
+   SELECT COUNT(*) FROM participantes WHERE email NOT LIKE '%@%';
+   SELECT COUNT(*) FROM logs_auditoria WHERE atorNomeCifrado IS NOT NULL AND atorNome IS NULL;
+   ```
+4. **Deploy do código novo** (merge da branch `dados-pessoais-sem-duplicacao`
+   na `main`; ela já não tem a rota temporária). Espere a Vercel mostrar o
+   deploy como Ready.
+5. **Logo em seguida, a migration** (entre o passo 4 e este, o cadastro de
+   aluno novo falha; login e o resto funcionam). No PowerShell, de dentro de
+   `backend/`, com a URL de produção:
+   ```powershell
+   $env:DATABASE_URL = "mysql://...SGEA?sslaccept=strict"
+   npx prisma migrate status    # deve listar só 20261103150000_dados_pessoais_sem_duplicacao como pendente
+   npx prisma migrate deploy
+   Remove-Item Env:DATABASE_URL
+   ```
+6. **Teste**: entrar com cada perfil, abrir Participantes, cadastrar um aluno
+   de teste. Depois de uma ou duas semanas sem problema, apagar os backups
+   (`DROP TABLE ..._bkp_20261103;` e os backups antigos).
 
 ## Scripts disponíveis
 

@@ -18,24 +18,27 @@ apaga no final (os registros de auditoria ficam, como em qualquer operação).
 
 | Teste | O que faz | Comando | Resultado |
 |---|---|---|---|
-| Requisitos pela API | Sobe o backend numa porta local e faz as chamadas HTTP de verdade, requisito por requisito | `cd backend && npx tsx scripts/testar-requisitos.ts` | **123/123** verificações |
-| 2FA pela API | Ativação, login em duas etapas, reuso de código, bloqueio, recuperação, reset, desativação | `cd backend && npx tsx scripts/testar-2fa.ts` | **53/53** |
+| Requisitos pela API | Sobe o backend numa porta local e faz as chamadas HTTP de verdade, requisito por requisito | `cd backend && npx tsx scripts/testar-requisitos.ts` | **127/127** verificações (03/11/2026, banco `SGEA_dev_migracao`) |
+| 2FA pela API | Ativação, login em duas etapas, reuso de código, bloqueio, recuperação, reset, desativação | `cd backend && npx tsx scripts/testar-2fa.ts` | **55/55** (03/11/2026, banco `SGEA_dev_migracao`) |
 | Interface | Navegador de verdade (Google Chrome, sem janela) usando as telas no frontend local ligado ao backend local | ver `frontend/testes-interface/testar-interface.mjs` (passo a passo no topo do arquivo) | **60/60** |
 | Hash de senha | Mostra o formato do hash bcrypt gravado no banco de dev e prova que a mesma senha gera hashes diferentes | `cd backend && npx tsx scripts/demonstrar-hash-senha.ts` | ver `docs/lgpd/07` |
-| Conversão dos dados pessoais | Simulação, aplicação e segunda aplicação (idempotência) no dev | `cd backend && npx tsx scripts/converter-dados-pessoais.ts [--aplicar]` | 3 usuários, 3 participantes e 98 logs convertidos; a 2ª rodada não achou nada |
+| Conversão dos dados pessoais | Simulação, aplicação e segunda aplicação (idempotência) no dev | `cd backend && npx tsx scripts/converter-dados-pessoais.ts [--aplicar]` (o script saiu do código em 03/11/2026, junto com as colunas que ele convertia; está no histórico do git, commit `8c2e7df`) | 3 usuários, 3 participantes e 98 logs convertidos; a 2ª rodada não achou nada |
 
 Na coluna "Teste", **API Rxx** é a seção de mesmo código em
 `testar-requisitos.ts` e **Interface** é a seção de mesmo nome em
 `testar-interface.mjs`.
 
 > **Atualização de 03/11/2026:** a tela Usuários saiu (2FA e bloqueio foram
-> para Participantes), o Dashboard ganhou endpoint próprio e os Palestrantes
-> do aluno viraram cards. As três suítes foram ajustadas (API R04, R16 e o novo
-> R25; `testar-2fa.ts` nas partes de secretaria e administrador; Interface
-> "Equipe entra só com a senha", "Agenda e certificados do aluno",
-> "Inativação" e "Participantes: 2FA e acesso"), mas **ainda não foram rodadas
-> de novo** contra o `SGEA_dev` — as contagens da tabela acima são da rodada
-> anterior. Os itens marcados "A rodar" ficam pendentes até essa execução.
+> para Participantes), o Dashboard ganhou endpoint próprio, os Palestrantes
+> do aluno viraram cards e nome/e-mail/RGM deixaram de ser duplicados entre
+> `usuarios` e `participantes` (migration `20261103150000`). As suítes de API
+> rodaram de novo num banco separado, `SGEA_dev_migracao` (todas as
+> migrations antigas + dados cifrados no formato antigo + conversão pela rota
+> temporária + a migration nova): **requisitos 127/127** e **2FA 55/55**,
+> além de 11/11 da rota de conversão e 12/12 do código novo sobre os dados
+> migrados. A suíte de **Interface não rodou de novo** (precisa do Google
+> Chrome, que não estava na máquina): o item marcado "A rodar" fica pendente
+> até essa execução; a contagem de Interface da tabela acima é da rodada anterior.
 
 ## Requisitos
 
@@ -59,18 +62,18 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
 | 16 | Feedback só de palestra com certificado, um por evento, sempre em nome do próprio aluno | API R14 | OK | — |
 | 17 | Feedback não é editado; aluno exclui o próprio e pode enviar outro; equipe só exclui, com motivo (item D) | API R22; Interface "Feedback do aluno" e "Feedback pela equipe" | OK | Implementado nesta rodada |
 | 18 | Participantes: listagem e correção de nome/e-mail/RGM pela equipe | API R15 | OK após correção | **Corrigido:** corrigir o nome ou o e-mail do participante não atualizava a conta de login do aluno — ele continuava entrando com o e-mail antigo e o nome antigo aparecia no topo da tela e na auditoria. Agora a correção vale para os dois. E-mail gravado sempre em minúsculo |
-| 19 | Inativação e reativação padronizadas (item C) | API R16; Interface "Inativação", "Inscrição manual" e "Participantes: 2FA e acesso" | OK (a tela Usuários saiu em 03/11; a conferência do selo "Inativo" passou para Participantes — a rodar) | Implementado nesta rodada (ver `docs/lgpd/03` e `07`) |
+| 19 | Inativação e reativação padronizadas (item C) | API R16; Interface "Inativação", "Inscrição manual" e "Participantes: 2FA e acesso" | OK (API R16 rodada de novo em 03/11/2026; a conferência do selo "Inativo" na tela passou para Participantes — Interface a rodar) | Implementado nesta rodada (ver `docs/lgpd/03` e `07`) |
 | 20 | Recuperação de senha por código | API R17; Interface "Esqueci a senha" | OK | Campos obrigatórios (item E) |
 | 21 | Trilha de auditoria: filtros, responsáveis, nada de dado pessoal no detalhe | API R18; Interface "Auditoria: filtro pelas ações novas" | OK após correção | **Corrigido:** a tela de Auditoria não conhecia as ações criadas nos blocos de segurança (2FA, bloqueio por tentativas etc.): elas não apareciam no filtro e a tabela mostrava só o código |
 | 22 | Exclusão de evento em cascata (inscrições, feedbacks, tentativas) | API R19 | OK | — |
-| 23 | Dashboard da equipe: 6 indicadores, próximos eventos com ocupação e gráfico de presença por evento, tudo de `GET /api/dashboard` (só equipe, sem dado pessoal) | API R04 (aluno → 403) e R25; Interface "Equipe entra só com a senha" (6 indicadores, gráfico e menu "Dashboard") | A rodar | Refeito em 03/11/2026: antes eram 4 indicadores calculados no navegador; o item de menu "Principal" passou a se chamar "Dashboard" |
+| 23 | Dashboard da equipe: 6 indicadores, próximos eventos com ocupação e gráfico de presença por evento, tudo de `GET /api/dashboard` (só equipe, sem dado pessoal) | API R04 (aluno → 403) e R25; Interface "Equipe entra só com a senha" (6 indicadores, gráfico e menu "Dashboard") | OK na API (R04, R25, 03/11/2026); Interface a rodar | Refeito em 03/11/2026: antes eram 4 indicadores calculados no navegador; o item de menu "Principal" passou a se chamar "Dashboard" |
 | 24 | 2FA opcional para todos os perfis (item F) | `testar-2fa.ts`; API R20; Interface "Equipe entra só com a senha" e "2FA na Minha conta" | OK | Implementado nesta rodada |
 | 25 | Senha com bcrypt, salt por senha, custo 12 e rehash no login (item B) | API R20; `demonstrar-hash-senha.ts` | OK | Implementado nesta rodada |
-| 26 | Nome, e-mail e RGM em texto puro, sem quebrar os registros antigos (item G, primeira implantação) | API R24; conversão no dev + as três suítes rodadas de novo depois dela | OK | Implementado nesta rodada; a conversão em produção depende de confirmação |
-| 27 | Participantes mostra 2FA e acesso (bloqueio) do aluno; resetar 2FA e desbloquear só pelo administrador, também no backend | `testar-2fa.ts` (secretaria vê as colunas e leva 403 nas ações; admin desbloqueia e a coluna volta a "Liberado"; `GET /usuarios` → 404); API R16; Interface "Inativação" e "Participantes: 2FA e acesso" | A rodar | Implementado em 03/11/2026, no lugar da tela Usuários |
-| 28 | Palestrantes do aluno em cards (iniciais, nome, próximas palestras), sem e-mail | Interface "Agenda e certificados do aluno" | A rodar | Implementado em 03/11/2026 |
+| 26 | Nome, e-mail e RGM em texto puro, sem quebrar os registros antigos (item G, primeira implantação) | API R24; conversão no dev + as três suítes rodadas de novo depois dela | OK; segunda implantação (cada dado numa tabela só, migration `20261103150000`) testada em `SGEA_dev_migracao` com R24, aguardando a conversão em produção | Implementado nesta rodada; a conversão em produção depende de confirmação |
 | 27 | Campos obrigatórios marcados e validados do mesmo jeito em todos os formulários (item E) | Interface (todas as seções "E") | OK | Implementado nesta rodada |
 | 28 | Comentário de feedback longo | Leitura dos dois bancos (schema × dev × produção) | Corrigido | **Corrigido:** o schema dizia `VARCHAR(191)` e o banco de dev seguia isso (comentário com mais de 191 caracteres dava erro 500), enquanto a produção já tinha `TEXT`. Schema e dev alinhados com a produção por migration, com limite de 1000 caracteres e mensagem clara |
+| 29 | Participantes mostra 2FA e acesso (bloqueio) do aluno; resetar 2FA e desbloquear só pelo administrador, também no backend | `testar-2fa.ts` (secretaria vê as colunas e leva 403 nas ações; admin desbloqueia e a coluna volta a "Liberado"; `GET /usuarios` → 404); API R16; Interface "Inativação" e "Participantes: 2FA e acesso" | OK na API (`testar-2fa.ts` 55/55, R16, 03/11/2026); Interface a rodar | Implementado em 03/11/2026, no lugar da tela Usuários |
+| 30 | Palestrantes do aluno em cards (iniciais, nome, próximas palestras), sem e-mail | Interface "Agenda e certificados do aluno" | A rodar | Implementado em 03/11/2026 |
 
 ## Outras correções encontradas na verificação
 

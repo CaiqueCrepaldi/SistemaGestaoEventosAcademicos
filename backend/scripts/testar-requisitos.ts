@@ -98,19 +98,16 @@ async function main() {
   const eventos: string[] = [];
   const sufixo = randomUUID().slice(0, 8);
 
-  // conta de equipe criada direto no banco (nao existe cadastro publico de equipe). De proposito no
-  // FORMATO ANTIGO (nome/e-mail cifrados, hash de senha com custo 10), igual as contas que ja existem
-  // em producao antes da conversao — o teste confere que elas continuam funcionando
-  async function criarEquipeFormatoAntigo(perfil: "ADMINISTRADOR" | "SECRETARIA"): Promise<Conta> {
+  // conta de equipe criada direto no banco (nao existe cadastro publico de equipe). De proposito com
+  // hash de senha de custo 10 (o custo antigo), pra o R20 conferir que o login refaz o hash com custo 12
+  async function criarEquipeHashAntigo(perfil: "ADMINISTRADOR" | "SECRETARIA"): Promise<Conta> {
     const email = `req-${perfil.toLowerCase()}-${sufixo}@teste.invalido`;
     const senha = "SenhaEquipe123";
-    const { criptografar } = await import("../src/utils/criptografia");
     const usuario = await prisma.usuario.create({
       data: {
         id: randomUUID(),
-        nome: criptografar(`Teste Requisitos ${perfil}`),
-        emailLogin: criptografar(email),
-        emailLoginHash: indiceBusca(email),
+        nome: `Teste Requisitos ${perfil}`,
+        emailLogin: email,
         senhaHash: await bcrypt.hash(senha, 10),
         perfil,
       },
@@ -128,8 +125,8 @@ async function main() {
   }
 
   try {
-    const admin = await criarEquipeFormatoAntigo("ADMINISTRADOR");
-    const secretaria = await criarEquipeFormatoAntigo("SECRETARIA");
+    const admin = await criarEquipeHashAntigo("ADMINISTRADOR");
+    const secretaria = await criarEquipeHashAntigo("SECRETARIA");
 
     // ------------------------------------------------------------------ B: senha com hash e salt
     requisito("R20 Senha com bcrypt, salt por senha e rehash no login");
@@ -205,28 +202,31 @@ async function main() {
     r = await chamar("GET", "/usuarios/me", { token: aluno.token });
     checar("GET /usuarios/me devolve a própria conta", r.status === 200 && r.corpo.id === aluno.id && r.corpo.emailLogin === emailAluno, r.corpo);
 
-    // ------------------------------------------------------------------ G: nome/e-mail/RGM sem criptografia
-    requisito("R24 Nome, e-mail e RGM em texto puro (transição sem quebrar os registros antigos)");
+    // ------------------------------------------------------------------ G: nome/e-mail/RGM sem criptografia e sem copia
+    requisito("R24 Nome, e-mail e RGM em texto puro, cada um numa tabela só");
     const usuarioNoBanco = await prisma.usuario.findUnique({ where: { id: aluno.id } });
     const participanteNoBanco = await prisma.participante.findUnique({ where: { id: aluno.participanteId! } });
     checar(
-      "cadastro novo grava nome, e-mail e RGM em texto puro",
+      "nome e e-mail ficam só na conta e o RGM só no participante, em texto puro",
       usuarioNoBanco?.nome === "Aluno Teste Requisitos" &&
         usuarioNoBanco.emailLogin === emailAluno &&
-        usuarioNoBanco.rgm === rgmAluno &&
-        participanteNoBanco?.email === emailAluno &&
-        participanteNoBanco.rgm === rgmAluno,
+        !("rgm" in usuarioNoBanco) &&
+        participanteNoBanco?.rgm === rgmAluno &&
+        !("nome" in participanteNoBanco) &&
+        !("email" in participanteNoBanco),
+      { usuario: usuarioNoBanco && Object.keys(usuarioNoBanco), participante: participanteNoBanco && Object.keys(participanteNoBanco) },
     );
     checar("senha continua só como hash bcrypt", usuarioNoBanco?.senhaHash.startsWith("$2a$12$") === true && usuarioNoBanco.senhaHash !== "SenhaAluno123");
-    const adminNoBanco = await prisma.usuario.findUnique({ where: { id: admin.id } });
-    r = await chamar("GET", "/usuarios/me", { token: admin.token });
+    r = await chamar("GET", "/usuarios/me", { token: aluno.token });
     checar(
-      "conta ainda no formato antigo (cifrado) continua sendo lida normalmente",
-      adminNoBanco?.nome !== "Teste Requisitos ADMINISTRADOR" && r.corpo.nome === "Teste Requisitos ADMINISTRADOR" && r.corpo.emailLogin === admin.email,
+      "a API continua devolvendo o RGM junto com a conta (vem do participante)",
+      r.status === 200 && r.corpo.rgm === rgmAluno && r.corpo.nome === "Aluno Teste Requisitos",
       r.corpo,
     );
+    r = await chamar("POST", "/auth/login", { corpo: { emailLogin: `  ${emailAluno.toUpperCase()} `, senha: "SenhaAluno123" } });
+    checar("login aceita o e-mail com maiúsculas e espaços (normalizado)", r.status === 200 && !!r.corpo.token, r.status);
     const logCadastro = await prisma.logAuditoria.findFirst({ where: { usuarioId: aluno.id, acao: "USUARIO_REGISTRADO" } });
-    checar("log novo guarda o nome do responsável em texto puro (atorNome)", logCadastro?.atorNome === "Aluno Teste Requisitos" && logCadastro.atorNomeCifrado === null);
+    checar("log guarda o nome do responsável em texto puro (atorNome)", logCadastro?.atorNome === "Aluno Teste Requisitos");
 
     requisito("R04 Permissões por perfil (aluno barrado nas rotas da equipe)");
     for (const [metodo, caminho] of [

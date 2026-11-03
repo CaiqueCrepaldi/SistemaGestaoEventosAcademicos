@@ -27,7 +27,7 @@ async function main() {
   }
 
   const { prisma } = await import("../src/db/prisma");
-  const { indiceBusca } = await import("../src/utils/criptografia");
+  const { normalizarEmail } = await import("../src/utils/validacao");
   const { mfaService } = await import("../src/modules/mfa/mfa.service");
 
   try {
@@ -35,7 +35,7 @@ async function main() {
     console.log(aplicar ? "[resetar-2fa] MODO REAL: vai resetar" : "[resetar-2fa] SIMULACAO (dry-run): nada sera alterado");
 
     const usuario = await prisma.usuario.findUnique({
-      where: { emailLoginHash: indiceBusca(email) },
+      where: { emailLogin: normalizarEmail(email) },
       select: { id: true, perfil: true, mfaAtivo: true },
     });
     if (!usuario) {

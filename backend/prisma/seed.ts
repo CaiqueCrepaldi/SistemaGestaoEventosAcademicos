@@ -3,20 +3,30 @@
 import { randomUUID } from "crypto";
 import type { Prisma } from "@prisma/client";
 import type { PerguntaQuestionario } from "../src/types/domain";
-import { gerarHashSenha } from "../src/utils/password";
-import { indiceBusca } from "../src/utils/criptografia";
+import { gerarHashSenha, SENHA_INUTILIZAVEL } from "../src/utils/password";
 import { prisma } from "../src/db/prisma";
 
-// monta os campos de um participante (texto puro + indice de busca), pronto pro "create" do upsert
-function dadosParticipante(nome: string, email: string, rgm: string) {
-  return {
-    id: randomUUID(),
-    nome,
-    email,
-    emailHash: indiceBusca(email),
-    rgm,
-    rgmHash: indiceBusca(rgm),
-  };
+// aluno = participante (RGM) + conta ALUNO (nome e e-mail, que ficam so na conta). senha null = conta
+// sem senha utilizavel (entra pela recuperacao de senha), pros alunos de exemplo que nao sao conta de demo
+async function garantirAluno(nome: string, email: string, rgm: string, senha: string | null) {
+  const participante = await prisma.participante.upsert({
+    where: { rgm },
+    update: {},
+    create: { id: randomUUID(), rgm },
+  });
+  await prisma.usuario.upsert({
+    where: { emailLogin: email },
+    update: {},
+    create: {
+      id: randomUUID(),
+      nome,
+      emailLogin: email,
+      senhaHash: senha ? await gerarHashSenha(senha) : SENHA_INUTILIZAVEL,
+      perfil: "ALUNO",
+      participanteId: participante.id,
+    },
+  });
+  return participante;
 }
 
 // monta as 10 perguntas a partir de uma lista compacta (enunciado + 4 alternativas + indice da correta)
@@ -156,58 +166,31 @@ async function seed() {
     questionario: questionarioPosteres,
   });
 
-  const participanteJoao = await prisma.participante.upsert({
-    where: { emailHash: indiceBusca("joao.lima@alunos.umc.br") },
-    update: {},
-    create: dadosParticipante("João Pedro Lima", "joao.lima@alunos.umc.br", "20240100111"),
-  });
-  const participanteBeatriz = await prisma.participante.upsert({
-    where: { emailHash: indiceBusca("beatriz.fernandes@alunos.umc.br") },
-    update: {},
-    create: dadosParticipante("Beatriz Fernandes", "beatriz.fernandes@alunos.umc.br", "20240100222"),
-  });
-  const participanteLucas = await prisma.participante.upsert({
-    where: { emailHash: indiceBusca("lucas.martins@alunos.umc.br") },
-    update: {},
-    create: dadosParticipante("Lucas Martins", "lucas.martins@alunos.umc.br", "20230100333"),
-  });
+  // aluno@alunos.umc.br / aluno123 e a conta de demonstracao; Beatriz e Lucas sao alunos de exemplo
+  const participanteJoao = await garantirAluno("João Pedro Lima", "aluno@alunos.umc.br", "20240100111", "aluno123");
+  const participanteBeatriz = await garantirAluno("Beatriz Fernandes", "beatriz.fernandes@alunos.umc.br", "20240100222", null);
+  const participanteLucas = await garantirAluno("Lucas Martins", "lucas.martins@alunos.umc.br", "20230100333", null);
 
   const usuarioAdmin = await prisma.usuario.upsert({
-    where: { emailLoginHash: indiceBusca("admin@umc.br") },
+    where: { emailLogin: "admin@umc.br" },
     update: {},
     create: {
       id: randomUUID(),
       nome: "Ana Ribeiro",
       emailLogin: "admin@umc.br",
-      emailLoginHash: indiceBusca("admin@umc.br"),
       senhaHash: await gerarHashSenha("admin123"),
       perfil: "ADMINISTRADOR",
     },
   });
   await prisma.usuario.upsert({
-    where: { emailLoginHash: indiceBusca("secretaria@umc.br") },
+    where: { emailLogin: "secretaria@umc.br" },
     update: {},
     create: {
       id: randomUUID(),
       nome: "Carlos Souza",
       emailLogin: "secretaria@umc.br",
-      emailLoginHash: indiceBusca("secretaria@umc.br"),
       senhaHash: await gerarHashSenha("secretaria123"),
       perfil: "SECRETARIA",
-    },
-  });
-  await prisma.usuario.upsert({
-    where: { emailLoginHash: indiceBusca("aluno@alunos.umc.br") },
-    update: {},
-    create: {
-      id: randomUUID(),
-      nome: "João Pedro Lima",
-      emailLogin: "aluno@alunos.umc.br",
-      emailLoginHash: indiceBusca("aluno@alunos.umc.br"),
-      senhaHash: await gerarHashSenha("aluno123"),
-      perfil: "ALUNO",
-      rgm: "20240100111",
-      participanteId: participanteJoao.id,
     },
   });
 
