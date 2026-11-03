@@ -28,6 +28,15 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
 `testar-requisitos.ts` e **Interface** é a seção de mesmo nome em
 `testar-interface.mjs`.
 
+> **Atualização de 03/11/2026:** a tela Usuários saiu (2FA e bloqueio foram
+> para Participantes), o Dashboard ganhou endpoint próprio e os Palestrantes
+> do aluno viraram cards. As três suítes foram ajustadas (API R04, R16 e o novo
+> R25; `testar-2fa.ts` nas partes de secretaria e administrador; Interface
+> "Equipe entra só com a senha", "Agenda e certificados do aluno",
+> "Inativação" e "Participantes: 2FA e acesso"), mas **ainda não foram rodadas
+> de novo** contra o `SGEA_dev` — as contagens da tabela acima são da rodada
+> anterior. Os itens marcados "A rodar" ficam pendentes até essa execução.
+
 ## Requisitos
 
 | # | Requisito | Como foi testado | Resultado | O que foi corrigido |
@@ -50,14 +59,16 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
 | 16 | Feedback só de palestra com certificado, um por evento, sempre em nome do próprio aluno | API R14 | OK | — |
 | 17 | Feedback não é editado; aluno exclui o próprio e pode enviar outro; equipe só exclui, com motivo (item D) | API R22; Interface "Feedback do aluno" e "Feedback pela equipe" | OK | Implementado nesta rodada |
 | 18 | Participantes: listagem e correção de nome/e-mail/RGM pela equipe | API R15 | OK após correção | **Corrigido:** corrigir o nome ou o e-mail do participante não atualizava a conta de login do aluno — ele continuava entrando com o e-mail antigo e o nome antigo aparecia no topo da tela e na auditoria. Agora a correção vale para os dois. E-mail gravado sempre em minúsculo |
-| 19 | Inativação e reativação padronizadas (item C) | API R16; Interface "Inativação", "Inscrição manual" e "Tela Usuários" | OK | Implementado nesta rodada (ver `docs/lgpd/03` e `07`) |
+| 19 | Inativação e reativação padronizadas (item C) | API R16; Interface "Inativação", "Inscrição manual" e "Participantes: 2FA e acesso" | OK (a tela Usuários saiu em 03/11; a conferência do selo "Inativo" passou para Participantes — a rodar) | Implementado nesta rodada (ver `docs/lgpd/03` e `07`) |
 | 20 | Recuperação de senha por código | API R17; Interface "Esqueci a senha" | OK | Campos obrigatórios (item E) |
 | 21 | Trilha de auditoria: filtros, responsáveis, nada de dado pessoal no detalhe | API R18; Interface "Auditoria: filtro pelas ações novas" | OK após correção | **Corrigido:** a tela de Auditoria não conhecia as ações criadas nos blocos de segurança (2FA, bloqueio por tentativas etc.): elas não apareciam no filtro e a tabela mostrava só o código |
 | 22 | Exclusão de evento em cascata (inscrições, feedbacks, tentativas) | API R19 | OK | — |
-| 23 | Dashboard da equipe | Interface "Equipe entra só com a senha" (a tela abre com os 4 indicadores) | OK | — |
+| 23 | Dashboard da equipe: 6 indicadores, próximos eventos com ocupação e gráfico de presença por evento, tudo de `GET /api/dashboard` (só equipe, sem dado pessoal) | API R04 (aluno → 403) e R25; Interface "Equipe entra só com a senha" (6 indicadores, gráfico e menu "Dashboard") | A rodar | Refeito em 03/11/2026: antes eram 4 indicadores calculados no navegador; o item de menu "Principal" passou a se chamar "Dashboard" |
 | 24 | 2FA opcional para todos os perfis (item F) | `testar-2fa.ts`; API R20; Interface "Equipe entra só com a senha" e "2FA na Minha conta" | OK | Implementado nesta rodada |
 | 25 | Senha com bcrypt, salt por senha, custo 12 e rehash no login (item B) | API R20; `demonstrar-hash-senha.ts` | OK | Implementado nesta rodada |
 | 26 | Nome, e-mail e RGM em texto puro, sem quebrar os registros antigos (item G, primeira implantação) | API R24; conversão no dev + as três suítes rodadas de novo depois dela | OK | Implementado nesta rodada; a conversão em produção depende de confirmação |
+| 27 | Participantes mostra 2FA e acesso (bloqueio) do aluno; resetar 2FA e desbloquear só pelo administrador, também no backend | `testar-2fa.ts` (secretaria vê as colunas e leva 403 nas ações; admin desbloqueia e a coluna volta a "Liberado"; `GET /usuarios` → 404); API R16; Interface "Inativação" e "Participantes: 2FA e acesso" | A rodar | Implementado em 03/11/2026, no lugar da tela Usuários |
+| 28 | Palestrantes do aluno em cards (iniciais, nome, próximas palestras), sem e-mail | Interface "Agenda e certificados do aluno" | A rodar | Implementado em 03/11/2026 |
 | 27 | Campos obrigatórios marcados e validados do mesmo jeito em todos os formulários (item E) | Interface (todas as seções "E") | OK | Implementado nesta rodada |
 | 28 | Comentário de feedback longo | Leitura dos dois bancos (schema × dev × produção) | Corrigido | **Corrigido:** o schema dizia `VARCHAR(191)` e o banco de dev seguia isso (comentário com mais de 191 caracteres dava erro 500), enquanto a produção já tinha `TEXT`. Schema e dev alinhados com a produção por migration, com limite de 1000 caracteres e mensagem clara |
 

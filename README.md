@@ -31,11 +31,15 @@ Três perfis de usuário:
 
 - **Administrador** e **Secretaria** — acesso igual, total: CRUD de
   eventos, salas e palestrantes; lista de participantes com busca,
-  correção de dados e inativação/reativação de aluno (com motivo);
+  correção de dados, inativação/reativação de aluno (com motivo) e a
+  situação da conta de cada aluno (2FA ativado e acesso liberado/bloqueado);
   gestão de inscrições; exclusão de feedback (com motivo); check-in (confirmar
   presença/ausência); consulta da nota de todos os alunos no questionário de
-  cada evento; emissão de certificado de qualquer participante; dashboard
-  com estatísticas gerais.
+  cada evento; emissão de certificado de qualquer participante; **Dashboard**
+  (indicadores de eventos, inscrições, presença, certificados e feedback,
+  ocupação dos próximos eventos e gráfico de presença por evento). A única
+  diferença: só o **Administrador** reseta o 2FA e remove o bloqueio por
+  tentativas de um aluno (botões na tela Participantes).
 - **Aluno** — perfil com cadastro público (`/cadastro`, sem precisar de
   admin criar a conta, e-mail institucional obrigatório terminando em
   `@alunos.umc.br`). Só lê eventos, agenda, salas e palestrantes; se
@@ -75,7 +79,9 @@ manual — todo Participante nasce do cadastro de conta de aluno; a equipe
 corrige os dados e inativa/reativa o aluno pela tela Participantes.
 
 Senhas ficam só como hash bcrypt (custo 12, salt aleatório por senha). A
-autenticação em dois fatores é opcional para todos os perfis. Nome, e-mail
+autenticação em dois fatores é opcional para todos os perfis; o 2FA de conta
+de administrador/secretaria, que não aparece na tela Participantes, é
+resetado pelo script `backend/scripts/resetar-2fa.ts`. Nome, e-mail
 e RGM ficam sem criptografia, protegidos por controle de acesso por perfil,
 HTTPS, banco com acesso restrito e auditoria (ver
 [`docs/lgpd/07-medidas-tecnicas-de-seguranca.md`](docs/lgpd/07-medidas-tecnicas-de-seguranca.md)).

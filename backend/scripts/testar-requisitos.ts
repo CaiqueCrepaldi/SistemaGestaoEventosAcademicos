@@ -234,7 +234,7 @@ async function main() {
       ["POST", "/salas"],
       ["GET", "/logs-auditoria"],
       ["GET", "/questionario-tentativas"],
-      ["GET", "/usuarios"],
+      ["GET", "/dashboard"],
     ] as const) {
       r = await chamar(metodo, caminho, { token: aluno.token, corpo: metodo === "POST" ? { nome: "x", capacidade: 1 } : undefined });
       checar(`aluno em ${metodo} ${caminho} -> 403`, r.status === 403, r.status);
@@ -509,10 +509,13 @@ async function main() {
     checar("equipe não inscreve aluno inativo -> 409", r.status === 409 && r.corpo.code === "PARTICIPANTE_INATIVO", r.corpo);
     r = await chamar("PUT", `/inscricoes/${inscricaoPassada}`, { token: secretaria.token, corpo: { statusPresenca: "PRESENTE" } });
     checar("check-in de aluno inativo -> 409", r.status === 409, r.corpo);
-    r = await chamar("GET", "/usuarios", { token: admin.token });
+    r = await chamar("GET", "/participantes", { token: admin.token });
     checar(
-      "tela de usuários marca o aluno como inativo",
-      r.corpo.some((u: { id: string; inativo: boolean }) => u.id === aluno2.id && u.inativo === true),
+      "Participantes marca o aluno como inativo e traz a situação da conta (2FA e acesso)",
+      r.corpo.some(
+        (p: { id: string; ativo: boolean; usuarioId: string; mfaAtivo: boolean; bloqueado: boolean }) =>
+          p.id === aluno2.participanteId && p.ativo === false && p.usuarioId === aluno2.id && p.mfaAtivo === false && p.bloqueado === false,
+      ),
       r.status,
     );
     r = await chamar("PUT", `/participantes/${aluno2.participanteId}`, { token: admin.token, corpo: { ativo: true } });
@@ -555,6 +558,29 @@ async function main() {
       "nenhum log do teste tem e-mail, RGM, senha, código, comentário ou motivo",
       logsDoTeste.every((l) => !sensiveis.some((s) => (l.detalhe ?? "").includes(s))),
       logsDoTeste.filter((l) => sensiveis.some((s) => (l.detalhe ?? "").includes(s))).map((l) => l.detalhe),
+    );
+
+    // ------------------------------------------------------------------ dashboard
+    requisito("R25 Dashboard da equipe (endpoint agregado)");
+    r = await chamar("GET", "/dashboard", { token: secretaria.token });
+    const totais = r.corpo?.totais;
+    checar(
+      "equipe recebe os indicadores numa chamada só -> 200",
+      r.status === 200 && typeof totais?.eventos === "number" && totais.inscricoes === totais.presentes + totais.ausentes + totais.pendentes,
+      r.corpo,
+    );
+    const eventoNoDashboard = r.corpo?.eventos?.find((e: { id: string }) => e.id === eventoLotadoId);
+    const inscricoesDoEventoLotado = await prisma.inscricao.count({ where: { eventoId: eventoLotadoId } });
+    checar(
+      "presença por evento bate com as inscrições do banco",
+      eventoNoDashboard?.inscritos === inscricoesDoEventoLotado &&
+        eventoNoDashboard.inscritos === eventoNoDashboard.presentes + eventoNoDashboard.ausentes + eventoNoDashboard.pendentes,
+      eventoNoDashboard,
+    );
+    const textoDashboard = JSON.stringify(r.corpo);
+    checar(
+      "dashboard não traz dado pessoal (nome, e-mail, RGM de aluno)",
+      ![emailAluno, emailAluno2, novoEmailAluno2, rgmAluno, "Aluno Teste Requisitos", "Segundo Aluno Editado"].some((s) => textoDashboard.includes(s)),
     );
 
     // ------------------------------------------------------------------ exclusao em cascata

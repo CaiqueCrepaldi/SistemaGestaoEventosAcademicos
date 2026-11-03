@@ -44,3 +44,23 @@ export async function incrementarTentativa(chave: string): Promise<void> {
 export async function limparTentativas(chave: string): Promise<void> {
   await prisma.limiteAcesso.deleteMany({ where: { chave } });
 }
+
+// chaves POR CONTA (nao por IP) que travam o acesso de um usuario: login e recuperacao de senha
+// pelo indice do e-mail, codigo do 2FA pelo id. Fonte unica pra listar e pra desbloquear
+export function chavesDaConta(usuario: { id: string; emailLoginHash: string }): string[] {
+  return [
+    chaveConta("login", usuario.emailLoginHash),
+    chaveConta("recuperacao", usuario.emailLoginHash),
+    chaveConta("mfa", usuario.id),
+  ];
+}
+
+// todas as chaves com bloqueio valendo agora, numa consulta so (pra montar lista sem uma consulta por linha)
+export async function chavesBloqueadasAgora(): Promise<Set<string>> {
+  const bloqueios = await prisma.limiteAcesso.findMany({ where: { bloqueadoAte: { gt: new Date() } }, select: { chave: true } });
+  return new Set(bloqueios.map((bloqueio) => bloqueio.chave));
+}
+
+export function contaBloqueada(chavesBloqueadas: Set<string>, usuario: { id: string; emailLoginHash: string }): boolean {
+  return chavesDaConta(usuario).some((chave) => chavesBloqueadas.has(chave));
+}

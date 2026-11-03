@@ -45,7 +45,9 @@ auto-cadastro.
 | Check-in (confirmar presença/ausência)   | ✅ | ✅ | ❌ |
 | Certificados                             | ✅ (de qualquer participante) | ✅ | ✅ (só os próprios) |
 | Feedback                                 | ✅ (listar tudo, excluir com motivo; não edita) | ✅ | ✅ (enviar e excluir os próprios, só de palestra com certificado; não edita) |
-| Dashboard / estatísticas                 | ✅ | ✅ | ❌ |
+| Dashboard / estatísticas (`GET /api/dashboard`) | ✅ | ✅ | ❌ |
+| Participantes — ver situação do 2FA e do bloqueio | ✅ | ✅ | ❌ |
+| Participantes — resetar 2FA / desbloquear a conta do aluno | ✅ | ❌ | ❌ |
 | Auditoria (trilha de operações e acessos) | ✅ | ✅ | ❌ |
 | Trabalhos                                | removido do projeto | removido | removido |
 
@@ -222,15 +224,25 @@ Qualquer perfil autenticado. Mesmo formato do campo `usuario` do login.
 `401` se o token não for mais válido. Chamado pela página "Minha conta"
 pra mostrar a situação do 2FA.
 
-### Tela Usuários (só administrador)
+### Ações sobre a conta (só administrador)
 
-- `GET /api/usuarios` — `[{ id, nome, emailLogin, perfil, mfaAtivo, bloqueado, inativo }]`
-  (`inativo` só é `true` para aluno inativado pela secretaria; a tela mostra
-  o selo "Inativo").
+A tela Usuários saiu do sistema e, com ela, a listagem `GET /api/usuarios`
+(hoje responde `404`). A situação do 2FA e do bloqueio de cada aluno aparece
+na listagem de participantes (`GET /api/participantes`, campos `usuarioId`,
+`mfaAtivo` e `bloqueado`). As duas ações continuam aqui porque agem sobre a
+conta de acesso, de qualquer perfil:
+
 - `DELETE /api/usuarios/{id}/bloqueio` — `204`; remove o bloqueio por
-  tentativas da conta (login, recuperação e 2FA).
+  tentativas da conta (login, recuperação e 2FA). O bloqueio por IP não é
+  removido: ele só expira sozinho (15 min).
 - `DELETE /api/usuarios/{id}/2fa` — `204`; reseta o 2FA (apaga segredo e
   códigos, encerra as sessões da pessoa).
+
+Secretaria e aluno recebem `403` nas duas. A tela Participantes chama as duas
+com o `usuarioId` do aluno. Conta de administrador/secretaria não aparece em
+nenhuma tela: o reset do 2FA dela é pelo script
+`backend/scripts/resetar-2fa.ts` (ou por esta API, com o id da conta), e o
+bloqueio por tentativas expira sozinho em 15 minutos.
 
 ## Auditoria
 
@@ -436,6 +448,20 @@ interface Participante {
 `GET /api/participantes` e `GET /api/participantes/{id}` — admin/secretaria
 only, `403` pra aluno. Não existe `POST` (participante só nasce via
 `POST /api/auth/registro`).
+
+A listagem (`GET /api/participantes`) traz também a situação da conta de
+acesso do aluno, que a tela mostra nas colunas **2FA** e **Acesso**:
+
+```ts
+interface ParticipanteNaListagem extends Participante {
+  usuarioId: string | null; // conta ALUNO vinculada (null se não houver)
+  mfaAtivo: boolean;        // 2FA ativado
+  bloqueado: boolean;       // bloqueado agora por excesso de tentativas (login, recuperação ou código do 2FA)
+}
+```
+
+Nunca vêm segredo do 2FA, códigos de recuperação nem hash de senha. Resetar
+o 2FA e desbloquear são só do administrador (ver "Ações sobre a conta").
 
 `GET /api/participantes/alunos` — admin/secretaria only. Só os participantes
 com conta de perfil `ALUNO`, em ordem alfabética (pt-BR), no mesmo formato
@@ -735,12 +761,32 @@ desabilitado com o motivo.
 
 ## Dashboard
 
-Não existe endpoint dedicado — `DashboardPage.tsx` calcula tudo no cliente
-a partir de `GET /api/eventos`, `GET /api/inscricoes` e `GET /api/salas`
-(pra ocupação média). Funciona, mas belisca performance se
-o volume de dados crescer bastante; um `GET /api/dashboard/estatisticas`
-agregando isso no servidor é uma otimização futura razoável, não um
-requisito pra este contrato funcionar.
+`GET /api/dashboard` — só admin/secretaria (`403` pra aluno). Tudo que a
+tela Dashboard mostra, agregado no servidor numa chamada só. Só números,
+título do evento e nome da sala — nenhum dado pessoal (nome, e-mail, RGM,
+quem se inscreveu ou quem avaliou).
+
+```ts
+interface ResumoDashboard {
+  totais: {
+    eventos: number;
+    eventosFuturos: number;        // horário >= agora
+    inscricoes: number;            // presentes + ausentes + pendentes
+    presentes: number;
+    ausentes: number;
+    pendentes: number;
+    taxaPresenca: number | null;   // presentes / (presentes + ausentes) × 100; null sem check-in
+    certificadosLiberados: number; // presença confirmada + ≥ 60% no questionário do mesmo evento
+    mediaFeedback: number | null;  // 1 a 5; null sem feedback
+    totalFeedbacks: number;
+  };
+  proximosEventos: { id; titulo; horario; salaNome; capacidade; inscritos }[]; // até 5, do mais próximo
+  eventos: { id; titulo; horario; inscritos; presentes; ausentes; pendentes }[]; // todos, por horário
+}
+```
+
+A taxa de presença considera só os check-ins já registrados (presente ou
+ausente): inscrição pendente de evento futuro não puxa a taxa pra baixo.
 
 ## Formato de erro
 

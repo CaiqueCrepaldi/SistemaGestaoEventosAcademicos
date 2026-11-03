@@ -2,7 +2,7 @@ import { Router } from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { autenticar, autorizar } from "../../middleware/auth";
 import { validarCorpo } from "../../middleware/validate";
-import { participanteParaDTO } from "../../utils/dto";
+import { participanteComContaParaDTO, participanteParaDTO } from "../../utils/dto";
 import { participantesService } from "./participantes.service";
 import { participanteUpdateSchema } from "./participantes.schemas";
 
@@ -11,12 +11,13 @@ export const participantesRouter = Router();
 // nenhum verbo liberado pro ALUNO aqui, nem leitura
 participantesRouter.use(autenticar, autorizar("ADMINISTRADOR", "SECRETARIA"));
 
-// lista todos os participantes
+// lista todos os participantes, com a situacao da conta (2FA e bloqueio) — admin e secretaria veem;
+// resetar o 2FA e desbloquear continuam so pro ADMINISTRADOR (DELETE /usuarios/:id/2fa e /bloqueio)
 participantesRouter.get(
   "/",
   asyncHandler(async (_req, res) => {
     const participantes = await participantesService.listar();
-    res.json(participantes.map(participanteParaDTO));
+    res.json(participantes.map(participanteComContaParaDTO));
   }),
 );
 

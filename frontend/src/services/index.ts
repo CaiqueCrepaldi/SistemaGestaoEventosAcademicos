@@ -6,7 +6,8 @@ export type { LogAuditoria, PaginaAuditoria, ResponsavelAuditoria } from "./audi
 export { authService } from "./authService";
 export type { CadastroAlunoInput, ResultadoLogin, SessaoUsuario, UsuarioPerfil } from "./authService";
 export { usuarioService } from "./usuarioService";
-export type { UsuarioResumo } from "./usuarioService";
+export { dashboardService } from "./dashboardService";
+export type { PresencaPorEvento, ProximoEventoDashboard, ResumoDashboard, TotaisDashboard } from "./dashboardService";
 export { certificadoService } from "./certificadoService";
 export type { CertificadoDisponivel } from "./certificadoService";
 export { checkinService } from "./checkinService";

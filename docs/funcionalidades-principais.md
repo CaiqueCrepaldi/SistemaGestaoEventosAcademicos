@@ -122,7 +122,7 @@ Antes de existir um evento no sistema, é preciso ter pelo menos uma sala e um p
 ### Fluxo do usuário
 
 - **Salas** (`/salas`): cadastro simples de nome e capacidade (número de lugares), usado depois para calcular vagas disponíveis nas inscrições.
-- **Palestrantes** (`/palestrantes`): cadastro de nome e e-mail. O aluno enxerga essa tela em modo somente leitura.
+- **Palestrantes** (`/palestrantes`): cadastro de nome e e-mail. O aluno enxerga essa tela em modo somente leitura, como uma grade de cards (avatar com as iniciais, nome e as próximas palestras de cada palestrante) — sem o e-mail, que o backend nem envia para o aluno.
 - **Eventos** (`/eventos`): título, sala, data/horário, palestrante responsável, tema e carga horária, além do construtor das 10 perguntas do questionário (ver funcionalidade 1). Só é possível abrir o formulário de novo evento se já existir pelo menos uma sala e um palestrante cadastrados.
 - Nas três telas, editar ou excluir um registro pede confirmação antes de gravar ("Confirmar alteração" / "Remover ..."), e qualquer campo inválido ou vazio é avisado por notificação (toast) — nunca por `alert()`.
 
@@ -147,7 +147,7 @@ Permitir que a secretaria bloqueie o uso do sistema por um aluno (uso indevido, 
 ### Fluxo do usuário
 
 1. Na tela **Participantes**, administrador ou secretaria clica em **"Inativar"**, informa o motivo (obrigatório) e confirma.
-2. A partir daí o aluno aparece com o selo **"Inativo"** nas telas da equipe (Participantes, Inscrições, Check-in, Certificados, Usuários).
+2. A partir daí o aluno aparece com o selo **"Inativo"** nas telas da equipe (Participantes, Inscrições, Check-in, Certificados).
 3. Se o aluno estiver logado, a sessão cai. Ao tentar entrar de novo, vê "Sua conta está inativa. Procure a secretaria." — sem o motivo interno.
 4. Ele não consegue se inscrever, fazer check-in nem responder questionário. As inscrições pendentes em eventos futuros são canceladas; os certificados já emitidos continuam valendo.
 5. **"Reativar"** (com confirmação) libera o login de novo.
@@ -178,7 +178,9 @@ Permitir que a secretaria bloqueie o uso do sistema por um aluno (uso indevido, 
 ## 7. Senha e autenticação em dois fatores
 
 - Senhas são guardadas só como hash bcrypt, custo 12, com salt aleatório por senha embutido no próprio hash. Contas com hash antigo (custo 10) são atualizadas no próximo login, sem o usuário perceber. Detalhes em `docs/lgpd/07-medidas-tecnicas-de-seguranca.md`.
-- A autenticação em dois fatores (aplicativo autenticador) é **opcional para todos os perfis**: cada pessoa ativa ou desativa na página **Minha conta**. O administrador pode resetar o 2FA de quem perdeu o celular (tela **Usuários**).
+- A autenticação em dois fatores (aplicativo autenticador) é **opcional para todos os perfis**: cada pessoa ativa ou desativa na página **Minha conta**.
+- A tela **Participantes** mostra, para cada aluno, as colunas **2FA** ("Ativado"/"Não ativado") e **Acesso** ("Liberado"/"Bloqueado" por excesso de tentativas). Administrador e secretaria veem as colunas; só o **administrador** tem os botões **"Resetar 2FA"** (aluno que perdeu o celular) e **"Desbloquear"**, sempre com confirmação — e o backend recusa a secretaria com `403` mesmo que ela chame a API direto.
+- Contas de administrador e secretaria não são participantes, então não aparecem nessa tela: o reset do 2FA delas é feito pelo script `backend/scripts/resetar-2fa.ts` (que também serve de emergência se o único administrador perder o celular e os códigos), e o bloqueio por tentativas expira sozinho em 15 minutos.
 
 ---
 

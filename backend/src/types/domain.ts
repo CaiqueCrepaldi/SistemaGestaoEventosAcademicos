@@ -49,6 +49,14 @@ export interface Participante {
   criadoEm: string;
 }
 
+// situacao da conta de acesso (Usuario ALUNO) vinculada ao participante — so o que a tela
+// Participantes mostra. usuarioId nulo = participante sem conta (nao deveria existir, mas nao quebra)
+export interface SituacaoConta {
+  usuarioId: string | null;
+  mfaAtivo: boolean;
+  bloqueado: boolean;
+}
+
 export interface Sala {
   id: string;
   nome: string;

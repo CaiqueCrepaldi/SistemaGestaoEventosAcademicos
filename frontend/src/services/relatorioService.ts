@@ -1,40 +1,6 @@
-import { eventoService, feedbackService, inscricaoService, salaService } from "./entityServices";
+import { eventoService, feedbackService, salaService } from "./entityServices";
 
-export interface EstatisticasGerais {
-  totalEventos: number;
-  totalInscricoes: number;
-  totalPresentes: number;
-  taxaPresenca: number;
-  ocupacaoMedia: number;
-}
-
-// numeros exibidos nos cartoes do topo do Dashboard
-async function estatisticasGerais(): Promise<EstatisticasGerais> {
-  const [eventos, inscricoes, salas] = await Promise.all([
-    eventoService.list(),
-    inscricaoService.list(),
-    salaService.list(),
-  ]);
-
-  const totalPresentes = inscricoes.filter((i) => i.statusPresenca === "PRESENTE").length;
-  const taxaPresenca = inscricoes.length > 0 ? (totalPresentes / inscricoes.length) * 100 : 0;
-
-  const ocupacoes = eventos.map((evento) => {
-    const sala = salas.find((s) => s.id === evento.salaId);
-    const inscritosNoEvento = inscricoes.filter((i) => i.eventoId === evento.id).length;
-    if (!sala || sala.capacidade === 0) return 0;
-    return Math.min(inscritosNoEvento / sala.capacidade, 1) * 100;
-  });
-  const ocupacaoMedia = ocupacoes.length > 0 ? ocupacoes.reduce((a, b) => a + b, 0) / ocupacoes.length : 0;
-
-  return {
-    totalEventos: eventos.length,
-    totalInscricoes: inscricoes.length,
-    totalPresentes,
-    taxaPresenca,
-    ocupacaoMedia,
-  };
-}
+// os numeros do Dashboard vem prontos do backend (dashboardService), nao sao mais calculados aqui
 
 export interface EventoAgenda {
   id: string;
@@ -78,7 +44,6 @@ async function mediaFeedbackPorEvento(eventoId: string): Promise<number | null> 
 }
 
 export const relatorioService = {
-  estatisticasGerais,
   agendaGeral,
   mediaFeedbackPorEvento,
 };

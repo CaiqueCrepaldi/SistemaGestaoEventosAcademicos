@@ -21,7 +21,6 @@ import { PalestrantesPage } from "./pages/Palestrantes/PalestrantesPage";
 import { ParticipantesPage } from "./pages/Participantes/ParticipantesPage";
 import { QuestionarioPage } from "./pages/Questionario/QuestionarioPage";
 import { SalasPage } from "./pages/Salas/SalasPage";
-import { UsuariosPage } from "./pages/Usuarios/UsuariosPage";
 
 // raiz da aplicacao: define todas as rotas e onde cada perfil pode entrar
 export function App() {
@@ -55,10 +54,6 @@ export function App() {
                 <Route path="/inscricoes" element={<InscricoesPage />} />
                 <Route path="/checkin" element={<CheckinPage />} />
                 <Route path="/auditoria" element={<AuditoriaPage />} />
-              </Route>
-              {/* rotas exclusivas de ADMINISTRADOR */}
-              <Route element={<ProtectedRoute perfis={["ADMINISTRADOR"]} />}>
-                <Route path="/usuarios" element={<UsuariosPage />} />
               </Route>
             </Route>
           </Route>

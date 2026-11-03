@@ -226,10 +226,24 @@ async function main() {
     checar("código certo -> sessão da secretaria", r.status === 200 && !!r.corpo.token);
     tokenSecretaria = r.corpo.token;
 
+    r = await chamar("GET", "/participantes", { token: tokenSecretaria });
+    const alunoNaListaDaSecretaria = (r.corpo as { id: string; usuarioId: string; mfaAtivo: boolean; bloqueado: boolean; mfaSegredoCifrado?: unknown }[]).find(
+      (p) => p.id === aluno.participanteId,
+    );
+    checar(
+      "secretaria vê em Participantes o 2FA ativo e o bloqueio do aluno, sem segredo",
+      r.status === 200 &&
+        alunoNaListaDaSecretaria?.usuarioId === aluno.id &&
+        alunoNaListaDaSecretaria.mfaAtivo === true &&
+        alunoNaListaDaSecretaria.bloqueado === true &&
+        alunoNaListaDaSecretaria.mfaSegredoCifrado === undefined,
+    );
     r = await chamar("GET", "/usuarios", { token: tokenSecretaria });
-    checar("secretaria não lista usuários -> 403", r.status === 403);
+    checar("listagem de contas (tela Usuários) não existe mais -> 404", r.status === 404);
     r = await chamar("DELETE", `/usuarios/${aluno.id}/2fa`, { token: tokenSecretaria });
     checar("secretaria não reseta 2FA de ninguém -> 403", r.status === 403);
+    r = await chamar("DELETE", `/usuarios/${aluno.id}/bloqueio`, { token: tokenSecretaria });
+    checar("secretaria não remove bloqueio de ninguém -> 403", r.status === 403);
 
     // ---------------------------------------------------------------- ADMINISTRADOR
     console.log("\n[ADMINISTRADOR] desbloqueio, reset do 2FA de outro usuário, listagem");
@@ -244,9 +258,11 @@ async function main() {
     r = await chamar("POST", "/auth/2fa/verificar", { token: r.corpo.tokenEtapa, corpo: { codigoRecuperacao: codigosAluno[1] } });
     checar("depois do desbloqueio o aluno entra com código de recuperação", r.status === 200);
 
-    r = await chamar("GET", "/usuarios", { token: tokenAdmin });
-    const listaSecretaria = (r.corpo as { id: string; mfaAtivo: boolean; rgm?: unknown; mfaSegredoCifrado?: unknown }[]).find((u) => u.id === secretaria.id);
-    checar("admin lista usuários com a situação do 2FA, sem segredo nem RGM", r.status === 200 && listaSecretaria?.mfaAtivo === true && listaSecretaria.rgm === undefined && listaSecretaria.mfaSegredoCifrado === undefined);
+    r = await chamar("GET", "/participantes", { token: tokenAdmin });
+    const alunoDesbloqueado = (r.corpo as { id: string; bloqueado: boolean }[]).find((p) => p.id === aluno.participanteId);
+    checar("depois do desbloqueio, Participantes mostra o acesso do aluno liberado", r.status === 200 && alunoDesbloqueado?.bloqueado === false);
+
+    // conta da equipe nao aparece em Participantes: o reset continua pela API (e pelo script resetar-2fa.ts)
 
     r = await chamar("DELETE", `/usuarios/${secretaria.id}/2fa`, { token: tokenAdmin });
     checar("admin reseta o 2FA da secretaria -> 204", r.status === 204);

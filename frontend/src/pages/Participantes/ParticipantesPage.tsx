@@ -5,16 +5,21 @@ import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { toast } from "../../components/ui/Toast";
+import { useAuth } from "../../context/AuthContext";
 import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
-import { ApiError, participanteService } from "../../services";
+import { ApiError, participanteService, usuarioService } from "../../services";
 import type { Participante } from "../../types";
 import { normalizarRgm, validarEmail, validarNome, validarRgm } from "../../utils/validacao";
 
 const VAZIO = { nome: "", email: "", rgm: "" };
 
 // alunos cadastrados: a equipe corrige dados, inativa (com motivo) e reativa. Inativo = nao entra
-// no sistema, nao se inscreve, nao faz check-in nem questionario; certificados ja emitidos valem
+// no sistema, nao se inscreve, nao faz check-in nem questionario; certificados ja emitidos valem.
+// Colunas 2FA e Acesso: admin e secretaria veem; resetar o 2FA e desbloquear sao so do
+// ADMINISTRADOR (o backend tambem recusa a secretaria com 403)
 export function ParticipantesPage() {
+  const { usuario } = useAuth();
+  const ehAdministrador = usuario?.perfil === "ADMINISTRADOR";
   const [participantes, setParticipantes] = useState<Participante[]>([]);
   const [busca, setBusca] = useState("");
   const [editando, setEditando] = useState<Participante | null>(null);
@@ -24,6 +29,8 @@ export function ParticipantesPage() {
   const [inativando, setInativando] = useState<Participante | null>(null);
   const [reativando, setReativando] = useState<Participante | null>(null);
   const [motivoInativacao, setMotivoInativacao] = useState("");
+  const [resetandoMfa, setResetandoMfa] = useState<Participante | null>(null);
+  const [desbloqueando, setDesbloqueando] = useState<Participante | null>(null);
   const edicao = useErrosFormulario();
   const inativacao = useErrosFormulario();
 
@@ -115,6 +122,34 @@ export function ParticipantesPage() {
     }
   }
 
+  // zera o 2FA da conta do aluno (perdeu o celular): sessoes abertas caem e ele volta a entrar so com a senha
+  async function resetarMfa() {
+    if (!resetandoMfa?.usuarioId) return;
+    try {
+      await usuarioService.resetarMfa(resetandoMfa.usuarioId);
+      toast.success(`2FA de ${resetandoMfa.nome} resetado. A pessoa volta a entrar só com a senha.`);
+      setResetandoMfa(null);
+      await carregar();
+    } catch (erro) {
+      setResetandoMfa(null);
+      toast.error(erro instanceof Error ? erro.message : "Não foi possível resetar o 2FA.");
+    }
+  }
+
+  // remove o bloqueio por excesso de tentativas (login, recuperacao de senha e codigo do 2FA)
+  async function desbloquear() {
+    if (!desbloqueando?.usuarioId) return;
+    try {
+      await usuarioService.removerBloqueio(desbloqueando.usuarioId);
+      toast.success(`Bloqueio de ${desbloqueando.nome} removido.`);
+      setDesbloqueando(null);
+      await carregar();
+    } catch (erro) {
+      setDesbloqueando(null);
+      toast.error(erro instanceof Error ? erro.message : "Não foi possível remover o bloqueio.");
+    }
+  }
+
   const filtrados = participantes.filter((p) => {
     const alvo = busca.trim().toLowerCase();
     if (!alvo) return true;
@@ -132,48 +167,87 @@ export function ParticipantesPage() {
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
         />
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Nome</th>
-              <th>E-mail</th>
-              <th>RGM</th>
-              <th>Situação</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {filtrados.map((participante) => (
-              <tr key={participante.id}>
-                <td>{participante.nome}</td>
-                <td>{participante.email}</td>
-                <td>{participante.rgm}</td>
-                <td>{participante.ativo === false ? <Badge tone="red">Inativo</Badge> : <Badge tone="green">Ativo</Badge>}</td>
-                <td className="table-actions">
-                  <button className="btn btn-ghost" onClick={() => abrirEdicao(participante)}>Editar</button>
-                  {participante.ativo === false ? (
-                    <button className="btn btn-ghost" onClick={() => setReativando(participante)}>Reativar</button>
-                  ) : (
-                    <button className="btn btn-ghost" onClick={() => abrirInativacao(participante)}>Inativar</button>
-                  )}
-                  {participante.ativo === false && (
-                    <button className="btn btn-ghost btn-danger" onClick={() => setExcluindo(participante)}>
-                      Excluir
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {filtrados.length === 0 && (
+        <div className="table-scroll">
+          <table className="table">
+            <thead>
               <tr>
-                <td colSpan={5} className="empty-cell">
-                  Nenhum participante encontrado.
-                </td>
+                <th>Nome</th>
+                <th>E-mail</th>
+                <th>RGM</th>
+                <th>Situação</th>
+                <th>2FA</th>
+                <th>Acesso</th>
+                <th />
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filtrados.map((participante) => (
+                <tr key={participante.id}>
+                  <td>{participante.nome}</td>
+                  <td>{participante.email}</td>
+                  <td>{participante.rgm}</td>
+                  <td>{participante.ativo === false ? <Badge tone="red">Inativo</Badge> : <Badge tone="green">Ativo</Badge>}</td>
+                  <td>
+                    <Badge tone={participante.mfaAtivo ? "green" : "neutral"}>{participante.mfaAtivo ? "Ativado" : "Não ativado"}</Badge>
+                  </td>
+                  <td>{participante.bloqueado ? <Badge tone="red">Bloqueado</Badge> : <Badge>Liberado</Badge>}</td>
+                  <td className="table-actions">
+                    {ehAdministrador && participante.usuarioId && participante.mfaAtivo && (
+                      <button className="btn btn-ghost btn-danger" onClick={() => setResetandoMfa(participante)}>
+                        Resetar 2FA
+                      </button>
+                    )}
+                    {ehAdministrador && participante.usuarioId && participante.bloqueado && (
+                      <button className="btn btn-ghost" onClick={() => setDesbloqueando(participante)}>
+                        Desbloquear
+                      </button>
+                    )}
+                    <button className="btn btn-ghost" onClick={() => abrirEdicao(participante)}>Editar</button>
+                    {participante.ativo === false ? (
+                      <button className="btn btn-ghost" onClick={() => setReativando(participante)}>Reativar</button>
+                    ) : (
+                      <button className="btn btn-ghost" onClick={() => abrirInativacao(participante)}>Inativar</button>
+                    )}
+                    {participante.ativo === false && (
+                      <button className="btn btn-ghost btn-danger" onClick={() => setExcluindo(participante)}>
+                        Excluir
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {filtrados.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="empty-cell">
+                    Nenhum participante encontrado.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
+
+      {resetandoMfa && (
+        <ConfirmDialog
+          title="Resetar autenticação em dois fatores"
+          message={`Resetar o 2FA de ${resetandoMfa.nome}? As sessões abertas dessa pessoa serão encerradas e os códigos de recuperação deixam de valer. Ela volta a entrar só com a senha e pode ativar o 2FA de novo em Minha conta.`}
+          confirmLabel="Resetar"
+          tone="danger"
+          onConfirm={() => void resetarMfa()}
+          onCancel={() => setResetandoMfa(null)}
+        />
+      )}
+
+      {desbloqueando && (
+        <ConfirmDialog
+          title="Remover bloqueio"
+          message={`Liberar o acesso de ${desbloqueando.nome}, bloqueado por excesso de tentativas?`}
+          confirmLabel="Desbloquear"
+          onConfirm={() => void desbloquear()}
+          onCancel={() => setDesbloqueando(null)}
+        />
+      )}
 
       {editando && (
         <Modal title="Editar participante" onClose={() => setEditando(null)}>

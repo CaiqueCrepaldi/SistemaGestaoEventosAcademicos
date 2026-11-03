@@ -4,7 +4,8 @@ import { AppError } from "../../errors/AppError";
 import { indiceBusca } from "../../utils/criptografia";
 import { lerDadoPessoal } from "../../utils/dadosPessoais";
 import { registrarAuditoria } from "../../utils/auditoria";
-import type { Participante } from "../../types/domain";
+import { chavesBloqueadasAgora, contaBloqueada } from "../../utils/limiteAcesso";
+import type { Participante, SituacaoConta } from "../../types/domain";
 import type { ParticipanteUpdateInput } from "./participantes.schemas";
 
 // prisma devolve criadoEm como Date — converte pro formato do resto do app. nome/email/rgm podem
@@ -20,10 +21,28 @@ function paraDominio(participante: ParticipanteDb): Participante {
 }
 
 // lista participantes ordenados por nome (ordenado depois de ler, pra valer tambem pros registros
-// que ainda estao no formato antigo)
-async function listar() {
-  const participantes = await prisma.participante.findMany();
-  return participantes.map(paraDominio).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+// que ainda estao no formato antigo), junto com a situacao da conta de acesso do aluno: 2FA ativo e
+// bloqueio por excesso de tentativas agora. Do Usuario so sai id/mfaAtivo/emailLoginHash (este
+// ultimo so pra montar a chave do bloqueio, nao vai pra resposta)
+async function listar(): Promise<(Participante & SituacaoConta)[]> {
+  const [participantes, chavesBloqueadas] = await Promise.all([
+    prisma.participante.findMany({
+      include: { usuarios: { where: { perfil: "ALUNO" }, select: { id: true, mfaAtivo: true, emailLoginHash: true }, take: 1 } },
+    }),
+    chavesBloqueadasAgora(),
+  ]);
+
+  return participantes
+    .map(({ usuarios, ...participante }) => {
+      const conta = usuarios[0];
+      return {
+        ...paraDominio(participante),
+        usuarioId: conta?.id ?? null,
+        mfaAtivo: conta?.mfaAtivo ?? false,
+        bloqueado: conta ? contaBloqueada(chavesBloqueadas, conta) : false,
+      };
+    })
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
 // so os alunos: participantes com conta de acesso de perfil ALUNO, em ordem alfabetica — usado

@@ -65,6 +65,10 @@ export interface Participante {
   rgm: string;
   ativo?: boolean;
   motivoInativacao?: string | null;
+  // situacao da conta de acesso do aluno — so vem na listagem da tela Participantes (equipe)
+  usuarioId?: string | null;
+  mfaAtivo?: boolean;
+  bloqueado?: boolean;
 }
 
 // comeca PENDENTE e so muda quando alguem da equipe confirma o checkin

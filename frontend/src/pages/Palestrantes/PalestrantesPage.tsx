@@ -6,15 +6,37 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
 import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
-import { ApiError, palestranteService } from "../../services";
-import type { Palestrante } from "../../types";
+import { ApiError, eventoService, palestranteService } from "../../services";
+import type { Evento, Palestrante } from "../../types";
 import { validarEmail, validarNome } from "../../utils/validacao";
 
 const VAZIO = { nome: "", email: "" };
+// quantas proximas palestras cabem no card do aluno antes de mandar pra Agenda
+const MAX_EVENTOS_NO_CARD = 3;
+
+const PREPOSICOES = new Set(["de", "da", "do", "das", "dos", "e"]);
+
+// "Maria da Silva" -> "MS"; ignora titulos abreviados ("Dr.", "Profa.") e preposicoes
+function iniciais(nome: string): string {
+  const partes = nome
+    .trim()
+    .split(/\s+/)
+    .filter((parte) => !parte.endsWith(".") && !PREPOSICOES.has(parte.toLowerCase()));
+  const usadas = partes.length > 0 ? partes : nome.trim().split(/\s+/);
+  const primeira = usadas[0]?.[0] ?? "";
+  const ultima = usadas.length > 1 ? usadas[usadas.length - 1][0] : "";
+  return (primeira + ultima).toUpperCase();
+}
+
+function formatarDataHora(iso: string): string {
+  return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+}
 
 export function PalestrantesPage() {
   const { usuario } = useAuth();
+  const ehAluno = usuario?.perfil === "ALUNO";
   const [palestrantes, setPalestrantes] = useState<Palestrante[]>([]);
+  const [eventos, setEventos] = useState<Evento[]>([]);
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<Palestrante | null>(null);
   const [form, setForm] = useState(VAZIO);
@@ -24,7 +46,9 @@ export function PalestrantesPage() {
 
   useEffect(() => {
     void carregar();
-  }, []);
+    // eventos so servem pros cards do aluno (proximas palestras de cada palestrante)
+    if (ehAluno) void eventoService.list().then(setEventos);
+  }, [ehAluno]);
 
   // busca a lista atualizada de palestrantes
   async function carregar() {
@@ -91,21 +115,59 @@ export function PalestrantesPage() {
     }
   }
 
-  // ALUNO ve uma versao mais simples (so nome — o backend nem manda e-mail pra esse perfil)
-  if (usuario?.perfil === "ALUNO") {
+  // ALUNO ve cards so com nome e proximas palestras — o backend nem manda e-mail pra esse perfil
+  if (ehAluno) {
+    const agora = new Date().toISOString();
     return (
       <div>
         <PageHeader title="Palestrantes" />
-        <div className="card">
-          <ul className="simple-list">
-            {palestrantes.map((palestrante) => (
-              <li key={palestrante.id} className="simple-list-item">
-                <div className="simple-list-title">{palestrante.nome}</div>
-              </li>
-            ))}
-            {palestrantes.length === 0 && <p className="empty-cell">Nenhum palestrante cadastrado.</p>}
-          </ul>
-        </div>
+        {palestrantes.length === 0 ? (
+          <div className="card">
+            <p className="empty-cell">Nenhum palestrante cadastrado.</p>
+          </div>
+        ) : (
+          <div className="palestrantes-grid">
+            {palestrantes.map((palestrante) => {
+              const proximas = eventos
+                .filter((evento) => evento.palestranteId === palestrante.id && evento.horario >= agora)
+                .sort((a, b) => a.horario.localeCompare(b.horario));
+              return (
+                <article key={palestrante.id} className="palestrante-card">
+                  <div className="palestrante-card-topo">
+                    <span className="avatar-iniciais" aria-hidden="true">
+                      {iniciais(palestrante.nome)}
+                    </span>
+                    <div>
+                      <h2 className="palestrante-nome">{palestrante.nome}</h2>
+                      <p className="palestrante-resumo">
+                        {proximas.length === 0
+                          ? "Palestrante"
+                          : `${proximas.length} ${proximas.length === 1 ? "palestra agendada" : "palestras agendadas"}`}
+                      </p>
+                    </div>
+                  </div>
+                  {proximas.length === 0 ? (
+                    <p className="palestrante-sem-eventos">Nenhuma palestra agendada no momento.</p>
+                  ) : (
+                    <ul className="palestrante-eventos">
+                      {proximas.slice(0, MAX_EVENTOS_NO_CARD).map((evento) => (
+                        <li key={evento.id}>
+                          <div className="palestrante-evento-titulo">{evento.titulo}</div>
+                          <div className="palestrante-evento-data">{formatarDataHora(evento.horario)}</div>
+                        </li>
+                      ))}
+                      {proximas.length > MAX_EVENTOS_NO_CARD && (
+                        <li className="palestrante-resumo">
+                          + {proximas.length - MAX_EVENTOS_NO_CARD} na Agenda
+                        </li>
+                      )}
+                    </ul>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   }

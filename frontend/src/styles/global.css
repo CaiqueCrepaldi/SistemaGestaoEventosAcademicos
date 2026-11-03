@@ -22,6 +22,8 @@
   --gray-100: #f1f5f9;
   --gray-200: #e2e8f0;
   --gray-300: #cbd5e1;
+  /* cinza neutro do "pendente" no grafico do Dashboard (meio-termo entre presente e ausente) */
+  --gray-400: #94a3b8;
   --gray-500: #64748b;
   --gray-700: #334155;
   --gray-900: #0f172a;
@@ -512,6 +514,7 @@ h1, h2, h3 {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .badge.tone-neutral { background: var(--gray-100); color: var(--gray-700); }
@@ -1173,4 +1176,312 @@ h1, h2, h3 {
 
 .campo-checkbox.field-invalido .lgpd-consent {
   color: var(--red-600);
+}
+
+/* tabela larga rola de lado dentro do card no celular, em vez de estourar a tela */
+.table-scroll {
+  overflow-x: auto;
+}
+
+.table-scroll .table {
+  min-width: 720px;
+}
+
+/* muitas acoes numa linha (ex.: Participantes do admin): os botoes descem pra linha de baixo
+   dentro da celula em vez de alargar a tabela; cada botao continua inteiro */
+.table-scroll .table-actions {
+  white-space: normal;
+}
+
+.table-scroll .table-actions .btn {
+  white-space: nowrap;
+}
+
+/* Palestrantes (visao do aluno): grade de cards */
+.palestrantes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.palestrante-card {
+  background: #ffffff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.palestrante-card-topo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.avatar-iniciais {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--black-900);
+  color: var(--yellow-500);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.palestrante-nome {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gray-900);
+  overflow-wrap: anywhere;
+}
+
+.palestrante-resumo {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--gray-500);
+}
+
+.palestrante-eventos {
+  list-style: none;
+  margin: 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--gray-100);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.palestrante-evento-titulo {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-900);
+  overflow-wrap: anywhere;
+}
+
+.palestrante-evento-data {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--yellow-text);
+}
+
+.palestrante-sem-eventos {
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--gray-100);
+  font-size: 13px;
+  color: var(--gray-500);
+}
+
+/* Dashboard */
+/* sem isso uma tabela larga dentro do card estica a coluna do grid em vez de rolar */
+.grid-2 > * {
+  min-width: 0;
+}
+
+.dashboard-stats {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.card-subtitulo {
+  margin: -8px 0 14px;
+  font-size: 12px;
+  color: var(--gray-500);
+}
+
+.proximos-eventos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.proximo-evento {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--gray-100);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.proximo-evento:first-child {
+  padding-top: 0;
+}
+
+.proximo-evento:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.proximo-evento-topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.proximo-evento-vagas {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gray-700);
+  white-space: nowrap;
+}
+
+/* medidor de ocupacao: o preenchimento carrega o nivel (normal -> quase cheio -> lotado) e o
+   trilho e um tom mais claro da mesma cor, pra o nivel ler na barra inteira */
+.ocupacao {
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--yellow-50);
+}
+
+.ocupacao-preenchimento {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--yellow-500);
+}
+
+.ocupacao.nivel-alto { background: var(--orange-50); }
+.ocupacao.nivel-alto .ocupacao-preenchimento { background: var(--orange-600); }
+.ocupacao.nivel-lotado { background: var(--red-50); }
+.ocupacao.nivel-lotado .ocupacao-preenchimento { background: var(--red-600); }
+
+/* grafico de presenca por evento: barra horizontal empilhada (presente | pendente | ausente),
+   2px de respiro entre os segmentos, ponta da barra arredondada e base reta */
+.grafico-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--gray-700);
+}
+
+.grafico-legenda li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.grafico-amostra {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.grafico-linhas {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.grafico-linha {
+  display: grid;
+  grid-template-columns: minmax(110px, 38%) 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
+.grafico-rotulo {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-900);
+  overflow-wrap: anywhere;
+}
+
+.grafico-rotulo span {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--gray-500);
+}
+
+/* o total vai logo depois da ponta da barra; a largura da barra desconta o espaco dele (ver o calc no componente) */
+.grafico-trilho {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.grafico-barra {
+  flex-shrink: 0;
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  border-radius: 0 4px 4px 0;
+  overflow: hidden;
+}
+
+.grafico-segmento {
+  height: 100%;
+  min-width: 2px;
+}
+
+.grafico-segmento.presente,
+.grafico-amostra.presente { background: var(--green-600); }
+.grafico-segmento.pendente,
+.grafico-amostra.pendente { background: var(--gray-400); }
+.grafico-segmento.ausente,
+.grafico-amostra.ausente { background: var(--red-600); }
+
+.grafico-total {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gray-700);
+}
+
+.grafico-tabela {
+  margin-top: 16px;
+  font-size: 13px;
+}
+
+.grafico-tabela summary {
+  cursor: pointer;
+  color: var(--yellow-text);
+  font-weight: 600;
+}
+
+/* vem depois de .table-scroll .table (mesma especificidade), entao a largura minima menor vale aqui */
+.grafico-tabela .table {
+  min-width: 480px;
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 600px) {
+  .content {
+    padding: 20px 16px;
+  }
+
+  .grafico-linha {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  /* no celular a pagina inteira ja rola: rolagem dentro do card so cortaria a ultima linha */
+  .grafico-linhas.list-scroll {
+    max-height: none;
+    overflow: visible;
+  }
 }

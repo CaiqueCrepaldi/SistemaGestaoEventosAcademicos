@@ -5,6 +5,7 @@ import type {
   Palestrante,
   Participante,
   Sala,
+  SituacaoConta,
   SolicitacaoTitular,
   TentativaQuestionario,
   Usuario,
@@ -68,6 +69,17 @@ export function participanteParaDTO(participante: Participante) {
     rgm: participante.rgm,
     ativo: participante.ativo,
     motivoInativacao: participante.motivoInativacao,
+  };
+}
+
+// linha da tela Participantes: o participante + a situacao da conta dele. Lista campo a campo de
+// proposito: segredo do 2FA, codigos de recuperacao e hash de senha nunca entram aqui
+export function participanteComContaParaDTO(participante: Participante & SituacaoConta) {
+  return {
+    ...participanteParaDTO(participante),
+    usuarioId: participante.usuarioId,
+    mfaAtivo: participante.mfaAtivo,
+    bloqueado: participante.bloqueado,
   };
 }
 

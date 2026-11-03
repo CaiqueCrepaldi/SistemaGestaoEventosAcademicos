@@ -1,7 +1,8 @@
-// script de emergencia: zera o 2FA de uma conta pela linha de comando, pro caso de o unico
-// administrador perder o celular E os codigos de recuperacao (ai ninguem consegue resetar pela
-// tela). Faz o mesmo que o botao "Resetar 2FA": apaga segredo e codigos de recuperacao, encerra
-// as sessoes da conta e registra MFA_RESETADO na auditoria (origem: script de emergencia).
+// script de emergencia: zera o 2FA de uma conta pela linha de comando. E o caminho pra conta de
+// ADMINISTRADOR/SECRETARIA (a tela Participantes so tem o botao "Resetar 2FA" pra aluno) e pro caso
+// de o unico administrador perder o celular E os codigos de recuperacao. Faz o mesmo que o botao:
+// apaga segredo e codigos de recuperacao, encerra as sessoes da conta, limpa o bloqueio do codigo
+// do 2FA e registra MFA_RESETADO na auditoria (origem: script de emergencia).
 //
 // como rodar (de dentro de backend/):
 //   npx tsx scripts/resetar-2fa.ts email@dominio                       -> SIMULACAO no banco do .env (dev)
@@ -52,7 +53,7 @@ async function main() {
 
     await mfaService.resetar(usuario.id, null, "script de emergência pela linha de comando");
     console.log("[resetar-2fa] 2FA resetado, sessões encerradas e MFA_RESETADO registrado na auditoria");
-    console.log("[resetar-2fa] no próximo login a conta configura o 2FA de novo (obrigatório pra administrador/secretaria)");
+    console.log("[resetar-2fa] no próximo login a conta entra só com a senha (o 2FA pode ser ativado de novo em Minha conta)");
   } finally {
     await prisma.$disconnect();
   }

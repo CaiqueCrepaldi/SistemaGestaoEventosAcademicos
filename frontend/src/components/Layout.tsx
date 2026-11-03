@@ -15,7 +15,6 @@ import {
   PalestranteIcon,
   ParticipanteIcon,
   SalaIcon,
-  UsuariosIcon,
 } from "./ui/icons";
 import type { Perfil } from "../types";
 
@@ -38,7 +37,7 @@ interface NavItem {
 
 // fonte unica do menu
 const NAV_ITEMS: NavItem[] = [
-  { to: "/", label: "Principal", end: true, perfis: EQUIPE, icon: DashboardIcon },
+  { to: "/", label: "Dashboard", end: true, perfis: EQUIPE, icon: DashboardIcon },
   { to: "/eventos", label: "Eventos", perfis: TODOS_PERFIS, icon: EventoIcon },
   { to: "/salas", label: "Salas", perfis: EQUIPE, icon: SalaIcon },
   { to: "/palestrantes", label: "Palestrantes", perfis: TODOS_PERFIS, icon: PalestranteIcon },
@@ -46,7 +45,6 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/inscricoes", label: "Inscrições", perfis: EQUIPE, icon: InscricaoIcon },
   { to: "/checkin", label: "Check-in", perfis: EQUIPE, icon: CheckinIcon },
   { to: "/auditoria", label: "Auditoria", perfis: EQUIPE, icon: AuditoriaIcon },
-  { to: "/usuarios", label: "Usuários", perfis: ["ADMINISTRADOR"], icon: UsuariosIcon },
   { to: "/agenda", label: "Agenda", perfis: TODOS_PERFIS, icon: AgendaIcon },
   { to: "/certificados", label: "Certificados", perfis: TODOS_PERFIS, icon: CertificadoIcon },
   { to: "/feedback", label: "Feedback", perfis: TODOS_PERFIS, icon: FeedbackIcon },

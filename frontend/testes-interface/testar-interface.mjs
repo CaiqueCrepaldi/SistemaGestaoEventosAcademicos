@@ -104,7 +104,19 @@ try {
   await entrar(page, secretaria.email, secretaria.senha);
   checar("secretaria sem 2FA entra direto (sem tela de QR code)", (await page.evaluate(() => location.hash)) === "#/" && !(await temTexto(page, "Configurar autenticação")));
   await page.locator(".stat-card").first().waitFor();
-  checar("Dashboard da equipe carrega os indicadores", (await page.locator(".stat-card").count()) >= 4 && (await temTexto(page, "Eventos cadastrados")));
+  checar(
+    "Dashboard da equipe carrega os 6 indicadores e o gráfico de presença",
+    (await page.locator(".stat-card").count()) === 6 &&
+      (await temTexto(page, "Certificados liberados")) &&
+      (await temTexto(page, "Média do feedback")) &&
+      (await temTexto(page, "Presença por evento")),
+  );
+  checar(
+    "menu chama a tela de \"Dashboard\" (não mais \"Principal\") e não tem mais \"Usuários\"",
+    (await page.locator("a.nav-link", { hasText: "Dashboard" }).count()) === 1 &&
+      (await page.locator("a.nav-link", { hasText: "Principal" }).count()) === 0 &&
+      (await page.locator("a.nav-link", { hasText: "Usuários" }).count()) === 0,
+  );
   await page.goto(`${APP}/minha-conta`);
   await page.locator("h2", { hasText: "Autenticação em dois fatores" }).waitFor();
   checar("Minha conta da secretaria oferece ativar o 2FA (opcional)", (await page.locator("button", { hasText: "Ativar" }).count()) === 1 && (await temTexto(page, "Opcional")));
@@ -214,6 +226,14 @@ try {
   const linhaAgenda = page.locator("li, tr", { hasText: `Evento UI ${sufixo}` }).first();
   await linhaAgenda.waitFor();
   checar("Agenda do aluno mostra o total de inscritos do evento (2), não só a própria inscrição", (await linhaAgenda.innerText()).includes("2/40"), await linhaAgenda.innerText());
+  await page.goto(`${APP}/palestrantes`);
+  const cardPalestrante = page.locator(".palestrante-card", { hasText: "Palestrante Fluxo" }).filter({ hasText: `Evento UI ${sufixo}` });
+  await cardPalestrante.first().waitFor({ timeout: 8000 }).catch(() => {});
+  checar(
+    "Palestrantes do aluno em cards, com avatar e a próxima palestra",
+    (await cardPalestrante.count()) >= 1 && (await cardPalestrante.first().locator(".avatar-iniciais").innerText()) === "PF",
+  );
+  checar("aluno não vê e-mail de palestrante", !(await temTexto(page, `fluxo-${sufixo}@`)) && !(await temTexto(page, `pal-${sufixo}@`)));
   await sair(page);
 
   titulo("Check-in pela tela da secretaria");
@@ -308,6 +328,14 @@ try {
   const linhaInativo = page.locator("tr", { hasText: NOME_INATIVO });
   await linhaInativo.waitFor();
   checar("Participantes mostra o badge Inativo", (await linhaInativo.locator(".badge", { hasText: "Inativo" }).count()) === 1);
+  checar(
+    "secretaria vê as colunas 2FA e Acesso, mas sem os botões Resetar 2FA/Desbloquear",
+    (await page.locator("th", { hasText: "2FA" }).count()) === 1 &&
+      (await page.locator("th", { hasText: "Acesso" }).count()) === 1 &&
+      (await linhaInativo.locator(".badge", { hasText: "Não ativado" }).count()) === 1 &&
+      (await page.locator("button", { hasText: "Resetar 2FA" }).count()) === 0 &&
+      (await page.locator("button", { hasText: "Desbloquear" }).count()) === 0,
+  );
   const linhaAtiva = page.locator("tr", { hasText: NOME_ALUNA });
   await linhaAtiva.locator("button:has-text('Inativar')").click();
   await page.click(".modal button[type=submit]");
@@ -345,12 +373,18 @@ try {
   checar("equipe exclui com motivo", await esperarToast(page, "Feedback excluído."));
   await sair(page);
 
-  titulo("C / Tela Usuários (administrador)");
+  titulo("C / Participantes: 2FA e acesso (administrador)");
   await entrar(page, admin.email, admin.senha);
-  await page.goto(`${APP}/usuarios`);
+  await page.goto(`${APP}/participantes`);
   const linhaUsuario = page.locator("tr", { hasText: NOME_INATIVO });
   await linhaUsuario.waitFor();
-  checar("Usuários mostra o badge Inativo", (await linhaUsuario.locator(".badge", { hasText: "Inativo" }).count()) === 1);
+  checar(
+    "admin vê em Participantes o Inativo, o 2FA e o acesso da conta",
+    (await linhaUsuario.locator(".badge", { hasText: "Inativo" }).count()) === 1 &&
+      (await linhaUsuario.locator(".badge", { hasText: "Não ativado" }).count()) === 1 &&
+      (await linhaUsuario.locator(".badge", { hasText: "Liberado" }).count()) === 1,
+  );
+  checar("menu do admin não tem mais a tela Usuários", (await page.locator("a.nav-link", { hasText: "Usuários" }).count()) === 0);
 
   titulo("Auditoria: filtro pelas ações novas");
   await page.goto(`${APP}/auditoria`);

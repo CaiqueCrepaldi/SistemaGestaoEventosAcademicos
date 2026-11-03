@@ -35,8 +35,7 @@ invalidada depois de emitida (versão de token).
 | Rota | Método | ADMINISTRADOR | SECRETARIA | ALUNO | Regra de propriedade |
 |---|---|:---:|:---:|:---:|---|
 | `/api/usuarios/me` | GET | ✅ | ✅ | ✅ | Sempre os dados do próprio token (`req.usuario.sub`) — não existe `GET /usuarios/:id` |
-| `/api/usuarios` | GET | ✅ | ❌ | ❌ | Lista as contas para a tela Usuários: nome, e-mail, perfil, se o aluno está inativado, situação do 2FA e se está bloqueada por tentativas — sem RGM, sem segredo |
-| `/api/usuarios/:id/bloqueio` | DELETE | ✅ | ❌ | ❌ | Remove o bloqueio por tentativas da conta (login, recuperação de senha e código do 2FA; o bloqueio por IP só expira sozinho); registra `BLOQUEIO_LOGIN_REMOVIDO` |
+| `/api/usuarios/:id/bloqueio` | DELETE | ✅ | ❌ | ❌ | Remove o bloqueio por tentativas da conta (login, recuperação de senha e código do 2FA; o bloqueio por IP só expira sozinho); registra `BLOQUEIO_LOGIN_REMOVIDO`. Chamado pelo botão "Desbloquear" da tela Participantes. A listagem `GET /api/usuarios` (antiga tela Usuários) foi removida |
 | `/api/usuarios/:id/2fa` | DELETE | ✅ | ❌ | ❌ | Reset do 2FA de quem perdeu o celular: apaga segredo e códigos de recuperação e encerra as sessões da pessoa; registra `MFA_RESETADO` com quem resetou |
 | `/api/auth/aceitar-termos` | POST | ✅ | ✅ | ✅ | Registra o aceite da versão vigente dos Termos/Política para a própria conta do token |
 | `/api/auth/2fa/configuracao` | POST | ✅ | ✅ | ✅ | Ativação opcional: gera o segredo e o QR code no servidor, sempre da própria conta do token; `409` se o 2FA já estiver ativo |
@@ -57,7 +56,8 @@ invalidada depois de emitida (versão de token).
 | `/api/palestrantes` | GET | ✅ (id/nome/e-mail) | ✅ (id/nome/e-mail) | ✅ (só id/nome) | Campo `email` some da resposta pra ALUNO — ele não precisa disso pra nada (minimização, guia 4.3), via `palestranteParaDTO(..., paraAluno)` |
 | `/api/palestrantes/:id` | GET | ✅ | ✅ | ✅ (só id/nome) | idem |
 | `/api/palestrantes` | POST / `/api/palestrantes/:id` | ✅ | ✅ | ❌ | PUT/DELETE |
-| `/api/participantes` | GET | ✅ | ✅ | ❌ | Lista todo mundo, com a situação (ativo/inativo) — nenhum verbo desse módulo é liberado pro ALUNO, nem leitura do próprio registro (o aluno usa `/usuarios/me`) |
+| `/api/participantes` | GET | ✅ | ✅ | ❌ | Lista todo mundo, com a situação (ativo/inativo) e a da conta do aluno (`usuarioId`, `mfaAtivo`, `bloqueado`) — sem segredo do 2FA, códigos de recuperação nem hash de senha. Nenhum verbo desse módulo é liberado pro ALUNO, nem leitura do próprio registro (o aluno usa `/usuarios/me`) |
+| `/api/dashboard` | GET | ✅ | ✅ | ❌ | Indicadores agregados da tela Dashboard (totais, próximos eventos com ocupação, presença por evento) — só números, título do evento e nome da sala, nenhum dado pessoal |
 | `/api/participantes/alunos` | GET | ✅ | ✅ | ❌ | Só quem tem conta `ALUNO`, usado pela tela de Check-in |
 | `/api/participantes/:id` | GET | ✅ | ✅ | ❌ | — |
 | `/api/participantes/:id` | PUT | ✅ | ✅ | ❌ | Corrigir nome/e-mail/RGM (vale também para a conta de login do aluno). **Inativar** exige `motivoInativacao`, encerra as sessões do aluno e cancela as inscrições pendentes em eventos futuros; **reativar** apaga o motivo e libera o login. Só a equipe inativa e reativa; auditoria nos dois casos |
@@ -89,13 +89,15 @@ invalidada depois de emitida (versão de token).
   `expressApp.ts` e todos os arquivos de rotas por completo.
 - **2FA:** opcional para todos os perfis; cada pessoa ativa e desativa só o
   da própria conta.
-- **Quem pode resetar o 2FA de outra pessoa:** só ADMINISTRADOR, pela tela
-  Usuários (a tela não oferece o botão para a própria conta). Em
-  emergência — o único administrador perdeu o celular e os códigos de
-  recuperação — quem tem as credenciais de produção roda
-  `backend/scripts/resetar-2fa.ts`, que registra `MFA_RESETADO` na
-  auditoria com a origem "script de emergência". SECRETARIA e ALUNO não
-  resetam o 2FA de ninguém (`403`).
+- **Quem pode resetar o 2FA de outra pessoa:** só ADMINISTRADOR. O 2FA de
+  aluno é resetado pelo botão "Resetar 2FA" da tela Participantes (a
+  secretaria vê a coluna 2FA, mas não o botão, e a API recusa com `403`).
+  Conta de administrador/secretaria não aparece em nenhuma tela: o reset é
+  pelo script `backend/scripts/resetar-2fa.ts` — o mesmo usado em
+  emergência, quando o único administrador perde o celular e os códigos de
+  recuperação —, que só roda com as credenciais de produção e registra
+  `MFA_RESETADO` na auditoria com a origem "script de emergência".
+  SECRETARIA e ALUNO não resetam o 2FA de ninguém (`403`).
 - **Quem inativa e reativa aluno:** só ADMINISTRADOR e SECRETARIA
   (`PUT /api/participantes/:id`); o aluno não altera a própria situação.
 - **Feedback é do aluno:** só ele cria; ninguém edita; ele exclui o
