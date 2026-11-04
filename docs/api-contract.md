@@ -51,6 +51,7 @@ auto-cadastro.
 | Participantes — ver situação do 2FA e do bloqueio | ✅ | ✅ | ❌ |
 | Participantes — resetar 2FA / desbloquear a conta do aluno | ✅ | ❌ | ❌ |
 | Auditoria (trilha de operações e acessos) | ✅ | ✅ | ❌ |
+| Meus dados — ver e exportar os próprios dados (`/api/meus-dados`, RF026) | ❌ | ❌ | ✅ (só os próprios) |
 | Trabalhos                                | removido do projeto | removido | removido |
 
 Feedback: as regras por perfil (ninguém edita; o aluno só vê e exclui o
@@ -283,6 +284,7 @@ ou apagar.
 | `FEEDBACK_CRIADO`, `FEEDBACK_EXCLUIDO` | feedbacks; a exclusão diz se foi o próprio aluno ou a equipe (e, nesse caso, o motivo). `FEEDBACK_ATUALIZADO`/`_REMOVIDO` só aparecem em registros antigos |
 | `MFA_ATIVADO`, `MFA_DESATIVADO`, `MFA_VERIFICADO`, `MFA_FALHA`, `MFA_BLOQUEADO`, `MFA_RESETADO`, `CODIGO_RECUPERACAO_USADO`, `BLOQUEIO_LOGIN_REMOVIDO` | 2FA e bloqueio por tentativas |
 | `TERMOS_REACEITOS` | aceite de uma versão nova dos termos |
+| `DADOS_EXPORTADOS` | o aluno baixou os próprios dados em JSON pela página Meus dados (RF026) — o detalhe traz só o id da `SolicitacaoTitular` registrada |
 | `CONVERSAO_DADOS_PESSOAIS` | execução do script que passou nome/e-mail/RGM do formato cifrado para texto (só contagens) |
 
 Todas as rotas abaixo são admin/secretaria only (`403` pra aluno).
@@ -921,6 +923,71 @@ A ocupação média das salas é a média simples dos percentuais de ocupação
 de cada evento (cada evento pesa igual, independentemente do tamanho da
 sala); sala com capacidade 0 fica fora da conta. A tela mostra o valor
 arredondado num cartão próprio ("Ocupação média das salas").
+
+## Meus dados — direitos do titular (RF026, LGPD art. 18)
+
+Versão enxuta: o aluno **vê e exporta** os próprios dados pelo sistema; os
+demais pedidos (correção, anonimização/exclusão, revisão humana do
+resultado do questionário, oposição) são atendidos pelo e-mail
+`privacidade@sgeacademicos.com.br`, em até 15 dias (procedimento em
+`docs/lgpd/08-procedimento-direitos-dos-titulares.md`).
+
+As duas rotas são **só do `ALUNO`** (`403` para a equipe, `401` sem token)
+e sempre usam o participante do token — não existe parâmetro de id, então
+ninguém consulta os dados de outra pessoa por aqui. As respostas vêm com
+`Cache-Control: no-store`.
+
+### `GET /api/meus-dados`
+
+Tudo o que o sistema guarda sobre o aluno. Só leitura: não grava solicitação
+nem log. Ficam de fora o que não é informação sobre a pessoa e só serve à
+segurança da conta (hash da senha, segredo e códigos de recuperação do 2FA)
+e, nos questionários, o gabarito e as alternativas marcadas — vai só o
+resultado.
+
+```ts
+interface MeusDados {
+  geradoEm: string;                     // instante em que a resposta foi montada
+  dadosCadastrais: {
+    nome: string;
+    email: string;
+    rgm: string;
+    cadastradoEm: string;               // criação da conta
+    termos: { aceitoEm: string | null; versao: string | null };  // aceite dos Termos/Política
+    doisFatores: { ativo: boolean; ativadoEm: string | null };
+  };
+  inscricoes: { evento; dataEvento; inscritoEm; presenca: "PENDENTE" | "PRESENTE" | "AUSENTE"; checkinEm: string | null }[];
+  questionarios: { evento; respondidoEm; acertos; totalPerguntas; percentual }[];  // uma linha por tentativa
+  certificados: { evento; dataEvento; cargaHoraria; codigoValidacao; emitidoEm; nomeImpresso; rgmImpresso }[];
+  avaliacoes: { evento; nota; comentario; enviadaEm }[];
+}
+```
+
+`evento` é o título. As listas vêm em ordem cronológica (inscrições pela data
+do evento). `nomeImpresso`/`rgmImpresso` são a cópia gravada na emissão do
+certificado (ver **Certificados**).
+
+### `GET /api/meus-dados/exportacao`
+
+Mesmo conteúdo do `GET /api/meus-dados`, como arquivo para download:
+`Content-Type: application/json` e
+`Content-Disposition: attachment; filename="meus-dados-sgea.json"`
+(JSON indentado). Cada exportação:
+
+- grava uma `SolicitacaoTitular` com `tipo: "EXPORTACAO"`,
+  `status: "ATENDIDA"` e `atendidoEm` = agora (`atendidoPorId` fica nulo:
+  ninguém da equipe precisou agir);
+- registra `DADOS_EXPORTADOS` na auditoria, com o id da solicitação e o
+  aluno como responsável — nunca nome, e-mail ou RGM.
+
+A tela **Meus dados** (`/meus-dados`, só aluno, item do menu depois de
+"Minha conta") mostra essas seções em tabelas, o botão "Baixar meus dados
+(JSON)" e um bloco "Outros pedidos sobre seus dados" com um botão que abre o
+e-mail de privacidade (`mailto`) com o assunto "Solicitação LGPD – SGEA" e o
+RGM no corpo. Na tela de **Certificados**, o evento em que o aluno ficou
+abaixo de 60% nas duas tentativas mostra o link "Pedir revisão do
+resultado", que abre o mesmo e-mail com o assunto "Revisão do resultado do
+questionário – {título do evento}".
 
 ## Formato de erro
 

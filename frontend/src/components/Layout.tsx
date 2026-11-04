@@ -11,6 +11,7 @@ import {
   EventoIcon,
   FeedbackIcon,
   InscricaoIcon,
+  MeusDadosIcon,
   PalestranteIcon,
   ParticipanteIcon,
   SalaIcon,
@@ -25,6 +26,7 @@ const PERFIL_LABEL: Record<Perfil, string> = {
 
 const TODOS_PERFIS: Perfil[] = ["ADMINISTRADOR", "SECRETARIA", "ALUNO"];
 const EQUIPE: Perfil[] = ["ADMINISTRADOR", "SECRETARIA"];
+const SO_ALUNO: Perfil[] = ["ALUNO"];
 
 interface NavItem {
   to: string;
@@ -47,6 +49,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/certificados", label: "Certificados", perfis: TODOS_PERFIS, icon: CertificadoIcon },
   { to: "/feedback", label: "Feedback", perfis: TODOS_PERFIS, icon: FeedbackIcon },
   { to: "/minha-conta", label: "Minha conta", perfis: TODOS_PERFIS, icon: ContaIcon },
+  { to: "/meus-dados", label: "Meus dados", perfis: SO_ALUNO, icon: MeusDadosIcon },
 ];
 
 // topbar + menu lateral, envolve toda pagina autenticada

@@ -1,11 +1,12 @@
 # Política de Privacidade
 
-**Versão 2 — rascunho de 27/09/2026, atualizado em 29/09/2026.** Substitui a Versão 1 (25/09/2026)
+**Versão 2 — rascunho de 27/09/2026, atualizado em 04/11/2026.** Substitui a Versão 1 (25/09/2026)
 quando a Fase 2 publicar este texto na página `/politica-de-privacidade` do
 sistema (a Fase 2 importa este arquivo direto na página, pra nunca
-divergirem). Até lá, a página ao vivo continua mostrando a Versão 1.
-Algumas seções abaixo descrevem funcionalidade que só existe a partir da
-Fase 2 (ex.: página "Meus dados") — marcadas como tal.
+divergirem). Até lá, a página ao vivo continua mostrando a Versão 1 (com a
+seção "Seus direitos" já igual à seção 7 abaixo). A seção 7 descreve o que
+existe hoje: a página "Meus dados" (ver e exportar) e o atendimento dos
+demais pedidos pelo e-mail de privacidade.
 
 ## 1. Quem trata os dados
 
@@ -25,8 +26,7 @@ pelos dados tratados).
   Vercel (hospedagem/execução), TiDB Cloud (banco de dados) e SendGrid/
   Twilio (envio de e-mail) — detalhados na seção 4.
 - **Canal de privacidade:** a página "Meus dados", dentro do próprio
-  sistema (a partir da Fase 2), e o e-mail
-  `privacidade@sgeacademicos.com.br`.
+  sistema, e o e-mail `privacidade@sgeacademicos.com.br` (seção 7).
 
 ## 2. Dados pessoais tratados
 
@@ -132,18 +132,29 @@ resumo:
 
 ## 7. Seus direitos
 
-A partir da Fase 2, a página **"Meus dados"**, dentro do sistema, permite:
+A página **"Meus dados"**, no menu do sistema depois que você entra com a
+sua conta de aluno, permite:
 
-- Ver todos os seus dados e exportá-los em um arquivo (portabilidade).
-- Corrigir dados incorretos ou desatualizados.
-- Pedir a anonimização da sua conta, com confirmação de senha.
-- Pedir revisão humana do resultado do questionário/liberação do
-  certificado (decisão tomada automaticamente pelo sistema).
-- Fazer outras solicitações (informação sobre compartilhamento, oposição
-  ao tratamento), registradas e respondidas pela equipe.
+- Ver tudo o que o SGEA guarda sobre você: dados cadastrais, aceite dos
+  termos, situação do 2FA, inscrições e presenças, resultados dos
+  questionários, certificados e avaliações (acesso — art. 18, II).
+- Baixar uma cópia completa desses dados em arquivo JSON (portabilidade —
+  art. 18, V).
 
-Alternativamente, qualquer solicitação pode ser feita para
-`privacidade@sgeacademicos.com.br`.
+Os demais pedidos são feitos pelo e-mail
+`privacidade@sgeacademicos.com.br` e respondidos em até **15 dias**:
+
+- Correção de dados incorretos ou desatualizados.
+- Anonimização ou exclusão da conta e dos dados. Quem já tem certificado
+  emitido não tem a conta excluída — ela é inativada e o registro do
+  certificado é mantido, porque ele comprova a sua participação.
+- Revisão humana do resultado do questionário, que é calculado
+  automaticamente pelo sistema e libera o certificado (art. 20). A tela de
+  Certificados mostra um atalho para esse pedido quando o resultado fica
+  abaixo do mínimo nas duas tentativas.
+- Oposição ao tratamento, informação sobre com quem seus dados são
+  compartilhados e qualquer outro pedido sobre seus dados — inclusive uma
+  cópia deles, se você não conseguir entrar no sistema.
 
 ## 8. Segurança
 
@@ -180,7 +191,7 @@ Processo detalhado em `docs/lgpd/05-plano-de-resposta-a-incidentes.md`.
 
 ---
 
-*Versão 2 — rascunho de 27/09/2026, atualizado em 29/09/2026 (publicação prevista na Fase 2). Mudanças
+*Versão 2 — rascunho de 27/09/2026, atualizado em 04/11/2026 (publicação prevista na Fase 2). Mudanças
 importantes em relação a versões futuras serão comunicadas e, quando a
 mudança afetar a base do tratamento, um novo aceite será solicitado no
 próximo login.*

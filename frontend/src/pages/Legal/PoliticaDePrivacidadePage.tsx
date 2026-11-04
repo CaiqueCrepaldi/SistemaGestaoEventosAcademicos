@@ -14,8 +14,8 @@ export function PoliticaDePrivacidadePage() {
           O SGEA (Sistema de Gestão de Eventos Acadêmicos) é um protótipo acadêmico desenvolvido
           como Projeto de Final de Curso na Universidade de Mogi das Cruzes (UMC). Numa
           implantação real, o controlador dos dados seria a instituição ou o organizador do
-          evento acadêmico responsável por operar o sistema. Dúvidas sobre privacidade podem ser
-          enviadas à secretaria do evento.
+          evento acadêmico responsável por operar o sistema. Dúvidas e pedidos sobre privacidade vão
+          para o e-mail <strong>privacidade@sgeacademicos.com.br</strong> (veja a seção 8).
         </p>
 
         <h2>2. Dados pessoais tratados</h2>
@@ -148,12 +148,27 @@ export function PoliticaDePrivacidadePage() {
         </p>
 
         <h2>8. Seus direitos</h2>
-        <p>Você pode solicitar à secretaria, a qualquer momento:</p>
+        <p>
+          Na página <strong>"Meus dados"</strong>, no menu do sistema depois que você entra com a sua conta de aluno,
+          você vê tudo o que o SGEA guarda sobre você (dados cadastrais, inscrições e presenças, resultados dos
+          questionários, certificados e avaliações) e baixa uma cópia completa em arquivo JSON (portabilidade).
+        </p>
+        <p>
+          Os demais pedidos são feitos pelo e-mail <strong>privacidade@sgeacademicos.com.br</strong> e respondidos em
+          até 15 dias:
+        </p>
         <ul>
-          <li>Confirmação de quais dados seus estão armazenados e acesso a eles.</li>
           <li>Correção de dados incorretos ou desatualizados.</li>
-          <li>Inativação da conta e, em seguida, exclusão definitiva dos dados.</li>
-          <li>Informação sobre com quem seus dados são compartilhados.</li>
+          <li>Anonimização ou exclusão da conta e dos dados (veja na seção 7 o caso de quem já tem certificado).</li>
+          <li>
+            Revisão humana do resultado do questionário, que é calculado automaticamente pelo sistema e libera o
+            certificado (art. 20 da LGPD). A tela de Certificados mostra um atalho para esse pedido quando o resultado
+            fica abaixo do mínimo nas duas tentativas.
+          </li>
+          <li>
+            Oposição ao tratamento, informação sobre com quem seus dados são compartilhados e qualquer outro pedido
+            sobre seus dados — inclusive uma cópia deles, se você não conseguir entrar no sistema.
+          </li>
         </ul>
 
         <h2>9. Incidentes de segurança</h2>

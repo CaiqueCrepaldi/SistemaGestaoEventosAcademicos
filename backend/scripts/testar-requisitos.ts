@@ -613,6 +613,123 @@ async function main() {
     checar("equipe vê os feedbacks do evento", r.status === 200 && r.corpo.some((f: { id: string }) => f.id === feedbackId), r.status);
 
     // ------------------------------------------------------------------ D: feedback nao e editado
+    // ------------------------------------------------------------------ RF026: direitos do titular
+    // aqui o aluno ja tem inscricoes, presenca, as 2 tentativas, o certificado e uma avaliacao
+    requisito("R30 Meus dados: acesso e exportação pelo próprio aluno (RF026)");
+    r = await chamar("GET", "/meus-dados");
+    checar("sem token -> 401", r.status === 401, r.status);
+    r = await chamar("GET", "/meus-dados", { token: secretaria.token });
+    checar("equipe não usa a rota do titular -> 403", r.status === 403, r.status);
+    const solicitacoesAntes = await prisma.solicitacaoTitular.count({ where: { participanteId: aluno.participanteId! } });
+    r = await chamar("GET", "/meus-dados", { token: aluno.token });
+    const meusDados = r.corpo;
+    const contaNoBanco = await prisma.usuario.findUnique({ where: { id: aluno.id }, include: { participante: true } });
+    checar(
+      "aluno vê os próprios dados cadastrais (nome, e-mail, RGM, cadastro, aceite dos termos e 2FA)",
+      r.status === 200 &&
+        meusDados.dadosCadastrais?.nome === contaNoBanco?.nome &&
+        meusDados.dadosCadastrais.email === contaNoBanco?.emailLogin &&
+        meusDados.dadosCadastrais.rgm === contaNoBanco?.participante?.rgm &&
+        !!meusDados.dadosCadastrais.cadastradoEm &&
+        !!meusDados.dadosCadastrais.termos?.aceitoEm &&
+        meusDados.dadosCadastrais.termos.versao === contaNoBanco?.versaoTermosAceitos &&
+        meusDados.dadosCadastrais.doisFatores?.ativo === false,
+      meusDados?.dadosCadastrais,
+    );
+    const [qtdInscricoes, qtdTentativas, qtdFeedbacks] = await Promise.all([
+      prisma.inscricao.count({ where: { participanteId: aluno.participanteId! } }),
+      prisma.tentativaQuestionario.count({ where: { participanteId: aluno.participanteId! } }),
+      prisma.feedback.count({ where: { participanteId: aluno.participanteId! } }),
+    ]);
+    checar(
+      "inscrições, tentativas e avaliações são todas as do aluno — e só as dele",
+      qtdInscricoes > 0 && qtdTentativas > 0 && qtdFeedbacks > 0 &&
+        meusDados.inscricoes?.length === qtdInscricoes &&
+        meusDados.questionarios?.length === qtdTentativas &&
+        meusDados.avaliacoes?.length === qtdFeedbacks,
+      [meusDados.inscricoes?.length, qtdInscricoes, meusDados.questionarios?.length, qtdTentativas, meusDados.avaliacoes?.length, qtdFeedbacks],
+    );
+    checar(
+      "inscrição traz evento, data e presença (a do evento principal aparece como PRESENTE)",
+      meusDados.inscricoes.some(
+        (i: { evento: string; presenca: string; dataEvento: string }) => i.evento === `Evento Teste ${sufixo}` && i.presenca === "PRESENTE" && !!i.dataEvento,
+      ),
+      meusDados.inscricoes,
+    );
+    const textoMeusDados = JSON.stringify(meusDados);
+    checar(
+      "questionários com acertos e percentual, sem gabarito e sem as respostas marcadas",
+      meusDados.questionarios.every(
+        (q: { acertos: number; percentual: number; totalPerguntas: number }) =>
+          typeof q.acertos === "number" && typeof q.percentual === "number" && q.totalPerguntas === 10,
+      ) &&
+        !textoMeusDados.includes('"respostas"') &&
+        !textoMeusDados.includes('"correta"') &&
+        !textoMeusDados.includes('"alternativas"'),
+      meusDados.questionarios,
+    );
+    checar(
+      "certificado emitido aparece com o código de validação",
+      meusDados.certificados?.some((c: { codigoValidacao: string }) => c.codigoValidacao === certificado.codigoValidacao),
+      meusDados.certificados,
+    );
+    checar(
+      "avaliação traz nota e comentário",
+      meusDados.avaliacoes.some((a: { nota: number; comentario: string }) => a.nota === 5 && a.comentario === "Ótima palestra"),
+      meusDados.avaliacoes,
+    );
+    checar("nada de senha, segredo do 2FA nem ids internos na resposta", !/senha|segredo|hash|participanteId|usuarioId/i.test(textoMeusDados));
+    checar(
+      "consultar a página não grava solicitação",
+      (await prisma.solicitacaoTitular.count({ where: { participanteId: aluno.participanteId! } })) === solicitacoesAntes,
+    );
+    const exportacao = await fetch(`${base}/meus-dados/exportacao`, { headers: { Authorization: `Bearer ${aluno.token}` } });
+    const arquivoExportado = await exportacao.text();
+    let exportado: Record<string, unknown> | null = null;
+    try {
+      exportado = JSON.parse(arquivoExportado);
+    } catch {
+      exportado = null;
+    }
+    checar(
+      "exportação -> 200 como download meus-dados-sgea.json (JSON, sem cache)",
+      exportacao.status === 200 &&
+        exportacao.headers.get("content-disposition") === 'attachment; filename="meus-dados-sgea.json"' &&
+        (exportacao.headers.get("content-type") ?? "").startsWith("application/json") &&
+        exportacao.headers.get("cache-control") === "no-store",
+      [exportacao.status, exportacao.headers.get("content-disposition"), exportacao.headers.get("cache-control")],
+    );
+    checar(
+      "o arquivo tem o mesmo conteúdo da página",
+      !!exportado && JSON.stringify({ ...exportado, geradoEm: "" }) === JSON.stringify({ ...meusDados, geradoEm: "" }),
+    );
+    const solicitacaoExportacao = await prisma.solicitacaoTitular.findFirst({
+      where: { participanteId: aluno.participanteId! },
+      orderBy: { criadoEm: "desc" },
+    });
+    checar(
+      "a exportação vira solicitação do titular já atendida (EXPORTACAO, ATENDIDA, com atendidoEm)",
+      solicitacaoExportacao?.tipo === "EXPORTACAO" &&
+        solicitacaoExportacao.status === "ATENDIDA" &&
+        !!solicitacaoExportacao.atendidoEm &&
+        solicitacaoExportacao.atendidoPorId === null,
+      solicitacaoExportacao,
+    );
+    const logExportacao = await prisma.logAuditoria.findFirst({
+      where: { acao: "DADOS_EXPORTADOS", usuarioId: aluno.id },
+      orderBy: { criadoEm: "desc" },
+    });
+    const detalheExportacao = logExportacao?.detalhe ?? "";
+    checar(
+      "auditoria DADOS_EXPORTADOS com o id da solicitação e o aluno como responsável, sem nome, e-mail ou RGM",
+      !!solicitacaoExportacao &&
+        detalheExportacao.includes(solicitacaoExportacao.id) &&
+        ![contaNoBanco?.nome, contaNoBanco?.emailLogin, contaNoBanco?.participante?.rgm].some((dado) => !!dado && detalheExportacao.includes(dado)),
+      detalheExportacao,
+    );
+    const exportacaoDaEquipe = await fetch(`${base}/meus-dados/exportacao`, { headers: { Authorization: `Bearer ${secretaria.token}` } });
+    checar("equipe não exporta pela rota do titular -> 403", exportacaoDaEquipe.status === 403, exportacaoDaEquipe.status);
+
     requisito("R22 Feedback: sem edição; exclusão pelo aluno ou pela equipe com motivo");
     r = await chamar("PUT", `/feedbacks/${feedbackId}`, { token: aluno.token, corpo: { nota: 1 } });
     checar("aluno não edita o próprio feedback -> 403", r.status === 403, r.corpo);

@@ -14,3 +14,5 @@ export { checkinService } from "./checkinService";
 export { inscricaoAlunoService } from "./inscricaoAlunoService";
 export { questionarioService } from "./questionarioService";
 export type { PerguntaSemGabarito } from "./questionarioService";
+export { titularService } from "./titularService";
+export type { MeusDados } from "./titularService";

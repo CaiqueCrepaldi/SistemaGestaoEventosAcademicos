@@ -15,6 +15,7 @@ import { InscricoesPage } from "./pages/Inscricoes/InscricoesPage";
 import { PoliticaDePrivacidadePage } from "./pages/Legal/PoliticaDePrivacidadePage";
 import { TermosDeUsoPage } from "./pages/Legal/TermosDeUsoPage";
 import { LoginPage } from "./pages/Login/LoginPage";
+import { MeusDadosPage } from "./pages/MeusDados/MeusDadosPage";
 import { MinhaContaPage } from "./pages/MinhaConta/MinhaContaPage";
 import { PalestrantesPage } from "./pages/Palestrantes/PalestrantesPage";
 import { ParticipantesPage } from "./pages/Participantes/ParticipantesPage";
@@ -48,6 +49,10 @@ export function App() {
                 <Route path="/certificados" element={<CertificadosPage />} />
                 <Route path="/feedback" element={<FeedbackPage />} />
                 <Route path="/minha-conta" element={<MinhaContaPage />} />
+              </Route>
+              {/* rotas exclusivas do ALUNO */}
+              <Route element={<ProtectedRoute perfis={["ALUNO"]} />}>
+                <Route path="/meus-dados" element={<MeusDadosPage />} />
               </Route>
               {/* rotas exclusivas de ADMINISTRADOR/SECRETARIA */}
               <Route element={<ProtectedRoute perfis={["ADMINISTRADOR", "SECRETARIA"]} />}>

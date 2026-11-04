@@ -358,6 +358,72 @@ try {
   await page.click("button:has-text('Confirmar e ativar')");
   checar("confirmar sem o código: campo marcado com mensagem", (await invalido(page, "#codigo")) && (await temTexto(page, "Digite os 6 dígitos")));
   await page.click("button:has-text('Cancelar')");
+
+  // ---------------------------------------------------------------- RF026: direitos do titular
+  titulo("Meus dados e pedidos LGPD do aluno (RF026)");
+  // evento em que a aluna fica abaixo de 60% nas duas tentativas (sala propria, sem conflito de horario)
+  const tokenAluna = await tokenDe(emailAluno, "SenhaAluna123");
+  const salaRevisao = await api("POST", "/salas", tokenSecretaria, { nome: `Sala Revisao UI ${sufixo}`, capacidade: 10 });
+  const tituloRevisao = `Evento Revisao UI ${sufixo}`;
+  const eventoRevisao = await api("POST", "/eventos", tokenSecretaria, {
+    titulo: tituloRevisao, horario: new Date(Date.now() + 30 * 60 * 1000).toISOString(), salaId: salaRevisao.corpo.id, palestranteId: palestrante.corpo.id, tema: "Tema", cargaHoraria: 1, questionario: questionario(),
+  });
+  const inscricaoRevisao = await api("POST", `/eventos/${eventoRevisao.corpo.id}/inscricoes`, tokenAluna);
+  await api("PUT", `/inscricoes/${inscricaoRevisao.corpo.id}`, tokenSecretaria, { statusPresenca: "PRESENTE" });
+  for (let i = 0; i < 2; i++) {
+    await api("POST", `/eventos/${eventoRevisao.corpo.id}/questionario/respostas`, tokenAluna, { respostas: Array(10).fill(1) });
+  }
+  await page.goto(`${APP}/certificados`);
+  const itemRevisao = page.locator(".simple-list-item", { hasText: tituloRevisao });
+  await itemRevisao.waitFor({ timeout: 8000 }).catch(() => {});
+  const linkRevisao = itemRevisao.locator("a:has-text('Pedir revisão do resultado')");
+  const hrefRevisao = (await linkRevisao.count()) === 1 ? decodeURIComponent((await linkRevisao.getAttribute("href")) ?? "") : "";
+  checar(
+    "reprovado nas duas tentativas: \"Pedir revisão do resultado\" abre o e-mail de privacidade com o evento no assunto e o RGM",
+    hrefRevisao.startsWith(`mailto:privacidade@sgeacademicos.com.br?subject=Revisão do resultado do questionário – ${tituloRevisao}&body=`) &&
+      hrefRevisao.includes(`RGM: ${rgmAluno}`),
+    hrefRevisao || "link não encontrado",
+  );
+  checar(
+    "evento com questionário aprovado não mostra o pedido de revisão",
+    (await page.locator(".simple-list-item", { hasText: `Evento UI ${sufixo}` }).locator("a:has-text('Pedir revisão do resultado')").count()) === 0,
+  );
+
+  const itensMenu = (await page.locator("a.nav-link").allInnerTexts()).map((t) => t.trim().toLowerCase());
+  const posicaoConta = itensMenu.indexOf("minha conta");
+  checar("menu do aluno tem \"Meus dados\" logo depois de \"Minha conta\"", posicaoConta >= 0 && itensMenu[posicaoConta + 1] === "meus dados", itensMenu.join(" | "));
+  await page.locator("a.nav-link", { hasText: "Meus dados" }).click();
+  await page.getByText(rgmAluno).first().waitFor({ timeout: 10000 }).catch(() => {});
+  const titulosSecoes = await page.locator(".card h3").allInnerTexts();
+  checar(
+    "Meus dados mostra as seções em cartões",
+    ["Dados cadastrais", "Inscrições e presenças", "Questionários", "Certificados", "Avaliações", "Outros pedidos sobre seus dados"].every((s) => titulosSecoes.includes(s)),
+    titulosSecoes.join(" | "),
+  );
+  checar(
+    "dados da própria aluna: RGM, eventos inscritos e resultado dos questionários",
+    (await temTexto(page, rgmAluno)) && (await temTexto(page, `Evento UI ${sufixo}`)) && (await temTexto(page, tituloRevisao)) && (await temTexto(page, "10 de 10")) && (await temTexto(page, "0 de 10")),
+  );
+  const [download] = await Promise.all([
+    page.waitForEvent("download", { timeout: 15000 }),
+    page.click("button:has-text('Baixar meus dados (JSON)')"),
+  ]);
+  const caminhoDownload = await download.path();
+  const conteudoDownload = caminhoDownload ? JSON.parse(readFileSync(caminhoDownload, "utf8")) : null;
+  checar(
+    "\"Baixar meus dados (JSON)\" baixa meus-dados-sgea.json com os dados da aluna",
+    download.suggestedFilename() === "meus-dados-sgea.json" && conteudoDownload?.dadosCadastrais?.rgm === rgmAluno && Array.isArray(conteudoDownload?.inscricoes),
+    download.suggestedFilename(),
+  );
+  const hrefPedido = decodeURIComponent((await page.locator("a:has-text('Enviar pedido por e-mail')").getAttribute("href")) ?? "");
+  checar(
+    "\"Outros pedidos\" explica o canal e o prazo e abre o e-mail com o assunto e o RGM",
+    (await temTexto(page, "privacidade@sgeacademicos.com.br")) &&
+      (await temTexto(page, "15 dias")) &&
+      hrefPedido.startsWith("mailto:privacidade@sgeacademicos.com.br?subject=Solicitação LGPD – SGEA&body=") &&
+      hrefPedido.includes(`RGM: ${rgmAluno}`),
+    hrefPedido,
+  );
   await sair(page);
 
   // ---------------------------------------------------------------- C: inativacao
@@ -449,6 +515,16 @@ try {
     "filtro por \"Feedback excluído\" mostra a exclusão feita pela equipe, com o motivo e o responsável",
     (await linhaLog.count()) === 1 && (await linhaLog.innerText()).includes("Equipe UI Secretaria") && (await linhaLog.innerText()).includes("Feedback excluído"),
   );
+  await page.locator(".card select").first().selectOption("DADOS_EXPORTADOS");
+  const linhaExportacao = page.locator("tr", { hasText: NOME_ALUNA }).filter({ hasText: "Dados exportados pelo titular" }).first();
+  await linhaExportacao.waitFor({ timeout: 10000 }).catch(() => {});
+  const textoExportacao = (await linhaExportacao.count()) === 1 ? await linhaExportacao.innerText() : "";
+  checar(
+    "filtro por \"Dados exportados pelo titular\" mostra a exportação da aluna, sem RGM nem e-mail no detalhe",
+    textoExportacao.includes("solicitação") && !textoExportacao.includes(rgmAluno) && !textoExportacao.toLowerCase().includes(emailAluno),
+    textoExportacao || "linha não encontrada",
+  );
+  checar("equipe não tem \"Meus dados\" no menu", (await page.locator("a.nav-link", { hasText: "Meus dados" }).count()) === 0);
   await sair(page);
 
   titulo("E / Esqueci a senha");

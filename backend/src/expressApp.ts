@@ -16,6 +16,7 @@ import { questionarioRouter } from "./modules/questionario/questionario.routes";
 import { certificadosRouter } from "./modules/certificados/certificados.routes";
 import { auditoriaRouter } from "./modules/auditoria/auditoria.routes";
 import { dashboardRouter } from "./modules/dashboard/dashboard.routes";
+import { titularRouter } from "./modules/titular/titular.routes";
 
 // monta a instancia do express com todos os middlewares e rotas
 export function criarApp() {
@@ -49,6 +50,7 @@ export function criarApp() {
   apiRouter.use("/certificados", certificadosRouter);
   apiRouter.use("/logs-auditoria", auditoriaRouter);
   apiRouter.use("/dashboard", dashboardRouter);
+  apiRouter.use("/meus-dados", titularRouter);
   app.use("/api", apiRouter);
 
   // qualquer rota nao mapeada cai aqui, 404 no formato padrao

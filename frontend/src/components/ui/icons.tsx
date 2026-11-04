@@ -145,6 +145,18 @@ export function ContaIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+// icone de documento com linhas, usado em Meus dados (dados do titular, LGPD)
+export function MeusDadosIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z" />
+      <path d="M14 3v5h5" />
+      <path d="M9 13h6" />
+      <path d="M9 17h4" />
+    </Icon>
+  );
+}
+
 // icone de olho aberto, usado no botao de mostrar senha
 export function OlhoIcon(props: SVGProps<SVGSVGElement>) {
   return (

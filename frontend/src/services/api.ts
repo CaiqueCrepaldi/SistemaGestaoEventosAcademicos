@@ -54,8 +54,15 @@ function getToken(): string | null {
 const TIMEOUT_MS = 30_000;
 
 // faz a chamada http de verdade. tokenEtapa = token temporario do login em duas etapas (2FA),
-// que ainda nao e sessao: vai no lugar do token salvo e nunca dispara o "sessao expirada"
-async function request<T>(path: string, method: string, body?: unknown, tokenEtapa?: string): Promise<T> {
+// que ainda nao e sessao: vai no lugar do token salvo e nunca dispara o "sessao expirada".
+// comoArquivo = devolve o corpo como Blob (download), com o mesmo tratamento de erro do JSON
+async function request<T>(
+  path: string,
+  method: string,
+  body?: unknown,
+  tokenEtapa?: string,
+  comoArquivo = false,
+): Promise<T> {
   const token = tokenEtapa ?? getToken();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -81,6 +88,10 @@ async function request<T>(path: string, method: string, body?: unknown, tokenEta
 
   if (response.status === 204) {
     return undefined as T;
+  }
+
+  if (comoArquivo && response.ok) {
+    return (await response.blob()) as T;
   }
 
   const contentType = response.headers.get("content-type") ?? "";
@@ -112,4 +123,6 @@ export const api = {
   post: <T>(path: string, body?: unknown, tokenEtapa?: string) => request<T>(path, "POST", body, tokenEtapa),
   put: <T>(path: string, body?: unknown) => request<T>(path, "PUT", body),
   del: <T>(path: string, body?: unknown) => request<T>(path, "DELETE", body),
+  // GET de um arquivo (ex.: exportacao dos dados do titular), autenticado como as outras chamadas
+  baixar: (path: string) => request<Blob>(path, "GET", undefined, undefined, true),
 };
