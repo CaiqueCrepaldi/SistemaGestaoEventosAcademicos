@@ -219,10 +219,21 @@ try {
 
   // ---------------------------------------------------------------- aluno: agenda, questionario, certificado, feedback
   titulo("A / Agenda e certificados do aluno");
+  // evento de 4 dias atras (sem cruzar com o "Evento Passado UI" de ontem na mesma sala): o aluno nao se inscreve
+  const quatroDiasAtras = new Date(Date.now() - 4 * 24 * 3600 * 1000).toISOString();
+  await api("POST", "/eventos", tokenSecretaria, {
+    titulo: `Evento Encerrado UI ${sufixo}`, horario: quatroDiasAtras, salaId: sala.corpo.id, palestranteId: palestrante.corpo.id, tema: "Tema", cargaHoraria: 1, questionario: questionario(),
+  });
   await entrar(page, emailAluno, "SenhaAluna123");
   await page.goto(`${APP}/eventos`);
   await page.locator(".agenda-item", { hasText: `Evento UI ${sufixo}` }).locator("button:has-text('Inscrever-se')").click();
   checar("aluno se inscreve pela tela", await esperarToast(page, "Inscrição confirmada"));
+  const botaoEncerrado = page.locator(".agenda-item", { hasText: `Evento Encerrado UI ${sufixo}` }).locator("button.btn-primary");
+  checar(
+    "evento que já começou mostra Encerrado, desabilitado (sem opção de se inscrever)",
+    (await botaoEncerrado.innerText()) === "Encerrado" && (await botaoEncerrado.isDisabled()),
+    await botaoEncerrado.innerText(),
+  );
   await page.goto(`${APP}/agenda`);
   const linhaAgenda = page.locator("li, tr", { hasText: `Evento UI ${sufixo}` }).first();
   await linhaAgenda.waitFor();

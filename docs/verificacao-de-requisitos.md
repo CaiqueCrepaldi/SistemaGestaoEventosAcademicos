@@ -18,9 +18,9 @@ apaga no final (os registros de auditoria ficam, como em qualquer operação).
 
 | Teste | O que faz | Comando | Resultado |
 |---|---|---|---|
-| Requisitos pela API | Sobe o backend numa porta local e faz as chamadas HTTP de verdade, requisito por requisito | `cd backend && npx tsx scripts/testar-requisitos.ts` | **163/163** verificações (04/11/2026, banco `SGEA_dev`) |
+| Requisitos pela API | Sobe o backend numa porta local e faz as chamadas HTTP de verdade, requisito por requisito | `cd backend && npx tsx scripts/testar-requisitos.ts` | **165/165** verificações (04/11/2026, banco `SGEA_dev`) |
 | 2FA pela API | Ativação, login em duas etapas, reuso de código, bloqueio, recuperação, reset, desativação | `cd backend && npx tsx scripts/testar-2fa.ts` | **55/55** (04/11/2026, banco `SGEA_dev`) |
-| Interface | Navegador de verdade (Google Chrome, sem janela) usando as telas no frontend local ligado ao backend local | ver `frontend/testes-interface/testar-interface.mjs` (passo a passo no topo do arquivo) | **68/68** (04/11/2026, no Microsoft Edge — ver a atualização de 04/11) |
+| Interface | Navegador de verdade (Google Chrome, sem janela) usando as telas no frontend local ligado ao backend local | ver `frontend/testes-interface/testar-interface.mjs` (passo a passo no topo do arquivo) | **69/69** (04/11/2026, no Microsoft Edge — ver a atualização de 04/11) |
 | Hash de senha | Mostra o formato do hash bcrypt gravado no banco de dev e prova que a mesma senha gera hashes diferentes | `cd backend && npx tsx scripts/demonstrar-hash-senha.ts` | ver `docs/lgpd/07` |
 | Conversão dos dados pessoais | Simulação, aplicação e segunda aplicação (idempotência) no dev | `cd backend && npx tsx scripts/converter-dados-pessoais.ts [--aplicar]` (o script saiu do código em 03/11/2026, junto com as colunas que ele convertia; está no histórico do git, commit `8c2e7df`) | 3 usuários, 3 participantes e 98 logs convertidos; a 2ª rodada não achou nada |
 
@@ -54,8 +54,9 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
 > validação.
 >
 > As três suítes rodaram no `SGEA_dev` com as migrations `20261103150000` e
-> `20261104120000` aplicadas: **requisitos 163/163**, **2FA 55/55** e
-> **Interface 68/68**. A Interface rodou no Microsoft Edge (mesmo motor
+> `20261104120000` aplicadas: **requisitos 165/165**, **2FA 55/55** e
+> **Interface 69/69** (contagens já com a correção da autoinscrição em
+> evento que já começou — item 8). A Interface rodou no Microsoft Edge (mesmo motor
 > Chromium), porque o Google Chrome não está instalado na máquina: o script
 > foi executado com `channel: "msedge"` no lugar de `"chrome"`, sem outra
 > mudança. Antes disso, o `SGEA_dev` precisou ser alinhado ao repositório:
@@ -79,7 +80,7 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
 | 5 | Salas: cadastro, edição, leitura pelo aluno, exclusão bloqueada com evento vinculado | API R05 e R07; Interface "Salas" | OK | Campos obrigatórios (item E) |
 | 6 | Palestrantes: nome só letras, e-mail válido e único, aluno não recebe o e-mail, exclusão bloqueada com evento vinculado | API R06 e R07; Interface "Palestrantes" | OK | E-mail duplicado (erro do backend) agora aparece embaixo do campo e-mail (item E) |
 | 7 | Eventos com questionário de 10 perguntas × 4 alternativas × 1 correta, gabarito escondido do aluno | API R07; Interface "Eventos" | OK | Erro de cada pergunta aparece na própria pergunta (item E). **Corrigido:** excluir um evento pela tela apagava antes, uma por uma pela API, as inscrições e os feedbacks do evento — o backend já faz isso em cascata numa operação só; agora a tela faz uma chamada. (Desde 04/11/2026 evento com inscrição não é mais excluído — ver item 22) |
-| 8 | Autoinscrição do aluno (sempre o participante do token, sem duplicidade, sem passar da capacidade) | API R08; Interface "Agenda e certificados" | OK | Aluno inativo também barrado no próprio serviço (item C) |
+| 8 | Autoinscrição do aluno (sempre o participante do token, sem duplicidade, sem passar da capacidade, só em evento que ainda não começou) | API R08; Interface "Agenda e certificados" | OK após correção (04/11/2026) | Aluno inativo também barrado no próprio serviço (item C). **Corrigido em 04/11/2026:** o aluno conseguia se inscrever em evento que já tinha acontecido (a tela mostrava "Inscrever-se" e a API aceitava). Agora a API responde `409 EVENTO_JA_INICIADO` e a tela mostra o botão desabilitado "Encerrado". A inscrição manual da secretaria continua aceitando evento passado, para registro retroativo (API R27) |
 | 9 | Inscrição manual pela equipe | API R09; Interface "Inscrição manual" | OK | Bloqueia aluno inativo (item C); campos obrigatórios (item E) |
 | 10 | Aluno só vê as próprias inscrições, mesmo forjando o parâmetro na URL | API R10 | OK | — |
 | 11 | E-mail de confirmação da inscrição, só pelo dono | API R11 | OK | — |

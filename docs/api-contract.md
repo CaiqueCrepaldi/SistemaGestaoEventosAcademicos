@@ -651,8 +651,14 @@ Erros:
 | 403 | `ACESSO_NEGADO` | token válido mas perfil não é aluno |
 | 403 | `CONTA_INATIVA` | aluno inativado pela secretaria |
 | 404 | `EVENTO_NAO_ENCONTRADO` | id inexistente |
+| 409 | `EVENTO_JA_INICIADO` | o evento já começou (`horario` no passado): "Não é possível se inscrever: o evento já começou." |
 | 409 | `JA_INSCRITO` | esse aluno já tá inscrito nesse evento |
 | 409 | `EVENTO_LOTADO` | capacidade da sala já bateu |
+
+A tela Eventos do aluno mostra o botão desabilitado "Encerrado" nos eventos
+que já começaram. A inscrição manual da equipe (`POST /api/inscricoes`)
+continua aceitando evento passado, pra registro retroativo de quem esteve
+no evento.
 
 ### `POST /api/inscricoes/{id}/confirmacao-email` (endpoint dedicado)
 
@@ -962,7 +968,7 @@ Códigos usados neste documento:
 | 409 | `EVENTO_COM_INSCRICOES` | exclusão de evento que ainda tem inscrição |
 | 409 | `PRESENCA_TRAVADA` | mudança de presença ou cancelamento depois de o aluno responder o questionário |
 | 409 | `PRESENCA_JA_REGISTRADA` | cancelamento de inscrição com presença já registrada no check-in |
-| 409 | `EVENTO_JA_INICIADO` | cancelamento de inscrição de evento que já começou |
+| 409 | `EVENTO_JA_INICIADO` | autoinscrição ou cancelamento de inscrição de evento que já começou |
 | 409 | `CERTIFICADO_NAO_LIBERADO` | emissão sem presença confirmada ou sem a nota mínima |
 | 409 | `PARTICIPANTE_COM_CERTIFICADO` | remoção de aluno que tem certificado emitido |
 | 404 | `CERTIFICADO_NAO_ENCONTRADO` | validação pública com código inexistente |

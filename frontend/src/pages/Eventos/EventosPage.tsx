@@ -148,8 +148,9 @@ export function EventosPage() {
                 (i) => i.participanteId === usuario?.participanteId && i.eventoId === evento.id,
               );
               const jaInscrito = Boolean(minhaInscricao);
-              // mesma regra do backend: so presenca pendente e evento que ainda nao comecou
-              const podeCancelar = minhaInscricao?.statusPresenca === "PENDENTE" && new Date(evento.horario) > new Date();
+              // mesma regra do backend: depois que o evento comeca, o aluno nao se inscreve nem cancela
+              const jaComecou = new Date(evento.horario) <= new Date();
+              const podeCancelar = minhaInscricao?.statusPresenca === "PENDENTE" && !jaComecou;
               return (
                 <li key={evento.id} className="agenda-item">
                   <div className="agenda-time" style={{ width: 90 }}>
@@ -172,8 +173,13 @@ export function EventosPage() {
                     {avisoPorEvento[evento.id] && <p className="form-hint">{avisoPorEvento[evento.id]}</p>}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, alignSelf: "center" }}>
-                    <button className="btn btn-primary" onClick={() => void inscreverSe(evento)} disabled={jaInscrito}>
-                      {jaInscrito ? "Inscrito" : "Inscrever-se"}
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => void inscreverSe(evento)}
+                      disabled={jaInscrito || jaComecou}
+                      title={!jaInscrito && jaComecou ? "O evento já começou: não aceita mais inscrições." : undefined}
+                    >
+                      {jaInscrito ? "Inscrito" : jaComecou ? "Encerrado" : "Inscrever-se"}
                     </button>
                     {podeCancelar && (
                       <button className="btn btn-ghost btn-danger" onClick={() => setCancelandoInscricao(evento)}>

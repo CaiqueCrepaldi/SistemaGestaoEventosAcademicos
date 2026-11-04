@@ -346,6 +346,19 @@ async function main() {
     checar("evento sem vaga -> 409 EVENTO_LOTADO", r.status === 409 && r.corpo.code === "EVENTO_LOTADO", r.corpo);
     r = await chamar("POST", `/eventos/${eventoId}/inscricoes`, { token: secretaria.token });
     checar("equipe não usa a autoinscrição -> 403", r.status === 403, r.status);
+    // evento de 4 dias atras, fora do horario dos outros eventos passados da mesma sala (sem conflito de sala)
+    r = await chamar("POST", "/eventos", {
+      token: admin.token,
+      corpo: { ...eventoBase, titulo: `Evento Encerrado ${sufixo}`, horario: emHoras(amanha, -120), questionario: questionario() },
+    });
+    const eventoEncerradoId: string = r.corpo.id;
+    eventos.push(eventoEncerradoId);
+    r = await chamar("POST", `/eventos/${eventoEncerradoId}/inscricoes`, { token: aluno.token });
+    checar(
+      "evento que já começou não aceita autoinscrição -> 409 EVENTO_JA_INICIADO",
+      r.status === 409 && r.corpo.code === "EVENTO_JA_INICIADO",
+      r.corpo,
+    );
 
     requisito("R09 Inscrição manual pela equipe");
     r = await chamar("POST", "/inscricoes", { token: secretaria.token, corpo: { participanteId: aluno2.participanteId, eventoId } });
@@ -405,6 +418,7 @@ async function main() {
     const eventoIniciadoId: string = r.corpo.id;
     eventos.push(eventoIniciadoId);
     r = await chamar("POST", "/inscricoes", { token: secretaria.token, corpo: { participanteId: aluno.participanteId, eventoId: eventoIniciadoId } });
+    checar("secretaria ainda inscreve em evento que já começou (registro retroativo) -> 201", r.status === 201, r.corpo);
     const inscricaoIniciada: string = r.corpo.id;
     r = await chamar("DELETE", `/eventos/${eventoIniciadoId}/inscricoes`, { token: aluno.token });
     checar("evento que já começou: aluno não cancela -> 409", r.status === 409 && r.corpo.code === "EVENTO_JA_INICIADO", r.corpo);

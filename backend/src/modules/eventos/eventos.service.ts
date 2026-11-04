@@ -137,7 +137,7 @@ async function remover(id: string, atorId: string) {
   await registrarAuditoria(atorId, "EVENTO_REMOVIDO", `evento ${id}`);
 }
 
-// autoinscricao do aluno logado: checa conta ativa, duplicidade e vaga antes de criar
+// autoinscricao do aluno logado: checa conta ativa, evento que ainda nao comecou, duplicidade e vaga antes de criar
 async function autoinscrever(eventoId: string, participanteId: string, atorId: string) {
   const evento = await prisma.evento.findUnique({ where: { id: eventoId }, include: { sala: true } });
   if (!evento) throw AppError.naoEncontrado("EVENTO_NAO_ENCONTRADO", "Evento não encontrado.");
@@ -145,6 +145,12 @@ async function autoinscrever(eventoId: string, participanteId: string, atorId: s
   // o aluno inativado ja nao tem sessao (a inativacao derruba as sessoes), isto e so a segunda barreira
   const participante = await prisma.participante.findUnique({ where: { id: participanteId }, select: { ativo: true } });
   if (!participante?.ativo) throw AppError.contaInativa();
+
+  // o aluno so se inscreve antes de o evento comecar; registro retroativo de quem foi a um evento
+  // passado continua possivel pela inscricao manual da secretaria
+  if (evento.horario <= new Date()) {
+    throw AppError.conflito("EVENTO_JA_INICIADO", "Não é possível se inscrever: o evento já começou.");
+  }
 
   const jaInscrito = await prisma.inscricao.findUnique({
     where: { participanteId_eventoId: { participanteId, eventoId } },
