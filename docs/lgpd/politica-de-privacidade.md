@@ -5,8 +5,8 @@ quando a Fase 2 publicar este texto na página `/politica-de-privacidade` do
 sistema (a Fase 2 importa este arquivo direto na página, pra nunca
 divergirem). Até lá, a página ao vivo continua mostrando a Versão 1 (com a
 seção "Seus direitos" já igual à seção 7 abaixo). A seção 7 descreve o que
-existe hoje: a página "Meus dados" (ver e exportar) e o atendimento dos
-demais pedidos pelo e-mail de privacidade.
+existe hoje: a página "Meus dados" (só para ver os dados) e o atendimento
+dos demais pedidos pelo e-mail de privacidade.
 
 ## 1. Quem trata os dados
 
@@ -133,28 +133,27 @@ resumo:
 ## 7. Seus direitos
 
 A página **"Meus dados"**, no menu do sistema depois que você entra com a
-sua conta de aluno, permite:
-
-- Ver tudo o que o SGEA guarda sobre você: dados cadastrais, aceite dos
-  termos, situação do 2FA, inscrições e presenças, resultados dos
-  questionários, certificados e avaliações (acesso — art. 18, II).
-- Baixar uma cópia completa desses dados em arquivo JSON (portabilidade —
-  art. 18, V).
+sua conta de aluno, mostra tudo o que o SGEA guarda sobre você: dados
+cadastrais, aceite dos termos, situação do 2FA, inscrições e presenças,
+resultados dos questionários, certificados e avaliações (acesso — art. 18,
+II).
 
 Os demais pedidos são feitos pelo e-mail
 `privacidade@sgeacademicos.com.br` e respondidos em até **15 dias**:
 
+- Cópia dos seus dados para levar a outro serviço (portabilidade — art.
+  18, V).
 - Correção de dados incorretos ou desatualizados.
 - Anonimização ou exclusão da conta e dos dados. Quem já tem certificado
   emitido não tem a conta excluída — ela é inativada e o registro do
   certificado é mantido, porque ele comprova a sua participação.
 - Revisão humana do resultado do questionário, que é calculado
-  automaticamente pelo sistema e libera o certificado (art. 20). A tela de
-  Certificados mostra um atalho para esse pedido quando o resultado fica
-  abaixo do mínimo nas duas tentativas.
+  automaticamente pelo sistema e libera o certificado (art. 20). A revisão
+  confere se a correção foi feita certo; não é uma nova tentativa — quem
+  não atinge o mínimo nas 2 tentativas permitidas não recebe o certificado
+  daquele evento.
 - Oposição ao tratamento, informação sobre com quem seus dados são
-  compartilhados e qualquer outro pedido sobre seus dados — inclusive uma
-  cópia deles, se você não conseguir entrar no sistema.
+  compartilhados e qualquer outro pedido sobre seus dados.
 
 ## 8. Segurança
 

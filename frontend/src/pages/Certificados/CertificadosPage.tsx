@@ -6,7 +6,6 @@ import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
 import { certificadoService, eventoService, formatarCodigoValidacao, type CertificadoDisponivel } from "../../services";
 import type { Evento } from "../../types";
-import { linkRevisaoQuestionario } from "../../utils/privacidade";
 import { MAX_TENTATIVAS_QUESTIONARIO, PERCENTUAL_APROVACAO } from "../../utils/questionario";
 
 // tela de certificados, aluno emite o proprio, equipe ve de todo mundo. A emissao e sempre pelo
@@ -92,13 +91,6 @@ export function CertificadosPage() {
                       )}
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
-                      {/* reprovado nas duas tentativas: o resultado e automatico, entao da pra pedir
-                          revisao humana (LGPD, art. 20) pelo e-mail de privacidade */}
-                      {tentativasEsgotadas && (
-                        <a className="btn btn-ghost" href={linkRevisaoQuestionario(c.eventoTitulo, usuario?.rgm)}>
-                          Pedir revisão do resultado
-                        </a>
-                      )}
                       {!c.questionarioAprovado && !tentativasEsgotadas && (
                         <Link className="btn btn-ghost" to={`/eventos/${c.eventoId}/questionario`}>
                           {c.tentativasUsadas === 0 ? "Questionário" : "Refazer questionário"}

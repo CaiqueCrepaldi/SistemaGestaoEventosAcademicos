@@ -18,9 +18,9 @@ apaga no final (os registros de auditoria ficam, como em qualquer operação).
 
 | Teste | O que faz | Comando | Resultado |
 |---|---|---|---|
-| Requisitos pela API | Sobe o backend numa porta local e faz as chamadas HTTP de verdade, requisito por requisito | `cd backend && npx tsx scripts/testar-requisitos.ts` | **186/186** verificações (04/11/2026, banco `SGEA_dev`) |
+| Requisitos pela API | Sobe o backend numa porta local e faz as chamadas HTTP de verdade, requisito por requisito | `cd backend && npx tsx scripts/testar-requisitos.ts` | **183/183** verificações (04/11/2026, banco `SGEA_dev`) |
 | 2FA pela API | Ativação, login em duas etapas, reuso de código, bloqueio, recuperação, reset, desativação | `cd backend && npx tsx scripts/testar-2fa.ts` | **55/55** (04/11/2026, banco `SGEA_dev`) |
-| Interface | Navegador de verdade (Google Chrome, sem janela) usando as telas no frontend local ligado ao backend local | ver `frontend/testes-interface/testar-interface.mjs` (passo a passo no topo do arquivo) | **84/84** (04/11/2026, no Microsoft Edge — ver a atualização de 04/11) |
+| Interface | Navegador de verdade (Google Chrome, sem janela) usando as telas no frontend local ligado ao backend local | ver `frontend/testes-interface/testar-interface.mjs` (passo a passo no topo do arquivo) | **83/83** (04/11/2026, no Microsoft Edge — ver a atualização de 04/11) |
 | Hash de senha | Mostra o formato do hash bcrypt gravado no banco de dev e prova que a mesma senha gera hashes diferentes | `cd backend && npx tsx scripts/demonstrar-hash-senha.ts` | ver `docs/lgpd/07` |
 | Conversão dos dados pessoais | Simulação, aplicação e segunda aplicação (idempotência) no dev | `cd backend && npx tsx scripts/converter-dados-pessoais.ts [--aplicar]` (o script saiu do código em 03/11/2026, junto com as colunas que ele convertia; está no histórico do git, commit `8c2e7df`) | 3 usuários, 3 participantes e 98 logs convertidos; a 2ª rodada não achou nada |
 
@@ -70,14 +70,20 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
 > 03/11, que põe o e-mail em minúsculas.
 
 > **Atualização de 04/11/2026 (RF026):** entrou a versão enxuta dos
-> direitos do titular (item 38): a página "Meus dados" mostra e exporta em
-> JSON tudo o que o sistema guarda sobre o aluno, e os demais pedidos
-> (correção, anonimização/exclusão, revisão humana do questionário,
+> direitos do titular (item 38): a página "Meus dados" mostra tudo o que o
+> sistema guarda sobre o aluno, e os demais pedidos (cópia dos dados,
+> correção, anonimização/exclusão, revisão humana do questionário,
 > oposição) vão para `privacidade@sgeacademicos.com.br`, com resposta em
-> até 15 dias. Sem mudança no banco: reaproveita a tabela
-> `solicitacoes_titular`. Testes novos: API **R30** e Interface "Meus dados e
-> pedidos LGPD do aluno (RF026)". As suítes rodaram de novo no `SGEA_dev`:
-> **requisitos 186/186** e **Interface 84/84** (no Microsoft Edge). Essas
+> até 15 dias. Sem mudança no banco. A primeira versão do dia também
+> exportava os dados em JSON, tinha um bloco "Outros pedidos" com botão de
+> e-mail e um link "Pedir revisão do resultado" na tela Certificados; os
+> três saíram no mesmo dia, junto com a janela "Informações do usuário"
+> (aberta ao clicar no nome, no topo da tela). Regra mantida: o aluno tem 2
+> tentativas no questionário e, sem 60% em nenhuma, não recebe o
+> certificado. Testes novos: API **R30** e Interface "Meus dados do aluno e
+> reprovação no questionário (RF026)". As suítes rodaram de novo no
+> `SGEA_dev`: **requisitos 183/183** e **Interface 83/83** (no Microsoft
+> Edge). Essas
 > contagens já incluem as verificações das mudanças anteriores do mesmo dia
 > que ainda não estão descritas nas tabelas deste documento: janela do
 > check-in (abre 1 hora antes do início), Agenda unida à tela Eventos,
@@ -125,7 +131,7 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
 | 35 | Presença travada depois do questionário (RF015): com qualquer tentativa do aluno no evento, mudar a presença ou excluir/cancelar a inscrição responde `409` "A presença não pode mais ser alterada: o aluno já respondeu o questionário."; a tela de Check-in desabilita os botões | API R28 | OK (04/11/2026) | Implementado em 04/11/2026 |
 | 36 | Dashboard: ocupação média das salas (RF021) — média, entre os eventos, de inscritos / capacidade da sala, em % | API R25 (compara com o cálculo direto no banco); Interface "Equipe entra só com a senha" | OK (04/11/2026) | Implementado em 04/11/2026 (novo cartão "Ocupação média das salas") |
 | 37 | Deploy só pela Vercel | Conferência do `frontend/package.json` e do `package-lock.json` | OK | Removidos o script `deploy` (gh-pages) e a dependência `gh-pages` (`npm uninstall`, que tirou só ela e as dependências exclusivas dela do lock) |
-| 38 | Direitos do titular (RF026, versão enxuta): página **"Meus dados"** (só aluno, menu depois de "Minha conta") com dados cadastrais (nome, e-mail, RGM, cadastro, aceite e versão dos termos, situação do 2FA), inscrições e presenças, questionários (acertos e percentual, sem gabarito nem respostas), certificados e avaliações — `GET /api/meus-dados`, sempre do participante do token; botão "Baixar meus dados (JSON)" — `GET /api/meus-dados/exportacao` (`meus-dados-sgea.json`), que grava uma `SolicitacaoTitular` `EXPORTACAO`/`ATENDIDA` e a auditoria `DADOS_EXPORTADOS` (só o id da solicitação e o responsável); bloco "Outros pedidos sobre seus dados" com `mailto` para `privacidade@sgeacademicos.com.br` (assunto "Solicitação LGPD – SGEA", RGM no corpo, prazo de 15 dias); na tela Certificados, "Pedir revisão do resultado" quando o aluno fica abaixo de 60% nas duas tentativas | API R30 (401 sem token, 403 para a equipe, conteúdo comparado com o banco, nada de gabarito/respostas/senha/ids, arquivo igual à tela, solicitação e auditoria sem nome/e-mail/RGM); Interface "Meus dados e pedidos LGPD do aluno (RF026)" (menu, seções, download, os dois `mailto`) e "Auditoria: filtro pelas ações novas" (exportação na trilha, equipe sem o item no menu) | OK (04/11/2026) | Implementado em 04/11/2026, sem mudança no banco. Política de Privacidade (página e `docs/lgpd/politica-de-privacidade.md`) e `docs/lgpd/08` descrevem exatamente isso |
+| 38 | Direitos do titular (RF026, versão enxuta): página **"Meus dados"** (só aluno, menu depois de "Minha conta"), só para consulta, com dados cadastrais (nome, e-mail, RGM, cadastro, aceite e versão dos termos, situação do 2FA), inscrições e presenças, questionários (acertos e percentual, sem gabarito nem respostas), certificados e avaliações — `GET /api/meus-dados`, sempre do participante do token, sem cache; os demais pedidos (cópia, correção, exclusão, revisão humana da correção automática do questionário, oposição) pelo e-mail `privacidade@sgeacademicos.com.br`, em até 15 dias | API R30 (401 sem token, 403 para a equipe, conteúdo comparado com o banco, nada de gabarito/respostas/senha/ids, consulta não grava nada, `/meus-dados/exportacao` → 404); Interface "Meus dados do aluno e reprovação no questionário (RF026)" (menu, seções, reprovado nas 2 tentativas sem nova tentativa nem pedido de revisão nem certificado, sem botão de baixar nem bloco de pedidos, nome no topo sem a janela "Informações do usuário") e "Auditoria: filtro pelas ações novas" (sem a opção "Dados exportados pelo titular", equipe sem o item no menu) | OK (04/11/2026) | Implementado em 04/11/2026, sem mudança no banco. No mesmo dia saíram a exportação em JSON, o bloco "Outros pedidos sobre seus dados", o link "Pedir revisão do resultado" e a janela "Informações do usuário". Política de Privacidade (página e `docs/lgpd/politica-de-privacidade.md`) e `docs/lgpd/08` descrevem exatamente isso |
 
 ## Outras correções encontradas na verificação
 

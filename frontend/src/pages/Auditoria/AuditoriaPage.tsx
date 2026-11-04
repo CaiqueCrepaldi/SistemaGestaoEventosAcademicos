@@ -47,7 +47,6 @@ const ACAO_LABEL: Record<string, string> = {
   PRESENCA_MARCADA_AUSENTE: "Presença marcada como ausente",
   QUESTIONARIO_RESPONDIDO: "Questionário respondido",
   CERTIFICADO_EMITIDO: "Certificado emitido",
-  DADOS_EXPORTADOS: "Dados exportados pelo titular",
   FEEDBACK_CRIADO: "Feedback criado",
   FEEDBACK_EXCLUIDO: "Feedback excluído",
   FEEDBACK_ATUALIZADO: "Feedback atualizado (registro antigo)",

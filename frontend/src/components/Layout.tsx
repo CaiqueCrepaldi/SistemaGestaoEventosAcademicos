@@ -1,7 +1,6 @@
-import { useState, type ComponentType } from "react";
+import type { ComponentType } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { Modal } from "./ui/Modal";
 import {
   AuditoriaIcon,
   CertificadoIcon,
@@ -55,7 +54,6 @@ const NAV_ITEMS: NavItem[] = [
 // topbar + menu lateral, envolve toda pagina autenticada
 export function Layout() {
   const { usuario, logout } = useAuth();
-  const [perfilAberto, setPerfilAberto] = useState(false);
   const menuItens = NAV_ITEMS.filter((item) => !usuario || item.perfis.includes(usuario.perfil));
 
   return (
@@ -67,48 +65,15 @@ export function Layout() {
           </span>
         </div>
         <div className="topbar-user">
-          <button
-            type="button"
-            className="topbar-user-trigger"
-            onClick={() => setPerfilAberto(true)}
-            aria-label="Ver informações do usuário"
-          >
-            <div className="topbar-user-info">
-              <strong>{usuario?.nome}</strong>
-              <span>{usuario ? PERFIL_LABEL[usuario.perfil] : ""}</span>
-            </div>
-          </button>
+          <div className="topbar-user-info">
+            <strong>{usuario?.nome}</strong>
+            <span>{usuario ? PERFIL_LABEL[usuario.perfil] : ""}</span>
+          </div>
           <button className="btn btn-ghost" onClick={() => logout()}>
             Sair
           </button>
         </div>
       </header>
-
-      {perfilAberto && usuario && (
-        <Modal title="Informações do usuário" onClose={() => setPerfilAberto(false)}>
-          <div className="profile-details">
-            <div className="profile-detail">
-              <span>Nome</span>
-              <strong>{usuario.nome}</strong>
-            </div>
-            <div className="profile-detail">
-              <span>E-mail</span>
-              <strong>{usuario.emailLogin}</strong>
-            </div>
-            <div className="profile-detail">
-              <span>Perfil</span>
-              <strong>{PERFIL_LABEL[usuario.perfil]}</strong>
-            </div>
-            <div className="profile-detail">
-              <span>RGM</span>
-              <strong>{usuario.rgm ?? "Não informado"}</strong>
-            </div>
-          </div>
-          <p className="form-hint profile-note">
-            Para alterar seus dados, entre em contato com a secretaria ou com a administração.
-          </p>
-        </Modal>
-      )}
 
       <nav className="main-nav">
         {menuItens.map((item) => {

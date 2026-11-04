@@ -1,7 +1,7 @@
 import type { StatusPresenca } from "../types";
 import { api } from "./api";
 
-// RF026: o que GET /api/meus-dados devolve (mesmo conteudo do arquivo da exportacao)
+// RF026: o que GET /api/meus-dados devolve — tudo o que o sistema guarda sobre o aluno
 export interface MeusDados {
   geradoEm: string;
   dadosCadastrais: {
@@ -26,26 +26,8 @@ export interface MeusDados {
   avaliacoes: { evento: string; nota: number; comentario: string; enviadaEm: string }[];
 }
 
-export const NOME_ARQUIVO_EXPORTACAO = "meus-dados-sgea.json";
-
-// entrega o arquivo ao navegador como download, sem abrir aba nova
-function salvarArquivo(arquivo: Blob, nome: string) {
-  const url = URL.createObjectURL(arquivo);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = nome;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
 export const titularService = {
   meusDados(): Promise<MeusDados> {
     return api.get<MeusDados>("/meus-dados");
-  },
-  // o backend registra o pedido (solicitacao EXPORTACAO atendida + auditoria) e devolve o arquivo
-  async baixarExportacao(): Promise<void> {
-    salvarArquivo(await api.baixar("/meus-dados/exportacao"), NOME_ARQUIVO_EXPORTACAO);
   },
 };

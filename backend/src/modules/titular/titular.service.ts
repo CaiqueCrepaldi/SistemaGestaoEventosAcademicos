@@ -1,10 +1,8 @@
-import { randomUUID } from "crypto";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
-import { registrarAuditoria } from "../../utils/auditoria";
 import type { StatusPresenca } from "../../types/domain";
 
-// RF026 (LGPD, art. 18, II e V): tudo o que o sistema guarda sobre o aluno, sempre do participante do
+// RF026 (LGPD, art. 18, II): tudo o que o sistema guarda sobre o aluno, sempre do participante do
 // token. Fica de fora o que nao e informacao sobre a pessoa e so serve a seguranca da conta (hash da
 // senha, segredo e codigos de recuperacao do 2FA) e, no questionario, o gabarito e as alternativas
 // marcadas — vai so o resultado (acertos e percentual)
@@ -144,29 +142,9 @@ async function montar(participanteId: string): Promise<MeusDados> {
   };
 }
 
-// consulta na tela: so leitura, nao vira solicitacao nem log
+// consulta na tela Meus dados: so leitura, nao grava nada (nem solicitacao nem log)
 async function meusDados(participanteId: string): Promise<MeusDados> {
   return montar(participanteId);
 }
 
-// portabilidade: o mesmo conteudo, pra baixar em JSON. O pedido ja nasce atendido (o arquivo sai na
-// hora, sem ninguem da equipe no meio), fica registrado como solicitacao do titular e na auditoria —
-// que guarda so a acao, o id da solicitacao e quem pediu, nunca nome, e-mail ou RGM
-async function exportar(participanteId: string, usuarioId: string): Promise<MeusDados> {
-  const dados = await montar(participanteId);
-  const solicitacao = await prisma.solicitacaoTitular.create({
-    data: {
-      id: randomUUID(),
-      participanteId,
-      tipo: "EXPORTACAO",
-      status: "ATENDIDA",
-      descricao: "Exportação dos próprios dados pela página Meus dados",
-      resposta: "Arquivo JSON gerado e baixado na hora",
-      atendidoEm: new Date(),
-    },
-  });
-  await registrarAuditoria(usuarioId, "DADOS_EXPORTADOS", `solicitação ${solicitacao.id} (exportação em JSON pelo próprio aluno)`);
-  return dados;
-}
-
-export const titularService = { meusDados, exportar };
+export const titularService = { meusDados };

@@ -615,7 +615,7 @@ async function main() {
     // ------------------------------------------------------------------ D: feedback nao e editado
     // ------------------------------------------------------------------ RF026: direitos do titular
     // aqui o aluno ja tem inscricoes, presenca, as 2 tentativas, o certificado e uma avaliacao
-    requisito("R30 Meus dados: acesso e exportação pelo próprio aluno (RF026)");
+    requisito("R30 Meus dados: o próprio aluno vê tudo o que o sistema guarda sobre ele (RF026)");
     r = await chamar("GET", "/meus-dados");
     checar("sem token -> 401", r.status === 401, r.status);
     r = await chamar("GET", "/meus-dados", { token: secretaria.token });
@@ -680,55 +680,14 @@ async function main() {
     );
     checar("nada de senha, segredo do 2FA nem ids internos na resposta", !/senha|segredo|hash|participanteId|usuarioId/i.test(textoMeusDados));
     checar(
-      "consultar a página não grava solicitação",
-      (await prisma.solicitacaoTitular.count({ where: { participanteId: aluno.participanteId! } })) === solicitacoesAntes,
+      "consultar a página não grava solicitação nem log",
+      (await prisma.solicitacaoTitular.count({ where: { participanteId: aluno.participanteId! } })) === solicitacoesAntes &&
+        !(await prisma.logAuditoria.findFirst({ where: { acao: "DADOS_EXPORTADOS", usuarioId: aluno.id } })),
     );
-    const exportacao = await fetch(`${base}/meus-dados/exportacao`, { headers: { Authorization: `Bearer ${aluno.token}` } });
-    const arquivoExportado = await exportacao.text();
-    let exportado: Record<string, unknown> | null = null;
-    try {
-      exportado = JSON.parse(arquivoExportado);
-    } catch {
-      exportado = null;
-    }
-    checar(
-      "exportação -> 200 como download meus-dados-sgea.json (JSON, sem cache)",
-      exportacao.status === 200 &&
-        exportacao.headers.get("content-disposition") === 'attachment; filename="meus-dados-sgea.json"' &&
-        (exportacao.headers.get("content-type") ?? "").startsWith("application/json") &&
-        exportacao.headers.get("cache-control") === "no-store",
-      [exportacao.status, exportacao.headers.get("content-disposition"), exportacao.headers.get("cache-control")],
-    );
-    checar(
-      "o arquivo tem o mesmo conteúdo da página",
-      !!exportado && JSON.stringify({ ...exportado, geradoEm: "" }) === JSON.stringify({ ...meusDados, geradoEm: "" }),
-    );
-    const solicitacaoExportacao = await prisma.solicitacaoTitular.findFirst({
-      where: { participanteId: aluno.participanteId! },
-      orderBy: { criadoEm: "desc" },
-    });
-    checar(
-      "a exportação vira solicitação do titular já atendida (EXPORTACAO, ATENDIDA, com atendidoEm)",
-      solicitacaoExportacao?.tipo === "EXPORTACAO" &&
-        solicitacaoExportacao.status === "ATENDIDA" &&
-        !!solicitacaoExportacao.atendidoEm &&
-        solicitacaoExportacao.atendidoPorId === null,
-      solicitacaoExportacao,
-    );
-    const logExportacao = await prisma.logAuditoria.findFirst({
-      where: { acao: "DADOS_EXPORTADOS", usuarioId: aluno.id },
-      orderBy: { criadoEm: "desc" },
-    });
-    const detalheExportacao = logExportacao?.detalhe ?? "";
-    checar(
-      "auditoria DADOS_EXPORTADOS com o id da solicitação e o aluno como responsável, sem nome, e-mail ou RGM",
-      !!solicitacaoExportacao &&
-        detalheExportacao.includes(solicitacaoExportacao.id) &&
-        ![contaNoBanco?.nome, contaNoBanco?.emailLogin, contaNoBanco?.participante?.rgm].some((dado) => !!dado && detalheExportacao.includes(dado)),
-      detalheExportacao,
-    );
-    const exportacaoDaEquipe = await fetch(`${base}/meus-dados/exportacao`, { headers: { Authorization: `Bearer ${secretaria.token}` } });
-    checar("equipe não exporta pela rota do titular -> 403", exportacaoDaEquipe.status === 403, exportacaoDaEquipe.status);
+    const consultaSemCache = await fetch(`${base}/meus-dados`, { headers: { Authorization: `Bearer ${aluno.token}` } });
+    checar("resposta com dado pessoal vem sem cache (Cache-Control: no-store)", consultaSemCache.headers.get("cache-control") === "no-store");
+    r = await chamar("GET", "/meus-dados/exportacao", { token: aluno.token });
+    checar("a exportação em arquivo saiu do sistema -> 404", r.status === 404, r.status);
 
     requisito("R22 Feedback: sem edição; exclusão pelo aluno ou pela equipe com motivo");
     r = await chamar("PUT", `/feedbacks/${feedbackId}`, { token: aluno.token, corpo: { nota: 1 } });

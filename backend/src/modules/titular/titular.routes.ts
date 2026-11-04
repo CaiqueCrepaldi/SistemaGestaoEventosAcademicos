@@ -28,13 +28,3 @@ titularRouter.get(
     res.json(await titularService.meusDados(participanteDoToken(req)));
   }),
 );
-
-// GET /api/meus-dados/exportacao — o mesmo conteudo como arquivo JSON (portabilidade, art. 18, V)
-titularRouter.get(
-  "/exportacao",
-  asyncHandler(async (req, res) => {
-    const dados = await titularService.exportar(participanteDoToken(req), req.usuario!.sub);
-    res.setHeader("Content-Disposition", 'attachment; filename="meus-dados-sgea.json"');
-    res.type("application/json").send(JSON.stringify(dados, null, 2));
-  }),
-);

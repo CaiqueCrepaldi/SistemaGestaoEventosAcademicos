@@ -360,33 +360,30 @@ try {
   await page.click("button:has-text('Cancelar')");
 
   // ---------------------------------------------------------------- RF026: direitos do titular
-  titulo("Meus dados e pedidos LGPD do aluno (RF026)");
-  // evento em que a aluna fica abaixo de 60% nas duas tentativas (sala propria, sem conflito de horario)
+  titulo("Meus dados do aluno e reprovação no questionário (RF026)");
+  // evento em que a aluna fica abaixo de 60% nas duas tentativas (sala propria, sem conflito de horario):
+  // sem terceira chance, o certificado desse evento nao sai mais
   const tokenAluna = await tokenDe(emailAluno, "SenhaAluna123");
-  const salaRevisao = await api("POST", "/salas", tokenSecretaria, { nome: `Sala Revisao UI ${sufixo}`, capacidade: 10 });
-  const tituloRevisao = `Evento Revisao UI ${sufixo}`;
-  const eventoRevisao = await api("POST", "/eventos", tokenSecretaria, {
-    titulo: tituloRevisao, horario: new Date(Date.now() + 30 * 60 * 1000).toISOString(), salaId: salaRevisao.corpo.id, palestranteId: palestrante.corpo.id, tema: "Tema", cargaHoraria: 1, questionario: questionario(),
+  const salaReprovado = await api("POST", "/salas", tokenSecretaria, { nome: `Sala Reprovado UI ${sufixo}`, capacidade: 10 });
+  const tituloReprovado = `Evento Reprovado UI ${sufixo}`;
+  const eventoReprovado = await api("POST", "/eventos", tokenSecretaria, {
+    titulo: tituloReprovado, horario: new Date(Date.now() + 30 * 60 * 1000).toISOString(), salaId: salaReprovado.corpo.id, palestranteId: palestrante.corpo.id, tema: "Tema", cargaHoraria: 1, questionario: questionario(),
   });
-  const inscricaoRevisao = await api("POST", `/eventos/${eventoRevisao.corpo.id}/inscricoes`, tokenAluna);
-  await api("PUT", `/inscricoes/${inscricaoRevisao.corpo.id}`, tokenSecretaria, { statusPresenca: "PRESENTE" });
+  const inscricaoReprovado = await api("POST", `/eventos/${eventoReprovado.corpo.id}/inscricoes`, tokenAluna);
+  await api("PUT", `/inscricoes/${inscricaoReprovado.corpo.id}`, tokenSecretaria, { statusPresenca: "PRESENTE" });
   for (let i = 0; i < 2; i++) {
-    await api("POST", `/eventos/${eventoRevisao.corpo.id}/questionario/respostas`, tokenAluna, { respostas: Array(10).fill(1) });
+    await api("POST", `/eventos/${eventoReprovado.corpo.id}/questionario/respostas`, tokenAluna, { respostas: Array(10).fill(1) });
   }
   await page.goto(`${APP}/certificados`);
-  const itemRevisao = page.locator(".simple-list-item", { hasText: tituloRevisao });
-  await itemRevisao.waitFor({ timeout: 8000 }).catch(() => {});
-  const linkRevisao = itemRevisao.locator("a:has-text('Pedir revisão do resultado')");
-  const hrefRevisao = (await linkRevisao.count()) === 1 ? decodeURIComponent((await linkRevisao.getAttribute("href")) ?? "") : "";
+  const itemReprovado = page.locator(".simple-list-item", { hasText: tituloReprovado });
+  await itemReprovado.waitFor({ timeout: 8000 }).catch(() => {});
   checar(
-    "reprovado nas duas tentativas: \"Pedir revisão do resultado\" abre o e-mail de privacidade com o evento no assunto e o RGM",
-    hrefRevisao.startsWith(`mailto:privacidade@sgeacademicos.com.br?subject=Revisão do resultado do questionário – ${tituloRevisao}&body=`) &&
-      hrefRevisao.includes(`RGM: ${rgmAluno}`),
-    hrefRevisao || "link não encontrado",
-  );
-  checar(
-    "evento com questionário aprovado não mostra o pedido de revisão",
-    (await page.locator(".simple-list-item", { hasText: `Evento UI ${sufixo}` }).locator("a:has-text('Pedir revisão do resultado')").count()) === 0,
+    "reprovada nas 2 tentativas: sem nova tentativa, sem pedido de revisão e sem certificado",
+    (await itemReprovado.count()) === 1 &&
+      (await itemReprovado.innerText()).includes("Você usou as 2 tentativas permitidas") &&
+      (await itemReprovado.locator("a").count()) === 0 &&
+      (await itemReprovado.locator("button:has-text('Emitir certificado')").isDisabled()),
+    (await itemReprovado.count()) === 1 ? await itemReprovado.innerText() : "item não encontrado",
   );
 
   const itensMenu = (await page.locator("a.nav-link").allInnerTexts()).map((t) => t.trim().toLowerCase());
@@ -396,34 +393,21 @@ try {
   await page.getByText(rgmAluno).first().waitFor({ timeout: 10000 }).catch(() => {});
   const titulosSecoes = await page.locator(".card h3").allInnerTexts();
   checar(
-    "Meus dados mostra as seções em cartões",
-    ["Dados cadastrais", "Inscrições e presenças", "Questionários", "Certificados", "Avaliações", "Outros pedidos sobre seus dados"].every((s) => titulosSecoes.includes(s)),
+    "Meus dados mostra só as seções de dados, em cartões",
+    ["Dados cadastrais", "Inscrições e presenças", "Questionários", "Certificados", "Avaliações"].every((s) => titulosSecoes.includes(s)) &&
+      titulosSecoes.length === 5,
     titulosSecoes.join(" | "),
   );
   checar(
     "dados da própria aluna: RGM, eventos inscritos e resultado dos questionários",
-    (await temTexto(page, rgmAluno)) && (await temTexto(page, `Evento UI ${sufixo}`)) && (await temTexto(page, tituloRevisao)) && (await temTexto(page, "10 de 10")) && (await temTexto(page, "0 de 10")),
+    (await temTexto(page, rgmAluno)) && (await temTexto(page, `Evento UI ${sufixo}`)) && (await temTexto(page, tituloReprovado)) && (await temTexto(page, "10 de 10")) && (await temTexto(page, "0 de 10")),
   );
-  const [download] = await Promise.all([
-    page.waitForEvent("download", { timeout: 15000 }),
-    page.click("button:has-text('Baixar meus dados (JSON)')"),
-  ]);
-  const caminhoDownload = await download.path();
-  const conteudoDownload = caminhoDownload ? JSON.parse(readFileSync(caminhoDownload, "utf8")) : null;
   checar(
-    "\"Baixar meus dados (JSON)\" baixa meus-dados-sgea.json com os dados da aluna",
-    download.suggestedFilename() === "meus-dados-sgea.json" && conteudoDownload?.dadosCadastrais?.rgm === rgmAluno && Array.isArray(conteudoDownload?.inscricoes),
-    download.suggestedFilename(),
+    "sem botão de baixar os dados e sem o bloco \"Outros pedidos\"",
+    !(await temTexto(page, "Baixar meus dados")) && !(await temTexto(page, "Outros pedidos sobre seus dados")) && !(await temTexto(page, "Enviar pedido por e-mail")),
   );
-  const hrefPedido = decodeURIComponent((await page.locator("a:has-text('Enviar pedido por e-mail')").getAttribute("href")) ?? "");
-  checar(
-    "\"Outros pedidos\" explica o canal e o prazo e abre o e-mail com o assunto e o RGM",
-    (await temTexto(page, "privacidade@sgeacademicos.com.br")) &&
-      (await temTexto(page, "15 dias")) &&
-      hrefPedido.startsWith("mailto:privacidade@sgeacademicos.com.br?subject=Solicitação LGPD – SGEA&body=") &&
-      hrefPedido.includes(`RGM: ${rgmAluno}`),
-    hrefPedido,
-  );
+  await page.locator(".topbar-user-info").click();
+  checar("clicar no nome do topo não abre mais a janela \"Informações do usuário\"", !(await temTexto(page, "Informações do usuário")) && (await page.locator(".modal").count()) === 0);
   await sair(page);
 
   // ---------------------------------------------------------------- C: inativacao
@@ -515,14 +499,11 @@ try {
     "filtro por \"Feedback excluído\" mostra a exclusão feita pela equipe, com o motivo e o responsável",
     (await linhaLog.count()) === 1 && (await linhaLog.innerText()).includes("Equipe UI Secretaria") && (await linhaLog.innerText()).includes("Feedback excluído"),
   );
-  await page.locator(".card select").first().selectOption("DADOS_EXPORTADOS");
-  const linhaExportacao = page.locator("tr", { hasText: NOME_ALUNA }).filter({ hasText: "Dados exportados pelo titular" }).first();
-  await linhaExportacao.waitFor({ timeout: 10000 }).catch(() => {});
-  const textoExportacao = (await linhaExportacao.count()) === 1 ? await linhaExportacao.innerText() : "";
+  const opcoesDeAcao = await page.locator(".card select").first().locator("option").allInnerTexts();
   checar(
-    "filtro por \"Dados exportados pelo titular\" mostra a exportação da aluna, sem RGM nem e-mail no detalhe",
-    textoExportacao.includes("solicitação") && !textoExportacao.includes(rgmAluno) && !textoExportacao.toLowerCase().includes(emailAluno),
-    textoExportacao || "linha não encontrada",
+    "filtro de ações não tem mais \"Dados exportados pelo titular\" (a exportação saiu)",
+    opcoesDeAcao.length > 1 && !opcoesDeAcao.some((opcao) => opcao.includes("Dados exportados")),
+    opcoesDeAcao.length,
   );
   checar("equipe não tem \"Meus dados\" no menu", (await page.locator("a.nav-link", { hasText: "Meus dados" }).count()) === 0);
   await sair(page);
