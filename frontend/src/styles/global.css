@@ -459,28 +459,6 @@ h1, h2, h3 {
   background: var(--gray-100);
 }
 
-.pergunta-item {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.pergunta-item input {
-  flex: 1;
-  border: 1px solid var(--gray-300);
-  border-radius: 8px;
-  padding: 9px 12px;
-  font-size: 14px;
-  font-family: inherit;
-  color: var(--gray-900);
-}
-
-.pergunta-item input:focus {
-  outline: none;
-  border-color: var(--yellow-600);
-  box-shadow: 0 0 0 3px var(--yellow-50);
-}
-
 .search-input {
   width: 100%;
   border: 1px solid var(--gray-300);
@@ -641,17 +619,6 @@ h1, h2, h3 {
   gap: 12px;
 }
 
-.certificate {
-  text-align: center;
-  padding: 24px 16px;
-  border: 1px solid var(--gray-100);
-  border-radius: 8px;
-}
-
-.certificate h2 {
-  margin: 8px 0;
-}
-
 .simple-list li:not(.simple-list-item) {
   padding: 10px 12px;
   border-bottom: 1px solid var(--gray-100);
@@ -806,22 +773,6 @@ h1, h2, h3 {
   color: var(--on-yellow);
   text-decoration: none;
   box-shadow: 0 3px 8px rgba(245, 158, 11, 0.22);
-}
-
-.login-hint {
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--gray-200);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--gray-500);
-}
-
-.login-hint strong {
-  color: var(--gray-700);
-  font-size: 12px;
 }
 
 /* Toasts */
@@ -1015,10 +966,6 @@ h1, h2, h3 {
 }
 
 /* Autenticação em dois fatores */
-.mfa-login-card {
-  max-width: 440px;
-}
-
 .mfa-titulo {
   margin: 0 0 6px;
   font-size: 17px;

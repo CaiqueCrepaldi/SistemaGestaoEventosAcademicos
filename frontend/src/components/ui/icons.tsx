@@ -42,18 +42,6 @@ export function EventoIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-// icone de slide/apresentacao, sem uso atual no menu
-export function SessaoIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <Icon {...props}>
-      <rect x="3" y="4" width="18" height="12" rx="1.5" />
-      <path d="M8 20h8" />
-      <path d="M12 16v4" />
-      <path d="M8 9l3 2-3 2z" />
-    </Icon>
-  );
-}
-
 // icone de predio, usado em Salas
 export function SalaIcon(props: SVGProps<SVGSVGElement>) {
   return (

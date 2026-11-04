@@ -20,16 +20,3 @@ export function perguntaVazia(): PerguntaQuestionario {
 export function questionarioVazio(): PerguntaQuestionario[] {
   return Array.from({ length: QUESTIONARIO_TAMANHO }, perguntaVazia);
 }
-
-// checa se as 10 perguntas tao completas, devolve o indice (1-based) da primeira com problema ou null
-export function validarQuestionario(perguntas: PerguntaQuestionario[]): number | null {
-  if (perguntas.length !== QUESTIONARIO_TAMANHO) return 1;
-  for (let i = 0; i < perguntas.length; i++) {
-    const pergunta = perguntas[i];
-    if (!pergunta.enunciado.trim()) return i + 1;
-    if (pergunta.alternativas.length !== ALTERNATIVAS_POR_PERGUNTA) return i + 1;
-    if (pergunta.alternativas.some((a) => !a.texto.trim())) return i + 1;
-    if (pergunta.alternativas.filter((a) => a.correta).length !== 1) return i + 1;
-  }
-  return null;
-}

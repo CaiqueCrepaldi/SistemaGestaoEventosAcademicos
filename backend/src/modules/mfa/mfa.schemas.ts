@@ -17,7 +17,6 @@ export const verificarMfaSchema = z
 export type VerificarMfaInput = z.infer<typeof verificarMfaSchema>;
 
 export const confirmarMfaSchema = z.object({ codigo: codigoTotp });
-export type ConfirmarMfaInput = z.infer<typeof confirmarMfaSchema>;
 
 export const desativarMfaSchema = z.object({
   senha: z.string().min(1, "Senha é obrigatória."),

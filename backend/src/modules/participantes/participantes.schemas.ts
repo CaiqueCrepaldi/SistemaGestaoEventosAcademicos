@@ -14,5 +14,4 @@ export const participanteSchema = z.object({
 });
 
 export const participanteUpdateSchema = participanteSchema.partial();
-export type ParticipanteInput = z.infer<typeof participanteSchema>;
 export type ParticipanteUpdateInput = z.infer<typeof participanteUpdateSchema>;

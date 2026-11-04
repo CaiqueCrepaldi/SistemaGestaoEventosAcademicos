@@ -130,15 +130,6 @@ export interface Feedback {
   criadoEm: string;
 }
 
-export interface RecuperacaoSenha {
-  id: string;
-  usuarioId: string;
-  codigo: string;
-  expiraEm: string;
-  usadoEm: string | null;
-  criadoEm: string;
-}
-
 // respostas[i] = indice da alternativa escolhida na pergunta i (mesma ordem do questionario)
 export interface TentativaQuestionario {
   id: string;

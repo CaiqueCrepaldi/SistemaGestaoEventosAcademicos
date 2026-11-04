@@ -14,7 +14,6 @@ export const feedbackSchema = z.object({
     .min(1, "Escreva um comentário.")
     .max(1000, "O comentário pode ter no máximo 1000 caracteres."),
 });
-export type FeedbackInput = z.infer<typeof feedbackSchema>;
 
 // a equipe so exclui feedback de aluno por um destes motivos. Lista fechada de proposito: o motivo
 // vai pro log de auditoria (imutavel por 5 anos) e texto livre ali poderia carregar dado pessoal

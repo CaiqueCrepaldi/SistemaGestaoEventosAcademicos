@@ -1,18 +1,6 @@
 // perfil de acesso do usuario logado, checado no ProtectedRoute/Layout/paginas
 export type Perfil = "ADMINISTRADOR" | "SECRETARIA" | "ALUNO";
 
-// todo ALUNO tem um Participante vinculado (participanteId), eh por ele que
-// inscricao/checkin/certificado enxergam o aluno
-export interface Usuario {
-  id: string;
-  nome: string;
-  emailLogin: string;
-  senhaHash: string;
-  perfil: Perfil;
-  rgm?: string | null; // so ALUNO
-  participanteId?: string | null; // so ALUNO
-}
-
 export interface Sala {
   id: string;
   nome: string;

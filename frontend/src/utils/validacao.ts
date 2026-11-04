@@ -5,8 +5,6 @@ const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const REGEX_NOME = /^[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'\s-]*$/;
 const REGEX_RGM = /^[0-9]{11}$/;
 
-export const RGM_TAMANHO = 11;
-
 // confere formato basico de email (algo@algo.algo)
 export function validarEmail(valor: string): boolean {
   return REGEX_EMAIL.test(valor.trim());
