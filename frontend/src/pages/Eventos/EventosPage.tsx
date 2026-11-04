@@ -6,18 +6,11 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
 import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
-import {
-  ApiError,
-  emailService,
-  eventoService,
-  inscricaoAlunoService,
-  inscricaoService,
-  palestranteService,
-  salaService,
-} from "../../services";
-import type { Evento, Inscricao, Palestrante, PerguntaQuestionario, Sala } from "../../types";
+import { ApiError, eventoService, palestranteService, salaService } from "../../services";
+import type { Evento, Palestrante, PerguntaQuestionario, Sala } from "../../types";
 import { inputLocalParaIso, isoParaInputLocal } from "../../utils/data";
 import { ALTERNATIVAS_POR_PERGUNTA, questionarioVazio } from "../../utils/questionario";
+import { EventosAluno } from "./EventosAluno";
 
 interface FormEvento {
   titulo: string;
@@ -60,154 +53,46 @@ function validarEvento(form: FormEvento): ErrosFormulario {
   return erros;
 }
 
-// crud de eventos pra equipe, lista + inscricao pro aluno
+// aluno ve a programacao com inscrever/cancelar (EventosAluno.tsx); equipe ve a gestao (crud) abaixo
 export function EventosPage() {
   const { usuario } = useAuth();
+  return usuario?.perfil === "ALUNO" ? <EventosAluno /> : <EventosEquipe />;
+}
+
+// crud de eventos da equipe, com a ocupacao (inscritos/capacidade) de cada evento
+function EventosEquipe() {
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [salas, setSalas] = useState<Sala[]>([]);
   const [palestrantes, setPalestrantes] = useState<Palestrante[]>([]);
-  const [inscricoes, setInscricoes] = useState<Inscricao[]>([]);
-  const [avisoPorEvento, setAvisoPorEvento] = useState<Record<string, string>>({});
+  const [busca, setBusca] = useState("");
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<Evento | null>(null);
   const [form, setForm] = useState<FormEvento>(formVazio());
   const [confirmandoSalvar, setConfirmandoSalvar] = useState(false);
   const [excluindo, setExcluindo] = useState<Evento | null>(null);
-  // evento cuja inscricao o aluno esta cancelando (aguardando a confirmacao)
-  const [cancelandoInscricao, setCancelandoInscricao] = useState<Evento | null>(null);
   const { erros, formRef, mostrar, mostrarErroDaApi, limpar, limparAoEditar } = useErrosFormulario();
 
   useEffect(() => {
     void carregar();
   }, []);
 
-  // busca eventos/salas/palestrantes/inscricoes de uma vez
+  // busca eventos/salas/palestrantes de uma vez (a contagem de inscritos ja vem em cada evento)
   async function carregar() {
-    const [e, sa, p, i] = await Promise.all([
-      eventoService.list(),
-      salaService.list(),
-      palestranteService.list(),
-      inscricaoService.list(),
-    ]);
+    const [e, sa, p] = await Promise.all([eventoService.list(), salaService.list(), palestranteService.list()]);
     setEventos([...e].sort((a, b) => a.horario.localeCompare(b.horario)));
     setSalas(sa);
     setPalestrantes(p);
-    setInscricoes(i);
   }
 
-  // aluno se inscreve no evento e ja dispara o email de confirmacao
-  async function inscreverSe(evento: Evento) {
-    if (!usuario?.participanteId) {
-      toast.error("Disponível apenas para contas de aluno.");
-      return;
-    }
-
-    try {
-      const nova = await inscricaoAlunoService.inscrever(usuario.participanteId, evento.id);
-      setInscricoes((prev) => [...prev, nova]);
-
-      const { destinatario } = await emailService.enviarConfirmacaoInscricao(nova);
-      const mensagem = `Inscrição confirmada. E-mail de confirmação enviado para ${destinatario}.`;
-      setAvisoPorEvento((prev) => ({ ...prev, [evento.id]: mensagem }));
-      toast.success(mensagem);
-    } catch (e) {
-      const mensagem = e instanceof ApiError ? e.message : "Não foi possível concluir a inscrição.";
-      setAvisoPorEvento((prev) => ({ ...prev, [evento.id]: mensagem }));
-      toast.error(mensagem);
-    }
-  }
-
-  // aluno cancela a propria inscricao (o backend confere: presenca pendente e evento que nao comecou);
-  // a vaga volta e ele pode se inscrever de novo enquanto houver vaga
-  async function cancelarInscricao() {
-    if (!cancelandoInscricao) return;
-    const evento = cancelandoInscricao;
-    try {
-      await inscricaoAlunoService.cancelar(evento.id);
-      setInscricoes((prev) => prev.filter((i) => !(i.eventoId === evento.id && i.participanteId === usuario?.participanteId)));
-      setAvisoPorEvento((prev) => ({ ...prev, [evento.id]: "Inscrição cancelada." }));
-      toast.success("Inscrição cancelada.");
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "Não foi possível cancelar a inscrição.");
-    } finally {
-      setCancelandoInscricao(null);
-    }
-  }
-
-  // ALUNO ve lista read-only com botao de inscricao, sem chegar no CRUD abaixo
-  if (usuario?.perfil === "ALUNO") {
-    return (
-      <div>
-        <PageHeader title="Eventos" />
-        <div className="card">
-          <ul className="agenda-list">
-            {eventos.map((evento) => {
-              const sala = salas.find((s) => s.id === evento.salaId);
-              const palestrante = palestrantes.find((p) => p.id === evento.palestranteId);
-              const minhaInscricao = inscricoes.find(
-                (i) => i.participanteId === usuario?.participanteId && i.eventoId === evento.id,
-              );
-              const jaInscrito = Boolean(minhaInscricao);
-              // mesma regra do backend: depois que o evento comeca, o aluno nao se inscreve nem cancela
-              const jaComecou = new Date(evento.horario) <= new Date();
-              const podeCancelar = minhaInscricao?.statusPresenca === "PENDENTE" && !jaComecou;
-              return (
-                <li key={evento.id} className="agenda-item">
-                  <div className="agenda-time" style={{ width: 90 }}>
-                    {evento.horario ? (
-                      <>
-                        <div>{new Date(evento.horario).toLocaleDateString("pt-BR")}</div>
-                        <div>
-                          {new Date(evento.horario).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                        </div>
-                      </>
-                    ) : (
-                      "—"
-                    )}
-                  </div>
-                  <div className="agenda-details" style={{ flex: 1 }}>
-                    <div className="simple-list-title">{evento.titulo}</div>
-                    <div className="simple-list-sub">Tema: {evento.tema || "—"}</div>
-                    <div className="simple-list-sub">Palestrante: {palestrante?.nome ?? "—"}</div>
-                    <div className="simple-list-sub">Local: {sala?.nome ?? "—"}</div>
-                    {avisoPorEvento[evento.id] && <p className="form-hint">{avisoPorEvento[evento.id]}</p>}
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6, alignSelf: "center" }}>
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => void inscreverSe(evento)}
-                      disabled={jaInscrito || jaComecou}
-                      title={!jaInscrito && jaComecou ? "O evento já começou: não aceita mais inscrições." : undefined}
-                    >
-                      {jaInscrito ? "Inscrito" : jaComecou ? "Encerrado" : "Inscrever-se"}
-                    </button>
-                    {podeCancelar && (
-                      <button className="btn btn-ghost btn-danger" onClick={() => setCancelandoInscricao(evento)}>
-                        Cancelar inscrição
-                      </button>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-            {eventos.length === 0 && <p className="empty-cell">Nenhum evento cadastrado.</p>}
-          </ul>
-        </div>
-
-        {cancelandoInscricao && (
-          <ConfirmDialog
-            title="Cancelar inscrição"
-            message={`Cancelar sua inscrição em "${cancelandoInscricao.titulo}"? A vaga fica livre e você pode se inscrever de novo enquanto houver vagas.`}
-            confirmLabel="Cancelar inscrição"
-            cancelLabel="Manter inscrição"
-            tone="danger"
-            onConfirm={() => void cancelarInscricao()}
-            onCancel={() => setCancelandoInscricao(null)}
-          />
-        )}
-      </div>
-    );
-  }
+  const nomeDaSala = (evento: Evento) => salas.find((s) => s.id === evento.salaId)?.nome ?? "—";
+  const nomeDoPalestrante = (evento: Evento) => palestrantes.find((p) => p.id === evento.palestranteId)?.nome ?? "—";
+  // a busca filtra a lista ja carregada: titulo, tema, palestrante ou sala
+  const termo = busca.trim().toLowerCase();
+  const eventosVisiveis = termo
+    ? eventos.filter((e) =>
+        `${e.titulo} ${e.tema ?? ""} ${nomeDoPalestrante(e)} ${nomeDaSala(e)}`.toLowerCase().includes(termo),
+      )
+    : eventos;
 
   // abre o modal em branco (sala e palestrante escolhidos de proposito, nao pre-selecionados)
   function abrirNovo() {
@@ -339,6 +224,14 @@ export function EventosPage() {
       />
 
       <div className="card">
+        <input
+          className="search-input"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar por título, tema, palestrante ou sala"
+          aria-label="Buscar eventos"
+          style={{ marginBottom: 12 }}
+        />
         <table className="table">
           <thead>
             <tr>
@@ -348,18 +241,22 @@ export function EventosPage() {
               <th>Palestrante</th>
               <th>Tema</th>
               <th>Carga horária</th>
+              <th>Inscritos</th>
               <th />
             </tr>
           </thead>
           <tbody>
-            {eventos.map((evento) => (
+            {eventosVisiveis.map((evento) => (
               <tr key={evento.id}>
                 <td>{evento.titulo}</td>
-                <td>{salas.find((s) => s.id === evento.salaId)?.nome ?? "—"}</td>
+                <td>{nomeDaSala(evento)}</td>
                 <td>{evento.horario ? new Date(evento.horario).toLocaleString("pt-BR") : "—"}</td>
-                <td>{palestrantes.find((p) => p.id === evento.palestranteId)?.nome ?? "—"}</td>
+                <td>{nomeDoPalestrante(evento)}</td>
                 <td className="truncate">{evento.tema || "—"}</td>
                 <td>{evento.cargaHoraria ? `${evento.cargaHoraria}h` : "—"}</td>
+                <td>
+                  {evento.inscritos ?? 0}/{salas.find((s) => s.id === evento.salaId)?.capacidade ?? "—"}
+                </td>
                 <td className="table-actions">
                   <button className="btn btn-ghost" onClick={() => abrirEdicao(evento)}>
                     Editar
@@ -370,10 +267,10 @@ export function EventosPage() {
                 </td>
               </tr>
             ))}
-            {eventos.length === 0 && (
+            {eventosVisiveis.length === 0 && (
               <tr>
-                <td colSpan={7} className="empty-cell">
-                  Nenhum evento cadastrado.
+                <td colSpan={8} className="empty-cell">
+                  {eventos.length === 0 ? "Nenhum evento cadastrado." : "Nenhum evento encontrado para a busca."}
                 </td>
               </tr>
             )}

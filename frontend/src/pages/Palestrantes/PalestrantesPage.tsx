@@ -11,7 +11,7 @@ import type { Evento, Palestrante } from "../../types";
 import { validarEmail, validarNome } from "../../utils/validacao";
 
 const VAZIO = { nome: "", email: "" };
-// quantas proximas palestras cabem no card do aluno antes de mandar pra Agenda
+// quantas proximas palestras cabem no card do aluno antes de mandar pra tela Eventos
 const MAX_EVENTOS_NO_CARD = 3;
 
 const PREPOSICOES = new Set(["de", "da", "do", "das", "dos", "e"]);
@@ -158,7 +158,7 @@ export function PalestrantesPage() {
                       ))}
                       {proximas.length > MAX_EVENTOS_NO_CARD && (
                         <li className="palestrante-resumo">
-                          + {proximas.length - MAX_EVENTOS_NO_CARD} na Agenda
+                          + {proximas.length - MAX_EVENTOS_NO_CARD} em Eventos
                         </li>
                       )}
                     </ul>

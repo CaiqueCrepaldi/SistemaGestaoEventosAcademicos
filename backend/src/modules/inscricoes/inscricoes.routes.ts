@@ -63,17 +63,3 @@ inscricoesRouter.delete(
     res.status(204).send();
   }),
 );
-
-// dispara o email de confirmacao da inscricao pro proprio dono dela
-inscricoesRouter.post(
-  "/:id/confirmacao-email",
-  autenticar,
-  asyncHandler(async (req, res) => {
-    const resultado = await inscricoesService.confirmarEmail(
-      req.params.id,
-      req.usuario!.participanteId ?? "",
-      req.usuario!.sub,
-    );
-    res.status(200).json(resultado);
-  }),
-);

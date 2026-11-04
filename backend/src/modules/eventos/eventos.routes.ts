@@ -79,8 +79,13 @@ eventosRouter.post(
     if (!participanteId) {
       throw AppError.acessoNegado("Esta conta não está vinculada a um participante.");
     }
-    const inscricao = await eventosService.autoinscrever(req.params.eventoId, participanteId, req.usuario!.sub);
-    res.status(201).json(inscricaoParaDTO(inscricao));
+    const { inscricao, emailConfirmacaoEnviado } = await eventosService.autoinscrever(
+      req.params.eventoId,
+      participanteId,
+      req.usuario!.sub,
+    );
+    // o e-mail de confirmacao ja foi enviado pelo backend; o campo extra so diz pra tela se saiu
+    res.status(201).json({ ...inscricaoParaDTO(inscricao), emailConfirmacaoEnviado });
   }),
 );
 

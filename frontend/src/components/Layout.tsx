@@ -3,7 +3,6 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Modal } from "./ui/Modal";
 import {
-  AgendaIcon,
   AuditoriaIcon,
   CertificadoIcon,
   CheckinIcon,
@@ -45,7 +44,6 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/inscricoes", label: "Inscrições", perfis: EQUIPE, icon: InscricaoIcon },
   { to: "/checkin", label: "Check-in", perfis: EQUIPE, icon: CheckinIcon },
   { to: "/auditoria", label: "Auditoria", perfis: EQUIPE, icon: AuditoriaIcon },
-  { to: "/agenda", label: "Agenda", perfis: TODOS_PERFIS, icon: AgendaIcon },
   { to: "/certificados", label: "Certificados", perfis: TODOS_PERFIS, icon: CertificadoIcon },
   { to: "/feedback", label: "Feedback", perfis: TODOS_PERFIS, icon: FeedbackIcon },
   { to: "/minha-conta", label: "Minha conta", perfis: TODOS_PERFIS, icon: ContaIcon },

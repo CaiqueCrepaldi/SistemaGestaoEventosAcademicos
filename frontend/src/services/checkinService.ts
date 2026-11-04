@@ -13,6 +13,15 @@ export interface InscricaoDetalhada {
   eventoHorario: string;
   // o aluno ja respondeu o questionario desse evento: a presenca nao muda mais (o backend responde 409)
   presencaTravada: boolean;
+  // o check-in so abre 1 hora antes do inicio do evento (mesma regra do backend, que responde 409 antes disso)
+  checkinAberto: boolean;
+}
+
+// mesma antecedencia do backend (inscricoes.service.ts, ANTECEDENCIA_CHECKIN_MS)
+export const ANTECEDENCIA_CHECKIN_MS = 60 * 60 * 1000;
+
+export function checkinAberto(eventoHorario: string): boolean {
+  return !eventoHorario || new Date(eventoHorario).getTime() - ANTECEDENCIA_CHECKIN_MS <= Date.now();
 }
 
 // todos os alunos cadastrados (participantes com conta ALUNO), ja em ordem alfabetica, com o
@@ -44,6 +53,7 @@ async function listarInscricoesDoParticipante(participanteId: string): Promise<I
         eventoTitulo: evento?.titulo ?? "Evento removido",
         eventoHorario: evento?.horario ?? "",
         presencaTravada: eventosRespondidos.has(inscricao.eventoId),
+        checkinAberto: checkinAberto(evento?.horario ?? ""),
       };
     });
 }

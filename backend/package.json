@@ -12,9 +12,9 @@
     "build": "tsc --noEmit && node scripts/bundle-vercel.mjs",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
+    "typecheck:scripts": "tsc -p scripts/tsconfig.json",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio"
   },

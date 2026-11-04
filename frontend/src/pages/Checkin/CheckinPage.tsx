@@ -4,11 +4,19 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
 import { checkinService } from "../../services";
-import type { InscricaoDetalhada } from "../../services/checkinService";
+import { ANTECEDENCIA_CHECKIN_MS, type InscricaoDetalhada } from "../../services/checkinService";
 import type { Participante, StatusPresenca } from "../../types";
 
 // mesma mensagem que o backend devolve (409) se alguem tentar mudar a presenca mesmo assim
 const MENSAGEM_PRESENCA_TRAVADA = "A presença não pode mais ser alterada: o aluno já respondeu o questionário.";
+
+// o check-in abre 1 hora antes do inicio (o backend responde 409 CHECKIN_NAO_LIBERADO antes disso)
+function mensagemCheckinFechado(eventoHorario: string): string {
+  const abre = new Date(new Date(eventoHorario).getTime() - ANTECEDENCIA_CHECKIN_MS);
+  const data = abre.toLocaleDateString("pt-BR");
+  const hora = abre.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return `O check-in abre em ${data} às ${hora} (1 hora antes do início).`;
+}
 
 // traduz o status em cor pra Badge
 function badgeTone(status: StatusPresenca): "green" | "red" | "orange" {
@@ -174,37 +182,45 @@ export function CheckinPage() {
                 </tr>
               </thead>
               <tbody>
-                {inscricoes.map((item) => (
-                  <tr key={item.inscricao.id}>
-                    <td>
-                      {item.eventoTitulo}
-                      {item.presencaTravada && <div className="form-hint">{MENSAGEM_PRESENCA_TRAVADA}</div>}
-                    </td>
-                    <td>
-                      <Badge tone={badgeTone(item.inscricao.statusPresenca)}>
-                        {badgeLabel(item.inscricao.statusPresenca)}
-                      </Badge>
-                    </td>
-                    <td className="table-actions">
-                      <button
-                        className="btn btn-primary"
-                        onClick={() => void confirmar(item.inscricao.id)}
-                        disabled={selecionadoInativo || item.presencaTravada}
-                        title={item.presencaTravada ? MENSAGEM_PRESENCA_TRAVADA : selecionadoInativo ? "Aluno inativo" : undefined}
-                      >
-                        Confirmar presença
-                      </button>
-                      <button
-                        className="btn btn-ghost"
-                        onClick={() => void marcarAusente(item.inscricao.id)}
-                        disabled={item.presencaTravada}
-                        title={item.presencaTravada ? MENSAGEM_PRESENCA_TRAVADA : undefined}
-                      >
-                        Ausente
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {inscricoes.map((item) => {
+                  // motivo pra nao mexer na presenca agora (a trava do questionario vale mais que a janela)
+                  const bloqueio = item.presencaTravada
+                    ? MENSAGEM_PRESENCA_TRAVADA
+                    : !item.checkinAberto
+                      ? mensagemCheckinFechado(item.eventoHorario)
+                      : null;
+                  return (
+                    <tr key={item.inscricao.id}>
+                      <td>
+                        {item.eventoTitulo}
+                        {bloqueio && <div className="form-hint">{bloqueio}</div>}
+                      </td>
+                      <td>
+                        <Badge tone={badgeTone(item.inscricao.statusPresenca)}>
+                          {badgeLabel(item.inscricao.statusPresenca)}
+                        </Badge>
+                      </td>
+                      <td className="table-actions">
+                        <button
+                          className="btn btn-primary"
+                          onClick={() => void confirmar(item.inscricao.id)}
+                          disabled={selecionadoInativo || bloqueio !== null}
+                          title={bloqueio ?? (selecionadoInativo ? "Aluno inativo" : undefined)}
+                        >
+                          Confirmar presença
+                        </button>
+                        <button
+                          className="btn btn-ghost"
+                          onClick={() => void marcarAusente(item.inscricao.id)}
+                          disabled={bloqueio !== null}
+                          title={bloqueio ?? undefined}
+                        >
+                          Ausente
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
                 {inscricoes.length === 0 && (
                   <tr>
                     <td colSpan={3} className="empty-cell">

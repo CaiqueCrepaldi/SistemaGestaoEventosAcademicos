@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { randomInt, randomUUID } from "crypto";
 import type { Usuario as UsuarioDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
@@ -7,7 +7,15 @@ import { assinarToken, assinarTokenEtapa, duracaoEmSegundos } from "../../utils/
 import { usuarioParaDTO } from "../../utils/dto";
 import { normalizarEmail } from "../../utils/validacao";
 import { registrarAuditoria } from "../../utils/auditoria";
-import { chaveConta, chaveIp, estaBloqueado, idDoEmail, incrementarTentativa, limparTentativas } from "../../utils/limiteAcesso";
+import {
+  chaveConta,
+  chaveIp,
+  estaBloqueado,
+  idDoEmail,
+  incrementarTentativa,
+  limparTentativas,
+  MAX_TENTATIVAS_POR_IP,
+} from "../../utils/limiteAcesso";
 import { env } from "../../config/env";
 import { VERSAO_TERMOS_ATUAL } from "../../config/termos";
 import { emailService } from "../email/email.service";
@@ -116,7 +124,7 @@ async function login(dados: LoginInput, ip: string) {
     // nunca grava o e-mail tentado (PII) no log — so se o usuario existe ou nao
     await registrarAuditoria(usuario?.id ?? null, "LOGIN_FALHA", usuario ? "senha incorreta" : "e-mail nao encontrado");
     await incrementarTentativa(chaveDaConta);
-    await incrementarTentativa(chaveDoIp);
+    await incrementarTentativa(chaveDoIp, MAX_TENTATIVAS_POR_IP);
     throw new AppError(401, "CREDENCIAIS_INVALIDAS", "E-mail ou senha inválidos.");
   }
 
@@ -185,9 +193,10 @@ function buscarUsuarioPorEmail(email: string) {
   return prisma.usuario.findUnique({ where: { emailLogin: normalizarEmail(email) } });
 }
 
-// gera um codigo numerico de 6 digitos
+// gera um codigo numerico de 6 digitos com gerador criptografico (Math.random e previsivel, nao
+// serve pra segredo): randomInt sorteia de 100000 a 999999 sem vies
 function gerarCodigoNumerico(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  return String(randomInt(100000, 1000000));
 }
 
 // gera o codigo de recuperacao, salva com validade de 15min e dispara o email. Aqui conta TODA
@@ -202,7 +211,7 @@ async function solicitarRecuperacaoSenha(dados: SolicitarRecuperacaoInput, ip: s
     throw erroBloqueado();
   }
   await incrementarTentativa(chaveDaConta);
-  await incrementarTentativa(chaveDoIp);
+  await incrementarTentativa(chaveDoIp, MAX_TENTATIVAS_POR_IP);
 
   const usuario = await buscarUsuarioPorEmail(dados.email);
   if (!usuario) {

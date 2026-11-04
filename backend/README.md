@@ -176,8 +176,8 @@ entrar. Siga a ordem:
 | `npm run build` | Compila TypeScript pra `dist/`. |
 | `npm start` | Roda a versão compilada (`dist/server.js`) — uso em produção. |
 | `npm run typecheck` | Só confere tipos, sem gerar arquivo nenhum. |
+| `npm run typecheck:scripts` | Confere os tipos dos scripts de `scripts/` e do seed. |
 | `npm run db:migrate` | Cria/atualiza as tabelas no banco a partir do `schema.prisma`. |
-| `npm run db:push` | Alternativa ao migrate pra ambientes sem banco de sombra (sem gerar arquivo de migration). |
 | `npm run db:seed` | Popula o banco com os dados de demonstração (idempotente, pode rodar de novo). |
 | `npm run db:studio` | Abre o Prisma Studio (interface visual pra ver/editar os dados). |
 

@@ -7,7 +7,7 @@ export function PoliticaDePrivacidadePage() {
     <div className="login-screen">
       <div className="login-card legal-card">
         <h1>Política de Privacidade</h1>
-        <p className="legal-versao">Versão 1 — atualizada em 29/09/2026.</p>
+        <p className="legal-versao">Versão 1 — atualizada em 04/11/2026.</p>
 
         <h2>1. Quem trata os dados</h2>
         <p>
@@ -31,6 +31,11 @@ export function PoliticaDePrivacidadePage() {
             <strong>Dados acadêmicos:</strong> inscrições em eventos, confirmações de presença
             (check-in), respostas ao questionário de cada evento e feedback enviado sobre as
             palestras.
+          </li>
+          <li>
+            <strong>Certificados emitidos:</strong> ao emitir um certificado, o sistema guarda uma
+            cópia do que vai impresso nele (nome, RGM, evento, data e carga horária) e um código de
+            validação.
           </li>
           <li>
             <strong>Registros de acesso:</strong> login (sucesso e falha) e alterações em
@@ -65,6 +70,14 @@ export function PoliticaDePrivacidadePage() {
               <td>Execução de contrato</td>
             </tr>
             <tr>
+              <td>Certificado emitido (nome, RGM, evento, data, carga horária, código)</td>
+              <td>
+                Comprovar a participação: qualquer pessoa com o código confere o certificado na página
+                pública de validação, que mostra só nome, evento, data e carga horária (nunca o RGM)
+              </td>
+              <td>Execução de contrato</td>
+            </tr>
+            <tr>
               <td>Feedback da palestra</td>
               <td>Avaliação do evento pela organização</td>
               <td>Consentimento (envio é opcional e feito pelo próprio aluno)</td>
@@ -81,7 +94,7 @@ export function PoliticaDePrivacidadePage() {
         <ul>
           <li>
             <strong>SendGrid</strong> (serviço de envio de e-mail): usado para mandar e-mails de
-            confirmação de inscrição, recuperação de senha e certificado. Recebe o e-mail do
+            confirmação e de cancelamento de inscrição e de recuperação de senha. Recebe o e-mail do
             destinatário, o nome do aluno e o conteúdo da mensagem — apenas o necessário para
             entregar aquele e-mail específico.
           </li>
@@ -126,6 +139,12 @@ export function PoliticaDePrivacidadePage() {
           caso) e só é excluída definitivamente depois de inativada — a exclusão apaga a conta e
           todo o histórico vinculado (inscrições, feedbacks, tentativas de questionário) de forma
           permanente.
+        </p>
+        <p>
+          Quem já tem certificado emitido não é excluído: o certificado é a prova da participação e
+          precisa continuar válido para quem o recebeu (por exemplo, numa conferência de horas
+          complementares). Nesse caso a conta fica inativada, sem acesso ao sistema, e o registro do
+          certificado é mantido.
         </p>
 
         <h2>8. Seus direitos</h2>

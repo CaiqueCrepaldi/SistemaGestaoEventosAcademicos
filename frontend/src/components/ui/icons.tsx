@@ -112,17 +112,6 @@ export function CheckinIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-// icone de relogio, usado em Agenda
-export function AgendaIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <Icon {...props}>
-      <circle cx="12" cy="13" r="8" />
-      <path d="M12 9v4l2.6 1.6" />
-      <path d="M9 2.5h6" />
-    </Icon>
-  );
-}
-
 // icone de medalha, usado em Certificados
 export function CertificadoIcon(props: SVGProps<SVGSVGElement>) {
   return (

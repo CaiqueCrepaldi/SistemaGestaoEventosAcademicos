@@ -172,9 +172,10 @@ try {
   // dados do fluxo do aluno: sala, palestrante e evento criados pela API
   const sala = await api("POST", "/salas", tokenSecretaria, { nome: `Auditorio UI ${sufixo}`, capacidade: 40 });
   const palestrante = await api("POST", "/palestrantes", tokenSecretaria, { nome: "Palestrante Fluxo", email: `fluxo-${sufixo}@teste.invalido` });
-  const amanha = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+  // comeca daqui a 30 min: ainda aceita inscricao e o check-in ja abriu (abre 1h antes do inicio)
+  const emBreve = new Date(Date.now() + 30 * 60 * 1000).toISOString();
   const evento = await api("POST", "/eventos", tokenSecretaria, {
-    titulo: `Evento UI ${sufixo}`, horario: amanha, salaId: sala.corpo.id, palestranteId: palestrante.corpo.id, tema: "Tema UI", cargaHoraria: 2, questionario: questionario(),
+    titulo: `Evento UI ${sufixo}`, horario: emBreve, salaId: sala.corpo.id, palestranteId: palestrante.corpo.id, tema: "Tema UI", cargaHoraria: 2, questionario: questionario(),
   });
   const eventoId = evento.corpo.id;
   await sair(page);
@@ -228,16 +229,32 @@ try {
   await page.goto(`${APP}/eventos`);
   await page.locator(".agenda-item", { hasText: `Evento UI ${sufixo}` }).locator("button:has-text('Inscrever-se')").click();
   checar("aluno se inscreve pela tela", await esperarToast(page, "Inscrição confirmada"));
-  const botaoEncerrado = page.locator(".agenda-item", { hasText: `Evento Encerrado UI ${sufixo}` }).locator("button.btn-primary");
   checar(
-    "evento que já começou mostra Encerrado, desabilitado (sem opção de se inscrever)",
-    (await botaoEncerrado.innerText()) === "Encerrado" && (await botaoEncerrado.isDisabled()),
-    await botaoEncerrado.innerText(),
+    "o e-mail de confirmação sai junto com a inscrição (o aviso cita o e-mail do aluno)",
+    await temTexto(page, `E-mail de confirmação enviado para ${emailAluno}`),
   );
+  const itemEncerrado = page.locator(".agenda-item", { hasText: `Evento Encerrado UI ${sufixo}` });
+  checar("eventos que já aconteceram ficam escondidos por padrão", (await itemEncerrado.count()) === 0);
+  await page.check("#mostrarEncerrados");
+  const botaoEncerrado = itemEncerrado.locator("button.btn-primary");
+  await botaoEncerrado.waitFor({ timeout: 8000 }).catch(() => {});
+  checar(
+    "com \"mostrar encerrados\", o evento que já começou aparece como Encerrado, desabilitado (sem opção de se inscrever)",
+    (await botaoEncerrado.count()) === 1 && (await botaoEncerrado.innerText()) === "Encerrado" && (await botaoEncerrado.isDisabled()),
+  );
+  checar("menu do aluno não tem mais a Agenda (unida à tela Eventos)", (await page.locator("a.nav-link", { hasText: "Agenda" }).count()) === 0);
   await page.goto(`${APP}/agenda`);
-  const linhaAgenda = page.locator("li, tr", { hasText: `Evento UI ${sufixo}` }).first();
-  await linhaAgenda.waitFor();
-  checar("Agenda do aluno mostra o total de inscritos do evento (2), não só a própria inscrição", (await linhaAgenda.innerText()).includes("2/40"), await linhaAgenda.innerText());
+  await page.waitForFunction(() => location.hash.startsWith("#/eventos"), null, { timeout: 8000 }).catch(() => {});
+  checar("o link antigo da Agenda leva para Eventos", (await page.evaluate(() => location.hash)).startsWith("#/eventos"));
+  const linhaEvento = page.locator(".agenda-item", { hasText: `Evento UI ${sufixo}` }).first();
+  await linhaEvento.waitFor();
+  checar("Eventos do aluno mostra as vagas do evento (2/40), não só a própria inscrição", (await linhaEvento.innerText()).includes("2/40"), await linhaEvento.innerText());
+  await page.fill("input[placeholder='Título, tema ou palestrante']", "Palestrante Fluxo");
+  checar(
+    "busca da tela Eventos filtra por palestrante",
+    (await page.locator(".agenda-item", { hasText: `Evento UI ${sufixo}` }).count()) === 1 &&
+      (await page.locator(".agenda-item").filter({ hasNotText: "Palestrante Fluxo" }).count()) === 0,
+  );
   await page.goto(`${APP}/palestrantes`);
   const cardPalestrante = page.locator(".palestrante-card", { hasText: "Palestrante Fluxo" }).filter({ hasText: `Evento UI ${sufixo}` });
   await cardPalestrante.first().waitFor({ timeout: 8000 }).catch(() => {});
@@ -248,6 +265,13 @@ try {
   checar("aluno não vê e-mail de palestrante", !(await temTexto(page, `fluxo-${sufixo}@`)) && !(await temTexto(page, `pal-${sufixo}@`)));
   await sair(page);
 
+  // evento de amanha: a aluna se inscreve, mas o check-in dele ainda nao abriu (abre 1h antes do inicio)
+  const amanha = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+  const eventoAmanha = await api("POST", "/eventos", tokenSecretaria, {
+    titulo: `Evento Amanha UI ${sufixo}`, horario: amanha, salaId: sala.corpo.id, palestranteId: palestrante.corpo.id, tema: "Tema", cargaHoraria: 1, questionario: questionario(),
+  });
+  await api("POST", `/eventos/${eventoAmanha.corpo.id}/inscricoes`, await tokenDe(emailAluno, "SenhaAluna123"));
+
   titulo("Check-in pela tela da secretaria");
   await entrar(page, secretaria.email, secretaria.senha);
   await page.goto(`${APP}/checkin`);
@@ -255,6 +279,15 @@ try {
   await page.locator(".simple-list-item", { hasText: NOME_ALUNA }).click();
   const linhaCheckin = page.locator("tr", { hasText: `Evento UI ${sufixo}` });
   await linhaCheckin.waitFor();
+  const linhaAmanha = page.locator("tr", { hasText: `Evento Amanha UI ${sufixo}` });
+  await linhaAmanha.waitFor({ timeout: 8000 }).catch(() => {});
+  checar(
+    "check-in de evento que começa daqui a mais de 1h: botões desabilitados e aviso de quando abre",
+    (await linhaAmanha.locator("button:has-text('Confirmar presença')").isDisabled()) &&
+      (await linhaAmanha.locator("button:has-text('Ausente')").isDisabled()) &&
+      (await linhaAmanha.innerText()).includes("O check-in abre em"),
+    await linhaAmanha.innerText().catch(() => "linha não encontrada"),
+  );
   await linhaCheckin.locator("button:has-text('Confirmar presença')").click();
   await linhaCheckin.locator(".badge", { hasText: "Presente" }).waitFor({ timeout: 8000 }).catch(() => {});
   checar("confirmar presença pela tela marca a inscrição como Presente", (await linhaCheckin.locator(".badge", { hasText: "Presente" }).count()) === 1);

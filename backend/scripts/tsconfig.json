@@ -2,7 +2,9 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "rootDir": "..",
-    "noEmit": true
+    "noEmit": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler"
   },
-  "include": ["backfill-criptografia.ts", "backfill-auditoria.ts"]
+  "include": ["*.ts", "../prisma/seed.ts"]
 }

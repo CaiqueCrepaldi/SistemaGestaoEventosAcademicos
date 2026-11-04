@@ -82,7 +82,6 @@ async function main() {
   const { criarApp } = await import("../src/expressApp");
   const { prisma } = await import("../src/db/prisma");
   const { indiceBusca } = await import("../src/utils/criptografia");
-  const { gerarHashSenha } = await import("../src/utils/password");
 
   // o limite de tentativas por IP (bloco 2) conta os logins errados de proposito deste teste, que
   // sempre saem do 127.0.0.1: zera o contador desse IP no comeco e no fim (so no banco de dev)
@@ -197,6 +196,20 @@ async function main() {
       senhaErrada.status === 401 && emailInexistente.status === 401 && senhaErrada.corpo.message === emailInexistente.corpo.message,
       [senhaErrada.corpo, emailInexistente.corpo],
     );
+    // limite por IP (20) maior que o por conta (5): numa rede compartilhada, erros de pessoas diferentes
+    // nao travam o login de todo mundo, mas chutar a senha de UMA conta continua bloqueado
+    const outrasPessoas = Array.from({ length: 6 }, (_, i) => `outra.pessoa.${i}.${sufixo}@alunos.umc.br`);
+    for (const email of outrasPessoas) await chamar("POST", "/auth/login", { corpo: { emailLogin: email, senha: "errada123" } });
+    r = await chamar("POST", "/auth/login", { corpo: { emailLogin: emailAluno, senha: "SenhaAluno123" } });
+    checar("erros de várias contas no mesmo IP não bloqueiam o login de outra pessoa (limite por IP é 20)", r.status === 200, r.corpo);
+    const contaChutada = `chute.${sufixo}@alunos.umc.br`;
+    for (let i = 0; i < 5; i++) await chamar("POST", "/auth/login", { corpo: { emailLogin: contaChutada, senha: "errada123" } });
+    r = await chamar("POST", "/auth/login", { corpo: { emailLogin: contaChutada, senha: "errada123" } });
+    checar("5 erros na mesma conta continuam bloqueando a conta -> 429", r.status === 429 && r.corpo.code === "MUITAS_TENTATIVAS", r.corpo);
+    // contadores dessas contas que nao existem nao ficam pra tras no banco de dev
+    await prisma.limiteAcesso.deleteMany({
+      where: { chave: { in: [...outrasPessoas, contaChutada].map((email) => `login:conta:${indiceBusca(email)}`) } },
+    });
 
     requisito("R03 Dados da própria conta");
     r = await chamar("GET", "/usuarios/me", { token: aluno.token });
@@ -276,8 +289,10 @@ async function main() {
     checar("equipe vê o e-mail do palestrante", r.corpo.email === emailPalestrante, r.corpo);
 
     requisito("R07 Eventos e questionário obrigatório");
-    const amanha = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
-    const eventoBase = { titulo: `Evento Teste ${sufixo}`, horario: amanha, salaId, palestranteId, tema: "Tema de teste", cargaHoraria: 2 };
+    // o evento principal comeca daqui a 30 min: ainda aceita inscricao e cancelamento (nao comecou) e o
+    // check-in ja abriu (abre 1h antes do inicio). A rodada inteira leva poucos minutos
+    const emBreve = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    const eventoBase = { titulo: `Evento Teste ${sufixo}`, horario: emBreve, salaId, palestranteId, tema: "Tema de teste", cargaHoraria: 2 };
     r = await chamar("POST", "/eventos", { token: admin.token, corpo: { ...eventoBase, questionario: questionario(9) } });
     checar("questionário com 9 perguntas -> 422", r.status === 422, r.corpo);
     r = await chamar("POST", "/eventos", { token: admin.token, corpo: { ...eventoBase, questionario: questionario(10, 2) } });
@@ -311,10 +326,11 @@ async function main() {
     // ------------------------------------------------------------------ RF024: conflito de sala
     requisito("R26 Conflito de sala (RF024)");
     const emHoras = (iso: string, horas: number) => new Date(new Date(iso).getTime() + horas * 3600 * 1000).toISOString();
-    // "Evento Lotado" ocupa a sala pequena de amanha ate amanha + 2h
+    // "Evento Lotado" ocupa a sala pequena de emBreve ate emBreve + 2h; o "Evento Encostado" (emBreve + 2h)
+    // fica fora da janela do check-in, o que o R12 usa pra conferir a regra
     r = await chamar("POST", "/eventos", {
       token: admin.token,
-      corpo: { ...eventoBase, titulo: `Evento Cruzado ${sufixo}`, salaId: salaPequenaId, horario: emHoras(amanha, 1), questionario: questionario() },
+      corpo: { ...eventoBase, titulo: `Evento Cruzado ${sufixo}`, salaId: salaPequenaId, horario: emHoras(emBreve, 1), questionario: questionario() },
     });
     checar(
       "evento que cruza outro na mesma sala -> 409 CONFLITO_DE_SALA citando o outro evento",
@@ -323,14 +339,14 @@ async function main() {
     );
     r = await chamar("POST", "/eventos", {
       token: admin.token,
-      corpo: { ...eventoBase, titulo: `Evento Encostado ${sufixo}`, salaId: salaPequenaId, horario: emHoras(amanha, 2), cargaHoraria: 1, questionario: questionario() },
+      corpo: { ...eventoBase, titulo: `Evento Encostado ${sufixo}`, salaId: salaPequenaId, horario: emHoras(emBreve, 2), cargaHoraria: 1, questionario: questionario() },
     });
     checar("evento que começa exatamente quando o outro termina não é conflito -> 201", r.status === 201, r.corpo);
     const eventoEncostadoId: string = r.corpo.id;
     eventos.push(eventoEncostadoId);
-    r = await chamar("PUT", `/eventos/${eventoLotadoId}`, { token: secretaria.token, corpo: { horario: amanha, cargaHoraria: 2 } });
+    r = await chamar("PUT", `/eventos/${eventoLotadoId}`, { token: secretaria.token, corpo: { horario: emBreve, cargaHoraria: 2 } });
     checar("editar mantendo o horário não conflita com o próprio evento -> 200", r.status === 200, r.corpo);
-    r = await chamar("PUT", `/eventos/${eventoEncostadoId}`, { token: secretaria.token, corpo: { horario: emHoras(amanha, 1) } });
+    r = await chamar("PUT", `/eventos/${eventoEncostadoId}`, { token: secretaria.token, corpo: { horario: emHoras(emBreve, 1) } });
     checar("editar pra cima do horário de outro evento da sala -> 409", r.status === 409 && r.corpo.code === "CONFLITO_DE_SALA", r.corpo);
 
     // ------------------------------------------------------------------ inscricoes e check-in
@@ -338,6 +354,7 @@ async function main() {
     r = await chamar("POST", `/eventos/${eventoId}/inscricoes`, { token: aluno.token, corpo: { participanteId: aluno2.participanteId } });
     checar("aluno se inscreve -> 201 com o participanteId do próprio token", r.status === 201 && r.corpo.participanteId === aluno.participanteId, r.corpo);
     const inscricaoAluno: string = r.corpo.id;
+    const emailDaAutoinscricao: unknown = r.corpo.emailConfirmacaoEnviado;
     r = await chamar("POST", `/eventos/${eventoId}/inscricoes`, { token: aluno.token });
     checar("inscrição repetida -> 409 JA_INSCRITO", r.status === 409 && r.corpo.code === "JA_INSCRITO", r.corpo);
     r = await chamar("POST", `/eventos/${eventoLotadoId}/inscricoes`, { token: aluno2.token });
@@ -349,7 +366,7 @@ async function main() {
     // evento de 4 dias atras, fora do horario dos outros eventos passados da mesma sala (sem conflito de sala)
     r = await chamar("POST", "/eventos", {
       token: admin.token,
-      corpo: { ...eventoBase, titulo: `Evento Encerrado ${sufixo}`, horario: emHoras(amanha, -120), questionario: questionario() },
+      corpo: { ...eventoBase, titulo: `Evento Encerrado ${sufixo}`, horario: emHoras(emBreve, -120), questionario: questionario() },
     });
     const eventoEncerradoId: string = r.corpo.id;
     eventos.push(eventoEncerradoId);
@@ -408,12 +425,13 @@ async function main() {
     r = await chamar("POST", `/eventos/${eventoEncostadoId}/inscricoes`, { token: aluno.token });
     checar("quem cancelou pode se inscrever de novo -> 201", r.status === 201, r.corpo);
     const inscricaoEncostadaAluno: string = r.corpo.id;
-    await chamar("PUT", `/inscricoes/${inscricaoEncostadaAluno}`, { token: secretaria.token, corpo: { statusPresenca: "AUSENTE" } });
-    r = await chamar("DELETE", `/eventos/${eventoEncostadoId}/inscricoes`, { token: aluno.token });
+    // o evento principal (comeca em 30 min) ja tem o check-in aberto e ainda nao comecou
+    await chamar("PUT", `/inscricoes/${inscricaoAluno2}`, { token: secretaria.token, corpo: { statusPresenca: "AUSENTE" } });
+    r = await chamar("DELETE", `/eventos/${eventoId}/inscricoes`, { token: aluno2.token });
     checar("presença já registrada no check-in não cancela -> 409", r.status === 409 && r.corpo.code === "PRESENCA_JA_REGISTRADA", r.corpo);
     r = await chamar("POST", "/eventos", {
       token: admin.token,
-      corpo: { ...eventoBase, titulo: `Evento Iniciado ${sufixo}`, salaId: salaPequenaId, horario: emHoras(amanha, -72), questionario: questionario() },
+      corpo: { ...eventoBase, titulo: `Evento Iniciado ${sufixo}`, salaId: salaPequenaId, horario: emHoras(emBreve, -72), questionario: questionario() },
     });
     const eventoIniciadoId: string = r.corpo.id;
     eventos.push(eventoIniciadoId);
@@ -434,12 +452,29 @@ async function main() {
     );
 
     requisito("R11 E-mail de confirmação da inscrição");
+    const emailConfirmacao = (inscricaoId: string, usuarioId?: string) =>
+      prisma.logAuditoria.findFirst({
+        where: { acao: "EMAIL_ENVIADO", ...(usuarioId ? { usuarioId } : {}), detalhe: { contains: `confirmação de inscrição, inscrição ${inscricaoId}` } },
+      });
+    checar(
+      "a autoinscrição já envia o e-mail de confirmação, sem chamada extra da tela (201 avisa e a auditoria registra)",
+      emailDaAutoinscricao === true && !!(await emailConfirmacao(inscricaoAluno, aluno.id)),
+      emailDaAutoinscricao,
+    );
+    checar("inscrição manual em evento futuro também avisa o aluno por e-mail", !!(await emailConfirmacao(inscricaoAluno2, secretaria.id)));
+    checar("inscrição retroativa em evento que já começou não manda confirmação", !(await emailConfirmacao(inscricaoIniciada)));
     r = await chamar("POST", `/inscricoes/${inscricaoAluno}/confirmacao-email`, { token: aluno.token });
-    checar("dono da inscrição dispara o e-mail -> 200", r.status === 200 && r.corpo.destinatario === emailAluno, r.corpo);
-    r = await chamar("POST", `/inscricoes/${inscricaoAluno2}/confirmacao-email`, { token: aluno.token });
-    checar("inscrição de outra pessoa -> 403", r.status === 403, r.status);
+    checar("a rota antiga de disparo pela tela não existe mais -> 404", r.status === 404, r.status);
 
     requisito("R12 Check-in");
+    r = await chamar("PUT", `/inscricoes/${inscricaoEncostadaAluno}`, { token: secretaria.token, corpo: { statusPresenca: "PRESENTE" } });
+    checar(
+      "check-in de evento que começa daqui a mais de 1h -> 409 CHECKIN_NAO_LIBERADO",
+      r.status === 409 && r.corpo.code === "CHECKIN_NAO_LIBERADO",
+      r.corpo,
+    );
+    r = await chamar("PUT", `/inscricoes/${inscricaoEncostadaAluno}`, { token: secretaria.token, corpo: { statusPresenca: "AUSENTE" } });
+    checar("marcar ausente também espera a janela do check-in -> 409", r.status === 409 && r.corpo.code === "CHECKIN_NAO_LIBERADO", r.corpo);
     r = await chamar("PUT", `/inscricoes/${inscricaoAluno}`, { token: secretaria.token, corpo: { statusPresenca: "AUSENTE" } });
     checar("marcar ausente -> 200", r.status === 200 && r.corpo.statusPresenca === "AUSENTE", r.corpo);
     r = await chamar("PUT", `/inscricoes/${inscricaoAluno}`, { token: secretaria.token, corpo: { statusPresenca: "PRESENTE", usuarioId: aluno.id } });
@@ -784,7 +819,7 @@ async function main() {
     );
     r = await chamar("POST", "/eventos", {
       token: admin.token,
-      corpo: { ...eventoBase, titulo: `Evento Sem Inscrição ${sufixo}`, horario: emHoras(amanha, 5), questionario: questionario() },
+      corpo: { ...eventoBase, titulo: `Evento Sem Inscrição ${sufixo}`, horario: emHoras(emBreve, 5), questionario: questionario() },
     });
     const eventoSemInscricaoId: string = r.corpo.id;
     eventos.push(eventoSemInscricaoId);

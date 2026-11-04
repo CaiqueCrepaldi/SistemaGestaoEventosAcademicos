@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import type { Evento as EventoDb, Prisma } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
-import { paraDominio as paraDominioInscricao } from "../inscricoes/inscricoes.service";
+import { enviarConfirmacaoPorEmail, paraDominio as paraDominioInscricao } from "../inscricoes/inscricoes.service";
 import { camposInformados, registrarAuditoria } from "../../utils/auditoria";
 import type { Evento, PerguntaQuestionario } from "../../types/domain";
 import type { EventoInput, EventoUpdateInput } from "./eventos.schemas";
@@ -172,7 +172,9 @@ async function autoinscrever(eventoId: string, participanteId: string, atorId: s
     "INSCRICAO_CRIADA",
     `inscrição ${inscricao.id} (evento ${eventoId}, participante ${participanteId}) feita pelo próprio aluno`,
   );
-  return paraDominioInscricao(inscricao);
+  // o e-mail de confirmacao sai daqui mesmo; se falhar, a inscricao continua valendo e a tela avisa
+  const emailConfirmacaoEnviado = await enviarConfirmacaoPorEmail(inscricao.id, atorId);
+  return { inscricao: paraDominioInscricao(inscricao), emailConfirmacaoEnviado };
 }
 
 export const eventosService = { listar, buscarOuFalhar, criar, atualizar, remover, autoinscrever };

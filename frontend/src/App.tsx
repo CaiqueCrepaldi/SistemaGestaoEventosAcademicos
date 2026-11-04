@@ -1,9 +1,8 @@
-import { HashRouter, Route, Routes } from "react-router-dom";
+import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ToastViewport } from "./components/ui/Toast";
 import { AuthProvider } from "./context/AuthContext";
-import { AgendaPage } from "./pages/Agenda/AgendaPage";
 import { AuditoriaPage } from "./pages/Auditoria/AuditoriaPage";
 import { CadastroPage } from "./pages/Cadastro/CadastroPage";
 import { CertificadosPage } from "./pages/Certificados/CertificadosPage";
@@ -44,7 +43,8 @@ export function App() {
                 <Route path="/eventos" element={<EventosPage />} />
                 <Route path="/eventos/:eventoId/questionario" element={<QuestionarioPage />} />
                 <Route path="/palestrantes" element={<PalestrantesPage />} />
-                <Route path="/agenda" element={<AgendaPage />} />
+                {/* a Agenda foi unida a tela Eventos: link antigo leva pra la */}
+                <Route path="/agenda" element={<Navigate to="/eventos" replace />} />
                 <Route path="/certificados" element={<CertificadosPage />} />
                 <Route path="/feedback" element={<FeedbackPage />} />
                 <Route path="/minha-conta" element={<MinhaContaPage />} />

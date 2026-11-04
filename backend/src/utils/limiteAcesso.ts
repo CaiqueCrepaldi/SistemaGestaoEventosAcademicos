@@ -2,10 +2,14 @@ import { randomUUID } from "crypto";
 import { prisma } from "../db/prisma";
 import { indiceBusca } from "./criptografia";
 
-// mesmo limite pra login e pra solicitar recuperacao de senha — 5 tentativas, 15 min de bloqueio
-// (mesma janela ja usada no codigo de recuperacao, so que ali o limite eh sobre o CODIGO em si;
-// isto aqui limita quantas vezes alguem tenta logar ou pedir um codigo novo)
+// mesmo limite pra login e pra solicitar recuperacao de senha — 5 tentativas por CONTA, 15 min de
+// bloqueio (mesma janela ja usada no codigo de recuperacao, so que ali o limite eh sobre o CODIGO em
+// si; isto aqui limita quantas vezes alguem tenta logar ou pedir um codigo novo)
 const MAX_TENTATIVAS = 5;
+// por IP o limite e maior: numa rede compartilhada (Wi-Fi da faculdade, NAT) muita gente sai pelo
+// mesmo IP, e 5 erros de pessoas diferentes nao podem travar o login de todo mundo. O limite por
+// conta continua 5, entao chutar senha de UMA conta segue bloqueado do mesmo jeito
+export const MAX_TENTATIVAS_POR_IP = 20;
 const BLOQUEIO_MS = 15 * 60 * 1000;
 
 // prefixo da chave identifica o fluxo e o alvo: login/recuperacao usam o HMAC do e-mail

@@ -1,9 +1,13 @@
 import type { Inscricao } from "../types";
 import { api } from "./api";
 
+// a resposta da autoinscricao: a inscricao criada e se o e-mail de confirmacao (enviado pelo
+// proprio backend, na mesma chamada) saiu
+export type InscricaoComConfirmacao = Inscricao & { emailConfirmacaoEnviado: boolean };
+
 // autoinscricao do proprio aluno, diferente da inscricao manual que admin/secretaria fazem (InscricoesPage.tsx)
 interface InscricaoAlunoService {
-  inscrever(participanteId: string, eventoId: string): Promise<Inscricao>;
+  inscrever(participanteId: string, eventoId: string): Promise<InscricaoComConfirmacao>;
   cancelar(eventoId: string): Promise<void>;
 }
 
@@ -11,7 +15,7 @@ interface InscricaoAlunoService {
 // os endpoints dedicados (o participante e sempre o do token)
 export const inscricaoAlunoService: InscricaoAlunoService = {
   async inscrever(_participanteId, eventoId) {
-    return api.post<Inscricao>(`/eventos/${eventoId}/inscricoes`, {});
+    return api.post<InscricaoComConfirmacao>(`/eventos/${eventoId}/inscricoes`, {});
   },
   // so cancela com presenca pendente e antes de o evento comecar (409 com o motivo, se nao der)
   async cancelar(eventoId) {

@@ -78,6 +78,11 @@ async function criarManual(dados: InscricaoInput, ator: { id: string; perfil: Pe
     "INSCRICAO_CRIADA",
     `inscrição ${inscricao.id} (evento ${dados.eventoId}, participante ${dados.participanteId}) feita ${quem}`,
   );
+  // o aluno e avisado de que foi inscrito por alguem da equipe; registro retroativo de evento que
+  // ja comecou nao manda "confirmacao" de algo que ja passou
+  if (evento!.horario > new Date()) {
+    await enviarConfirmacaoPorEmail(inscricao.id, ator.id);
+  }
   return paraDominio(inscricao);
 }
 
@@ -90,10 +95,26 @@ async function garantirPresencaDestravada(participanteId: string, eventoId: stri
   }
 }
 
+// o check-in abre 1 hora antes do inicio do evento (a recepcao atende quem chega cedo) e nao fecha:
+// da pra registrar presenca ou ausencia depois que o evento acabou. Antes disso a presenca nao pode
+// ser marcada — senao o aluno faria o questionario e emitiria o certificado de um evento que nem aconteceu
+export const ANTECEDENCIA_CHECKIN_MS = 60 * 60 * 1000;
+
+async function garantirCheckinAberto(eventoId: string) {
+  const evento = await prisma.evento.findUnique({ where: { id: eventoId }, select: { horario: true } });
+  if (evento && evento.horario.getTime() - ANTECEDENCIA_CHECKIN_MS > Date.now()) {
+    throw AppError.conflito("CHECKIN_NAO_LIBERADO", "O check-in deste evento só abre 1 hora antes do início.");
+  }
+}
+
 // muda o status de presenca (confirma, marca ausente ou reverte pra pendente)
 async function atualizarCheckin(id: string, dados: InscricaoCheckinInput, usuarioIdDoToken: string) {
   const existente = await buscarOuFalhar(id);
   await garantirPresencaDestravada(existente.participanteId, existente.eventoId);
+  // voltar pra pendente nao registra presenca nenhuma, entao nao depende da janela do check-in
+  if (dados.statusPresenca === "PRESENTE" || dados.statusPresenca === "AUSENTE") {
+    await garantirCheckinAberto(existente.eventoId);
+  }
 
   if (dados.statusPresenca === "PRESENTE") {
     // aluno inativado nao pode ter presenca confirmada (a tela do check-in tambem bloqueia, mas a regra vale na API)
@@ -218,20 +239,20 @@ async function cancelarPeloAluno(eventoId: string, participanteId: string, atorI
 }
 
 // dispara o email de confirmacao, so pro proprio dono da inscricao
-async function confirmarEmail(id: string, participanteIdDoToken: string, atorId: string) {
-  const inscricao = await prisma.inscricao.findUnique({
-    where: { id },
-    include: { participante: { include: COM_CONTA_DO_ALUNO }, evento: { include: { palestrante: true } } },
-  });
-  if (!inscricao) throw AppError.naoEncontrado("INSCRICAO_NAO_ENCONTRADA", "Inscrição não encontrada.");
-  if (inscricao.participanteId !== participanteIdDoToken) {
-    throw AppError.acessoNegado("Esta inscrição não pertence a você.");
-  }
-
-  // nome e e-mail do aluno vem da conta dele (o participante so guarda o RGM)
-  const participante = participanteParaDominio(inscricao.participante);
-
+// e-mail de confirmacao, enviado pelo proprio backend logo depois de criar a inscricao (autoinscricao,
+// ou inscricao manual em evento que ainda nao comecou) — nao depende mais da tela fazer uma segunda
+// chamada. Falha no envio nao desfaz a inscricao (que ja foi gravada): fica na auditoria e o retorno
+// avisa quem chamou. Devolve true se o e-mail saiu (ou foi simulado, sem SendGrid configurado)
+export async function enviarConfirmacaoPorEmail(inscricaoId: string, atorId: string): Promise<boolean> {
   try {
+    const inscricao = await prisma.inscricao.findUnique({
+      where: { id: inscricaoId },
+      include: { participante: { include: COM_CONTA_DO_ALUNO }, evento: { include: { palestrante: true } } },
+    });
+    // nome e e-mail do aluno vem da conta dele (o participante so guarda o RGM); sem conta, sem e-mail
+    const participante = inscricao ? participanteParaDominio(inscricao.participante) : null;
+    if (!inscricao || !participante?.email) return false;
+
     const resultado = await emailService.enviarConfirmacaoInscricao(participante.email, {
       participanteNome: participante.nome,
       eventoTitulo: inscricao.evento.titulo,
@@ -242,14 +263,14 @@ async function confirmarEmail(id: string, participanteIdDoToken: string, atorId:
     await registrarAuditoria(
       atorId,
       "EMAIL_ENVIADO",
-      `confirmação de inscrição, inscrição ${id}${resultado === "simulado" ? " (simulado: SendGrid não configurado)" : ""}`,
+      `confirmação de inscrição, inscrição ${inscricaoId}${resultado === "simulado" ? " (simulado: SendGrid não configurado)" : ""}`,
     );
-  } catch (erro) {
-    await registrarAuditoria(atorId, "EMAIL_FALHA", `confirmação de inscrição, inscrição ${id}: falha no envio`);
-    throw erro;
+    return true;
+  } catch {
+    // email.service.ts ja loga o detalhe sanitizado da falha
+    await registrarAuditoria(atorId, "EMAIL_FALHA", `confirmação de inscrição, inscrição ${inscricaoId}: falha no envio`);
+    return false;
   }
-
-  return { destinatario: participante.email, enviadoEm: new Date().toISOString() };
 }
 
 export const inscricoesService = {
@@ -259,5 +280,4 @@ export const inscricoesService = {
   atualizarCheckin,
   remover,
   cancelarPeloAluno,
-  confirmarEmail,
 };
