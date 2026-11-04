@@ -8,8 +8,8 @@ export type { CadastroAlunoInput, ResultadoLogin, SessaoUsuario, UsuarioPerfil }
 export { usuarioService } from "./usuarioService";
 export { dashboardService } from "./dashboardService";
 export type { PresencaPorEvento, ProximoEventoDashboard, ResumoDashboard, TotaisDashboard } from "./dashboardService";
-export { certificadoService } from "./certificadoService";
-export type { CertificadoDisponivel } from "./certificadoService";
+export { certificadoService, formatarCodigoValidacao, urlValidacao } from "./certificadoService";
+export type { CertificadoDisponivel, CertificadoEmitido, CertificadoValidado } from "./certificadoService";
 export { checkinService } from "./checkinService";
 export { emailService } from "./emailService";
 export { inscricaoAlunoService } from "./inscricaoAlunoService";

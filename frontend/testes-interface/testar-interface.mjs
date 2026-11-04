@@ -105,8 +105,9 @@ try {
   checar("secretaria sem 2FA entra direto (sem tela de QR code)", (await page.evaluate(() => location.hash)) === "#/" && !(await temTexto(page, "Configurar autenticação")));
   await page.locator(".stat-card").first().waitFor();
   checar(
-    "Dashboard da equipe carrega os 6 indicadores e o gráfico de presença",
-    (await page.locator(".stat-card").count()) === 6 &&
+    "Dashboard da equipe carrega os 7 indicadores e o gráfico de presença",
+    (await page.locator(".stat-card").count()) === 7 &&
+      (await temTexto(page, "Ocupação média das salas")) &&
       (await temTexto(page, "Certificados liberados")) &&
       (await temTexto(page, "Média do feedback")) &&
       (await temTexto(page, "Presença por evento")),
@@ -272,7 +273,16 @@ try {
     page.waitForEvent("download", { timeout: 15000 }),
     itemCertificado.locator("button:has-text('Emitir certificado')").click(),
   ]);
-  checar("certificado baixado em PDF (gerado no navegador)", arquivo.suggestedFilename().endsWith(".pdf"), arquivo.suggestedFilename());
+  checar("certificado baixado em PDF (montado no navegador com os dados da API)", arquivo.suggestedFilename().endsWith(".pdf"), arquivo.suggestedFilename());
+  await itemCertificado.getByText("Código de validação:").waitFor({ timeout: 10000 }).catch(() => {});
+  const codigoNaTela = (await itemCertificado.innerText()).match(/Código de validação: ([0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4})/)?.[1];
+  checar("depois de emitir, a tela mostra o código gravado e o botão vira Baixar certificado", !!codigoNaTela && (await itemCertificado.locator("button:has-text('Baixar certificado')").count()) === 1);
+  await page.goto(`${APP}/validar-certificado?codigo=${codigoNaTela}`);
+  await page.getByText("Certificado válido").waitFor({ timeout: 10000 }).catch(() => {});
+  checar("página pública valida o código do PDF", await temTexto(page, "Certificado válido"));
+  await page.goto(`${APP}/validar-certificado?codigo=ZZZZ-ZZZZ-ZZZZ`);
+  await page.getByText("Certificado não encontrado.").waitFor({ timeout: 10000 }).catch(() => {});
+  checar("código inexistente: Certificado não encontrado", await temTexto(page, "Certificado não encontrado."));
 
   titulo("D / Feedback do aluno (sem edição, exclui e envia de novo)");
   await page.goto(`${APP}/feedback`);

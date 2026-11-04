@@ -7,6 +7,9 @@ import { checkinService } from "../../services";
 import type { InscricaoDetalhada } from "../../services/checkinService";
 import type { Participante, StatusPresenca } from "../../types";
 
+// mesma mensagem que o backend devolve (409) se alguem tentar mudar a presenca mesmo assim
+const MENSAGEM_PRESENCA_TRAVADA = "A presença não pode mais ser alterada: o aluno já respondeu o questionário.";
+
 // traduz o status em cor pra Badge
 function badgeTone(status: StatusPresenca): "green" | "red" | "orange" {
   if (status === "PRESENTE") return "green";
@@ -173,7 +176,10 @@ export function CheckinPage() {
               <tbody>
                 {inscricoes.map((item) => (
                   <tr key={item.inscricao.id}>
-                    <td>{item.eventoTitulo}</td>
+                    <td>
+                      {item.eventoTitulo}
+                      {item.presencaTravada && <div className="form-hint">{MENSAGEM_PRESENCA_TRAVADA}</div>}
+                    </td>
                     <td>
                       <Badge tone={badgeTone(item.inscricao.statusPresenca)}>
                         {badgeLabel(item.inscricao.statusPresenca)}
@@ -183,12 +189,17 @@ export function CheckinPage() {
                       <button
                         className="btn btn-primary"
                         onClick={() => void confirmar(item.inscricao.id)}
-                        disabled={selecionadoInativo}
-                        title={selecionadoInativo ? "Aluno inativo" : undefined}
+                        disabled={selecionadoInativo || item.presencaTravada}
+                        title={item.presencaTravada ? MENSAGEM_PRESENCA_TRAVADA : selecionadoInativo ? "Aluno inativo" : undefined}
                       >
                         Confirmar presença
                       </button>
-                      <button className="btn btn-ghost" onClick={() => void marcarAusente(item.inscricao.id)}>
+                      <button
+                        className="btn btn-ghost"
+                        onClick={() => void marcarAusente(item.inscricao.id)}
+                        disabled={item.presencaTravada}
+                        title={item.presencaTravada ? MENSAGEM_PRESENCA_TRAVADA : undefined}
+                      >
                         Ausente
                       </button>
                     </td>

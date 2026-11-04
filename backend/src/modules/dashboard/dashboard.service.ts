@@ -63,6 +63,14 @@ async function resumo() {
   const aprovados = new Set(aprovacoes.map((a) => `${a.participanteId}:${a.eventoId}`));
   const certificadosLiberados = presencas.filter((p) => aprovados.has(`${p.participanteId}:${p.eventoId}`)).length;
 
+  // RF021: media, entre os eventos, de inscritos / capacidade da sala (em %). Sala sem capacidade
+  // (nao deveria existir) fica fora da conta; null enquanto nao houver evento
+  const comCapacidade = porEvento.filter((e) => e.capacidade > 0);
+  const ocupacaoMediaSalas =
+    comCapacidade.length > 0
+      ? comCapacidade.reduce((soma, e) => soma + (e.inscritos / e.capacidade) * 100, 0) / comCapacidade.length
+      : null;
+
   const futuros = porEvento.filter((e) => new Date(e.horario) >= agora);
 
   return {
@@ -76,6 +84,7 @@ async function resumo() {
       // entre os check-ins ja registrados (presente ou ausente); null enquanto nao houver nenhum
       taxaPresenca: checkinsRegistrados > 0 ? (totalPresentes / checkinsRegistrados) * 100 : null,
       certificadosLiberados,
+      ocupacaoMediaSalas,
       mediaFeedback: feedbacks._avg.nota,
       totalFeedbacks: feedbacks._count._all,
     },

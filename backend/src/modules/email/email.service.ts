@@ -54,6 +54,24 @@ async function enviarConfirmacaoInscricao(destinatario: string, dados: DadosConf
   return enviar("confirmacao-inscricao", destinatario, assunto, html);
 }
 
+interface DadosCancelamentoInscricao {
+  participanteNome: string;
+  eventoTitulo: string;
+  eventoHorario: Date;
+}
+
+// aviso pro aluno quando a EQUIPE cancela a inscricao dele (quando o proprio aluno cancela, ele ja sabe)
+async function enviarCancelamentoInscricao(destinatario: string, dados: DadosCancelamentoInscricao): Promise<ResultadoEnvio> {
+  const dataFormatada = dados.eventoHorario.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  const assunto = `Inscrição cancelada — ${dados.eventoTitulo}`;
+  const html = `
+    <p>Olá, ${dados.participanteNome}!</p>
+    <p>Sua inscrição em <strong>${dados.eventoTitulo}</strong> (${dataFormatada}) foi cancelada pela secretaria.</p>
+    <p>Se ainda houver vagas, você pode se inscrever de novo pelo sistema. Em caso de dúvida, procure a secretaria.</p>
+  `;
+  return enviar("cancelamento-inscricao", destinatario, assunto, html);
+}
+
 // monta e envia o email com o codigo de recuperacao de senha
 async function enviarCodigoRecuperacao(destinatario: string, codigo: string): Promise<ResultadoEnvio> {
   const assunto = "Código de recuperação de senha";
@@ -67,5 +85,6 @@ async function enviarCodigoRecuperacao(destinatario: string, codigo: string): Pr
 
 export const emailService = {
   enviarConfirmacaoInscricao,
+  enviarCancelamentoInscricao,
   enviarCodigoRecuperacao,
 };

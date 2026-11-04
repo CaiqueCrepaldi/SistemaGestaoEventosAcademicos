@@ -139,9 +139,33 @@ model Inscricao {
   usuarioId      String?
   usuario        Usuario?       @relation("CheckinFeitoPor", fields: [usuarioId], references: [id], onDelete: SetNull)
   dataInscricao  DateTime       @default(now())
+  certificado    Certificado?
 
   @@unique([participanteId, eventoId])
   @@map("inscricoes")
+}
+
+// certificado emitido (RF018/RF019): gravado na PRIMEIRA emissao e devolvido igual nas seguintes
+// (nunca e regerado). Os dados impressos ficam copiados aqui (snapshot) de proposito: o documento
+// emitido nao muda se o evento for editado ou o nome do aluno for corrigido depois, e a validacao
+// publica (RF027) confere exatamente o que foi impresso. codigoValidacao e aleatorio (crypto),
+// sem relacao com nenhum id interno. onDelete: Restrict — a inscricao de um certificado emitido
+// nao pode ser apagada (senao o codigo impresso deixaria de validar)
+model Certificado {
+  id               String    @id
+  inscricaoId      String    @unique
+  inscricao        Inscricao @relation(fields: [inscricaoId], references: [id], onDelete: Restrict)
+  codigoValidacao  String    @unique @db.VarChar(20)
+  nomeParticipante String    @db.Text
+  rgm              String    @db.VarChar(20)
+  tituloEvento     String
+  temaEvento       String
+  nomePalestrante  String
+  dataEvento       DateTime
+  cargaHoraria     Float
+  emitidoEm        DateTime  @default(now())
+
+  @@map("certificados")
 }
 
 model Feedback {

@@ -11,6 +11,8 @@ export interface TotaisDashboard {
   // presentes / (presentes + ausentes), em %; null enquanto nenhum check-in foi registrado
   taxaPresenca: number | null;
   certificadosLiberados: number;
+  // media, entre os eventos, de inscritos / capacidade da sala, em %; null sem nenhum evento
+  ocupacaoMediaSalas: number | null;
   // 1 a 5; null sem nenhum feedback
   mediaFeedback: number | null;
   totalFeedbacks: number;

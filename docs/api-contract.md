@@ -19,9 +19,10 @@ quanto pras telas do aluno (evento, agenda, certificados) — não existem
 rotas separadas "versão aluno" desses recursos. A diferença por perfil entra
 como filtro/validação dentro do MESMO endpoint (esconder campo, restringir
 quais linhas voltam, ignorar valor enviado pelo cliente), nunca como rota
-duplicada. Só uns poucos fluxos (login/cadastro, autoinscrição, e-mail de
-confirmação) têm rota dedicada de verdade — esses estão marcados como
-"endpoint dedicado" abaixo.
+duplicada. Só uns poucos fluxos (login/cadastro, autoinscrição e cancelamento
+pelo aluno, e-mail de confirmação, emissão e validação de certificado) têm
+rota dedicada de verdade — esses estão marcados como "endpoint dedicado"
+abaixo.
 
 ## Perfis e permissões
 
@@ -40,10 +41,11 @@ auto-cadastro.
 | Participantes — listar / detalhe         | ✅ | ✅ | ❌ |
 | Participantes — editar / inativar / reativar / excluir | ✅ | ✅ | ❌ (participante só nasce pelo cadastro público) |
 | Inscrições — listar                      | ✅ (todas) | ✅ (todas) | ✅ (só as próprias) |
-| Inscrições — criar/excluir manualmente   | ✅ | ✅ | ❌ |
-| Autoinscrição no evento                  | — | — | ✅ (só a própria) |
+| Inscrições — criar manualmente / cancelar a de um aluno | ✅ | ✅ | ❌ |
+| Autoinscrição no evento / cancelar a própria inscrição | — | — | ✅ (só a própria) |
 | Check-in (confirmar presença/ausência)   | ✅ | ✅ | ❌ |
-| Certificados                             | ✅ (de qualquer participante) | ✅ | ✅ (só os próprios) |
+| Certificados — emitir / listar           | ✅ (de qualquer participante que cumpra os requisitos) | ✅ | ✅ (só os próprios) |
+| Certificados — validar pelo código       | público, sem login | público | público |
 | Feedback                                 | ✅ (listar tudo, excluir com motivo; não edita) | ✅ | ✅ (enviar e excluir os próprios, só de palestra com certificado; não edita) |
 | Dashboard / estatísticas (`GET /api/dashboard`) | ✅ | ✅ | ❌ |
 | Participantes — ver situação do 2FA e do bloqueio | ✅ | ✅ | ❌ |
@@ -62,7 +64,8 @@ gerado a partir do diagrama antigo, pode jogar fora.
 
 ## Autenticação
 
-Toda rota exceto login, registro e recuperação de senha exige
+Toda rota exceto login, registro, recuperação de senha e a validação
+pública de certificado (`GET /api/certificados/validar/{codigo}`) exige
 `Authorization: Bearer <token>`.
 
 O token é opaco pro frontend — o React não decodifica o JWT em nenhum
@@ -265,16 +268,18 @@ ou apagar.
 | `USUARIO_REGISTRADO` | cadastro público de aluno |
 | `CONSENTIMENTO_LGPD_ACEITO` | aceite dos termos; `criadoEm` é idêntico a `usuarios.consentimentoLgpdEm` |
 | `RECUPERACAO_SENHA_SOLICITADA`, `RECUPERACAO_SENHA_FALHA`, `SENHA_REDEFINIDA` | fluxo "esqueci a senha" (falha: e-mail não cadastrado, código incorreto/expirado, excesso de tentativas) |
-| `EMAIL_ENVIADO`, `EMAIL_FALHA` | envio de e-mail (recuperação de senha, confirmação de inscrição); nunca grava o endereço; marca "(simulado)" quando o SendGrid não está configurado |
+| `EMAIL_ENVIADO`, `EMAIL_FALHA` | envio de e-mail (recuperação de senha, confirmação de inscrição, aviso de cancelamento de inscrição pela equipe); nunca grava o endereço; marca "(simulado)" quando o SendGrid não está configurado |
 | `SALA_CRIADA` / `_ATUALIZADA` / `_REMOVIDA` | salas |
 | `PALESTRANTE_CRIADO` / `_ATUALIZADO` / `_REMOVIDO` | palestrantes |
-| `EVENTO_CRIADO` / `_ATUALIZADO` / `_REMOVIDO` | eventos (a remoção informa quantas inscrições/feedbacks/tentativas foram junto) |
+| `EVENTO_CRIADO` / `_ATUALIZADO` / `_REMOVIDO` | eventos (só evento sem inscrição é removido; registros antigos de remoção informam quantas inscrições/feedbacks/tentativas foram junto, da época da exclusão em cascata) |
 | `PARTICIPANTE_ATUALIZADO`, `_INATIVADO`, `_REATIVADO`, `_REMOVIDO` | participantes (a inativação informa quantas inscrições foram canceladas; a remoção informa o que foi junto) |
 | `INSCRICAO_CRIADA` | inscrição manual (secretaria/admin) ou autoinscrição do aluno — o detalhe diz qual |
-| `INSCRICAO_ATUALIZADA`, `INSCRICAO_REMOVIDA` | reversão de presença pra pendente / remoção da inscrição |
-| `INSCRICAO_CANCELADA` | inscrição pendente em evento futuro cancelada automaticamente na inativação do aluno (uma linha por inscrição) |
+| `INSCRICAO_ATUALIZADA` | reversão de presença pra pendente |
+| `INSCRICAO_CANCELADA` | cancelamento de inscrição — o detalhe diz se foi o próprio aluno, a secretaria/o administrador ou a inativação do aluno (nesse caso, uma linha por inscrição pendente em evento futuro) |
+| `INSCRICAO_REMOVIDA` | só em registros antigos (o `DELETE /api/inscricoes/{id}` agora é um cancelamento e grava `INSCRICAO_CANCELADA`) |
 | `PRESENCA_CONFIRMADA`, `PRESENCA_MARCADA_AUSENTE` | check-in |
 | `QUESTIONARIO_RESPONDIDO` | percentual de acertos e se atingiu os 60% que liberam o certificado |
+| `CERTIFICADO_EMITIDO` | emissão de certificado — o detalhe diz se foi a primeira emissão (registro gravado) ou uma nova via do mesmo certificado, e quem pediu (aluno, secretaria, administrador). Nunca grava nome, RGM nem o código de validação |
 | `FEEDBACK_CRIADO`, `FEEDBACK_EXCLUIDO` | feedbacks; a exclusão diz se foi o próprio aluno ou a equipe (e, nesse caso, o motivo). `FEEDBACK_ATUALIZADO`/`_REMOVIDO` só aparecem em registros antigos |
 | `MFA_ATIVADO`, `MFA_DESATIVADO`, `MFA_VERIFICADO`, `MFA_FALHA`, `MFA_BLOQUEADO`, `MFA_RESETADO`, `CODIGO_RECUPERACAO_USADO`, `BLOQUEIO_LOGIN_REMOVIDO` | 2FA e bloqueio por tentativas |
 | `TERMOS_REACEITOS` | aceite de uma versão nova dos termos |
@@ -381,7 +386,22 @@ ocupação, sem precisar baixar todas as inscrições.
 - `POST /api/eventos` — admin/secretaria, `201`, `422` se
   `palestranteId`/`salaId` não existirem.
 - `PUT /api/eventos/{id}` — admin/secretaria, `200`.
-- `DELETE /api/eventos/{id}` — admin/secretaria, `204`.
+- `DELETE /api/eventos/{id}` — admin/secretaria, `204`. **Só evento sem
+  nenhuma inscrição** é excluído: com qualquer inscrição responde `409
+  EVENTO_COM_INSCRICOES` ("Cancele as inscrições antes de excluir o
+  evento.") e nada é apagado. A API não apaga mais inscrições, feedbacks nem
+  tentativas em cascata (RF009/RNF010). Como só inscrição pendente de evento
+  futuro pode ser cancelada, evento que já teve presença ou certificado fica
+  preservado.
+
+**Conflito de sala (RF024)** — no `POST` e no `PUT` (quando `salaId`,
+`horario` ou `cargaHoraria` vêm no corpo), o evento ocupa a sala no
+intervalo `[horario, horario + cargaHoraria horas)`. Se esse intervalo
+cruzar o de outro evento da mesma sala, a resposta é `409
+CONFLITO_DE_SALA` ("A sala já está ocupada pelo evento "<título>" nesse
+horário."). O intervalo é semiaberto: evento que termina exatamente quando
+o outro começa não é conflito. Na edição, o próprio evento é ignorado (os
+valores que não vieram no corpo são os já gravados).
 
 Aluno chamando POST/PUT/DELETE cai em `403 ACESSO_NEGADO`.
 
@@ -487,9 +507,11 @@ conceito ("conta sem uso", critério de retenção — ver
 `docs/lgpd/04-plano-de-retencao-e-descarte.md`).
 
 `DELETE /api/participantes/{id}` — admin/secretaria. Só funciona se o
-participante já estiver inativo (`409 PARTICIPANTE_ATIVO` caso contrário);
-remove em cascata o `Usuario` vinculado, inscrições, feedbacks e tentativas
-de questionário. Administrador e secretaria nunca têm `Participante`
+participante já estiver inativo (`409 PARTICIPANTE_ATIVO` caso contrário)
+e não tiver certificado emitido (`409 PARTICIPANTE_COM_CERTIFICADO`: o
+código impresso precisa continuar validando — a tabela `certificados` usa
+`onDelete: Restrict` na inscrição); remove em cascata o `Usuario`
+vinculado, inscrições, feedbacks e tentativas de questionário. Administrador e secretaria nunca têm `Participante`
 associado, então nunca são alcançados por essa rota — e o serviço ainda
 confere isso explicitamente (`409 USUARIO_PROTEGIDO`) como garantia extra.
 
@@ -548,6 +570,14 @@ Confirmar presença de um aluno **inativo** retorna `409 PARTICIPANTE_INATIVO`
 ("Aluno inativo: não é possível confirmar presença.") — a tela de Check-in
 também desabilita o botão, mas a regra vale na API.
 
+**Presença travada depois do questionário (RF015)**: se o aluno já tem
+alguma tentativa do questionário daquele evento, qualquer mudança de
+presença responde `409 PRESENCA_TRAVADA` ("A presença não pode mais ser
+alterada: o aluno já respondeu o questionário."). A mesma trava vale para
+excluir/cancelar a inscrição. A tela de Check-in desabilita "Confirmar
+presença" e "Ausente" nesses casos (ela consulta
+`GET /api/questionario-tentativas?participanteId=`).
+
 Aluno toma `403` em qualquer `PUT`/`DELETE` de inscrição — ele não confirma
 a própria presença, isso é sempre feito por quem está na recepção do
 evento. A tela de Check-in carrega todos os alunos de uma vez em
@@ -555,10 +585,39 @@ evento. A tela de Check-in carrega todos os alunos de uma vez em
 Funciona para o volume de dados de uma feira acadêmica; se crescer, um
 `?busca=` nessa rota resolveria sem mudar o frontend.
 
-### `DELETE /api/inscricoes/{id}` (admin/secretaria)
+### Cancelamento de inscrição (RF025)
 
-`204`. Aluno toma `403` — não existe fluxo de cancelamento de inscrição
-pelo próprio aluno hoje.
+Regra única, a mesma para o aluno e para a equipe, aplicada no service
+(`inscricoes.service.ts`, função `cancelar`). Só cancela se:
+
+1. o aluno **não respondeu** o questionário do evento — senão `409
+   PRESENCA_TRAVADA` (ver acima);
+2. a presença está **`PENDENTE`** — senão `409 PRESENCA_JA_REGISTRADA`
+   ("Não é possível cancelar: a presença desta inscrição já foi registrada
+   no check-in.");
+3. o evento **ainda não começou** (`horario` no futuro) — senão `409
+   EVENTO_JA_INICIADO` ("Não é possível cancelar: o evento já começou.").
+
+O cancelamento apaga a inscrição e libera a vaga na hora: o aluno pode se
+inscrever de novo se ainda houver vaga. Auditoria: `INSCRICAO_CANCELADA`,
+dizendo quem cancelou.
+
+#### `DELETE /api/eventos/{eventoId}/inscricoes` — cancelamento pelo aluno (endpoint dedicado)
+
+Só `ALUNO` (`403` para a equipe). Corpo vazio; sempre cancela a inscrição
+do participante do token. `204` se cancelou; `404
+INSCRICAO_NAO_ENCONTRADA` ("Você não está inscrito neste evento.") se não
+houver inscrição; `409` pelas regras acima. A tela Eventos mostra o botão
+"Cancelar inscrição" (com confirmação) nas inscrições ainda pendentes de
+eventos que não começaram.
+
+#### `DELETE /api/inscricoes/{id}` (admin/secretaria)
+
+`204`. A equipe cancela a inscrição de qualquer aluno, com a **mesma
+regra** acima. O aluno é avisado por e-mail (SendGrid, `email.service.ts`);
+se o envio falhar, o cancelamento continua valendo e a falha fica na
+auditoria (`EMAIL_FALHA`). Aluno toma `403` nesta rota — ele usa a rota
+dedicada acima.
 
 ### `POST /api/eventos/{eventoId}/inscricoes` — autoinscrição (endpoint dedicado, aluno)
 
@@ -679,38 +738,103 @@ ou se o provedor recusar o destinatário.
 - `GET /api/eventos/{eventoId}/questionario/tentativas` — só aluno, as
   tentativas dele nesse evento.
 - `GET /api/questionario-tentativas` — admin/secretaria, todas as
-  tentativas (nota na tela de Certificados da equipe).
+  tentativas (nota na tela de Certificados da equipe). Com
+  `?participanteId=`, só as daquele aluno (tela de Check-in, que trava a
+  presença de quem já respondeu).
 
 O certificado é liberado com presença confirmada e alguma tentativa com
 pelo menos 60% de acertos.
 
 ## Certificados
 
-Não existe recurso `Certificado` nem endpoint de download — o PDF é gerado
-inteiramente no navegador (`jsPDF`), então o backend só precisa expor os
-dados de presença corretamente. Tudo aqui reaproveita a rota de Inscrições
-de cima:
+O certificado é um registro de verdade (tabela `certificados`, model
+`Certificado`), gravado **na primeira emissão** (RF018/RF019). O PDF
+continua montado no navegador (`jsPDF`), mas só com o que a API devolve —
+o código de validação e todos os textos impressos vêm do backend.
 
-- **Aluno**: `GET /api/inscricoes?participanteId={o-próprio-id}&status=PRESENTE`
-  — o `participanteId` é ignorado/forçado pro do token, igual explicado na
-  seção de Inscrições, então na prática o aluno só descobre os certificados
-  dele mesmo.
-- **Admin/secretaria**: `GET /api/inscricoes?status=PRESENTE` (com
-  `eventoId` opcional pra filtrar), pra emitir certificado de qualquer
-  participante presente.
+```ts
+interface Certificado {
+  id: string;
+  inscricaoId: string;       // único: um certificado por inscrição
+  eventoId: string;          // da inscrição
+  participanteId: string;    // da inscrição
+  codigoValidacao: string;   // 12 caracteres aleatórios (crypto.randomBytes), ex.: "7KQ2MX9D4RTA"
+  nomeParticipante: string;  // ↓ cópia dos dados impressos, tirada na primeira emissão
+  rgm: string;
+  tituloEvento: string;
+  temaEvento: string;
+  nomePalestrante: string;
+  dataEvento: string;        // ISO-8601
+  cargaHoraria: number;
+  emitidoEm: string;         // ISO-8601
+}
+```
 
-O frontend junta `Inscricao` + `Evento` + `Palestrante` + `Participante` no
-cliente pra montar o certificado (nome, RGM, evento, tema, palestrante,
-data, carga horária) e calcula um "código de validação"
-determinístico a partir do `id` da inscrição — isso é só uma referência
-impressa no PDF, não existe endpoint pra validar esse código de volta. Se
-no futuro quiserem uma verificação de autenticidade de verdade, precisa de
-um endpoint novo tipo `GET /api/certificados/validar?codigo=...`; hoje isso
-não existe.
+- **Código de validação**: 12 símbolos sorteados com `crypto.randomBytes`
+  do alfabeto base32 de Crockford (`0-9` e `A-Z` sem `I`, `L`, `O`, `U`) —
+  60 bits, sem nenhuma relação com ids internos. O PDF imprime em grupos
+  (`7KQ2-MX9D-4RTA`); a validação aceita com ou sem hífen, em minúsculas,
+  e troca `O`→`0`, `I`/`L`→`1`.
+- **Cópia (snapshot) dos dados impressos**: o certificado emitido não muda
+  se o evento for editado ou o nome do aluno for corrigido depois, e a
+  validação pública confere exatamente o que foi impresso.
+- **Integridade**: `inscricaoId` é FK com `onDelete: Restrict` — a
+  inscrição de um certificado emitido não pode ser apagada (ela já fica
+  travada pela regra de presença, e o aluno com certificado não pode ser
+  removido: `409 PARTICIPANTE_COM_CERTIFICADO`).
 
-Regra central pro backend: um certificado "existe" se, e somente se,
-`statusPresenca == "PRESENTE"` na inscrição — não tem outro estado
-intermediário nem tabela própria pra isso.
+### `POST /api/certificados/emitir/{inscricaoId}` (endpoint dedicado)
+
+Qualquer perfil autenticado, corpo vazio.
+
+- **Aluno**: só a própria inscrição (`403` se for de outra pessoa).
+- **Admin/secretaria**: qualquer inscrição que cumpra os requisitos.
+
+Na primeira chamada confere os requisitos — presença `PRESENTE` **e**
+alguma tentativa do questionário com pelo menos 60% (mesma regra de
+`utils/certificado.ts` e `utils/questionario.ts`) — e grava o certificado:
+`201`. Nas chamadas seguintes devolve o **mesmo registro** (mesmo `id`,
+código e `emitidoEm`, nada é regerado): `200`. Duas emissões simultâneas da
+mesma inscrição resultam num registro só (índice único em `inscricaoId`).
+
+Erros: `404 INSCRICAO_NAO_ENCONTRADA`; `403 ACESSO_NEGADO` (aluno pedindo
+inscrição de outra pessoa); `409 CERTIFICADO_NAO_LIBERADO` ("O certificado
+só é liberado depois da confirmação de presença no check-in." ou "... depois
+de atingir 60% de acertos no questionário do evento."). Auditoria:
+`CERTIFICADO_EMITIDO` (primeira emissão ou nova via).
+
+### `GET /api/certificados?eventoId=`
+
+Lista os certificados já emitidos, mais recentes primeiro, no formato
+`Certificado` acima. A **equipe** vê todos (filtro `eventoId` opcional); o
+**aluno** só os próprios — o participante é sempre o do token.
+
+A tela de Certificados continua listando as inscrições com presença
+confirmada (`GET /api/inscricoes?status=PRESENTE`) junto com a nota do
+questionário; essa rota informa quais já têm certificado e com qual código.
+
+### `GET /api/certificados/validar/{codigo}` — validação pública (RF027)
+
+**Sem token.** Usada pela página pública `/validar-certificado` do frontend
+(link na tela de login; o PDF imprime o endereço da página junto com o
+código, e o endereço é um link que já abre a consulta). Response `200`,
+só com o necessário para conferir o documento — **sem RGM e sem e-mail**:
+
+```json
+{
+  "nomeParticipante": "João Pedro Lima",
+  "tituloEvento": "Minicurso: Arquitetura de Microsserviços",
+  "dataEvento": "2026-09-14T17:00:00.000Z",
+  "cargaHoraria": 2,
+  "emitidoEm": "2026-09-15T12:03:44.120Z"
+}
+```
+
+Erros: `404 CERTIFICADO_NAO_ENCONTRADO` ("Certificado não encontrado.") —
+também para código fora do formato; `429 MUITAS_TENTATIVAS` depois de 30
+consultas do mesmo IP (todas contam, não só as erradas), por 15 minutos
+(`utils/limiteAcesso.ts`, chave `validacao:ip:<ip>`). A consulta pública
+não grava auditoria (não tem responsável e encheria a trilha).
 
 ## Feedback
 
@@ -775,6 +899,7 @@ interface ResumoDashboard {
     pendentes: number;
     taxaPresenca: number | null;   // presentes / (presentes + ausentes) × 100; null sem check-in
     certificadosLiberados: number; // presença confirmada + ≥ 60% no questionário do mesmo evento
+    ocupacaoMediaSalas: number | null; // RF021: média, entre os eventos, de inscritos / capacidade da sala × 100; null sem evento
     mediaFeedback: number | null;  // 1 a 5; null sem feedback
     totalFeedbacks: number;
   };
@@ -785,6 +910,11 @@ interface ResumoDashboard {
 
 A taxa de presença considera só os check-ins já registrados (presente ou
 ausente): inscrição pendente de evento futuro não puxa a taxa pra baixo.
+
+A ocupação média das salas é a média simples dos percentuais de ocupação
+de cada evento (cada evento pesa igual, independentemente do tamanho da
+sala); sala com capacidade 0 fica fora da conta. A tela mostra o valor
+arredondado num cartão próprio ("Ocupação média das salas").
 
 ## Formato de erro
 
@@ -828,7 +958,15 @@ Códigos usados neste documento:
 | 409 | `EVENTO_LOTADO` | capacidade da sala esgotada |
 | 409 | `FEEDBACK_JA_ENVIADO` | feedback duplicado pro mesmo evento |
 | 409 | `PARTICIPANTE_INATIVO` | inscrição manual ou check-in de aluno inativo |
-| 429 | `MUITAS_TENTATIVAS` | limite de tentativas (login, recuperação de senha, 2FA) |
+| 409 | `CONFLITO_DE_SALA` | a sala já está ocupada por outro evento no intervalo do evento |
+| 409 | `EVENTO_COM_INSCRICOES` | exclusão de evento que ainda tem inscrição |
+| 409 | `PRESENCA_TRAVADA` | mudança de presença ou cancelamento depois de o aluno responder o questionário |
+| 409 | `PRESENCA_JA_REGISTRADA` | cancelamento de inscrição com presença já registrada no check-in |
+| 409 | `EVENTO_JA_INICIADO` | cancelamento de inscrição de evento que já começou |
+| 409 | `CERTIFICADO_NAO_LIBERADO` | emissão sem presença confirmada ou sem a nota mínima |
+| 409 | `PARTICIPANTE_COM_CERTIFICADO` | remoção de aluno que tem certificado emitido |
+| 404 | `CERTIFICADO_NAO_ENCONTRADO` | validação pública com código inexistente |
+| 429 | `MUITAS_TENTATIVAS` | limite de tentativas (login, recuperação de senha, 2FA) ou de consultas de validação de certificado por IP |
 | 422 | `CODIGO_INVALIDO` | código de recuperação de senha errado/expirado |
 | 422 | `VALIDACAO` | campo inválido/ausente no corpo |
 
@@ -846,7 +984,7 @@ tem permissão — não misturar os dois, e não usar 404 pra esconder um 403
 | `Inscricao` | campo `sessaoId` renomeado pra `eventoId` (reflete a fusão acima); campo novo `dataInscricao` |
 | `Feedback` | continua flat (`/api/feedbacks`), sem aninhar em `/eventos/{id}/feedback` como uma versão anterior deste documento sugeria |
 | `Trabalho` | removido — entidade, tabela e endpoints |
-| `Certificado` | não é entidade nem tabela — deriva de Inscrição + presença confirmada, PDF montado no cliente |
+| `Certificado` | entidade e tabela `certificados` (migration `20261104120000_certificados`): gravado na primeira emissão, com código de validação aleatório e cópia dos dados impressos; PDF montado no cliente com esses dados |
 
 ## Lacunas conhecidas (frontend ainda não fez, backend não precisa esperar)
 
@@ -856,8 +994,14 @@ tem permissão — não misturar os dois, e não usar 404 pra esconder um 403
 - Busca de aluno no Check-in é client-side (`GET /api/participantes/alunos`
   carrega tudo, filtra no navegador) — funciona, mas não escala pra uma base
   grande de dados.
-- Sem endpoint de validação de código de certificado (o código impresso no
-  PDF é só uma referência visual por enquanto).
+- Certificados baixados antes da migration `20261104120000_certificados`
+  traziam um código "decorativo" calculado no navegador, que não valida na
+  página pública: quem precisar de comprovante validável emite de novo (a
+  primeira emissão depois da migration grava o código definitivo).
+- O conflito de sala é conferido na aplicação (consulta antes de gravar):
+  dois cadastros exatamente simultâneos na mesma sala poderiam passar os
+  dois. Para o volume de uma secretaria isso é aceitável; uma trava no
+  banco resolveria se for preciso.
 
 ## Decisões tomadas na implementação do backend
 

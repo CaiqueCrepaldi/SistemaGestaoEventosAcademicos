@@ -81,9 +81,19 @@ async function criarManual(dados: InscricaoInput, ator: { id: string; perfil: Pe
   return paraDominio(inscricao);
 }
 
+// RF015: depois que o aluno responde o questionario do evento, a presenca daquela inscricao fica
+// travada — nao muda mais de status e a inscricao nao pode ser excluida (o certificado depende dela)
+async function garantirPresencaDestravada(participanteId: string, eventoId: string) {
+  const tentativas = await prisma.tentativaQuestionario.count({ where: { participanteId, eventoId } });
+  if (tentativas > 0) {
+    throw AppError.conflito("PRESENCA_TRAVADA", "A presença não pode mais ser alterada: o aluno já respondeu o questionário.");
+  }
+}
+
 // muda o status de presenca (confirma, marca ausente ou reverte pra pendente)
 async function atualizarCheckin(id: string, dados: InscricaoCheckinInput, usuarioIdDoToken: string) {
   const existente = await buscarOuFalhar(id);
+  await garantirPresencaDestravada(existente.participanteId, existente.eventoId);
 
   if (dados.statusPresenca === "PRESENTE") {
     // aluno inativado nao pode ter presenca confirmada (a tela do check-in tambem bloqueia, mas a regra vale na API)
@@ -121,15 +131,90 @@ async function atualizarCheckin(id: string, dados: InscricaoCheckinInput, usuari
   return paraDominio(inscricao);
 }
 
-// remove uma inscricao
-async function remover(id: string, atorId: string) {
-  const inscricao = await buscarOuFalhar(id);
+// quem cancela: o proprio aluno ou alguem da equipe (administrador/secretaria)
+interface QuemCancela {
+  id: string;
+  perfil: Perfil;
+}
+
+// aviso por e-mail quando a EQUIPE cancela. Falha de envio nao desfaz o cancelamento (que ja foi
+// gravado): so fica registrada na auditoria, como no fluxo de recuperacao de senha
+async function avisarCancelamentoPorEmail(
+  inscricao: { id: string; participanteId: string; evento: { titulo: string; horario: Date } },
+  atorId: string,
+) {
+  try {
+    const participante = await prisma.participante.findUnique({
+      where: { id: inscricao.participanteId },
+      include: COM_CONTA_DO_ALUNO,
+    });
+    // nome e e-mail do aluno vem da conta dele (o participante so guarda o RGM); sem conta, sem aviso
+    const dados = participante ? participanteParaDominio(participante) : null;
+    if (!dados?.email) return;
+
+    const resultado = await emailService.enviarCancelamentoInscricao(dados.email, {
+      participanteNome: dados.nome,
+      eventoTitulo: inscricao.evento.titulo,
+      eventoHorario: inscricao.evento.horario,
+    });
+    await registrarAuditoria(
+      atorId,
+      "EMAIL_ENVIADO",
+      `aviso de cancelamento de inscrição, inscrição ${inscricao.id}${resultado === "simulado" ? " (simulado: SendGrid não configurado)" : ""}`,
+    );
+  } catch {
+    // email.service.ts ja loga o detalhe sanitizado da falha
+    await registrarAuditoria(atorId, "EMAIL_FALHA", `aviso de cancelamento de inscrição, inscrição ${inscricao.id}: falha no envio`);
+  }
+}
+
+// RF025: regra UNICA de cancelamento, a mesma pro aluno (DELETE /eventos/:eventoId/inscricoes) e
+// pra equipe (DELETE /inscricoes/:id): so cancela inscricao com presenca PENDENTE, de evento que
+// ainda nao comecou e cujo questionario o aluno nao respondeu. A vaga volta na hora — o aluno pode
+// se inscrever de novo se ainda houver vaga
+async function cancelar(id: string, ator: QuemCancela) {
+  const inscricao = await prisma.inscricao.findUnique({
+    where: { id },
+    include: { evento: { select: { titulo: true, horario: true } } },
+  });
+  if (!inscricao) throw AppError.naoEncontrado("INSCRICAO_NAO_ENCONTRADA", "Inscrição não encontrada.");
+
+  await garantirPresencaDestravada(inscricao.participanteId, inscricao.eventoId);
+  if (inscricao.statusPresenca !== "PENDENTE") {
+    throw AppError.conflito(
+      "PRESENCA_JA_REGISTRADA",
+      "Não é possível cancelar: a presença desta inscrição já foi registrada no check-in.",
+    );
+  }
+  if (inscricao.evento.horario <= new Date()) {
+    throw AppError.conflito("EVENTO_JA_INICIADO", "Não é possível cancelar: o evento já começou.");
+  }
+
   await prisma.inscricao.delete({ where: { id } });
+
+  const pelaEquipe = ator.perfil !== "ALUNO";
+  const quem = !pelaEquipe ? "pelo próprio aluno" : ator.perfil === "SECRETARIA" ? "pela secretaria" : "pelo administrador";
   await registrarAuditoria(
-    atorId,
-    "INSCRICAO_REMOVIDA",
-    `inscrição ${id} (evento ${inscricao.eventoId}, participante ${inscricao.participanteId})`,
+    ator.id,
+    "INSCRICAO_CANCELADA",
+    `inscrição ${id} (evento ${inscricao.eventoId}, participante ${inscricao.participanteId}) cancelada ${quem}`,
   );
+  if (pelaEquipe) await avisarCancelamentoPorEmail(inscricao, ator.id);
+}
+
+// DELETE /inscricoes/:id — a equipe cancela a inscricao de qualquer aluno (mesma regra do aluno)
+async function remover(id: string, ator: QuemCancela) {
+  await cancelar(id, ator);
+}
+
+// DELETE /eventos/:eventoId/inscricoes — o aluno cancela a PROPRIA inscricao (participante do token)
+async function cancelarPeloAluno(eventoId: string, participanteId: string, atorId: string) {
+  const inscricao = await prisma.inscricao.findUnique({
+    where: { participanteId_eventoId: { participanteId, eventoId } },
+    select: { id: true },
+  });
+  if (!inscricao) throw AppError.naoEncontrado("INSCRICAO_NAO_ENCONTRADA", "Você não está inscrito neste evento.");
+  await cancelar(inscricao.id, { id: atorId, perfil: "ALUNO" });
 }
 
 // dispara o email de confirmacao, so pro proprio dono da inscricao
@@ -167,4 +252,12 @@ async function confirmarEmail(id: string, participanteIdDoToken: string, atorId:
   return { destinatario: participante.email, enviadoEm: new Date().toISOString() };
 }
 
-export const inscricoesService = { listar, buscarOuFalhar, criarManual, atualizarCheckin, remover, confirmarEmail };
+export const inscricoesService = {
+  listar,
+  buscarOuFalhar,
+  criarManual,
+  atualizarCheckin,
+  remover,
+  cancelarPeloAluno,
+  confirmarEmail,
+};

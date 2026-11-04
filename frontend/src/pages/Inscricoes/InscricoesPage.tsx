@@ -109,13 +109,19 @@ export function InscricoesPage() {
     }
   }
 
-  // remove a inscricao marcada pra exclusao
+  // cancela a inscricao marcada — mesma regra do cancelamento pelo aluno (presenca pendente, evento
+  // que nao comecou, questionario nao respondido); o backend avisa o aluno por e-mail
   async function excluir() {
     if (!excluindo) return;
-    await inscricaoService.remove(excluindo.id);
-    toast.success("Inscrição removida.");
-    setExcluindo(null);
-    await carregar();
+    try {
+      await inscricaoService.remove(excluindo.id);
+      toast.success("Inscrição cancelada. O aluno será avisado por e-mail.");
+      await carregar();
+    } catch (erro) {
+      toast.error(erro instanceof Error ? erro.message : "Não foi possível cancelar a inscrição.");
+    } finally {
+      setExcluindo(null);
+    }
   }
 
   const eventoSelecionado = eventos.find((e) => e.id === eventoId);
@@ -174,7 +180,7 @@ export function InscricoesPage() {
                   <td>{inscricao.dataCheckin ? new Date(inscricao.dataCheckin).toLocaleString("pt-BR") : "—"}</td>
                   <td className="table-actions">
                     <button className="btn btn-ghost btn-danger" onClick={() => setExcluindo(inscricao)}>
-                      Excluir
+                      Cancelar
                     </button>
                   </td>
                 </tr>
@@ -279,9 +285,10 @@ export function InscricoesPage() {
 
       {excluindo && (
         <ConfirmDialog
-          title="Remover inscrição"
-          message="Tem certeza que deseja remover esta inscrição? Essa ação não pode ser desfeita."
-          confirmLabel="Remover"
+          title="Cancelar inscrição"
+          message="Cancelar esta inscrição? O aluno será avisado por e-mail. Só é possível cancelar inscrições com presença pendente, em eventos que ainda não começaram."
+          confirmLabel="Cancelar inscrição"
+          cancelLabel="Voltar"
           tone="danger"
           onConfirm={() => void excluir()}
           onCancel={() => setExcluindo(null)}

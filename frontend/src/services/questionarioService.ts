@@ -13,6 +13,7 @@ interface QuestionarioService {
   enviarRespostas(eventoId: string, participanteId: string, respostas: number[]): Promise<TentativaQuestionario>;
   listarTentativas(eventoId: string, participanteId: string): Promise<TentativaQuestionario[]>;
   listarTodasTentativas(): Promise<TentativaQuestionario[]>;
+  listarTentativasDoParticipante(participanteId: string): Promise<TentativaQuestionario[]>;
 }
 
 // perguntas e correcao vivem no backend, servidor nunca manda o gabarito antes do aluno responder
@@ -28,5 +29,9 @@ export const questionarioService: QuestionarioService = {
   },
   listarTodasTentativas() {
     return api.get<TentativaQuestionario[]>("/questionario-tentativas");
+  },
+  // so equipe: tentativas de um aluno em todos os eventos (o Check-in trava a presenca de quem ja respondeu)
+  listarTentativasDoParticipante(participanteId) {
+    return api.get<TentativaQuestionario[]>(`/questionario-tentativas?participanteId=${encodeURIComponent(participanteId)}`);
   },
 };

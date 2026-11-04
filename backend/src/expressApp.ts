@@ -13,6 +13,7 @@ import { participantesRouter } from "./modules/participantes/participantes.route
 import { inscricoesRouter } from "./modules/inscricoes/inscricoes.routes";
 import { feedbacksRouter } from "./modules/feedbacks/feedbacks.routes";
 import { questionarioRouter } from "./modules/questionario/questionario.routes";
+import { certificadosRouter } from "./modules/certificados/certificados.routes";
 import { auditoriaRouter } from "./modules/auditoria/auditoria.routes";
 import { dashboardRouter } from "./modules/dashboard/dashboard.routes";
 
@@ -45,6 +46,7 @@ export function criarApp() {
   apiRouter.use("/inscricoes", inscricoesRouter);
   apiRouter.use("/feedbacks", feedbacksRouter);
   apiRouter.use("/questionario-tentativas", questionarioRouter);
+  apiRouter.use("/certificados", certificadosRouter);
   apiRouter.use("/logs-auditoria", auditoriaRouter);
   apiRouter.use("/dashboard", dashboardRouter);
   app.use("/api", apiRouter);

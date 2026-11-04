@@ -52,13 +52,14 @@ inscricoesRouter.put(
   }),
 );
 
-// remove uma inscricao
+// a equipe cancela a inscricao de um aluno — mesma regra do cancelamento pelo proprio aluno (so
+// presenca pendente em evento que nao comecou); o aluno e avisado por e-mail
 inscricoesRouter.delete(
   "/:id",
   autenticar,
   autorizar("ADMINISTRADOR", "SECRETARIA"),
   asyncHandler(async (req, res) => {
-    await inscricoesService.remover(req.params.id, req.usuario!.sub);
+    await inscricoesService.remover(req.params.id, { id: req.usuario!.sub, perfil: req.usuario!.perfil });
     res.status(204).send();
   }),
 );

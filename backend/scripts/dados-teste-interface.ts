@@ -51,10 +51,15 @@ async function main() {
     if (acao === "limpar") {
       const { sufixo } = JSON.parse(readFileSync(ARQUIVO, "utf8")) as { sufixo: string };
       const eventos = await prisma.evento.findMany({ where: { titulo: { contains: sufixo } }, select: { id: true } });
-      await prisma.evento.deleteMany({ where: { id: { in: eventos.map((e) => e.id) } } });
       const usuarios = (await prisma.usuario.findMany({ select: { id: true, emailLogin: true, participanteId: true } })).filter((u) =>
         u.emailLogin.includes(sufixo),
       );
+      // certificado emitido pela tela segura a inscricao (onDelete: Restrict): sai antes de tudo
+      const participantes = usuarios.map((u) => u.participanteId).filter((id): id is string => !!id);
+      await prisma.certificado.deleteMany({
+        where: { inscricao: { OR: [{ eventoId: { in: eventos.map((e) => e.id) } }, { participanteId: { in: participantes } }] } },
+      });
+      await prisma.evento.deleteMany({ where: { id: { in: eventos.map((e) => e.id) } } });
       for (const u of usuarios) {
         if (u.participanteId) {
           await prisma.tentativaQuestionario.deleteMany({ where: { participanteId: u.participanteId } });

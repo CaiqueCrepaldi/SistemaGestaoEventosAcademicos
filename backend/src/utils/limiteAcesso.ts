@@ -13,7 +13,8 @@ const BLOQUEIO_MS = 15 * 60 * 1000;
 export function chaveConta(fluxo: "login" | "recuperacao" | "mfa", identificador: string): string {
   return `${fluxo}:conta:${identificador}`;
 }
-export function chaveIp(fluxo: "login" | "recuperacao", ip: string): string {
+// "validacao" = consulta publica de certificado (sem login), limitada so por IP
+export function chaveIp(fluxo: "login" | "recuperacao" | "validacao", ip: string): string {
   return `${fluxo}:ip:${ip}`;
 }
 
@@ -29,14 +30,15 @@ export async function estaBloqueado(chave: string): Promise<boolean> {
 
 // conta uma tentativa (login errado, ou qualquer chamada de solicitacao de recuperacao — nesse
 // segundo caso conta toda chamada, nao so falha, porque o que se quer limitar e a frequencia do
-// pedido em si); ao atingir o limite, bloqueia por BLOQUEIO_MS a partir de agora
-export async function incrementarTentativa(chave: string): Promise<void> {
+// pedido em si); ao atingir o limite, bloqueia por BLOQUEIO_MS a partir de agora. "limite" so muda
+// pra fluxo que conta TODA consulta legitima (validacao publica de certificado), o resto usa o padrao
+export async function incrementarTentativa(chave: string, limite = MAX_TENTATIVAS): Promise<void> {
   const registro = await prisma.limiteAcesso.upsert({
     where: { chave },
     create: { id: randomUUID(), chave, tentativas: 1 },
     update: { tentativas: { increment: 1 } },
   });
-  if (registro.tentativas >= MAX_TENTATIVAS && !registro.bloqueadoAte) {
+  if (registro.tentativas >= limite && !registro.bloqueadoAte) {
     await prisma.limiteAcesso.update({ where: { chave }, data: { bloqueadoAte: new Date(Date.now() + BLOQUEIO_MS) } });
   }
 }

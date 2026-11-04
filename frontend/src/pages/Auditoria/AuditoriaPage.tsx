@@ -4,7 +4,7 @@ import { auditoriaService, SEM_RESPONSAVEL } from "../../services";
 import type { PaginaAuditoria, ResponsavelAuditoria } from "../../services";
 
 // traduz o codigo da acao pra um texto legivel na tela (a ordem aqui eh a do filtro de acao).
-// FEEDBACK_ATUALIZADO/FEEDBACK_REMOVIDO nao sao mais gravados, mas continuam nos logs antigos
+// FEEDBACK_ATUALIZADO/FEEDBACK_REMOVIDO e INSCRICAO_REMOVIDA nao sao mais gravados, mas continuam nos logs antigos
 const ACAO_LABEL: Record<string, string> = {
   LOGIN_SUCESSO: "Login realizado",
   LOGIN_FALHA: "Falha de login",
@@ -41,11 +41,12 @@ const ACAO_LABEL: Record<string, string> = {
   PARTICIPANTE_REMOVIDO: "Participante removido",
   INSCRICAO_CRIADA: "Inscrição criada",
   INSCRICAO_ATUALIZADA: "Inscrição atualizada",
-  INSCRICAO_REMOVIDA: "Inscrição removida",
-  INSCRICAO_CANCELADA: "Inscrição cancelada (inativação)",
+  INSCRICAO_CANCELADA: "Inscrição cancelada",
+  INSCRICAO_REMOVIDA: "Inscrição removida (registro antigo)",
   PRESENCA_CONFIRMADA: "Presença confirmada",
   PRESENCA_MARCADA_AUSENTE: "Presença marcada como ausente",
   QUESTIONARIO_RESPONDIDO: "Questionário respondido",
+  CERTIFICADO_EMITIDO: "Certificado emitido",
   FEEDBACK_CRIADO: "Feedback criado",
   FEEDBACK_EXCLUIDO: "Feedback excluído",
   FEEDBACK_ATUALIZADO: "Feedback atualizado (registro antigo)",

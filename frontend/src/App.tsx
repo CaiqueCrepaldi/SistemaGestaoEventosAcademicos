@@ -21,6 +21,7 @@ import { PalestrantesPage } from "./pages/Palestrantes/PalestrantesPage";
 import { ParticipantesPage } from "./pages/Participantes/ParticipantesPage";
 import { QuestionarioPage } from "./pages/Questionario/QuestionarioPage";
 import { SalasPage } from "./pages/Salas/SalasPage";
+import { ValidarCertificadoPage } from "./pages/ValidarCertificado/ValidarCertificadoPage";
 
 // raiz da aplicacao: define todas as rotas e onde cada perfil pode entrar
 export function App() {
@@ -34,6 +35,8 @@ export function App() {
           <Route path="/esqueci-senha" element={<EsqueciSenhaPage />} />
           <Route path="/termos-de-uso" element={<TermosDeUsoPage />} />
           <Route path="/politica-de-privacidade" element={<PoliticaDePrivacidadePage />} />
+          {/* publica: qualquer pessoa confere um certificado pelo codigo impresso no PDF */}
+          <Route path="/validar-certificado" element={<ValidarCertificadoPage />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
               {/* rotas que ADMINISTRADOR, SECRETARIA e ALUNO acessam */}

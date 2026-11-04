@@ -3,10 +3,38 @@ import type { Inscricao, Participante, TentativaQuestionario } from "../types";
 import { PERCENTUAL_APROVACAO } from "../utils/questionario";
 import { api } from "./api";
 import { authService } from "./authService";
-import { eventoService, palestranteService, participanteService } from "./entityServices";
+import { eventoService, participanteService } from "./entityServices";
 import { questionarioService } from "./questionarioService";
 
-// tudo que o pdf do certificado precisa, ja "achatado"
+// certificado gravado no backend na primeira emissao (POST /certificados/emitir/:inscricaoId).
+// O PDF sai sempre destes dados — codigo de validacao e textos impressos vem da API, nunca do navegador
+export interface CertificadoEmitido {
+  id: string;
+  inscricaoId: string;
+  eventoId: string;
+  participanteId: string;
+  codigoValidacao: string;
+  nomeParticipante: string;
+  rgm: string;
+  tituloEvento: string;
+  temaEvento: string;
+  nomePalestrante: string;
+  dataEvento: string;
+  cargaHoraria: number;
+  emitidoEm: string;
+}
+
+// o que a validacao publica devolve (sem RGM nem e-mail)
+export interface CertificadoValidado {
+  nomeParticipante: string;
+  tituloEvento: string;
+  dataEvento: string;
+  cargaHoraria: number;
+  emitidoEm: string;
+}
+
+// linha das telas de Certificados: inscricao com presenca confirmada + situacao do questionario e,
+// se o certificado ja foi emitido, o codigo gravado no backend
 export interface CertificadoDisponivel {
   inscricaoId: string;
   participanteId: string;
@@ -17,46 +45,47 @@ export interface CertificadoDisponivel {
   eventoId: string;
   eventoTitulo: string;
   tema: string;
-  palestranteNome: string;
   data: string;
   cargaHoraria: number;
-  codigoValidacao: string;
   // melhor percentual do aluno no questionario desse evento, null se ainda nao respondeu
   melhorPercentual: number | null;
   questionarioAprovado: boolean;
   // quantas das tentativas permitidas (ver MAX_TENTATIVAS_QUESTIONARIO) o aluno ja usou
   tentativasUsadas: number;
+  // null enquanto o certificado nao foi emitido nenhuma vez
+  codigoValidacao: string | null;
 }
 
-// hash simples pra gerar um codigo curto e consistente por inscricao, so decorativo
-function gerarCodigoValidacao(inscricaoId: string): string {
-  let hash = 0;
-  for (let i = 0; i < inscricaoId.length; i++) {
-    hash = (hash * 31 + inscricaoId.charCodeAt(i)) >>> 0;
-  }
-  const prefixo = inscricaoId.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 6).padEnd(6, "0");
-  const sufixo = hash.toString(36).toUpperCase().padStart(6, "0");
-  return `SGEA-${prefixo}-${sufixo}`;
+// "ABCDEFGHJKMN" -> "ABCD-EFGH-JKMN", mais facil de ler e digitar (a validacao aceita com ou sem hifen)
+export function formatarCodigoValidacao(codigo: string): string {
+  return codigo.match(/.{1,4}/g)?.join("-") ?? codigo;
 }
 
-// junta cada Inscricao com Evento/Palestrante/Participante, pula dado orfao.
-// participantes: a equipe passa a lista inteira; o aluno passa so ele mesmo (a lista de
+// endereco da pagina publica de validacao (HashRouter: a rota fica depois do "#"). Com o codigo, o
+// link do PDF ja abre a pagina com a consulta feita
+export function urlValidacao(codigo?: string): string {
+  const base = `${window.location.origin}${window.location.pathname}#/validar-certificado`;
+  return codigo ? `${base}?codigo=${encodeURIComponent(codigo)}` : base;
+}
+
+// junta cada Inscricao com Evento/Participante e com o certificado ja emitido (se houver), pula
+// dado orfao. participantes: a equipe passa a lista inteira; o aluno passa so ele mesmo (a lista de
 // participantes e exclusiva da equipe — o aluno recebe 403 nela).
 // todasTentativas: quando informado (visao de equipe, varios alunos de uma vez), filtra localmente
 // porque a rota por evento/aluno eh restrita ao proprio aluno respondendo
 async function enriquecer(
   inscricoes: Inscricao[],
   participantes: Participante[],
+  emitidos: CertificadoEmitido[],
   todasTentativas?: TentativaQuestionario[],
 ): Promise<CertificadoDisponivel[]> {
-  const [eventos, palestrantes] = await Promise.all([eventoService.list(), palestranteService.list()]);
+  const eventos = await eventoService.list();
 
   const certificados: CertificadoDisponivel[] = [];
   for (const inscricao of inscricoes) {
     const evento = eventos.find((e) => e.id === inscricao.eventoId);
     const participante = participantes.find((p) => p.id === inscricao.participanteId);
     if (!evento || !participante) continue;
-    const palestrante = palestrantes.find((p) => p.id === evento.palestranteId);
 
     const tentativas = todasTentativas
       ? todasTentativas.filter((t) => t.eventoId === evento.id && t.participanteId === participante.id)
@@ -72,13 +101,12 @@ async function enriquecer(
       eventoId: evento.id,
       eventoTitulo: evento.titulo,
       tema: evento.tema || evento.titulo,
-      palestranteNome: palestrante?.nome ?? "—",
       data: evento.horario,
       cargaHoraria: evento.cargaHoraria ?? 0,
-      codigoValidacao: gerarCodigoValidacao(inscricao.id),
       melhorPercentual,
       questionarioAprovado: melhorPercentual !== null && melhorPercentual >= PERCENTUAL_APROVACAO,
       tentativasUsadas: tentativas.length,
+      codigoValidacao: emitidos.find((c) => c.inscricaoId === inscricao.id)?.codigoValidacao ?? null,
     });
   }
   return certificados;
@@ -169,13 +197,30 @@ function desenharAssinatura(doc: jsPDF, x: number, y: number): void {
   doc.text("Diretoria Acadêmica", x, y + 9, { align: "left" });
 }
 
-// pdf montado no navegador com jspdf, seguindo o modelo oficial de certificado da UMC
-function gerarPdf(dados: CertificadoDisponivel): void {
+// rodape: codigo de validacao + endereco da pagina publica onde ele e conferido (o endereco e um
+// link que ja abre a consulta com o codigo preenchido)
+function desenharValidacao(doc: jsPDF, dados: CertificadoEmitido, meio: number, altura: number): void {
+  const emitidoEm = new Date(dados.emitidoEm).toLocaleDateString("pt-BR");
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(60, 60, 60);
+  doc.text(`Código de validação: ${formatarCodigoValidacao(dados.codigoValidacao)} · emitido em ${emitidoEm}`, meio, altura - 20, {
+    align: "center",
+  });
+
+  const endereco = `Confira a autenticidade em ${urlValidacao()}`;
+  doc.setTextColor(...AZUL_MARINHO);
+  doc.textWithLink(endereco, meio - doc.getTextWidth(endereco) / 2, altura - 14.5, { url: urlValidacao(dados.codigoValidacao) });
+}
+
+// pdf montado no navegador com jspdf, seguindo o modelo oficial de certificado da UMC, a partir do
+// certificado registrado no backend
+function gerarPdf(dados: CertificadoEmitido): void {
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const largura = doc.internal.pageSize.getWidth();
   const altura = doc.internal.pageSize.getHeight();
   const meio = largura / 2;
-  const dataFormatada = dados.data ? new Date(dados.data).toLocaleDateString("pt-BR") : "—";
+  const dataFormatada = dados.dataEvento ? new Date(dados.dataEvento).toLocaleDateString("pt-BR") : "—";
 
   desenharMoldura(doc, largura, altura);
   desenharLogo(doc, meio);
@@ -189,54 +234,63 @@ function gerarPdf(dados: CertificadoDisponivel): void {
   doc.setFontSize(12);
   doc.setTextColor(...CINZA_TEXTO);
   const corpo =
-    `Certificamos que ${dados.participanteNome} (RGM ${dados.participanteRgm}) participou do evento ` +
-    `"${dados.eventoTitulo}", com tema "${dados.tema}", ministrado por ${dados.palestranteNome}, ` +
+    `Certificamos que ${dados.nomeParticipante} (RGM ${dados.rgm}) participou do evento ` +
+    `"${dados.tituloEvento}", com tema "${dados.temaEvento}", ministrado por ${dados.nomePalestrante}, ` +
     `realizado em ${dataFormatada}, com carga horária de ${dados.cargaHoraria}h.`;
   const linhas = doc.splitTextToSize(corpo, largura - 110);
   doc.text(linhas, meio, 85, { align: "center", lineHeightFactor: 1.5 });
 
   desenharAssinatura(doc, 40, altura - 45);
   desenharSelo(doc, largura - 55, altura - 42);
+  desenharValidacao(doc, dados, meio, altura);
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(60, 60, 60);
-  doc.text(`Código de validação: ${dados.codigoValidacao}`, meio, altura - 15, { align: "center" });
+  doc.save(`certificado-${dados.codigoValidacao}.pdf`);
+}
 
-  doc.save(`certificado-${dados.eventoId}-${dados.participanteId}.pdf`);
+// certificados ja emitidos: a equipe recebe todos, o aluno so os dele (o backend decide pelo token)
+function listarEmitidos(eventoId?: string): Promise<CertificadoEmitido[]> {
+  return api.get<CertificadoEmitido[]>(eventoId ? `/certificados?eventoId=${encodeURIComponent(eventoId)}` : "/certificados");
 }
 
 interface CertificadoService {
   listarCertificadosDoParticipante(participanteId: string): Promise<CertificadoDisponivel[]>;
   listarTodosCertificados(): Promise<CertificadoDisponivel[]>;
-  gerarCertificado(dados: CertificadoDisponivel): void;
+  listarEmitidos(eventoId?: string): Promise<CertificadoEmitido[]>;
+  emitirEBaixar(inscricaoId: string): Promise<CertificadoEmitido>;
+  validar(codigo: string): Promise<CertificadoValidado>;
 }
 
 export const certificadoService: CertificadoService = {
   // visao do aluno: os dados do proprio certificado (nome/RGM) vem da propria conta
   async listarCertificadosDoParticipante(participanteId) {
-    const [inscricoes, conta] = await Promise.all([
+    const [inscricoes, conta, emitidos] = await Promise.all([
       api.get<Inscricao[]>(`/inscricoes?participanteId=${participanteId}&status=PRESENTE`),
       authService.obterMe(),
+      listarEmitidos(),
     ]);
     const euMesmo: Participante = { id: participanteId, nome: conta.nome, email: conta.emailLogin, rgm: conta.rgm ?? "" };
-    return enriquecer(inscricoes, [euMesmo]);
+    return enriquecer(inscricoes, [euMesmo], emitidos);
   },
   // certificados de todo mundo, usado na tela de gestao
   async listarTodosCertificados() {
-    const [inscricoes, todasTentativas, participantes] = await Promise.all([
-      api.get<Inscricao[]>("/inscricoes"),
+    const [inscricoes, todasTentativas, participantes, emitidos] = await Promise.all([
+      api.get<Inscricao[]>("/inscricoes?status=PRESENTE"),
       questionarioService.listarTodasTentativas(),
       participanteService.list(),
+      listarEmitidos(),
     ]);
-    return enriquecer(
-      inscricoes.filter((i) => i.statusPresenca === "PRESENTE"),
-      participantes,
-      todasTentativas,
-    );
+    return enriquecer(inscricoes, participantes, emitidos, todasTentativas);
   },
-  // pdf sempre montado no navegador
-  gerarCertificado(dados) {
-    gerarPdf(dados);
+  listarEmitidos,
+  // o backend confere os requisitos, grava o certificado na primeira vez e devolve sempre o mesmo
+  // registro depois; o PDF e montado com o que voltou
+  async emitirEBaixar(inscricaoId) {
+    const certificado = await api.post<CertificadoEmitido>(`/certificados/emitir/${inscricaoId}`);
+    gerarPdf(certificado);
+    return certificado;
+  },
+  // pagina publica: funciona sem login
+  validar(codigo) {
+    return api.get<CertificadoValidado>(`/certificados/validar/${encodeURIComponent(codigo.trim())}`);
   },
 };

@@ -1,6 +1,7 @@
 import type { Inscricao, Participante } from "../types";
 import { api } from "./api";
 import { eventoService, inscricaoService, participanteService } from "./entityServices";
+import { questionarioService } from "./questionarioService";
 
 // formato "achatado" usado so na tela de checkin
 export interface InscricaoDetalhada {
@@ -10,6 +11,8 @@ export interface InscricaoDetalhada {
   participanteRgm: string;
   eventoTitulo: string;
   eventoHorario: string;
+  // o aluno ja respondeu o questionario desse evento: a presenca nao muda mais (o backend responde 409)
+  presencaTravada: boolean;
 }
 
 // todos os alunos cadastrados (participantes com conta ALUNO), ja em ordem alfabetica, com o
@@ -18,13 +21,16 @@ function listarAlunos(): Promise<Participante[]> {
   return api.get<Participante[]>("/participantes/alunos");
 }
 
-// todas as inscricoes de UM participante, com o titulo do evento ja junto
+// todas as inscricoes de UM participante, com o titulo do evento ja junto e a marca de presenca
+// travada (eventos em que o aluno ja respondeu o questionario)
 async function listarInscricoesDoParticipante(participanteId: string): Promise<InscricaoDetalhada[]> {
-  const [inscricoes, eventos, participante] = await Promise.all([
+  const [inscricoes, eventos, participante, tentativas] = await Promise.all([
     inscricaoService.list(),
     eventoService.list(),
     participanteService.get(participanteId),
+    questionarioService.listarTentativasDoParticipante(participanteId),
   ]);
+  const eventosRespondidos = new Set(tentativas.map((t) => t.eventoId));
 
   return inscricoes
     .filter((i) => i.participanteId === participanteId)
@@ -37,6 +43,7 @@ async function listarInscricoesDoParticipante(participanteId: string): Promise<I
         participanteRgm: participante?.rgm ?? "",
         eventoTitulo: evento?.titulo ?? "Evento removido",
         eventoHorario: evento?.horario ?? "",
+        presencaTravada: eventosRespondidos.has(inscricao.eventoId),
       };
     });
 }

@@ -103,6 +103,24 @@ export interface Inscricao {
   dataInscricao: string;
 }
 
+// certificado emitido (gravado na primeira emissao): os dados impressos no PDF sao uma copia tirada
+// naquele momento, nao mudam se o evento ou o cadastro do aluno forem editados depois
+export interface Certificado {
+  id: string;
+  inscricaoId: string;
+  eventoId: string;
+  participanteId: string;
+  codigoValidacao: string;
+  nomeParticipante: string;
+  rgm: string;
+  tituloEvento: string;
+  temaEvento: string;
+  nomePalestrante: string;
+  dataEvento: string; // ISO-8601
+  cargaHoraria: number;
+  emitidoEm: string; // ISO-8601
+}
+
 export interface Feedback {
   id: string;
   eventoId: string;

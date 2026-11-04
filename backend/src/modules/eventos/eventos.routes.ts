@@ -4,6 +4,7 @@ import { autenticar, autorizar } from "../../middleware/auth";
 import { validarCorpo } from "../../middleware/validate";
 import { eventoParaDTO, inscricaoParaDTO, tentativaParaDTO } from "../../utils/dto";
 import { AppError } from "../../errors/AppError";
+import { inscricoesService } from "../inscricoes/inscricoes.service";
 import { questionarioService } from "../questionario/questionario.service";
 import { respostasQuestionarioSchema } from "../questionario/questionario.schemas";
 import { eventosService } from "./eventos.service";
@@ -57,7 +58,7 @@ eventosRouter.put(
   }),
 );
 
-// remove um evento e o que depende dele, so admin/secretaria
+// remove um evento, so admin/secretaria — 409 se ainda tiver inscricao (nada some em cascata)
 eventosRouter.delete(
   "/:id",
   autenticar,
@@ -80,6 +81,22 @@ eventosRouter.post(
     }
     const inscricao = await eventosService.autoinscrever(req.params.eventoId, participanteId, req.usuario!.sub);
     res.status(201).json(inscricaoParaDTO(inscricao));
+  }),
+);
+
+// RF025: o aluno cancela a propria inscricao no evento — sempre a do participante do token. A
+// regra (presenca pendente, evento ainda nao comecou) e a mesma do cancelamento pela equipe
+eventosRouter.delete(
+  "/:eventoId/inscricoes",
+  autenticar,
+  autorizar("ALUNO"),
+  asyncHandler(async (req, res) => {
+    const participanteId = req.usuario!.participanteId;
+    if (!participanteId) {
+      throw AppError.acessoNegado("Esta conta não está vinculada a um participante.");
+    }
+    await inscricoesService.cancelarPeloAluno(req.params.eventoId, participanteId, req.usuario!.sub);
+    res.status(204).send();
   }),
 );
 

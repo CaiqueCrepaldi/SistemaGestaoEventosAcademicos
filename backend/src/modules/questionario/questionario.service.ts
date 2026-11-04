@@ -96,9 +96,10 @@ async function listarTentativas(eventoId: string, participanteId: string) {
   return tentativas.map(paraDominio);
 }
 
-// lista todas as tentativas de todo mundo, usado na tela de certificados da equipe
-async function listarTodas() {
-  const tentativas = await prisma.tentativaQuestionario.findMany({ orderBy: { criadoEm: "asc" } });
+// lista as tentativas de todo mundo (tela de certificados da equipe) ou so as de um aluno (tela de
+// check-in, que trava a presenca de quem ja respondeu o questionario do evento)
+async function listarTodas(participanteId?: string) {
+  const tentativas = await prisma.tentativaQuestionario.findMany({ where: { participanteId }, orderBy: { criadoEm: "asc" } });
   return tentativas.map(paraDominio);
 }
 

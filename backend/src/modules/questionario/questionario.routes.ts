@@ -4,16 +4,17 @@ import { autenticar, autorizar } from "../../middleware/auth";
 import { tentativaParaDTO } from "../../utils/dto";
 import { questionarioService } from "./questionario.service";
 
-// rota separada de /eventos/:eventoId, usada so pela tela de certificados da
-// equipe que precisa da nota de todo mundo em todo evento de uma vez
+// rota separada de /eventos/:eventoId, usada pelas telas da equipe: Certificados (nota de todo
+// mundo em todo evento de uma vez) e Check-in (?participanteId= — so as tentativas de um aluno)
 export const questionarioRouter = Router();
 
 questionarioRouter.get(
   "/",
   autenticar,
   autorizar("ADMINISTRADOR", "SECRETARIA"),
-  asyncHandler(async (_req, res) => {
-    const tentativas = await questionarioService.listarTodas();
+  asyncHandler(async (req, res) => {
+    const participanteId = typeof req.query.participanteId === "string" ? req.query.participanteId : undefined;
+    const tentativas = await questionarioService.listarTodas(participanteId);
     res.json(tentativas.map(tentativaParaDTO));
   }),
 );

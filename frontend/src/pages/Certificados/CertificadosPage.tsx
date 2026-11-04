@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
-import { certificadoService, eventoService, type CertificadoDisponivel } from "../../services";
+import { certificadoService, eventoService, formatarCodigoValidacao, type CertificadoDisponivel } from "../../services";
 import type { Evento } from "../../types";
 import { MAX_TENTATIVAS_QUESTIONARIO, PERCENTUAL_APROVACAO } from "../../utils/questionario";
 
-// tela de certificados, aluno emite o proprio, equipe ve de todo mundo
+// tela de certificados, aluno emite o proprio, equipe ve de todo mundo. A emissao e sempre pelo
+// backend (que confere os requisitos e grava o certificado na primeira vez); o PDF sai do que voltou
 export function CertificadosPage() {
   const { usuario } = useAuth();
   const isEquipe = usuario?.perfil === "ADMINISTRADOR" || usuario?.perfil === "SECRETARIA";
@@ -15,6 +17,8 @@ export function CertificadosPage() {
   const [certificados, setCertificados] = useState<CertificadoDisponivel[]>([]);
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [filtroEventoId, setFiltroEventoId] = useState("");
+  // inscricao cujo certificado esta sendo emitido agora (evita clique duplo)
+  const [emitindo, setEmitindo] = useState<string | null>(null);
 
   useEffect(() => {
     void carregar();
@@ -22,12 +26,31 @@ export function CertificadosPage() {
 
   // equipe carrega certificado de todo mundo, aluno so os proprios
   async function carregar() {
-    if (isEquipe) {
-      const [c, e] = await Promise.all([certificadoService.listarTodosCertificados(), eventoService.list()]);
-      setCertificados(c);
-      setEventos(e);
-    } else if (usuario?.participanteId) {
-      setCertificados(await certificadoService.listarCertificadosDoParticipante(usuario.participanteId));
+    try {
+      if (isEquipe) {
+        const [c, e] = await Promise.all([certificadoService.listarTodosCertificados(), eventoService.list()]);
+        setCertificados(c);
+        setEventos(e);
+      } else if (usuario?.participanteId) {
+        setCertificados(await certificadoService.listarCertificadosDoParticipante(usuario.participanteId));
+      }
+    } catch (erro) {
+      toast.error(erro instanceof Error ? erro.message : "Não foi possível carregar os certificados.");
+    }
+  }
+
+  // pede a emissao ao backend e baixa o PDF; na primeira vez o codigo novo passa a aparecer na tela
+  async function emitir(certificado: CertificadoDisponivel) {
+    setEmitindo(certificado.inscricaoId);
+    try {
+      const emitido = await certificadoService.emitirEBaixar(certificado.inscricaoId);
+      setCertificados((lista) =>
+        lista.map((c) => (c.inscricaoId === emitido.inscricaoId ? { ...c, codigoValidacao: emitido.codigoValidacao } : c)),
+      );
+    } catch (erro) {
+      toast.error(erro instanceof Error ? erro.message : "Não foi possível emitir o certificado.");
+    } finally {
+      setEmitindo(null);
     }
   }
 
@@ -63,6 +86,9 @@ export function CertificadosPage() {
                               ? `Responda o questionário (mínimo ${PERCENTUAL_APROVACAO}% de acertos, ${MAX_TENTATIVAS_QUESTIONARIO} tentativas) para liberar o certificado.`
                               : `Última tentativa: ${c.melhorPercentual}% de acertos — mínimo de ${PERCENTUAL_APROVACAO}% necessário (${c.tentativasUsadas}/${MAX_TENTATIVAS_QUESTIONARIO} tentativas usadas).`}
                       </div>
+                      {c.codigoValidacao && (
+                        <div className="simple-list-sub">Código de validação: {formatarCodigoValidacao(c.codigoValidacao)}</div>
+                      )}
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
                       {!c.questionarioAprovado && !tentativasEsgotadas && (
@@ -72,10 +98,10 @@ export function CertificadosPage() {
                       )}
                       <button
                         className="btn btn-primary"
-                        onClick={() => certificadoService.gerarCertificado(c)}
-                        disabled={!c.questionarioAprovado}
+                        onClick={() => void emitir(c)}
+                        disabled={!c.questionarioAprovado || emitindo === c.inscricaoId}
                       >
-                        Emitir certificado
+                        {emitindo === c.inscricaoId ? "Emitindo…" : c.codigoValidacao ? "Baixar certificado" : "Emitir certificado"}
                       </button>
                     </div>
                   </li>
@@ -112,6 +138,7 @@ export function CertificadosPage() {
               <th>Evento</th>
               <th>Carga horária</th>
               <th>Nota do questionário</th>
+              <th>Código de validação</th>
               <th />
             </tr>
           </thead>
@@ -125,16 +152,22 @@ export function CertificadosPage() {
                 <td>{c.eventoTitulo}</td>
                 <td>{c.cargaHoraria}h</td>
                 <td>{c.melhorPercentual === null ? "—" : `${c.melhorPercentual}%`}</td>
+                <td>{c.codigoValidacao ? formatarCodigoValidacao(c.codigoValidacao) : "Não emitido"}</td>
                 <td className="table-actions">
-                  <button className="btn btn-ghost" onClick={() => certificadoService.gerarCertificado(c)}>
-                    Emitir certificado
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() => void emitir(c)}
+                    disabled={!c.questionarioAprovado || emitindo === c.inscricaoId}
+                    title={c.questionarioAprovado ? undefined : `Liberado com presença confirmada e ${PERCENTUAL_APROVACAO}% no questionário`}
+                  >
+                    {emitindo === c.inscricaoId ? "Emitindo…" : c.codigoValidacao ? "Baixar certificado" : "Emitir certificado"}
                   </button>
                 </td>
               </tr>
             ))}
             {filtrados.length === 0 && (
               <tr>
-                <td colSpan={6} className="empty-cell">
+                <td colSpan={7} className="empty-cell">
                   Nenhum certificado disponível para os filtros aplicados.
                 </td>
               </tr>

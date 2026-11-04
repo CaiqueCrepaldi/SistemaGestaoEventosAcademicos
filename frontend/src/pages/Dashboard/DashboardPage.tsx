@@ -103,6 +103,12 @@ export function DashboardPage() {
           tone="blue"
         />
         <StatCard
+          label="Ocupação média das salas"
+          value={totais.ocupacaoMediaSalas === null ? "—" : `${Math.round(totais.ocupacaoMediaSalas)}%`}
+          hint={totais.ocupacaoMediaSalas === null ? "Nenhum evento cadastrado" : "Inscritos ÷ capacidade, média dos eventos"}
+          tone="purple"
+        />
+        <StatCard
           label="Taxa de presença"
           value={totais.taxaPresenca === null ? "—" : `${Math.round(totais.taxaPresenca)}%`}
           hint={checkins === 0 ? "Nenhum check-in registrado" : `${numero(totais.presentes)} presentes de ${plural(checkins, "check-in", "check-ins")}`}

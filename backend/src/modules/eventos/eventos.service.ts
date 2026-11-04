@@ -56,9 +56,29 @@ async function validarReferencias(dados: Partial<Pick<EventoInput, "salaId" | "p
   }
 }
 
+const HORA_MS = 60 * 60 * 1000;
+
+// RF024: um evento ocupa a sala no intervalo [horario, horario + cargaHoraria horas). Intervalo
+// semiaberto: evento que termina exatamente quando o outro comeca NAO e conflito. Na edicao,
+// "ignorarEventoId" tira o proprio evento da comparacao
+async function validarConflitoDeSala(salaId: string, inicio: Date, cargaHoraria: number, ignorarEventoId?: string) {
+  const fim = new Date(inicio.getTime() + cargaHoraria * HORA_MS);
+  // so os que comecam antes do fim deste podem cruzar; o fim de cada um e conferido abaixo
+  const candidatos = await prisma.evento.findMany({
+    where: { salaId, horario: { lt: fim }, ...(ignorarEventoId ? { id: { not: ignorarEventoId } } : {}) },
+    select: { titulo: true, horario: true, cargaHoraria: true },
+    orderBy: { horario: "asc" },
+  });
+  const conflito = candidatos.find((outro) => outro.horario.getTime() + outro.cargaHoraria * HORA_MS > inicio.getTime());
+  if (conflito) {
+    throw AppError.conflito("CONFLITO_DE_SALA", `A sala já está ocupada pelo evento "${conflito.titulo}" nesse horário.`);
+  }
+}
+
 // cadastra um evento novo
 async function criar(dados: EventoInput, atorId: string) {
   await validarReferencias(dados);
+  await validarConflitoDeSala(dados.salaId, new Date(dados.horario), dados.cargaHoraria);
   const evento = await prisma.evento.create({
     data: {
       id: randomUUID(),
@@ -75,10 +95,19 @@ async function criar(dados: EventoInput, atorId: string) {
   return paraDominio(evento);
 }
 
-// edita um evento existente
+// edita um evento existente. Se sala, horario ou carga horaria vierem no patch, confere o conflito
+// de sala com os valores finais (o que veio + o que ja estava gravado), ignorando o proprio evento
 async function atualizar(id: string, dados: EventoUpdateInput, atorId: string) {
-  await buscarOuFalhar(id);
+  const atual = await buscarOuFalhar(id);
   await validarReferencias(dados);
+  if (dados.salaId !== undefined || dados.horario !== undefined || dados.cargaHoraria !== undefined) {
+    await validarConflitoDeSala(
+      dados.salaId ?? atual.salaId,
+      new Date(dados.horario ?? atual.horario),
+      dados.cargaHoraria ?? atual.cargaHoraria,
+      id,
+    );
+  }
   const evento = await prisma.evento.update({
     where: { id },
     data: {
@@ -95,21 +124,17 @@ async function atualizar(id: string, dados: EventoUpdateInput, atorId: string) {
   return paraDominio(evento);
 }
 
-// remove o evento; inscricao/feedback/tentativa vinculados somem juntos (onDelete: Cascade no schema),
-// entao conta o que vai junto antes pra trilha mostrar o tamanho real do estrago
+// RF009/RNF010: evento com qualquer inscricao NAO e excluido — nada mais some em cascata pela API.
+// A equipe cancela as inscricoes antes (so as pendentes de evento futuro podem ser canceladas, ver
+// inscricoes.service.ts), entao evento que ja teve presenca/certificado fica preservado
 async function remover(id: string, atorId: string) {
   await buscarOuFalhar(id);
-  const [inscricoes, feedbacks, tentativas] = await Promise.all([
-    prisma.inscricao.count({ where: { eventoId: id } }),
-    prisma.feedback.count({ where: { eventoId: id } }),
-    prisma.tentativaQuestionario.count({ where: { eventoId: id } }),
-  ]);
+  const inscricoes = await prisma.inscricao.count({ where: { eventoId: id } });
+  if (inscricoes > 0) {
+    throw AppError.conflito("EVENTO_COM_INSCRICOES", "Cancele as inscrições antes de excluir o evento.");
+  }
   await prisma.evento.delete({ where: { id } });
-  await registrarAuditoria(
-    atorId,
-    "EVENTO_REMOVIDO",
-    `evento ${id} (removidos junto: ${inscricoes} inscrições, ${feedbacks} feedbacks, ${tentativas} tentativas de questionário)`,
-  );
+  await registrarAuditoria(atorId, "EVENTO_REMOVIDO", `evento ${id}`);
 }
 
 // autoinscricao do aluno logado: checa conta ativa, duplicidade e vaga antes de criar

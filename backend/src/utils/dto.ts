@@ -1,4 +1,5 @@
 import type {
+  Certificado,
   Evento,
   Feedback,
   Inscricao,
@@ -128,6 +129,37 @@ export function inscricaoParaDTO(inscricao: Inscricao) {
     dataCheckin: inscricao.dataCheckin,
     usuarioId: inscricao.usuarioId,
     dataInscricao: inscricao.dataInscricao,
+  };
+}
+
+// certificado emitido com tudo que vai impresso no PDF — so pro dono (aluno) e pra equipe
+export function certificadoParaDTO(certificado: Certificado) {
+  return {
+    id: certificado.id,
+    inscricaoId: certificado.inscricaoId,
+    eventoId: certificado.eventoId,
+    participanteId: certificado.participanteId,
+    codigoValidacao: certificado.codigoValidacao,
+    nomeParticipante: certificado.nomeParticipante,
+    rgm: certificado.rgm,
+    tituloEvento: certificado.tituloEvento,
+    temaEvento: certificado.temaEvento,
+    nomePalestrante: certificado.nomePalestrante,
+    dataEvento: certificado.dataEvento,
+    cargaHoraria: certificado.cargaHoraria,
+    emitidoEm: certificado.emitidoEm,
+  };
+}
+
+// o que a validacao publica (sem login) devolve: o minimo pra conferir o documento impresso.
+// Lista campo a campo de proposito — RGM, e-mail e ids internos nunca saem por aqui
+export function certificadoPublicoParaDTO(certificado: Certificado) {
+  return {
+    nomeParticipante: certificado.nomeParticipante,
+    tituloEvento: certificado.tituloEvento,
+    dataEvento: certificado.dataEvento,
+    cargaHoraria: certificado.cargaHoraria,
+    emitidoEm: certificado.emitidoEm,
   };
 }
 

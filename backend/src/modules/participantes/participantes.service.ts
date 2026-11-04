@@ -182,6 +182,16 @@ async function remover(id: string, atorId: string) {
     throw AppError.conflito("USUARIO_PROTEGIDO", "Administrador e secretaria não podem ser removidos.");
   }
 
+  // certificado emitido segura a inscricao (onDelete: Restrict no schema): o codigo impresso no PDF
+  // precisa continuar validando. O banco barraria do mesmo jeito, isto so da uma mensagem melhor
+  const certificados = await prisma.certificado.count({ where: { inscricao: { participanteId: id } } });
+  if (certificados > 0) {
+    throw AppError.conflito(
+      "PARTICIPANTE_COM_CERTIFICADO",
+      "Não é possível remover: o aluno tem certificado emitido, que precisa continuar válido para consulta.",
+    );
+  }
+
   const [tentativas, feedbacks, inscricoes] = await prisma.$transaction([
     prisma.tentativaQuestionario.deleteMany({ where: { participanteId: id } }),
     prisma.feedback.deleteMany({ where: { participanteId: id } }),

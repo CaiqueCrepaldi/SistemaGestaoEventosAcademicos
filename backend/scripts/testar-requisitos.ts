@@ -308,6 +308,31 @@ async function main() {
     r = await chamar("DELETE", `/palestrantes/${palestranteId}`, { token: admin.token });
     checar("excluir palestrante com evento vinculado -> 409", r.status === 409, r.corpo);
 
+    // ------------------------------------------------------------------ RF024: conflito de sala
+    requisito("R26 Conflito de sala (RF024)");
+    const emHoras = (iso: string, horas: number) => new Date(new Date(iso).getTime() + horas * 3600 * 1000).toISOString();
+    // "Evento Lotado" ocupa a sala pequena de amanha ate amanha + 2h
+    r = await chamar("POST", "/eventos", {
+      token: admin.token,
+      corpo: { ...eventoBase, titulo: `Evento Cruzado ${sufixo}`, salaId: salaPequenaId, horario: emHoras(amanha, 1), questionario: questionario() },
+    });
+    checar(
+      "evento que cruza outro na mesma sala -> 409 CONFLITO_DE_SALA citando o outro evento",
+      r.status === 409 && r.corpo.code === "CONFLITO_DE_SALA" && r.corpo.message.includes(`Evento Lotado ${sufixo}`),
+      r.corpo,
+    );
+    r = await chamar("POST", "/eventos", {
+      token: admin.token,
+      corpo: { ...eventoBase, titulo: `Evento Encostado ${sufixo}`, salaId: salaPequenaId, horario: emHoras(amanha, 2), cargaHoraria: 1, questionario: questionario() },
+    });
+    checar("evento que começa exatamente quando o outro termina não é conflito -> 201", r.status === 201, r.corpo);
+    const eventoEncostadoId: string = r.corpo.id;
+    eventos.push(eventoEncostadoId);
+    r = await chamar("PUT", `/eventos/${eventoLotadoId}`, { token: secretaria.token, corpo: { horario: amanha, cargaHoraria: 2 } });
+    checar("editar mantendo o horário não conflita com o próprio evento -> 200", r.status === 200, r.corpo);
+    r = await chamar("PUT", `/eventos/${eventoEncostadoId}`, { token: secretaria.token, corpo: { horario: emHoras(amanha, 1) } });
+    checar("editar pra cima do horário de outro evento da sala -> 409", r.status === 409 && r.corpo.code === "CONFLITO_DE_SALA", r.corpo);
+
     // ------------------------------------------------------------------ inscricoes e check-in
     requisito("R08 Autoinscrição do aluno");
     r = await chamar("POST", `/eventos/${eventoId}/inscricoes`, { token: aluno.token, corpo: { participanteId: aluno2.participanteId } });
@@ -339,6 +364,52 @@ async function main() {
       vistoPeloAluno?.inscritos === 2 && vistoPelaEquipe?.inscritos === 2,
       [vistoPeloAluno?.inscritos, vistoPelaEquipe?.inscritos],
     );
+
+    // ------------------------------------------------------------------ RF025: cancelamento de inscricao
+    requisito("R27 Cancelamento de inscrição (RF025)");
+    // "Evento Encostado" fica na sala pequena (1 vaga)
+    r = await chamar("POST", `/eventos/${eventoEncostadoId}/inscricoes`, { token: aluno.token });
+    checar("aluno ocupa a única vaga do evento -> 201", r.status === 201, r.corpo);
+    r = await chamar("DELETE", `/eventos/${eventoEncostadoId}/inscricoes`, { token: aluno.token });
+    checar("aluno cancela a própria inscrição pendente -> 204", r.status === 204, r.corpo);
+    checar(
+      "cancelamento pelo aluno na auditoria (INSCRICAO_CANCELADA)",
+      !!(await prisma.logAuditoria.findFirst({ where: { acao: "INSCRICAO_CANCELADA", usuarioId: aluno.id, detalhe: { contains: "pelo próprio aluno" } } })),
+    );
+    r = await chamar("DELETE", `/eventos/${eventoEncostadoId}/inscricoes`, { token: aluno.token });
+    checar("cancelar sem estar inscrito -> 404", r.status === 404, r.corpo);
+    r = await chamar("DELETE", `/eventos/${eventoEncostadoId}/inscricoes`, { token: secretaria.token });
+    checar("equipe não usa a rota de cancelamento do aluno -> 403", r.status === 403, r.status);
+    r = await chamar("POST", `/eventos/${eventoEncostadoId}/inscricoes`, { token: aluno2.token });
+    checar("a vaga liberada pode ser ocupada por outro aluno -> 201", r.status === 201, r.corpo);
+    const inscricaoEncostadaAluno2: string = r.corpo.id;
+    r = await chamar("DELETE", `/inscricoes/${inscricaoEncostadaAluno2}`, { token: secretaria.token });
+    checar("secretaria cancela a inscrição pendente de um aluno -> 204", r.status === 204, r.corpo);
+    checar(
+      "cancelamento pela equipe na auditoria, com o aviso por e-mail ao aluno",
+      !!(await prisma.logAuditoria.findFirst({ where: { acao: "INSCRICAO_CANCELADA", usuarioId: secretaria.id, detalhe: { contains: inscricaoEncostadaAluno2 } } })) &&
+        !!(await prisma.logAuditoria.findFirst({
+          where: { acao: "EMAIL_ENVIADO", usuarioId: secretaria.id, detalhe: { contains: `cancelamento de inscrição, inscrição ${inscricaoEncostadaAluno2}` } },
+        })),
+    );
+    r = await chamar("POST", `/eventos/${eventoEncostadoId}/inscricoes`, { token: aluno.token });
+    checar("quem cancelou pode se inscrever de novo -> 201", r.status === 201, r.corpo);
+    const inscricaoEncostadaAluno: string = r.corpo.id;
+    await chamar("PUT", `/inscricoes/${inscricaoEncostadaAluno}`, { token: secretaria.token, corpo: { statusPresenca: "AUSENTE" } });
+    r = await chamar("DELETE", `/eventos/${eventoEncostadoId}/inscricoes`, { token: aluno.token });
+    checar("presença já registrada no check-in não cancela -> 409", r.status === 409 && r.corpo.code === "PRESENCA_JA_REGISTRADA", r.corpo);
+    r = await chamar("POST", "/eventos", {
+      token: admin.token,
+      corpo: { ...eventoBase, titulo: `Evento Iniciado ${sufixo}`, salaId: salaPequenaId, horario: emHoras(amanha, -72), questionario: questionario() },
+    });
+    const eventoIniciadoId: string = r.corpo.id;
+    eventos.push(eventoIniciadoId);
+    r = await chamar("POST", "/inscricoes", { token: secretaria.token, corpo: { participanteId: aluno.participanteId, eventoId: eventoIniciadoId } });
+    const inscricaoIniciada: string = r.corpo.id;
+    r = await chamar("DELETE", `/eventos/${eventoIniciadoId}/inscricoes`, { token: aluno.token });
+    checar("evento que já começou: aluno não cancela -> 409", r.status === 409 && r.corpo.code === "EVENTO_JA_INICIADO", r.corpo);
+    r = await chamar("DELETE", `/inscricoes/${inscricaoIniciada}`, { token: secretaria.token });
+    checar("a mesma regra vale pra equipe -> 409", r.status === 409 && r.corpo.code === "EVENTO_JA_INICIADO", r.corpo);
 
     requisito("R10 Aluno só vê as próprias inscrições");
     r = await chamar("GET", `/inscricoes?participanteId=${aluno2.participanteId}`, { token: aluno.token });
@@ -384,6 +455,93 @@ async function main() {
     await chamar("POST", `/eventos/${eventoId}/questionario/respostas`, { token: aluno2.token, corpo: { respostas: Array(10).fill(2) } });
     r = await chamar("POST", `/eventos/${eventoId}/questionario/respostas`, { token: aluno2.token, corpo: { respostas: Array(10).fill(0) } });
     checar("terceira tentativa -> 409 LIMITE_TENTATIVAS_ATINGIDO", r.status === 409 && r.corpo.code === "LIMITE_TENTATIVAS_ATINGIDO", r.corpo);
+
+    // ------------------------------------------------------------------ RF015: presenca travada
+    requisito("R28 Presença travada depois do questionário (RF015)");
+    r = await chamar("PUT", `/inscricoes/${inscricaoAluno}`, { token: secretaria.token, corpo: { statusPresenca: "AUSENTE" } });
+    checar(
+      "mudar a presença de quem já respondeu o questionário -> 409 com a mensagem da regra",
+      r.status === 409 && r.corpo.code === "PRESENCA_TRAVADA" && r.corpo.message === "A presença não pode mais ser alterada: o aluno já respondeu o questionário.",
+      r.corpo,
+    );
+    r = await chamar("DELETE", `/inscricoes/${inscricaoAluno}`, { token: secretaria.token });
+    checar("excluir a inscrição de quem já respondeu o questionário -> 409", r.status === 409 && r.corpo.code === "PRESENCA_TRAVADA", r.corpo);
+    checar("a presença continua confirmada", (await prisma.inscricao.findUnique({ where: { id: inscricaoAluno } }))?.statusPresenca === "PRESENTE");
+    r = await chamar("GET", `/questionario-tentativas?participanteId=${aluno.participanteId}`, { token: secretaria.token });
+    checar(
+      "equipe consulta as tentativas de um aluno só (tela de Check-in)",
+      r.status === 200 && r.corpo.length > 0 && r.corpo.every((t: { participanteId: string }) => t.participanteId === aluno.participanteId),
+      r.corpo,
+    );
+
+    // ------------------------------------------------------------------ RF018/RF019/RF027: certificado registrado
+    requisito("R29 Certificado registrado e validação pública (RF018, RF019, RF027)");
+    r = await chamar("POST", `/certificados/emitir/${inscricaoAluno2}`, { token: aluno2.token });
+    checar("sem a nota mínima não emite -> 409 CERTIFICADO_NAO_LIBERADO", r.status === 409 && r.corpo.code === "CERTIFICADO_NAO_LIBERADO", r.corpo);
+    r = await chamar("POST", `/certificados/emitir/${inscricaoEncostadaAluno}`, { token: aluno.token });
+    checar("sem presença confirmada não emite -> 409", r.status === 409 && r.corpo.code === "CERTIFICADO_NAO_LIBERADO", r.corpo);
+    r = await chamar("POST", `/certificados/emitir/${inscricaoAluno}`, { token: aluno2.token });
+    checar("aluno não emite o certificado de outra pessoa -> 403", r.status === 403, r.status);
+    r = await chamar("POST", `/certificados/emitir/${inscricaoAluno}`, { token: aluno.token });
+    const certificado = r.corpo;
+    checar(
+      "primeira emissão grava o certificado -> 201, código aleatório de 12 caracteres e os dados impressos",
+      r.status === 201 &&
+        /^[0-9A-HJKMNP-TV-Z]{12}$/.test(certificado.codigoValidacao ?? "") &&
+        certificado.nomeParticipante === "Aluno Teste Requisitos" &&
+        certificado.rgm === rgmAluno &&
+        certificado.tituloEvento === `Evento Teste ${sufixo}` &&
+        certificado.temaEvento === "Tema editado" &&
+        certificado.nomePalestrante === "Palestrante Teste" &&
+        certificado.cargaHoraria === 2,
+      r.corpo,
+    );
+    r = await chamar("POST", `/certificados/emitir/${inscricaoAluno}`, { token: aluno.token });
+    checar(
+      "emitir de novo devolve o mesmo registro, sem regerar -> 200",
+      r.status === 200 && r.corpo.id === certificado.id && r.corpo.codigoValidacao === certificado.codigoValidacao && r.corpo.emitidoEm === certificado.emitidoEm,
+      r.corpo,
+    );
+    r = await chamar("POST", `/certificados/emitir/${inscricaoAluno}`, { token: secretaria.token });
+    checar("secretaria emite o certificado do aluno -> o mesmo código", r.status === 200 && r.corpo.codigoValidacao === certificado.codigoValidacao, r.corpo);
+    checar(
+      "emissão registrada na auditoria (CERTIFICADO_EMITIDO)",
+      !!(await prisma.logAuditoria.findFirst({ where: { acao: "CERTIFICADO_EMITIDO", usuarioId: aluno.id, detalhe: { contains: "primeira emissão" } } })),
+    );
+    r = await chamar("GET", "/certificados", { token: aluno2.token });
+    checar(
+      "aluno só lista os próprios certificados",
+      r.status === 200 && r.corpo.every((c: { participanteId: string }) => c.participanteId === aluno2.participanteId) && !r.corpo.some((c: { id: string }) => c.id === certificado.id),
+      r.corpo,
+    );
+    r = await chamar("GET", `/certificados?eventoId=${eventoId}`, { token: secretaria.token });
+    checar("equipe lista os certificados do evento", r.status === 200 && r.corpo.some((c: { id: string }) => c.id === certificado.id), r.corpo);
+    r = await chamar("GET", `/certificados/validar/${certificado.codigoValidacao}`);
+    checar(
+      "validação pública, sem token -> 200 com nome, evento, data, carga horária e emissão",
+      r.status === 200 &&
+        r.corpo.nomeParticipante === "Aluno Teste Requisitos" &&
+        r.corpo.tituloEvento === `Evento Teste ${sufixo}` &&
+        r.corpo.cargaHoraria === 2 &&
+        !!r.corpo.dataEvento &&
+        r.corpo.emitidoEm === certificado.emitidoEm,
+      r.corpo,
+    );
+    checar(
+      "validação pública não devolve RGM, e-mail nem ids internos",
+      Object.keys(r.corpo ?? {}).sort().join(",") === "cargaHoraria,dataEvento,emitidoEm,nomeParticipante,tituloEvento" &&
+        !JSON.stringify(r.corpo).includes(rgmAluno) &&
+        !JSON.stringify(r.corpo).includes(emailAluno),
+      r.corpo,
+    );
+    const codigoComoDigitado = `${certificado.codigoValidacao.slice(0, 4)}-${certificado.codigoValidacao.slice(4, 8)}-${certificado.codigoValidacao.slice(8)}`.toLowerCase();
+    r = await chamar("GET", `/certificados/validar/${codigoComoDigitado}`);
+    checar("código digitado em minúsculas e com hífens também valida", r.status === 200, r.corpo);
+    r = await chamar("GET", "/certificados/validar/ZZZZZZZZZZZZ");
+    checar("código inexistente -> 404 Certificado não encontrado", r.status === 404 && r.corpo.message === "Certificado não encontrado.", r.corpo);
+    // o limite e de 30 consultas por IP (todas contam, inclusive as de cima)
+    for (let i = 0; i < 30 && r.status !== 429; i++) r = await chamar("GET", "/certificados/validar/ZZZZZZZZZZZZ");
+    checar("excesso de consultas do mesmo IP -> 429", r.status === 429 && r.corpo.code === "MUITAS_TENTATIVAS", r.corpo);
 
     // ------------------------------------------------------------------ feedback
     requisito("R14 Feedback");
@@ -577,23 +735,54 @@ async function main() {
         eventoNoDashboard.inscritos === eventoNoDashboard.presentes + eventoNoDashboard.ausentes + eventoNoDashboard.pendentes,
       eventoNoDashboard,
     );
+    const ocupacoes = (
+      await prisma.evento.findMany({ select: { sala: { select: { capacidade: true } }, _count: { select: { inscricoes: true } } } })
+    )
+      .filter((e) => e.sala.capacidade > 0)
+      .map((e) => (e._count.inscricoes / e.sala.capacidade) * 100);
+    const ocupacaoEsperada = ocupacoes.length > 0 ? ocupacoes.reduce((soma, o) => soma + o, 0) / ocupacoes.length : null;
+    checar(
+      "ocupação média das salas = média de inscritos / capacidade entre os eventos (RF021)",
+      typeof totais?.ocupacaoMediaSalas === "number" && ocupacaoEsperada !== null && Math.abs(totais.ocupacaoMediaSalas - ocupacaoEsperada) < 0.01,
+      { recebido: totais?.ocupacaoMediaSalas, esperado: ocupacaoEsperada },
+    );
     const textoDashboard = JSON.stringify(r.corpo);
     checar(
       "dashboard não traz dado pessoal (nome, e-mail, RGM de aluno)",
       ![emailAluno, emailAluno2, novoEmailAluno2, rgmAluno, "Aluno Teste Requisitos", "Segundo Aluno Editado"].some((s) => textoDashboard.includes(s)),
     );
 
-    // ------------------------------------------------------------------ exclusao em cascata
-    requisito("R19 Exclusão de evento em cascata");
+    // ------------------------------------------------------------------ RF009/RNF010: exclusao bloqueada
+    requisito("R19 Exclusão de evento bloqueada com inscrições (RF009/RNF010)");
     r = await chamar("DELETE", `/eventos/${eventoId}`, { token: admin.token });
-    const [inscricoesRestantes, feedbacksRestantes, tentativasRestantes] = await Promise.all([
+    const [inscricoesMantidas, tentativasMantidas] = await Promise.all([
       prisma.inscricao.count({ where: { eventoId } }),
-      prisma.feedback.count({ where: { eventoId } }),
       prisma.tentativaQuestionario.count({ where: { eventoId } }),
     ]);
-    checar("evento removido leva inscrições, feedbacks e tentativas", r.status === 204 && inscricoesRestantes + feedbacksRestantes + tentativasRestantes === 0, { inscricoesRestantes, feedbacksRestantes, tentativasRestantes });
-    eventos.splice(eventos.indexOf(eventoId), 1);
+    checar(
+      "evento com inscrições não é excluído -> 409 EVENTO_COM_INSCRICOES, nada é apagado",
+      r.status === 409 &&
+        r.corpo.code === "EVENTO_COM_INSCRICOES" &&
+        r.corpo.message === "Cancele as inscrições antes de excluir o evento." &&
+        inscricoesMantidas > 0 &&
+        tentativasMantidas > 0,
+      { corpo: r.corpo, inscricoesMantidas, tentativasMantidas },
+    );
+    r = await chamar("POST", "/eventos", {
+      token: admin.token,
+      corpo: { ...eventoBase, titulo: `Evento Sem Inscrição ${sufixo}`, horario: emHoras(amanha, 5), questionario: questionario() },
+    });
+    const eventoSemInscricaoId: string = r.corpo.id;
+    eventos.push(eventoSemInscricaoId);
+    r = await chamar("DELETE", `/eventos/${eventoSemInscricaoId}`, { token: admin.token });
+    checar("evento sem inscrição é excluído -> 204", r.status === 204 && !(await prisma.evento.findUnique({ where: { id: eventoSemInscricaoId } })), r.corpo);
+    eventos.splice(eventos.indexOf(eventoSemInscricaoId), 1);
   } finally {
+    // certificado segura a inscricao (onDelete: Restrict), entao sai antes dos eventos e das inscricoes
+    const participantesDoTeste = contas.map((c) => c.participanteId).filter((id): id is string => !!id);
+    await prisma.certificado.deleteMany({
+      where: { inscricao: { OR: [{ eventoId: { in: eventos } }, { participanteId: { in: participantesDoTeste } }] } },
+    });
     for (const id of eventos) await prisma.evento.deleteMany({ where: { id } });
     for (const conta of contas) {
       if (conta.participanteId) {

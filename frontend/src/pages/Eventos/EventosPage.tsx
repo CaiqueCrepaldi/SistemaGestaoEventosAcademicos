@@ -73,6 +73,8 @@ export function EventosPage() {
   const [form, setForm] = useState<FormEvento>(formVazio());
   const [confirmandoSalvar, setConfirmandoSalvar] = useState(false);
   const [excluindo, setExcluindo] = useState<Evento | null>(null);
+  // evento cuja inscricao o aluno esta cancelando (aguardando a confirmacao)
+  const [cancelandoInscricao, setCancelandoInscricao] = useState<Evento | null>(null);
   const { erros, formRef, mostrar, mostrarErroDaApi, limpar, limparAoEditar } = useErrosFormulario();
 
   useEffect(() => {
@@ -115,6 +117,23 @@ export function EventosPage() {
     }
   }
 
+  // aluno cancela a propria inscricao (o backend confere: presenca pendente e evento que nao comecou);
+  // a vaga volta e ele pode se inscrever de novo enquanto houver vaga
+  async function cancelarInscricao() {
+    if (!cancelandoInscricao) return;
+    const evento = cancelandoInscricao;
+    try {
+      await inscricaoAlunoService.cancelar(evento.id);
+      setInscricoes((prev) => prev.filter((i) => !(i.eventoId === evento.id && i.participanteId === usuario?.participanteId)));
+      setAvisoPorEvento((prev) => ({ ...prev, [evento.id]: "Inscrição cancelada." }));
+      toast.success("Inscrição cancelada.");
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Não foi possível cancelar a inscrição.");
+    } finally {
+      setCancelandoInscricao(null);
+    }
+  }
+
   // ALUNO ve lista read-only com botao de inscricao, sem chegar no CRUD abaixo
   if (usuario?.perfil === "ALUNO") {
     return (
@@ -125,9 +144,12 @@ export function EventosPage() {
             {eventos.map((evento) => {
               const sala = salas.find((s) => s.id === evento.salaId);
               const palestrante = palestrantes.find((p) => p.id === evento.palestranteId);
-              const jaInscrito = inscricoes.some(
+              const minhaInscricao = inscricoes.find(
                 (i) => i.participanteId === usuario?.participanteId && i.eventoId === evento.id,
               );
+              const jaInscrito = Boolean(minhaInscricao);
+              // mesma regra do backend: so presenca pendente e evento que ainda nao comecou
+              const podeCancelar = minhaInscricao?.statusPresenca === "PENDENTE" && new Date(evento.horario) > new Date();
               return (
                 <li key={evento.id} className="agenda-item">
                   <div className="agenda-time" style={{ width: 90 }}>
@@ -149,20 +171,34 @@ export function EventosPage() {
                     <div className="simple-list-sub">Local: {sala?.nome ?? "—"}</div>
                     {avisoPorEvento[evento.id] && <p className="form-hint">{avisoPorEvento[evento.id]}</p>}
                   </div>
-                  <button
-                    className="btn btn-primary"
-                    style={{ alignSelf: "center" }}
-                    onClick={() => void inscreverSe(evento)}
-                    disabled={jaInscrito}
-                  >
-                    {jaInscrito ? "Inscrito" : "Inscrever-se"}
-                  </button>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, alignSelf: "center" }}>
+                    <button className="btn btn-primary" onClick={() => void inscreverSe(evento)} disabled={jaInscrito}>
+                      {jaInscrito ? "Inscrito" : "Inscrever-se"}
+                    </button>
+                    {podeCancelar && (
+                      <button className="btn btn-ghost btn-danger" onClick={() => setCancelandoInscricao(evento)}>
+                        Cancelar inscrição
+                      </button>
+                    )}
+                  </div>
                 </li>
               );
             })}
             {eventos.length === 0 && <p className="empty-cell">Nenhum evento cadastrado.</p>}
           </ul>
         </div>
+
+        {cancelandoInscricao && (
+          <ConfirmDialog
+            title="Cancelar inscrição"
+            message={`Cancelar sua inscrição em "${cancelandoInscricao.titulo}"? A vaga fica livre e você pode se inscrever de novo enquanto houver vagas.`}
+            confirmLabel="Cancelar inscrição"
+            cancelLabel="Manter inscrição"
+            tone="danger"
+            onConfirm={() => void cancelarInscricao()}
+            onCancel={() => setCancelandoInscricao(null)}
+          />
+        )}
       </div>
     );
   }
@@ -247,13 +283,31 @@ export function EventosPage() {
       await carregar();
     } catch (e) {
       setConfirmandoSalvar(false);
+      // sala ja ocupada nesse horario por outro evento: a mensagem do backend (com o titulo do outro
+      // evento) aparece embaixo do campo de data/horario
+      if (e instanceof ApiError && e.code === "CONFLITO_DE_SALA") {
+        mostrar({ horario: e.message });
+        return;
+      }
       // a regra de "exatamente 1 correta" o backend devolve em questionario.N.alternativas
       const tratou = mostrarErroDaApi(e, (campo) => campo.replace(/^(questionario\.\d+)\.alternativas$/, "$1.correta"));
       if (!tratou) toast.error(e instanceof ApiError ? e.message : "Não foi possível salvar o evento.");
     }
   }
 
-  // o backend remove junto as inscricoes, feedbacks e tentativas de questionario do evento
+  // evento com inscricao nao e excluido (o backend responde 409): avisa direto, sem abrir a confirmacao
+  function pedirExclusao(evento: Evento) {
+    const inscritos = evento.inscritos ?? 0;
+    if (inscritos > 0) {
+      toast.error(
+        `"${evento.titulo}" tem ${inscritos} ${inscritos === 1 ? "inscrição" : "inscrições"}. Cancele as inscrições antes de excluir o evento.`,
+      );
+      return;
+    }
+    setExcluindo(evento);
+  }
+
+  // so evento sem nenhuma inscricao e excluido; nada mais e apagado em cascata
   async function excluir() {
     if (!excluindo) return;
     try {
@@ -262,6 +316,7 @@ export function EventosPage() {
       setExcluindo(null);
       await carregar();
     } catch (e) {
+      setExcluindo(null);
       toast.error(e instanceof Error ? e.message : "Não foi possível remover o evento.");
     }
   }
@@ -303,7 +358,7 @@ export function EventosPage() {
                   <button className="btn btn-ghost" onClick={() => abrirEdicao(evento)}>
                     Editar
                   </button>
-                  <button className="btn btn-ghost btn-danger" onClick={() => setExcluindo(evento)}>
+                  <button className="btn btn-ghost btn-danger" onClick={() => pedirExclusao(evento)}>
                     Excluir
                   </button>
                 </td>
@@ -467,7 +522,7 @@ export function EventosPage() {
       {excluindo && (
         <ConfirmDialog
           title="Remover evento"
-          message={`Tem certeza que deseja remover "${excluindo.titulo}"? Inscrições, feedbacks e tentativas de questionário vinculados também serão removidos.`}
+          message={`Tem certeza que deseja remover "${excluindo.titulo}"? Essa ação não pode ser desfeita. Eventos com inscrições não podem ser excluídos: cancele as inscrições antes.`}
           confirmLabel="Remover"
           tone="danger"
           onConfirm={() => void excluir()}
