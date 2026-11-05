@@ -89,7 +89,10 @@ export function EsqueciSenhaPage() {
 
         {etapa === "confirmar" && (
           <form onSubmit={confirmarNovaSenha} onChange={limparAoEditar} className="form" ref={formRef} noValidate>
-            <p className="form-hint">Digite o código enviado e escolha uma nova senha.</p>
+            <p className="form-hint">
+              Se houver uma conta com o e-mail informado, enviamos um código de verificação. Digite o código e escolha
+              uma nova senha.
+            </p>
             {codigoDemo && <p className="form-hint">Modo demonstração — código: {codigoDemo}</p>}
             <LegendaObrigatorio />
 

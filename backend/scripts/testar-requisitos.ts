@@ -689,6 +689,62 @@ async function main() {
     r = await chamar("GET", "/meus-dados/exportacao", { token: aluno.token });
     checar("a exportação em arquivo saiu do sistema -> 404", r.status === 404, r.status);
 
+    // ------------------------------------------------------------------ listas da equipe paginadas no servidor
+    // (o teste de carga com 10 mil alunos mostrou as listas inteiras passando do limite de 4,5 MB da Vercel)
+    requisito("R31 Inscrições e certificados da equipe paginados e filtrados no servidor");
+    r = await chamar("GET", `/inscricoes/gestao?eventoId=${eventoId}&pageSize=2`, { token: secretaria.token });
+    const totalDoEvento = await prisma.inscricao.count({ where: { eventoId } });
+    checar(
+      "inscrições: página com total, itens do evento pedido e nome/RGM do aluno já juntos",
+      r.status === 200 &&
+        r.corpo.total === totalDoEvento &&
+        r.corpo.pageSize === 2 &&
+        r.corpo.itens.length === Math.min(2, totalDoEvento) &&
+        r.corpo.totalPages === Math.ceil(totalDoEvento / 2) &&
+        r.corpo.itens.every((i: { eventoId: string; eventoTitulo: string; participanteNome: string }) => i.eventoId === eventoId && !!i.eventoTitulo && !!i.participanteNome),
+      r.corpo,
+    );
+    r = await chamar("GET", `/inscricoes/gestao?busca=${rgmAluno}`, { token: secretaria.token });
+    const inscricoesDoAluno = await prisma.inscricao.count({ where: { participanteId: aluno.participanteId! } });
+    checar(
+      "inscrições: busca pelo RGM traz só as do aluno",
+      r.status === 200 &&
+        r.corpo.total === inscricoesDoAluno &&
+        r.corpo.itens.every((i: { participanteId: string; participanteRgm: string }) => i.participanteId === aluno.participanteId && i.participanteRgm === rgmAluno),
+      r.corpo,
+    );
+    r = await chamar("GET", `/inscricoes/gestao?eventoId=${eventoId}&status=PRESENTE`, { token: secretaria.token });
+    checar(
+      "inscrições: filtro por presença",
+      r.status === 200 && r.corpo.total > 0 && r.corpo.itens.every((i: { statusPresenca: string }) => i.statusPresenca === "PRESENTE"),
+      r.corpo,
+    );
+    r = await chamar("GET", "/inscricoes/gestao?status=TALVEZ", { token: secretaria.token });
+    checar("inscrições: filtro inválido -> 422", r.status === 422, r.corpo);
+    r = await chamar("GET", "/inscricoes/gestao", { token: aluno.token });
+    checar("inscrições: aluno não usa a lista da equipe -> 403", r.status === 403, r.status);
+    r = await chamar("GET", `/certificados/situacao?eventoId=${eventoId}&busca=${rgmAluno}`, { token: secretaria.token });
+    checar(
+      "certificados: situação montada no servidor (melhor nota, tentativas e código emitido)",
+      r.status === 200 &&
+        r.corpo.total === 1 &&
+        r.corpo.itens[0].inscricaoId === inscricaoAluno &&
+        r.corpo.itens[0].melhorPercentual === 100 &&
+        r.corpo.itens[0].tentativasUsadas === 2 &&
+        r.corpo.itens[0].questionarioAprovado === true &&
+        r.corpo.itens[0].codigoValidacao === certificado.codigoValidacao,
+      r.corpo,
+    );
+    r = await chamar("GET", `/certificados/situacao?eventoId=${eventoId}&pageSize=1`, { token: secretaria.token });
+    const presentesNoEvento = await prisma.inscricao.count({ where: { eventoId, statusPresenca: "PRESENTE" } });
+    checar(
+      "certificados: só inscrições com presença confirmada, uma página por vez",
+      r.status === 200 && r.corpo.total === presentesNoEvento && r.corpo.itens.length === 1,
+      r.corpo,
+    );
+    r = await chamar("GET", "/certificados/situacao", { token: aluno.token });
+    checar("certificados: aluno não usa a lista da equipe -> 403", r.status === 403, r.status);
+
     requisito("R22 Feedback: sem edição; exclusão pelo aluno ou pela equipe com motivo");
     r = await chamar("PUT", `/feedbacks/${feedbackId}`, { token: aluno.token, corpo: { nota: 1 } });
     checar("aluno não edita o próprio feedback -> 403", r.status === 403, r.corpo);
@@ -730,8 +786,22 @@ async function main() {
 
     // ------------------------------------------------------------------ participantes
     requisito("R15 Participantes: listagem e edição pela equipe");
-    r = await chamar("GET", "/participantes/alunos", { token: secretaria.token });
-    checar("lista de alunos (check-in) traz o aluno já legível", r.status === 200 && r.corpo.some((p: { id: string; email: string }) => p.id === aluno.participanteId && p.email === emailAluno), r.status);
+    r = await chamar("GET", `/participantes/alunos?busca=${rgmAluno}`, { token: secretaria.token });
+    checar(
+      "busca de alunos (check-in) por RGM traz o aluno já legível",
+      r.status === 200 && r.corpo.length === 1 && r.corpo[0].id === aluno.participanteId && r.corpo[0].email === emailAluno,
+      r.corpo,
+    );
+    r = await chamar("GET", `/participantes/alunos?busca=${encodeURIComponent("aluno teste requisitos")}`, { token: secretaria.token });
+    checar(
+      "busca por nome no servidor ignora maiúsculas/minúsculas",
+      r.status === 200 && r.corpo.some((p: { id: string }) => p.id === aluno.participanteId),
+      r.corpo?.length,
+    );
+    r = await chamar("GET", "/participantes/alunos?limite=1", { token: secretaria.token });
+    checar("a busca devolve no máximo o limite pedido (não baixa todos os alunos)", r.status === 200 && r.corpo.length === 1, r.corpo?.length);
+    r = await chamar("GET", "/participantes/alunos", { token: aluno.token });
+    checar("aluno não busca outros alunos -> 403", r.status === 403, r.status);
     const novoEmailAluno2 = `req.aluno2.corrigido.${sufixo}@alunos.umc.br`;
     r = await chamar("PUT", `/participantes/${aluno2.participanteId}`, {
       token: secretaria.token,
@@ -817,6 +887,20 @@ async function main() {
     r = await chamar("POST", "/auth/recuperacao-senha", { corpo: { email: emailAluno } });
     checar("pede o código -> 200 (em dev devolve codigoDemo)", r.status === 200 && /^\d{6}$/.test(r.corpo.codigoDemo ?? ""), r.corpo);
     const codigoDemo: string = r.corpo.codigoDemo;
+    const emailSemConta = `ninguem.${sufixo}@alunos.umc.br`;
+    const pedidoSemConta = await chamar("POST", "/auth/recuperacao-senha", { corpo: { email: emailSemConta } });
+    checar(
+      "e-mail sem conta -> o mesmo 200 de quem tem conta (não revela quem está cadastrado)",
+      pedidoSemConta.status === 200 && JSON.stringify(pedidoSemConta.corpo) === "{}",
+      pedidoSemConta,
+    );
+    const confirmacaoSemConta = await chamar("POST", "/auth/recuperacao-senha/confirmar", { corpo: { email: emailSemConta, codigo: "123456", novaSenha: "NovaSenha123" } });
+    checar(
+      "confirmar com e-mail sem conta -> o mesmo 422 de código errado",
+      confirmacaoSemConta.status === 422 && confirmacaoSemConta.corpo.code === "CODIGO_INVALIDO",
+      confirmacaoSemConta.corpo,
+    );
+    await prisma.limiteAcesso.deleteMany({ where: { chave: `recuperacao:conta:${indiceBusca(emailSemConta)}` } });
     r = await chamar("POST", "/auth/recuperacao-senha/confirmar", { corpo: { email: emailAluno, codigo: codigoDemo === "000000" ? "111111" : "000000", novaSenha: "NovaSenha123" } });
     checar("código errado -> 422", r.status === 422, r.corpo);
     r = await chamar("POST", "/auth/recuperacao-senha/confirmar", { corpo: { email: emailAluno, codigo: codigoDemo, novaSenha: "NovaSenha123" } });

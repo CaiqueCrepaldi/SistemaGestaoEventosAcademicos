@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "../../components/ui/Badge";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
 import { checkinService } from "../../services";
-import { ANTECEDENCIA_CHECKIN_MS, type InscricaoDetalhada } from "../../services/checkinService";
+import { ANTECEDENCIA_CHECKIN_MS, LIMITE_BUSCA_ALUNOS, type InscricaoDetalhada } from "../../services/checkinService";
 import type { Participante, StatusPresenca } from "../../types";
 
 // mesma mensagem que o backend devolve (409) se alguem tentar mudar a presenca mesmo assim
@@ -42,47 +42,50 @@ export function CheckinPage() {
   const [termo, setTermo] = useState("");
   const [selecionado, setSelecionado] = useState<Participante | null>(null);
   const [inscricoes, setInscricoes] = useState<InscricaoDetalhada[]>([]);
+  const [carregandoInscricoes, setCarregandoInscricoes] = useState(false);
 
-  // carrega a lista completa uma vez (o backend ja devolve em ordem alfabetica)
+  // busca no servidor por nome, e-mail ou RGM enquanto se digita (espera 300 ms sem digitar pra nao
+  // consultar a cada tecla). Traz no maximo LIMITE_BUSCA_ALUNOS: nunca baixa todos os alunos de uma vez
   useEffect(() => {
     let descartar = false;
     setCarregando(true);
     setErroCarga(null);
-    checkinService
-      .listarAlunos()
-      .then((lista) => {
-        if (!descartar) setAlunos(lista);
-      })
-      .catch((e) => {
-        if (!descartar) setErroCarga(e instanceof Error ? e.message : "Não foi possível carregar os alunos.");
-      })
-      .finally(() => {
-        if (!descartar) setCarregando(false);
-      });
+    const espera = setTimeout(() => {
+      checkinService
+        .listarAlunos(termo)
+        .then((lista) => {
+          if (!descartar) setAlunos(lista);
+        })
+        .catch((e) => {
+          if (!descartar) setErroCarga(e instanceof Error ? e.message : "Não foi possível carregar os alunos.");
+        })
+        .finally(() => {
+          if (!descartar) setCarregando(false);
+        });
+    }, termo ? 300 : 0);
     return () => {
       descartar = true;
+      clearTimeout(espera);
     };
-  }, [tentativa]);
+  }, [termo, tentativa]);
 
-  // a busca so filtra a lista ja carregada: nome, e-mail ou RGM
-  const filtrados = useMemo(() => {
-    const alvo = termo.trim().toLowerCase();
-    if (!alvo) return alunos;
-    return alunos.filter(
-      (p) => p.nome.toLowerCase().includes(alvo) || p.email.toLowerCase().includes(alvo) || p.rgm.toLowerCase().includes(alvo),
-    );
-  }, [alunos, termo]);
+  const filtrados = alunos;
 
   const selecionadoInativo = selecionado?.ativo === false;
 
   // guarda o participante clicado e carrega as inscricoes dele
   async function selecionar(participante: Participante) {
     setSelecionado(participante);
+    // limpa as do aluno anterior e mostra "Carregando" (e nao "nao possui inscricoes") ate chegarem
+    setInscricoes([]);
+    setCarregandoInscricoes(true);
     try {
       setInscricoes(await checkinService.listarInscricoesDoParticipante(participante.id));
     } catch (e) {
       setInscricoes([]);
       toast.error(e instanceof Error ? e.message : "Não foi possível carregar as inscrições.");
+    } finally {
+      setCarregandoInscricoes(false);
     }
   }
 
@@ -116,16 +119,15 @@ export function CheckinPage() {
           <h3>Alunos</h3>
           <input
             className="search-input"
-            placeholder="Filtrar por nome, e-mail ou RGM…"
+            placeholder="Buscar por nome, e-mail ou RGM…"
             value={termo}
             onChange={(e) => setTermo(e.target.value)}
             autoFocus
           />
-          {!carregando && !erroCarga && (
+          {!carregando && !erroCarga && alunos.length >= LIMITE_BUSCA_ALUNOS && (
             <p className="form-hint" style={{ margin: "8px 0" }}>
-              {termo.trim()
-                ? `${filtrados.length} de ${alunos.length} aluno${alunos.length === 1 ? "" : "s"}`
-                : `${alunos.length} aluno${alunos.length === 1 ? "" : "s"} cadastrado${alunos.length === 1 ? "" : "s"}`}
+              Mostrando os {LIMITE_BUSCA_ALUNOS} primeiros{termo.trim() ? " resultados" : " alunos"}. Digite o nome, o
+              e-mail ou o RGM para encontrar quem você procura.
             </p>
           )}
           <ul className="simple-list list-scroll">
@@ -158,9 +160,7 @@ export function CheckinPage() {
                 </li>
               ))}
             {!carregando && !erroCarga && filtrados.length === 0 && (
-              <li className="empty-cell">
-                {alunos.length === 0 ? "Nenhum aluno cadastrado." : "Nenhum aluno encontrado com esse filtro."}
-              </li>
+              <li className="empty-cell">{termo.trim() ? "Nenhum aluno encontrado com essa busca." : "Nenhum aluno cadastrado."}</li>
             )}
           </ul>
         </div>
@@ -224,7 +224,7 @@ export function CheckinPage() {
                 {inscricoes.length === 0 && (
                   <tr>
                     <td colSpan={3} className="empty-cell">
-                      Este aluno não possui inscrições.
+                      {carregandoInscricoes ? "Carregando inscrições…" : "Este aluno não possui inscrições."}
                     </td>
                   </tr>
                 )}

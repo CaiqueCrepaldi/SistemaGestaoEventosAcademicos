@@ -72,6 +72,15 @@ export interface Inscricao {
   usuarioId: string | null;
 }
 
+// uma pagina de uma lista paginada no servidor (inscricoes e certificados da equipe, auditoria)
+export interface Pagina<T> {
+  itens: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export interface Feedback {
   id: string;
   eventoId: string;

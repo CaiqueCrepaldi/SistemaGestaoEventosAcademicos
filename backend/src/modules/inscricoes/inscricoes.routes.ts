@@ -1,5 +1,7 @@
 import { Router } from "express";
+import { z } from "zod";
 import type { StatusPresenca } from "../../types/domain";
+import { buscaSchema, lerConsulta, paginacaoSchema } from "../../utils/paginacao";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { autenticar, autorizar } from "../../middleware/auth";
 import { validarCorpo } from "../../middleware/validate";
@@ -25,6 +27,22 @@ inscricoesRouter.get(
       status: typeof req.query.status === "string" ? (req.query.status as StatusPresenca) : undefined,
     });
     res.json(inscricoes.map(inscricaoParaDTO));
+  }),
+);
+
+// GET /api/inscricoes/gestao?eventoId=&status=&busca=&page=&pageSize= — tela Inscricoes da equipe:
+// paginada e filtrada no banco, com nome/RGM do aluno e titulo do evento ja junto
+const consultaGestaoSchema = paginacaoSchema.extend({
+  eventoId: z.string().trim().min(1).max(64).optional(),
+  status: z.enum(["PENDENTE", "PRESENTE", "AUSENTE"]).optional(),
+  busca: buscaSchema,
+});
+inscricoesRouter.get(
+  "/gestao",
+  autenticar,
+  autorizar("ADMINISTRADOR", "SECRETARIA"),
+  asyncHandler(async (req, res) => {
+    res.json(await inscricoesService.listarParaGestao(lerConsulta(consultaGestaoSchema, req.query)));
   }),
 );
 

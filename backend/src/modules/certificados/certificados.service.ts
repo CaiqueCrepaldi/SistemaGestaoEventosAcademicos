@@ -7,6 +7,8 @@ import { temCertificado } from "../../utils/certificado";
 import { chaveIp, estaBloqueado, incrementarTentativa } from "../../utils/limiteAcesso";
 import { PERCENTUAL_APROVACAO } from "../../utils/questionario";
 import { COM_CONTA_DO_ALUNO, paraDominio as participanteParaDominio } from "../participantes/participantes.service";
+import { COM_ALUNO_DA_INSCRICAO, filtroDoAluno } from "../inscricoes/inscricoes.service";
+import { montarPagina } from "../../utils/paginacao";
 import type { Certificado, Perfil } from "../../types/domain";
 import { ALFABETO_CODIGO_VALIDACAO, codigoValidacaoSchema, TAMANHO_CODIGO_VALIDACAO } from "./certificados.schemas";
 
@@ -152,4 +154,67 @@ async function validar(codigoDigitado: string, ip: string): Promise<Certificado>
   return paraDominio(certificado);
 }
 
-export const certificadosService = { listar, emitir, validar };
+interface FiltrosSituacao {
+  eventoId?: string;
+  busca?: string;
+  page: number;
+  pageSize: number;
+}
+
+// tela Certificados da equipe: uma pagina das inscricoes com presenca confirmada e, pra cada uma, a
+// situacao do certificado (melhor nota, tentativas usadas, se ja foi emitido e o codigo). Tudo montado
+// no banco, uma pagina por vez. Antes a tela baixava 4 listas inteiras (inscricoes, tentativas,
+// participantes e certificados) e cruzava no navegador — com 10 mil alunos passava do limite da Vercel
+async function situacaoParaGestao(filtros: FiltrosSituacao) {
+  const where: Prisma.InscricaoWhereInput = {
+    statusPresenca: "PRESENTE",
+    eventoId: filtros.eventoId,
+    ...filtroDoAluno(filtros.busca),
+  };
+  const [total, inscricoes] = await prisma.$transaction([
+    prisma.inscricao.count({ where }),
+    prisma.inscricao.findMany({
+      where,
+      orderBy: [{ dataInscricao: "desc" }, { id: "desc" }],
+      skip: (filtros.page - 1) * filtros.pageSize,
+      take: filtros.pageSize,
+      include: {
+        participante: { select: COM_ALUNO_DA_INSCRICAO },
+        evento: { select: { titulo: true, tema: true, horario: true, cargaHoraria: true } },
+        certificado: { select: { codigoValidacao: true } },
+      },
+    }),
+  ]);
+  // melhor nota e quantas tentativas, so dos pares aluno+evento desta pagina
+  const tentativas = inscricoes.length
+    ? await prisma.tentativaQuestionario.groupBy({
+        by: ["participanteId", "eventoId"],
+        where: { OR: inscricoes.map((i) => ({ participanteId: i.participanteId, eventoId: i.eventoId })) },
+        _max: { percentual: true },
+        _count: { _all: true },
+      })
+    : [];
+  const itens = inscricoes.map((inscricao) => {
+    const resultado = tentativas.find((t) => t.participanteId === inscricao.participanteId && t.eventoId === inscricao.eventoId);
+    const melhorPercentual = resultado?._max.percentual ?? null;
+    return {
+      inscricaoId: inscricao.id,
+      participanteId: inscricao.participanteId,
+      participanteNome: inscricao.participante.usuarios[0]?.nome ?? "",
+      participanteRgm: inscricao.participante.rgm,
+      participanteAtivo: inscricao.participante.ativo,
+      eventoId: inscricao.eventoId,
+      eventoTitulo: inscricao.evento.titulo,
+      tema: inscricao.evento.tema || inscricao.evento.titulo,
+      data: inscricao.evento.horario.toISOString(),
+      cargaHoraria: inscricao.evento.cargaHoraria,
+      melhorPercentual,
+      questionarioAprovado: melhorPercentual !== null && melhorPercentual >= PERCENTUAL_APROVACAO,
+      tentativasUsadas: resultado?._count._all ?? 0,
+      codigoValidacao: inscricao.certificado?.codigoValidacao ?? null,
+    };
+  });
+  return montarPagina(itens, total, filtros.page, filtros.pageSize);
+}
+
+export const certificadosService = { listar, emitir, validar, situacaoParaGestao };

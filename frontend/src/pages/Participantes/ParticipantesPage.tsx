@@ -21,6 +21,8 @@ export function ParticipantesPage() {
   const { usuario } = useAuth();
   const ehAdministrador = usuario?.perfil === "ADMINISTRADOR";
   const [participantes, setParticipantes] = useState<Participante[]>([]);
+  // enquanto carrega a lista diz "Carregando" (e nao "Nenhum participante encontrado")
+  const [carregando, setCarregando] = useState(true);
   const [busca, setBusca] = useState("");
   const [editando, setEditando] = useState<Participante | null>(null);
   const [form, setForm] = useState(VAZIO);
@@ -39,7 +41,11 @@ export function ParticipantesPage() {
   }, []);
 
   async function carregar() {
-    setParticipantes(await participanteService.list());
+    try {
+      setParticipantes(await participanteService.list());
+    } finally {
+      setCarregando(false);
+    }
   }
 
   function abrirEdicao(participante: Participante) {
@@ -219,7 +225,7 @@ export function ParticipantesPage() {
               {filtrados.length === 0 && (
                 <tr>
                   <td colSpan={7} className="empty-cell">
-                    Nenhum participante encontrado.
+                    {carregando ? "Carregando…" : "Nenhum participante encontrado."}
                   </td>
                 </tr>
               )}

@@ -465,6 +465,15 @@ try {
     "inscrição pendente em evento futuro foi cancelada na inativação",
     (await page.locator("tr", { hasText: NOME_INATIVO }).filter({ hasText: `Evento UI ${sufixo}` }).count()) === 0,
   );
+  // a busca por aluno vai ao servidor (a lista e paginada la, nunca baixa todas as inscricoes)
+  await page.fill("input[aria-label='Buscar aluno']", NOME_INATIVO);
+  for (let i = 0; i < 20 && (await page.locator("table tbody tr", { hasNotText: NOME_INATIVO }).count()) > 0; i++) await page.waitForTimeout(500);
+  checar(
+    "Inscrições: busca por aluno filtrada no servidor, com a paginação no rodapé",
+    (await page.locator("table tbody tr", { hasText: NOME_INATIVO }).count()) >= 1 &&
+      (await page.locator("table tbody tr", { hasNotText: NOME_INATIVO }).count()) === 0 &&
+      (await temTexto(page, "Mostrando 1–")),
+  );
   await page.click("button:has-text('+ Nova inscrição')");
   await page.click(".modal button[type=submit]");
   checar("enviar vazio: aluno e evento marcados", (await invalido(page, "#participanteId")) && (await invalido(page, "#eventoId")));
@@ -507,6 +516,8 @@ try {
   await validacaoEquipe.locator("button:has-text('Validar')").click();
   await validacaoEquipe.getByText("Certificado não encontrado.").waitFor({ timeout: 10000 }).catch(() => {});
   checar("equipe valida certificado na tela Certificados (código inexistente: não encontrado)", (await validacaoEquipe.getByText("Certificado não encontrado.").count()) === 1);
+  await page.getByText("com presença confirmada").first().waitFor({ timeout: 10000 }).catch(() => {});
+  checar("Certificados da equipe vêm paginados do servidor (rodapé com o total)", await temTexto(page, "com presença confirmada"));
 
   titulo("Auditoria: filtro pelas ações novas");
   await page.goto(`${APP}/auditoria`);
@@ -530,6 +541,15 @@ try {
   await page.goto(`${APP}/esqueci-senha`);
   await page.click("button[type=submit]");
   checar("enviar vazio: e-mail marcado com mensagem", (await invalido(page, "#email")) && (await temTexto(page, "Informe o e-mail cadastrado.")));
+  await page.fill("#email", `ninguem.${sufixo}@alunos.umc.br`);
+  await page.click("button[type=submit]");
+  await page.locator("#codigo").waitFor({ timeout: 10000 }).catch(() => {});
+  checar(
+    "e-mail sem conta segue para o código com a mesma mensagem (não revela quem tem conta)",
+    (await page.locator("#codigo").count()) === 1 && (await temTexto(page, "Se houver uma conta com o e-mail informado")),
+  );
+  await page.goto(`${APP}/login`);
+  await page.goto(`${APP}/esqueci-senha`);
   await page.fill("#email", emailAluno);
   await page.click("button[type=submit]");
   await page.locator("#codigo").waitFor();

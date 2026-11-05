@@ -215,9 +215,11 @@ async function solicitarRecuperacaoSenha(dados: SolicitarRecuperacaoInput, ip: s
 
   const usuario = await buscarUsuarioPorEmail(dados.email);
   if (!usuario) {
-    // nunca grava o e-mail digitado (PII) no log
+    // nunca grava o e-mail digitado (PII) no log. A resposta e a mesma de quando a conta existe
+    // (em producao, {}): a tela diz "se houver uma conta com esse e-mail, enviamos o codigo", entao
+    // ninguem descobre por aqui quem tem conta — igual ao login, que tambem nao revela
     await registrarAuditoria(null, "RECUPERACAO_SENHA_FALHA", "e-mail não cadastrado");
-    throw AppError.naoEncontrado("USUARIO_NAO_ENCONTRADO", "Não encontramos conta com esse e-mail.");
+    return {};
   }
 
   const codigo = gerarCodigoNumerico();
@@ -256,8 +258,9 @@ async function solicitarRecuperacaoSenha(dados: SolicitarRecuperacaoInput, ip: s
 async function confirmarRecuperacaoSenha(dados: ConfirmarRecuperacaoInput) {
   const usuario = await buscarUsuarioPorEmail(dados.email);
   if (!usuario) {
+    // mesma resposta de codigo errado: a confirmacao tambem nao revela se o e-mail tem conta
     await registrarAuditoria(null, "RECUPERACAO_SENHA_FALHA", "confirmação: e-mail não cadastrado");
-    throw AppError.naoEncontrado("USUARIO_NAO_ENCONTRADO", "Não encontramos conta com esse e-mail.");
+    throw new AppError(422, "CODIGO_INVALIDO", "Código inválido ou expirado.");
   }
 
   // o codigo fica guardado so como hash, entao pega o ultimo pendente e compara por bcrypt

@@ -3,7 +3,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { autenticar, autorizar } from "../../middleware/auth";
 import { validarCorpo } from "../../middleware/validate";
 import { participanteComContaParaDTO, participanteParaDTO } from "../../utils/dto";
-import { participantesService } from "./participantes.service";
+import { LIMITE_BUSCA_ALUNOS, LIMITE_MAXIMO_BUSCA_ALUNOS, participantesService } from "./participantes.service";
 import { participanteUpdateSchema } from "./participantes.schemas";
 
 export const participantesRouter = Router();
@@ -21,11 +21,16 @@ participantesRouter.get(
   }),
 );
 
-// lista so os alunos (com conta ALUNO), em ordem alfabetica; antes de "/:id" pra "alunos" nao virar id
+// GET /participantes/alunos?busca=&limite= — busca alunos (conta ALUNO) por nome, e-mail ou RGM, em
+// ordem alfabetica, no maximo `limite` (padrao 20, ate 50). Usada no check-in e na inscricao manual,
+// que buscam enquanto se digita. Antes de "/:id" pra "alunos" nao virar id
 participantesRouter.get(
   "/alunos",
-  asyncHandler(async (_req, res) => {
-    const alunos = await participantesService.listarAlunos();
+  asyncHandler(async (req, res) => {
+    const busca = typeof req.query.busca === "string" ? req.query.busca : undefined;
+    const limitePedido = Number(req.query.limite);
+    const limite = Number.isInteger(limitePedido) && limitePedido > 0 ? Math.min(limitePedido, LIMITE_MAXIMO_BUSCA_ALUNOS) : LIMITE_BUSCA_ALUNOS;
+    const alunos = await participantesService.listarAlunos(busca, limite);
     res.json(alunos.map(participanteParaDTO));
   }),
 );

@@ -12,6 +12,8 @@ export { certificadoService, formatarCodigoValidacao, urlValidacao } from "./cer
 export type { CertificadoDisponivel, CertificadoEmitido, CertificadoValidado } from "./certificadoService";
 export { checkinService } from "./checkinService";
 export { inscricaoAlunoService } from "./inscricaoAlunoService";
+export { inscricaoGestaoService } from "./inscricaoGestaoService";
+export type { FiltrosInscricoesGestao, InscricaoGestao } from "./inscricaoGestaoService";
 export { questionarioService } from "./questionarioService";
 export type { PerguntaSemGabarito } from "./questionarioService";
 export { titularService } from "./titularService";

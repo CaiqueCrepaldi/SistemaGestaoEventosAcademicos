@@ -1,6 +1,8 @@
 import { Router } from "express";
+import { z } from "zod";
 import { asyncHandler } from "../../utils/asyncHandler";
-import { autenticar } from "../../middleware/auth";
+import { autenticar, autorizar } from "../../middleware/auth";
+import { buscaSchema, lerConsulta, paginacaoSchema } from "../../utils/paginacao";
 import { AppError } from "../../errors/AppError";
 import { certificadoParaDTO, certificadoPublicoParaDTO } from "../../utils/dto";
 import { certificadosService } from "./certificados.service";
@@ -34,6 +36,21 @@ certificadosRouter.get(
     }
     const certificados = await certificadosService.listar({ eventoId, participanteId });
     res.json(certificados.map(certificadoParaDTO));
+  }),
+);
+
+// GET /api/certificados/situacao?eventoId=&busca=&page=&pageSize= — tela Certificados da equipe: as
+// inscricoes com presenca confirmada e a situacao do certificado de cada uma, paginadas no banco
+const consultaSituacaoSchema = paginacaoSchema.extend({
+  eventoId: z.string().trim().min(1).max(64).optional(),
+  busca: buscaSchema,
+});
+certificadosRouter.get(
+  "/situacao",
+  autenticar,
+  autorizar("ADMINISTRADOR", "SECRETARIA"),
+  asyncHandler(async (req, res) => {
+    res.json(await certificadosService.situacaoParaGestao(lerConsulta(consultaSituacaoSchema, req.query)));
   }),
 );
 

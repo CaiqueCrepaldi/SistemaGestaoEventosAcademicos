@@ -54,14 +54,29 @@ async function listar(): Promise<(Participante & SituacaoConta)[]> {
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
-// so os alunos: participantes com conta de acesso de perfil ALUNO, em ordem alfabetica — usado
-// pelo check-in, que mostra todos sem precisar digitar nada
-async function listarAlunos() {
-  const participantes = await prisma.participante.findMany({
-    where: { usuarios: { some: { perfil: "ALUNO" } } },
-    include: COM_CONTA_DO_ALUNO,
+// quantos alunos a busca devolve por vez (check-in e inscricao manual buscam enquanto se digita)
+export const LIMITE_BUSCA_ALUNOS = 20;
+export const LIMITE_MAXIMO_BUSCA_ALUNOS = 50;
+
+// so os alunos (contas ALUNO), em ordem alfabetica, buscando no banco por nome, e-mail ou RGM — no
+// maximo `limite` por vez. Antes a tela de Check-in baixava todos os alunos e filtrava no navegador:
+// com 10 mil alunos eram 1,7 MB a cada abertura da tela. A collation das tabelas (utf8mb4_unicode_ci)
+// ja faz a busca ignorar maiusculas e acentos
+async function listarAlunos(busca?: string, limite = LIMITE_BUSCA_ALUNOS) {
+  const termo = busca?.trim();
+  const contas = await prisma.usuario.findMany({
+    where: {
+      perfil: "ALUNO",
+      participanteId: { not: null },
+      ...(termo
+        ? { OR: [{ nome: { contains: termo } }, { emailLogin: { contains: termo } }, { participante: { rgm: { contains: termo } } }] }
+        : {}),
+    },
+    orderBy: { nome: "asc" },
+    take: limite,
+    select: { id: true, nome: true, emailLogin: true, mfaAtivo: true, participante: true },
   });
-  return participantes.map(paraDominio).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  return contas.map(({ participante, ...conta }) => paraDominio({ ...participante!, usuarios: [conta] }));
 }
 
 // busca um participante pelo id, 404 se nao existir

@@ -36,6 +36,8 @@ export function PalestrantesPage() {
   const { usuario } = useAuth();
   const ehAluno = usuario?.perfil === "ALUNO";
   const [palestrantes, setPalestrantes] = useState<Palestrante[]>([]);
+  // enquanto carrega a lista diz "Carregando" (e nao "Nenhum palestrante cadastrado")
+  const [carregando, setCarregando] = useState(true);
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<Palestrante | null>(null);
@@ -52,7 +54,11 @@ export function PalestrantesPage() {
 
   // busca a lista atualizada de palestrantes
   async function carregar() {
-    setPalestrantes(await palestranteService.list());
+    try {
+      setPalestrantes(await palestranteService.list());
+    } finally {
+      setCarregando(false);
+    }
   }
 
   function abrirNovo() {
@@ -123,7 +129,7 @@ export function PalestrantesPage() {
         <PageHeader title="Palestrantes" />
         {palestrantes.length === 0 ? (
           <div className="card">
-            <p className="empty-cell">Nenhum palestrante cadastrado.</p>
+            <p className="empty-cell">{carregando ? "Carregando palestrantes…" : "Nenhum palestrante cadastrado."}</p>
           </div>
         ) : (
           <div className="palestrantes-grid">
@@ -199,7 +205,7 @@ export function PalestrantesPage() {
             {palestrantes.length === 0 && (
               <tr>
                 <td colSpan={3} className="empty-cell">
-                  Nenhum palestrante cadastrado.
+                  {carregando ? "Carregando…" : "Nenhum palestrante cadastrado."}
                 </td>
               </tr>
             )}

@@ -24,17 +24,22 @@ export function checkinAberto(eventoHorario: string): boolean {
   return !eventoHorario || new Date(eventoHorario).getTime() - ANTECEDENCIA_CHECKIN_MS <= Date.now();
 }
 
-// todos os alunos cadastrados (participantes com conta ALUNO), ja em ordem alfabetica, com o
-// campo "ativo". quem filtra por texto eh a tela, em cima dessa lista
-function listarAlunos(): Promise<Participante[]> {
-  return api.get<Participante[]>("/participantes/alunos");
+// quantos alunos a busca traz por vez (mesmo padrao do backend)
+export const LIMITE_BUSCA_ALUNOS = 20;
+
+// busca alunos (conta ALUNO) no servidor por nome, e-mail ou RGM, em ordem alfabetica, com o campo
+// "ativo". Sem texto, traz os primeiros da lista. Nunca baixa todos os alunos de uma vez
+function listarAlunos(busca = ""): Promise<Participante[]> {
+  const params = new URLSearchParams({ limite: String(LIMITE_BUSCA_ALUNOS) });
+  if (busca.trim()) params.set("busca", busca.trim());
+  return api.get<Participante[]>(`/participantes/alunos?${params.toString()}`);
 }
 
-// todas as inscricoes de UM participante, com o titulo do evento ja junto e a marca de presenca
-// travada (eventos em que o aluno ja respondeu o questionario)
+// as inscricoes de UM participante (so as dele, filtradas no servidor), com o titulo do evento ja
+// junto e a marca de presenca travada (eventos em que o aluno ja respondeu o questionario)
 async function listarInscricoesDoParticipante(participanteId: string): Promise<InscricaoDetalhada[]> {
   const [inscricoes, eventos, participante, tentativas] = await Promise.all([
-    inscricaoService.list(),
+    api.get<Inscricao[]>(`/inscricoes?participanteId=${encodeURIComponent(participanteId)}`),
     eventoService.list(),
     participanteService.get(participanteId),
     questionarioService.listarTentativasDoParticipante(participanteId),

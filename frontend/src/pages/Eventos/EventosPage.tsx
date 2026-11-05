@@ -65,6 +65,8 @@ function EventosEquipe() {
   const [salas, setSalas] = useState<Sala[]>([]);
   const [palestrantes, setPalestrantes] = useState<Palestrante[]>([]);
   const [busca, setBusca] = useState("");
+  // enquanto carrega a tabela diz "Carregando" (e nao "Nenhum evento cadastrado")
+  const [carregando, setCarregando] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<Evento | null>(null);
   const [form, setForm] = useState<FormEvento>(formVazio());
@@ -78,10 +80,14 @@ function EventosEquipe() {
 
   // busca eventos/salas/palestrantes de uma vez (a contagem de inscritos ja vem em cada evento)
   async function carregar() {
-    const [e, sa, p] = await Promise.all([eventoService.list(), salaService.list(), palestranteService.list()]);
-    setEventos([...e].sort((a, b) => a.horario.localeCompare(b.horario)));
-    setSalas(sa);
-    setPalestrantes(p);
+    try {
+      const [e, sa, p] = await Promise.all([eventoService.list(), salaService.list(), palestranteService.list()]);
+      setEventos([...e].sort((a, b) => a.horario.localeCompare(b.horario)));
+      setSalas(sa);
+      setPalestrantes(p);
+    } finally {
+      setCarregando(false);
+    }
   }
 
   const nomeDaSala = (evento: Evento) => salas.find((s) => s.id === evento.salaId)?.nome ?? "—";
@@ -270,7 +276,7 @@ function EventosEquipe() {
             {eventosVisiveis.length === 0 && (
               <tr>
                 <td colSpan={8} className="empty-cell">
-                  {eventos.length === 0 ? "Nenhum evento cadastrado." : "Nenhum evento encontrado para a busca."}
+                  {carregando ? "Carregando…" : eventos.length === 0 ? "Nenhum evento cadastrado." : "Nenhum evento encontrado para a busca."}
                 </td>
               </tr>
             )}

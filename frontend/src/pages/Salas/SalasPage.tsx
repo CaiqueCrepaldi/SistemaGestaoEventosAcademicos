@@ -14,6 +14,8 @@ const VAZIO = { nome: "", capacidade: "" };
 // crud de salas
 export function SalasPage() {
   const [salas, setSalas] = useState<Sala[]>([]);
+  // enquanto carrega a lista diz "Carregando" (e nao "Nenhuma sala cadastrada")
+  const [carregando, setCarregando] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<Sala | null>(null);
   const [form, setForm] = useState(VAZIO);
@@ -27,7 +29,11 @@ export function SalasPage() {
 
   // busca a lista atualizada de salas
   async function carregar() {
-    setSalas(await salaService.list());
+    try {
+      setSalas(await salaService.list());
+    } finally {
+      setCarregando(false);
+    }
   }
 
   // abre o modal em branco
@@ -136,7 +142,7 @@ export function SalasPage() {
             {salas.length === 0 && (
               <tr>
                 <td colSpan={3} className="empty-cell">
-                  Nenhuma sala cadastrada.
+                  {carregando ? "Carregando…" : "Nenhuma sala cadastrada."}
                 </td>
               </tr>
             )}

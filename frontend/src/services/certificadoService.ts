@@ -1,9 +1,9 @@
 import { jsPDF } from "jspdf";
-import type { Inscricao, Participante, TentativaQuestionario } from "../types";
+import type { Inscricao, Pagina, Participante } from "../types";
 import { PERCENTUAL_APROVACAO } from "../utils/questionario";
 import { api } from "./api";
 import { authService } from "./authService";
-import { eventoService, participanteService } from "./entityServices";
+import { eventoService } from "./entityServices";
 import { questionarioService } from "./questionarioService";
 
 // certificado gravado no backend na primeira emissao (POST /certificados/emitir/:inscricaoId).
@@ -68,16 +68,12 @@ export function urlValidacao(codigo?: string): string {
   return codigo ? `${base}?codigo=${encodeURIComponent(codigo)}` : base;
 }
 
-// junta cada Inscricao com Evento/Participante e com o certificado ja emitido (se houver), pula
-// dado orfao. participantes: a equipe passa a lista inteira; o aluno passa so ele mesmo (a lista de
-// participantes e exclusiva da equipe — o aluno recebe 403 nela).
-// todasTentativas: quando informado (visao de equipe, varios alunos de uma vez), filtra localmente
-// porque a rota por evento/aluno eh restrita ao proprio aluno respondendo
+// visao do aluno: junta cada inscricao dele com o evento, as proprias tentativas e o certificado ja
+// emitido (se houver). A visao da equipe vem pronta e paginada do backend (GET /certificados/situacao)
 async function enriquecer(
   inscricoes: Inscricao[],
   participantes: Participante[],
   emitidos: CertificadoEmitido[],
-  todasTentativas?: TentativaQuestionario[],
 ): Promise<CertificadoDisponivel[]> {
   const eventos = await eventoService.list();
 
@@ -87,9 +83,7 @@ async function enriquecer(
     const participante = participantes.find((p) => p.id === inscricao.participanteId);
     if (!evento || !participante) continue;
 
-    const tentativas = todasTentativas
-      ? todasTentativas.filter((t) => t.eventoId === evento.id && t.participanteId === participante.id)
-      : await questionarioService.listarTentativas(evento.id, participante.id);
+    const tentativas = await questionarioService.listarTentativas(evento.id, participante.id);
     const melhorPercentual = tentativas.length > 0 ? Math.max(...tentativas.map((t) => t.percentual)) : null;
 
     certificados.push({
@@ -252,9 +246,16 @@ function listarEmitidos(eventoId?: string): Promise<CertificadoEmitido[]> {
   return api.get<CertificadoEmitido[]>(eventoId ? `/certificados?eventoId=${encodeURIComponent(eventoId)}` : "/certificados");
 }
 
+export interface FiltrosSituacaoCertificados {
+  eventoId?: string;
+  // nome, e-mail ou RGM do aluno
+  busca?: string;
+  page: number;
+}
+
 interface CertificadoService {
   listarCertificadosDoParticipante(participanteId: string): Promise<CertificadoDisponivel[]>;
-  listarTodosCertificados(): Promise<CertificadoDisponivel[]>;
+  listarSituacao(filtros: FiltrosSituacaoCertificados): Promise<Pagina<CertificadoDisponivel>>;
   listarEmitidos(eventoId?: string): Promise<CertificadoEmitido[]>;
   emitirEBaixar(inscricaoId: string): Promise<CertificadoEmitido>;
   validar(codigo: string): Promise<CertificadoValidado>;
@@ -271,15 +272,12 @@ export const certificadoService: CertificadoService = {
     const euMesmo: Participante = { id: participanteId, nome: conta.nome, email: conta.emailLogin, rgm: conta.rgm ?? "" };
     return enriquecer(inscricoes, [euMesmo], emitidos);
   },
-  // certificados de todo mundo, usado na tela de gestao
-  async listarTodosCertificados() {
-    const [inscricoes, todasTentativas, participantes, emitidos] = await Promise.all([
-      api.get<Inscricao[]>("/inscricoes?status=PRESENTE"),
-      questionarioService.listarTodasTentativas(),
-      participanteService.list(),
-      listarEmitidos(),
-    ]);
-    return enriquecer(inscricoes, participantes, emitidos, todasTentativas);
+  // tela de gestao: uma pagina da situacao dos certificados, montada e filtrada no servidor
+  listarSituacao(filtros) {
+    const params = new URLSearchParams({ page: String(filtros.page), pageSize: "50" });
+    if (filtros.eventoId) params.set("eventoId", filtros.eventoId);
+    if (filtros.busca?.trim()) params.set("busca", filtros.busca.trim());
+    return api.get<Pagina<CertificadoDisponivel>>(`/certificados/situacao?${params.toString()}`);
   },
   listarEmitidos,
   // o backend confere os requisitos, grava o certificado na primeira vez e devolve sempre o mesmo

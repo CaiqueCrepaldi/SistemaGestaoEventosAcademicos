@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
-import type { Inscricao as InscricaoDb } from "@prisma/client";
+import type { Inscricao as InscricaoDb, Prisma } from "@prisma/client";
+import { montarPagina } from "../../utils/paginacao";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { emailService } from "../email/email.service";
@@ -21,6 +22,65 @@ export function paraDominio(inscricao: InscricaoDb): Inscricao {
     dataCheckin: inscricao.dataCheckin ? inscricao.dataCheckin.toISOString() : null,
     dataInscricao: inscricao.dataInscricao.toISOString(),
   };
+}
+
+// inscricoes cujo aluno tem o texto no nome, no e-mail (da conta) ou no RGM (vazio = todas). A collation
+// das tabelas (utf8mb4_unicode_ci) ja ignora maiusculas e acentos
+export function filtroDoAluno(busca?: string): Prisma.InscricaoWhereInput {
+  if (!busca) return {};
+  return {
+    participante: {
+      OR: [
+        { rgm: { contains: busca } },
+        { usuarios: { some: { perfil: "ALUNO", OR: [{ nome: { contains: busca } }, { emailLogin: { contains: busca } }] } } },
+      ],
+    },
+  };
+}
+
+// o nome do aluno vem da conta dele (o participante so guarda RGM e situacao)
+export const COM_ALUNO_DA_INSCRICAO = {
+  rgm: true,
+  ativo: true,
+  usuarios: { where: { perfil: "ALUNO" as const }, take: 1, select: { nome: true } },
+} satisfies Prisma.ParticipanteSelect;
+
+export interface FiltrosGestao {
+  eventoId?: string;
+  status?: StatusPresenca;
+  busca?: string;
+  page: number;
+  pageSize: number;
+}
+
+// tela Inscricoes da equipe: uma pagina por vez, ja com nome/RGM do aluno e titulo do evento, filtrada
+// no banco. Antes a tela baixava todas as inscricoes e todos os participantes e cruzava no navegador
+// (com 30 mil inscricoes a resposta passava de 8 MB, acima do limite da Vercel)
+async function listarParaGestao(filtros: FiltrosGestao) {
+  const where: Prisma.InscricaoWhereInput = {
+    eventoId: filtros.eventoId,
+    statusPresenca: filtros.status,
+    ...filtroDoAluno(filtros.busca),
+  };
+  const [total, inscricoes] = await prisma.$transaction([
+    prisma.inscricao.count({ where }),
+    prisma.inscricao.findMany({
+      where,
+      orderBy: [{ dataInscricao: "desc" }, { id: "desc" }],
+      skip: (filtros.page - 1) * filtros.pageSize,
+      take: filtros.pageSize,
+      include: { participante: { select: COM_ALUNO_DA_INSCRICAO }, evento: { select: { titulo: true, horario: true } } },
+    }),
+  ]);
+  const itens = inscricoes.map(({ participante, evento, ...inscricao }) => ({
+    ...paraDominio(inscricao),
+    participanteNome: participante.usuarios[0]?.nome ?? "",
+    participanteRgm: participante.rgm,
+    participanteAtivo: participante.ativo,
+    eventoTitulo: evento.titulo,
+    eventoHorario: evento.horario.toISOString(),
+  }));
+  return montarPagina(itens, total, filtros.page, filtros.pageSize);
 }
 
 // lista inscricoes filtradas, mais recente primeiro
@@ -275,6 +335,7 @@ export async function enviarConfirmacaoPorEmail(inscricaoId: string, atorId: str
 
 export const inscricoesService = {
   listar,
+  listarParaGestao,
   buscarOuFalhar,
   criarManual,
   atualizarCheckin,

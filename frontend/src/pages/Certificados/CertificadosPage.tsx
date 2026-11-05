@@ -3,41 +3,79 @@ import { Link } from "react-router-dom";
 import { ValidacaoCertificado } from "../../components/certificados/ValidacaoCertificado";
 import { Badge } from "../../components/ui/Badge";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { Paginacao } from "../../components/ui/Paginacao";
 import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
 import { certificadoService, eventoService, formatarCodigoValidacao, type CertificadoDisponivel } from "../../services";
-import type { Evento } from "../../types";
+import type { Evento, Pagina } from "../../types";
 import { MAX_TENTATIVAS_QUESTIONARIO, PERCENTUAL_APROVACAO } from "../../utils/questionario";
 
-// tela de certificados, aluno emite o proprio, equipe ve de todo mundo. A emissao e sempre pelo
-// backend (que confere os requisitos e grava o certificado na primeira vez); o PDF sai do que voltou
+const FILTROS_VAZIOS = { eventoId: "", busca: "" };
+
+// tela de certificados, aluno emite o proprio, equipe ve de todo mundo (paginado no servidor). A emissao
+// e sempre pelo backend (que confere os requisitos e grava o certificado na primeira vez); o PDF sai do
+// que voltou
 export function CertificadosPage() {
   const { usuario } = useAuth();
   const isEquipe = usuario?.perfil === "ADMINISTRADOR" || usuario?.perfil === "SECRETARIA";
 
+  // aluno: a lista dele inteira (poucos itens)
   const [certificados, setCertificados] = useState<CertificadoDisponivel[]>([]);
+  // equipe: uma pagina da situacao dos certificados, filtrada no servidor
+  const [pagina, setPagina] = useState<Pagina<CertificadoDisponivel> | null>(null);
+  const [filtros, setFiltros] = useState(FILTROS_VAZIOS);
+  const [page, setPage] = useState(1);
   const [eventos, setEventos] = useState<Evento[]>([]);
-  const [filtroEventoId, setFiltroEventoId] = useState("");
+  const [carregando, setCarregando] = useState(true);
   // inscricao cujo certificado esta sendo emitido agora (evita clique duplo)
   const [emitindo, setEmitindo] = useState<string | null>(null);
 
+  // aluno: carrega os proprios certificados uma vez
   useEffect(() => {
-    void carregar();
+    if (isEquipe || !usuario?.participanteId) return;
+    setCarregando(true);
+    certificadoService
+      .listarCertificadosDoParticipante(usuario.participanteId)
+      .then(setCertificados)
+      .catch((erro) => toast.error(erro instanceof Error ? erro.message : "Não foi possível carregar os certificados."))
+      .finally(() => setCarregando(false));
   }, [usuario?.id]);
 
-  // equipe carrega certificado de todo mundo, aluno so os proprios
-  async function carregar() {
-    try {
-      if (isEquipe) {
-        const [c, e] = await Promise.all([certificadoService.listarTodosCertificados(), eventoService.list()]);
-        setCertificados(c);
-        setEventos(e);
-      } else if (usuario?.participanteId) {
-        setCertificados(await certificadoService.listarCertificadosDoParticipante(usuario.participanteId));
-      }
-    } catch (erro) {
-      toast.error(erro instanceof Error ? erro.message : "Não foi possível carregar os certificados.");
-    }
+  // equipe: eventos pro filtro
+  useEffect(() => {
+    if (isEquipe) void eventoService.list().then((e) => setEventos([...e].sort((a, b) => a.horario.localeCompare(b.horario))));
+  }, [usuario?.id]);
+
+  // equipe: pagina atual com os filtros; a busca por texto espera 300 ms sem digitar
+  useEffect(() => {
+    if (!isEquipe) return;
+    let descartar = false;
+    setCarregando(true);
+    const espera = setTimeout(() => {
+      certificadoService
+        .listarSituacao({ ...filtros, page })
+        .then((resposta) => {
+          if (descartar) return;
+          setPagina(resposta);
+          if (resposta.page > resposta.totalPages) setPage(resposta.totalPages);
+        })
+        .catch((erro) => {
+          if (!descartar) toast.error(erro instanceof Error ? erro.message : "Não foi possível carregar os certificados.");
+        })
+        .finally(() => {
+          if (!descartar) setCarregando(false);
+        });
+    }, filtros.busca ? 300 : 0);
+    return () => {
+      descartar = true;
+      clearTimeout(espera);
+    };
+  }, [usuario?.id, filtros, page]);
+
+  // mudar qualquer filtro volta pra primeira pagina
+  function mudarFiltro(parcial: Partial<typeof FILTROS_VAZIOS>) {
+    setFiltros((atual) => ({ ...atual, ...parcial }));
+    setPage(1);
   }
 
   // pede a emissao ao backend e baixa o PDF; na primeira vez o codigo novo passa a aparecer na tela
@@ -45,17 +83,16 @@ export function CertificadosPage() {
     setEmitindo(certificado.inscricaoId);
     try {
       const emitido = await certificadoService.emitirEBaixar(certificado.inscricaoId);
-      setCertificados((lista) =>
-        lista.map((c) => (c.inscricaoId === emitido.inscricaoId ? { ...c, codigoValidacao: emitido.codigoValidacao } : c)),
-      );
+      const comCodigo = (c: CertificadoDisponivel) =>
+        c.inscricaoId === emitido.inscricaoId ? { ...c, codigoValidacao: emitido.codigoValidacao } : c;
+      setCertificados((lista) => lista.map(comCodigo));
+      setPagina((atual) => (atual ? { ...atual, itens: atual.itens.map(comCodigo) } : atual));
     } catch (erro) {
       toast.error(erro instanceof Error ? erro.message : "Não foi possível emitir o certificado.");
     } finally {
       setEmitindo(null);
     }
   }
-
-  const filtrados = certificados.filter((c) => !filtroEventoId || c.eventoId === filtroEventoId);
 
   // RF027: confere se um certificado e autentico pelo codigo impresso no PDF (a mesma consulta da pagina
   // publica que o link do PDF abre). Fica aqui, dentro do sistema, e nao mais na tela de login
@@ -77,7 +114,9 @@ export function CertificadosPage() {
       <div>
         <PageHeader title="Certificados" />
         <div className="card">
-          {certificados.length === 0 ? (
+          {carregando ? (
+            <p className="empty-cell">Carregando seus certificados…</p>
+          ) : certificados.length === 0 ? (
             <p className="empty-cell">
               Você ainda não possui certificados. Os certificados são liberados após a confirmação de presença.
             </p>
@@ -131,6 +170,9 @@ export function CertificadosPage() {
     );
   }
 
+  const itens = pagina?.itens ?? [];
+  const filtrosAtivos = Boolean(filtros.eventoId || filtros.busca.trim());
+
   // equipe: a validacao vem antes da tabela, que pode ser longa
   return (
     <div>
@@ -139,17 +181,29 @@ export function CertificadosPage() {
       {cartaoValidacao}
 
       <div className="card">
-        <select className="search-input" value={filtroEventoId} onChange={(e) => setFiltroEventoId(e.target.value)}>
-          <option value="">Todos os eventos</option>
-          {eventos.map((e) => (
-            <option key={e.id} value={e.id}>
-              {e.titulo}
-            </option>
-          ))}
-        </select>
-      </div>
+        <div className="field-row" style={{ flexWrap: "wrap", marginBottom: 12 }}>
+          <label className="field" style={{ minWidth: 240 }}>
+            <span>Evento</span>
+            <select value={filtros.eventoId} onChange={(e) => mudarFiltro({ eventoId: e.target.value })}>
+              <option value="">Todos os eventos</option>
+              {eventos.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.titulo}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field" style={{ minWidth: 240 }}>
+            <span>Aluno</span>
+            <input
+              value={filtros.busca}
+              onChange={(e) => mudarFiltro({ busca: e.target.value })}
+              placeholder="Nome, e-mail ou RGM"
+              aria-label="Buscar aluno"
+            />
+          </label>
+        </div>
 
-      <div className="card">
         <table className="table">
           <thead>
             <tr>
@@ -163,7 +217,7 @@ export function CertificadosPage() {
             </tr>
           </thead>
           <tbody>
-            {filtrados.map((c) => (
+            {itens.map((c) => (
               <tr key={c.inscricaoId}>
                 <td>
                   {c.participanteNome} {!c.participanteAtivo && <Badge tone="red">Inativo</Badge>}
@@ -185,15 +239,32 @@ export function CertificadosPage() {
                 </td>
               </tr>
             ))}
-            {filtrados.length === 0 && (
+            {itens.length === 0 && (
               <tr>
                 <td colSpan={7} className="empty-cell">
-                  Nenhum certificado disponível para os filtros aplicados.
+                  {carregando
+                    ? "Carregando…"
+                    : filtrosAtivos
+                      ? "Nenhum certificado disponível para os filtros aplicados."
+                      : "Nenhum aluno com presença confirmada ainda."}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+
+        {pagina && (
+          <Paginacao
+            page={page}
+            pageSize={pagina.pageSize}
+            total={pagina.total}
+            totalPages={pagina.totalPages}
+            carregando={carregando}
+            singular="aluno com presença confirmada"
+            plural="alunos com presença confirmada"
+            onMudarPagina={setPage}
+          />
+        )}
       </div>
     </div>
   );

@@ -42,6 +42,8 @@ export function EventosAluno() {
   const [salas, setSalas] = useState<Sala[]>([]);
   const [palestrantes, setPalestrantes] = useState<Palestrante[]>([]);
   const [inscricoes, setInscricoes] = useState<Inscricao[]>([]);
+  // enquanto carrega, a tela diz "Carregando" (e nao "Nenhum evento cadastrado", que parece erro)
+  const [carregando, setCarregando] = useState(true);
   const [filtros, setFiltros] = useState(FILTROS_VAZIOS);
   const [mostrarEncerrados, setMostrarEncerrados] = useState(false);
   const [avisoPorEvento, setAvisoPorEvento] = useState<Record<string, string>>({});
@@ -50,14 +52,15 @@ export function EventosAluno() {
 
   useEffect(() => {
     // o backend ja devolve so as inscricoes do proprio aluno
-    void Promise.all([eventoService.list(), salaService.list(), palestranteService.list(), inscricaoService.list()]).then(
-      ([e, s, p, i]) => {
+    void Promise.all([eventoService.list(), salaService.list(), palestranteService.list(), inscricaoService.list()])
+      .then(([e, s, p, i]) => {
         setEventos([...e].sort((a, b) => a.horario.localeCompare(b.horario)));
         setSalas(s);
         setPalestrantes(p);
         setInscricoes(i);
-      },
-    );
+      })
+      .catch((e) => toast.error(e instanceof ApiError ? e.message : "Não foi possível carregar os eventos."))
+      .finally(() => setCarregando(false));
   }, []);
 
   // soma (ou tira) uma vaga ocupada na contagem do evento, sem recarregar a lista inteira
@@ -243,7 +246,7 @@ export function EventosAluno() {
       )}
       {eventos.length === 0 && (
         <div className="card">
-          <p className="empty-cell">Nenhum evento cadastrado.</p>
+          <p className="empty-cell">{carregando ? "Carregando eventos…" : "Nenhum evento cadastrado."}</p>
         </div>
       )}
 
