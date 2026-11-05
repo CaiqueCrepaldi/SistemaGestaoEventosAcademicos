@@ -92,7 +92,6 @@ export function LoginPage() {
             <div className="login-links">
               <Link to="/cadastro">Criar conta</Link>
               <Link to="/esqueci-senha">Esqueci minha senha</Link>
-              <Link to="/validar-certificado">Validar certificado</Link>
             </div>
           </>
         )}

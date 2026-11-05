@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { ValidacaoCertificado } from "../../components/certificados/ValidacaoCertificado";
 import { Badge } from "../../components/ui/Badge";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { toast } from "../../components/ui/Toast";
@@ -56,6 +57,20 @@ export function CertificadosPage() {
 
   const filtrados = certificados.filter((c) => !filtroEventoId || c.eventoId === filtroEventoId);
 
+  // RF027: confere se um certificado e autentico pelo codigo impresso no PDF (a mesma consulta da pagina
+  // publica que o link do PDF abre). Fica aqui, dentro do sistema, e nao mais na tela de login
+  const cartaoValidacao = (
+    <div className="card">
+      <h3>Validar certificado</h3>
+      <p className="form-hint" style={{ marginBottom: 12 }}>
+        Confira se um certificado é autêntico pelo código de validação impresso no PDF.
+      </p>
+      <div style={{ maxWidth: 520 }}>
+        <ValidacaoCertificado />
+      </div>
+    </div>
+  );
+
   // aluno ve lista simples com questionario/emitir, equipe ve tabela com filtro
   if (!isEquipe) {
     return (
@@ -110,13 +125,18 @@ export function CertificadosPage() {
             </ul>
           )}
         </div>
+
+        {cartaoValidacao}
       </div>
     );
   }
 
+  // equipe: a validacao vem antes da tabela, que pode ser longa
   return (
     <div>
       <PageHeader title="Certificados" />
+
+      {cartaoValidacao}
 
       <div className="card">
         <select className="search-input" value={filtroEventoId} onChange={(e) => setFiltroEventoId(e.target.value)}>

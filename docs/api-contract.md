@@ -823,9 +823,13 @@ questionário; essa rota informa quais já têm certificado e com qual código.
 
 ### `GET /api/certificados/validar/{codigo}` — validação pública (RF027)
 
-**Sem token.** Usada pela página pública `/validar-certificado` do frontend
-(link na tela de login; o PDF imprime o endereço da página junto com o
-código, e o endereço é um link que já abre a consulta). Response `200`,
+**Sem token.** Usada em dois lugares do frontend: o cartão "Validar
+certificado" da tela **Certificados**, dentro do sistema (todos os perfis), e
+a página pública `/validar-certificado`, que não tem mais link na tela de
+login — quem chega nela é quem recebeu o PDF: o certificado imprime o
+endereço junto com o código, e o endereço é um link que já abre a consulta
+(assim quem não tem conta, como a coordenação conferindo horas
+complementares, também valida). Response `200`,
 só com o necessário para conferir o documento — **sem RGM e sem e-mail**:
 
 ```json

@@ -92,6 +92,7 @@ try {
   await page.goto(`${APP}/login`);
   checar("rótulos com * nos campos obrigatórios", (await page.locator("label[for=emailLogin] .campo-obrigatorio").count()) === 1 && (await page.locator("label[for=senha] .campo-obrigatorio").count()) === 1);
   checar("legenda explicando o *", await temTexto(page, "são obrigatórios"));
+  checar("a tela de login não tem mais o link \"Validar certificado\" (a validação fica em Certificados)", !(await temTexto(page, "Validar certificado")));
   await page.click("button[type=submit]");
   checar("enviar vazio marca e-mail e senha como inválidos (borda vermelha)", (await invalido(page, "#emailLogin")) && (await invalido(page, "#senha")));
   checar("mensagem embaixo de cada campo", (await temTexto(page, "Informe o e-mail.")) && (await temTexto(page, "Informe a senha.")));
@@ -321,9 +322,18 @@ try {
   await itemCertificado.getByText("Código de validação:").waitFor({ timeout: 10000 }).catch(() => {});
   const codigoNaTela = (await itemCertificado.innerText()).match(/Código de validação: ([0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4})/)?.[1];
   checar("depois de emitir, a tela mostra o código gravado e o botão vira Baixar certificado", !!codigoNaTela && (await itemCertificado.locator("button:has-text('Baixar certificado')").count()) === 1);
+  // validacao dentro do sistema, na propria tela Certificados (codigo digitado em minusculas, como alguem faria)
+  const cartaoValidacao = page.locator(".card", { has: page.locator("h3", { hasText: "Validar certificado" }) });
+  await cartaoValidacao.locator("input").fill((codigoNaTela ?? "").toLowerCase());
+  await cartaoValidacao.locator("button:has-text('Validar')").click();
+  await cartaoValidacao.getByText("Certificado válido").waitFor({ timeout: 10000 }).catch(() => {});
+  checar(
+    "tela Certificados valida o código digitado (dentro do sistema)",
+    (await cartaoValidacao.getByText("Certificado válido").count()) === 1 && (await cartaoValidacao.innerText()).includes(`Evento UI ${sufixo}`),
+  );
   await page.goto(`${APP}/validar-certificado?codigo=${codigoNaTela}`);
   await page.getByText("Certificado válido").waitFor({ timeout: 10000 }).catch(() => {});
-  checar("página pública valida o código do PDF", await temTexto(page, "Certificado válido"));
+  checar("o link impresso no PDF continua abrindo a validação sem login", await temTexto(page, "Certificado válido"));
   await page.goto(`${APP}/validar-certificado?codigo=ZZZZ-ZZZZ-ZZZZ`);
   await page.getByText("Certificado não encontrado.").waitFor({ timeout: 10000 }).catch(() => {});
   checar("código inexistente: Certificado não encontrado", await temTexto(page, "Certificado não encontrado."));
@@ -489,6 +499,14 @@ try {
       (await linhaUsuario.locator(".badge", { hasText: "Liberado" }).count()) === 1,
   );
   checar("menu do admin não tem mais a tela Usuários", (await page.locator("a.nav-link", { hasText: "Usuários" }).count()) === 0);
+
+  // a equipe tambem valida certificado pela tela Certificados (o cartao vem antes da tabela)
+  await page.goto(`${APP}/certificados`);
+  const validacaoEquipe = page.locator(".card", { has: page.locator("h3", { hasText: "Validar certificado" }) });
+  await validacaoEquipe.locator("input").fill("ZZZZ-ZZZZ-ZZZZ");
+  await validacaoEquipe.locator("button:has-text('Validar')").click();
+  await validacaoEquipe.getByText("Certificado não encontrado.").waitFor({ timeout: 10000 }).catch(() => {});
+  checar("equipe valida certificado na tela Certificados (código inexistente: não encontrado)", (await validacaoEquipe.getByText("Certificado não encontrado.").count()) === 1);
 
   titulo("Auditoria: filtro pelas ações novas");
   await page.goto(`${APP}/auditoria`);
