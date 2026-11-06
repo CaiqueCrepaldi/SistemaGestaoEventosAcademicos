@@ -1,10 +1,11 @@
-import { Router } from "express";
+import { Router, type NextFunction, type Request, type Response } from "express";
+import { AppError } from "../../errors/AppError";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { autenticar, autorizar } from "../../middleware/auth";
 import { validarCorpo } from "../../middleware/validate";
 import { participanteComContaParaDTO, participanteParaDTO } from "../../utils/dto";
 import { LIMITE_BUSCA_ALUNOS, LIMITE_MAXIMO_BUSCA_ALUNOS, participantesService } from "./participantes.service";
-import { participanteUpdateSchema } from "./participantes.schemas";
+import { MENSAGEM_EMAIL_FIXO, participanteUpdateSchema } from "./participantes.schemas";
 
 export const participantesRouter = Router();
 
@@ -44,8 +45,18 @@ participantesRouter.get(
   }),
 );
 
+// o e-mail e o login do aluno, confirmado por codigo no cadastro: a equipe corrige nome e RGM, nunca o
+// e-mail. Se o campo vier (mesmo igual ao atual), 422 — em vez de ser ignorado sem aviso
+function recusarEmail(req: Request, _res: Response, next: NextFunction) {
+  if (req.body && typeof req.body === "object" && "email" in req.body) {
+    throw AppError.validacao(MENSAGEM_EMAIL_FIXO, [{ campo: "email", mensagem: MENSAGEM_EMAIL_FIXO }]);
+  }
+  next();
+}
+
 participantesRouter.put(
   "/:id",
+  recusarEmail,
   validarCorpo(participanteUpdateSchema),
   asyncHandler(async (req, res) => {
     const participante = await participantesService.atualizar(req.params.id, req.body, req.usuario!.sub);

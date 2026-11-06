@@ -71,7 +71,7 @@ async function main() {
 
   async function criarConta(perfil: Perfil): Promise<Conta> {
     const email = `teste-2fa-${perfil.toLowerCase()}-${randomUUID().slice(0, 8)}@teste.invalido`;
-    const senha = "SenhaTeste123";
+    const senha = "Senha@Teste123";
     let participanteId: string | null = null;
     if (perfil === "ALUNO") {
       // participante so guarda o RGM; nome e e-mail ficam na conta criada logo abaixo

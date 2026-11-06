@@ -4,13 +4,17 @@ import { auditoriaService, SEM_RESPONSAVEL } from "../../services";
 import type { PaginaAuditoria, ResponsavelAuditoria } from "../../services";
 
 // traduz o codigo da acao pra um texto legivel na tela (a ordem aqui eh a do filtro de acao).
-// FEEDBACK_ATUALIZADO/FEEDBACK_REMOVIDO e INSCRICAO_REMOVIDA nao sao mais gravados, mas continuam nos logs antigos
+// FEEDBACK_ATUALIZADO/FEEDBACK_REMOVIDO, INSCRICAO_REMOVIDA e USUARIO_REGISTRADO (cadastro antes da
+// confirmacao do e-mail) nao sao mais gravados, mas continuam nos logs antigos
 const ACAO_LABEL: Record<string, string> = {
   LOGIN_SUCESSO: "Login realizado",
   LOGIN_FALHA: "Falha de login",
   ACESSO_NEGADO: "Acesso negado",
   BLOQUEIO_LOGIN_REMOVIDO: "Bloqueio de acesso removido",
-  USUARIO_REGISTRADO: "Conta registrada",
+  CADASTRO_INICIADO: "Cadastro iniciado (código enviado)",
+  CADASTRO_CODIGO_REENVIADO: "Código do cadastro reenviado",
+  CADASTRO_CONCLUIDO: "Cadastro concluído (e-mail confirmado)",
+  USUARIO_REGISTRADO: "Conta registrada (registro antigo)",
   CONSENTIMENTO_LGPD_ACEITO: "Termos de Uso aceitos no cadastro",
   TERMOS_REACEITOS: "Termos de Uso aceitos de novo",
   RECUPERACAO_SENHA_SOLICITADA: "Recuperação de senha solicitada",

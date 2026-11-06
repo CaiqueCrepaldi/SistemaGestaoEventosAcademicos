@@ -3,7 +3,6 @@ import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { registrarAuditoria } from "../../utils/auditoria";
 import { chavesBloqueadasAgora, contaBloqueada } from "../../utils/limiteAcesso";
-import { normalizarEmail } from "../../utils/validacao";
 import type { Participante, SituacaoConta } from "../../types/domain";
 import type { ParticipanteUpdateInput } from "./participantes.schemas";
 
@@ -88,7 +87,7 @@ async function buscarOuFalhar(id: string) {
 
 function relancarComoConflito(erro: unknown): never {
   if (erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === "P2002") {
-    throw AppError.conflito("DUPLICIDADE_PARTICIPANTE", "Já existe um participante com este e-mail ou RGM.");
+    throw AppError.conflito("DUPLICIDADE_PARTICIPANTE", "Já existe um participante com este RGM.");
   }
   throw erro;
 }
@@ -123,19 +122,16 @@ async function atualizar(id: string, dados: ParticipanteUpdateInput, atorId: str
     ]);
   }
 
-  // cada dado na sua tabela, sem copia: nome e e-mail (tambem o de login) na conta do aluno; RGM e
-  // situacao no participante. Os dois juntos ou nenhum. E-mail ou RGM repetido -> P2002 -> 409
-  const { nome, email, ...dadosDoParticipante } = dados;
-  const dadosDaConta: Prisma.UsuarioUpdateManyMutationInput = {};
-  if (nome !== undefined) dadosDaConta.nome = nome;
-  if (email !== undefined) dadosDaConta.emailLogin = normalizarEmail(email);
+  // cada dado na sua tabela, sem copia: o nome na conta do aluno; RGM e situacao no participante. Os
+  // dois juntos ou nenhum. RGM repetido -> P2002 -> 409. O e-mail (login) nunca muda por aqui
+  const { nome, ...dadosDoParticipante } = dados;
 
   try {
     const participante = await prisma.$transaction(async (tx) => {
-      if (Object.keys(dadosDaConta).length > 0) {
-        await tx.usuario.updateMany({ where: { participanteId: id, perfil: "ALUNO" }, data: dadosDaConta });
+      if (nome !== undefined) {
+        await tx.usuario.updateMany({ where: { participanteId: id, perfil: "ALUNO" }, data: { nome } });
       }
-      // depois da conta, pra ja voltar com o nome/e-mail novos
+      // depois da conta, pra ja voltar com o nome novo
       return tx.participante.update({
         where: { id },
         data: dados.ativo === true ? { ...dadosDoParticipante, motivoInativacao: null } : dadosDoParticipante,
@@ -159,9 +155,9 @@ async function atualizar(id: string, dados: ParticipanteUpdateInput, atorId: str
       await registrarAuditoria(atorId, "PARTICIPANTE_REATIVADO", `participante ${id}`);
     }
 
-    // edicao de dados (nome/e-mail/rgm/motivo) — grava so os nomes dos campos que mudaram, nunca os valores;
+    // edicao de dados (nome/rgm/motivo) — grava so os nomes dos campos que mudaram, nunca os valores;
     // o motivo que acompanha uma inativacao ja esta coberto pelo log de inativacao, nao conta como edicao a parte
-    const camposAlterados = (["nome", "email", "rgm", "motivoInativacao"] as const).filter(
+    const camposAlterados = (["nome", "rgm", "motivoInativacao"] as const).filter(
       (campo) => dados[campo] !== undefined && dados[campo] !== atual[campo] && !(campo === "motivoInativacao" && statusMudou),
     );
     if (camposAlterados.length > 0 || !statusMudou) {

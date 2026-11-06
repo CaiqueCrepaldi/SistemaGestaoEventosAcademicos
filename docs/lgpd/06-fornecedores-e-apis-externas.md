@@ -1,7 +1,9 @@
 # Fornecedores e APIs externas — SGEA
 
-**Data:** 29/09/2026 · **Versão:** 2 (TiDB Cloud: nome, e-mail e RGM
-deixaram de ser criptografados pela aplicação)
+**Data:** 06/11/2026 · **Versão:** 3 (SendGrid passa a enviar também o
+código de confirmação do cadastro; TiDB Cloud guarda o cadastro pendente
+por até 15 minutos. A versão 2, de 29/09/2026, registrou que nome, e-mail e
+RGM deixaram de ser criptografados pela aplicação)
 
 Todo serviço de terceiro identificado no diagnóstico da Fase 0 (código
 completo revisado — backend, frontend, deploy). Os três são também os
@@ -16,7 +18,9 @@ completo revisado — backend, frontend, deploy). Os três são também os
   ver `07-medidas-tecnicas-de-seguranca.md`), como o restante (evento,
   sala, inscrição, log), atrás de autenticação e TLS na conexão. Continuam
   protegidos pela própria aplicação antes de chegar ao banco: senhas (hash
-  bcrypt), códigos de recuperação (hash) e o segredo do 2FA (cifrado).
+  bcrypt), códigos de recuperação e de confirmação do cadastro (hash) e o
+  segredo do 2FA (cifrado). O cadastro que ainda espera a confirmação do
+  e-mail fica na tabela `cadastros_pendentes` por até 15 minutos.
 - **País:** Estados Unidos (região `us-east-1`, AWS), confirmado no host
   de conexão (`gateway01.us-east-1.prod.aws.tidbcloud.com`).
 - **Salvaguardas:** conexão cifrada (TLS) entre o backend e o banco;
@@ -28,11 +32,18 @@ completo revisado — backend, frontend, deploy). Os três são também os
 
 ## SendGrid (Twilio)
 
-- **Finalidade:** envio de e-mails transacionais — código de recuperação
-  de senha, confirmação de inscrição.
-- **Dados enviados:** e-mail e nome do destinatário, e o conteúdo da
-  mensagem (que inclui o código de recuperação, quando aplicável). Nunca
-  a senha nem outro dado sensível.
+- **Finalidade:** envio de e-mails transacionais — código de confirmação
+  do e-mail no cadastro (a conta só é criada depois que o aluno digita esse
+  código), código de recuperação de senha, confirmação de inscrição e aviso
+  de cancelamento de inscrição pela equipe.
+- **Dados enviados:** e-mail do destinatário e o conteúdo da mensagem (nos
+  avisos de inscrição, também o nome do aluno; nos e-mails de código, o
+  próprio código de 6 dígitos). Nunca a senha nem outro dado sensível. O
+  e-mail do código do cadastro avisa: "Se você não pediu este cadastro,
+  ignore este e-mail: nenhuma conta será criada."
+- **Se o envio falhar:** no cadastro, em produção, a API responde `503` e
+  mantém o cadastro pendente para o aluno usar "Reenviar código"; a falha
+  fica na auditoria (`EMAIL_FALHA`), sem o endereço.
 - **País:** Estados Unidos (Twilio Inc.).
 - **Salvaguardas:** chamada via API autenticada por chave
   (`SENDGRID_API_KEY`, fora do código); o e-mail só é disparado pelo

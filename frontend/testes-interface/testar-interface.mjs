@@ -18,6 +18,9 @@ const { sufixo, contas } = JSON.parse(readFileSync(fileURLToPath(new URL("./dado
 const tag = sufixo.replace(/\d/g, (d) => "ghijklmnop"[Number(d)]);
 const NOME_ALUNA = `Aluna Interface ${tag}`;
 const NOME_INATIVO = `Aluno Inativado ${tag}`;
+// senhas que seguem a regra de senha nova (8 a 64, maiuscula, numero e caractere especial)
+const SENHA_ALUNA = "Senha@Aluna123";
+const SENHA_ALUNO2 = "Senha@Aluno123";
 const resultados = [];
 let secao = "";
 
@@ -63,9 +66,16 @@ async function entrar(page, email, senha) {
   await page.click("button[type=submit]");
   await page.waitForFunction(() => !location.hash.startsWith("#/login"), null, { timeout: 15000 });
 }
+// "Sair" pede confirmacao: clica no botao do topo e depois no "Sair" da janela de confirmacao
 async function sair(page) {
-  await page.click("button:has-text('Sair')");
+  await page.click(".topbar button:has-text('Sair')");
+  await page.locator(".modal button:has-text('Sair')").click();
   await page.waitForFunction(() => location.hash.startsWith("#/login"));
+}
+// codigo de demonstracao mostrado na tela fora de producao ("Modo demonstração — código: 123456")
+async function codigoDemoDaTela(page) {
+  const texto = await page.getByText("Modo demonstração — código:").first().innerText();
+  return /\d{6}/.exec(texto)?.[0] ?? "";
 }
 async function esperarToast(page, texto) {
   try {
@@ -179,7 +189,21 @@ try {
     titulo: `Evento UI ${sufixo}`, horario: emBreve, salaId: sala.corpo.id, palestranteId: palestrante.corpo.id, tema: "Tema UI", cargaHoraria: 2, questionario: questionario(),
   });
   const eventoId = evento.corpo.id;
+
+  titulo("Sair pede confirmação");
+  await page.click(".topbar button:has-text('Sair')");
+  checar(
+    "clicar em Sair abre \"Sair do sistema?\" com o aviso de que vai precisar entrar de novo",
+    (await page.locator(".modal", { hasText: "Sair do sistema?" }).count()) === 1 &&
+      (await temTexto(page, "Você vai precisar entrar de novo com seu e-mail e senha.")),
+  );
+  await page.locator(".modal button:has-text('Cancelar')").click();
+  checar(
+    "Cancelar fecha a confirmação e continua no sistema",
+    (await page.locator(".modal").count()) === 0 && !(await page.evaluate(() => location.hash)).startsWith("#/login"),
+  );
   await sair(page);
+  checar("confirmar o Sair volta para o login", (await page.evaluate(() => location.hash)).startsWith("#/login"));
 
   // ---------------------------------------------------------------- E: cadastro
   titulo("E / Cadastro de aluno");
@@ -191,6 +215,23 @@ try {
   );
   checar("foco no nome", (await idAtivo(page)) === "nomeCompleto", await idAtivo(page));
   checar("texto do aceite não chama de consentimento", await temTexto(page, "estou ciente da"));
+
+  titulo("E / Regras da senha com checklist");
+  const requisitosOk = () => page.locator(".requisitos-senha li.requisito-ok").count();
+  checar(
+    "embaixo da senha aparece a lista com os 4 requisitos, todos pendentes (• cinza)",
+    (await page.locator(".requisitos-senha li").count()) === 4 && (await page.locator(".requisitos-senha li.requisito-pendente").count()) === 4,
+  );
+  checar("a lista fica num aria-live pro leitor de tela", (await page.locator(".requisitos-senha ul[aria-live=polite]").count()) === 1);
+  await page.fill("#senha", "senha1");
+  checar(
+    "a cada tecla: só \"Um número\" fica ✓ com \"senha1\"",
+    (await requisitosOk()) === 1 && (await page.locator(".requisitos-senha li.requisito-ok", { hasText: "Um número" }).count()) === 1,
+  );
+  checar("o item cumprido mostra o ícone ✓ (não só a cor)", (await page.locator(".requisitos-senha li.requisito-ok .requisito-icone").innerText()) === "✓");
+  await page.fill("#senha", `Aa1!${"x".repeat(61)}`);
+  checar("passando de 64 caracteres aparece o aviso embaixo do campo", await temTexto(page, "A senha pode ter no máximo 64 caracteres."));
+
   const emailAluno = `ui.aluno.${sufixo}@alunos.umc.br`;
   const rgmAluno = `8${String(Date.now()).slice(-10)}`;
   await page.fill("#nomeCompleto", NOME_ALUNA);
@@ -200,15 +241,62 @@ try {
   await page.fill("#confirmarSenha", "SenhaAluna123");
   await page.check("input[name=aceiteLgpd]");
   await page.click("button[type=submit]");
+  checar(
+    "enviar com requisito faltando (sem caractere especial): erro embaixo do campo senha, sem sair da etapa",
+    (await invalido(page, "#senha")) && (await temTexto(page, "A senha deve ter de 8 a 64 caracteres")) && (await page.locator("#codigo").count()) === 0,
+  );
+  await page.fill("#senha", SENHA_ALUNA);
+  await page.fill("#confirmarSenha", SENHA_ALUNA);
+  checar("senha que cumpre a regra: os 4 itens com ✓", (await requisitosOk()) === 4);
+
+  titulo("E / Cadastro: confirmação do e-mail por código");
+  await page.click("button[type=submit]");
+  await page.locator("#codigo").waitFor({ timeout: 15000 });
+  checar(
+    "Criar conta passa para a etapa do código, com o e-mail, a validade e o aviso de spam",
+    await temTexto(page, `Enviamos um código de 6 dígitos para ${emailAluno}`) &&
+      (await temTexto(page, "O código vale por 15 minutos")) &&
+      (await temTexto(page, "caixa de spam")),
+  );
+  checar("avisa que sair da página não conclui o cadastro", await temTexto(page, "Se você sair desta página, o cadastro não é concluído"));
+  checar(
+    "campo do código só com números (inputmode numeric, autocomplete one-time-code)",
+    (await page.getAttribute("#codigo", "inputmode")) === "numeric" && (await page.getAttribute("#codigo", "autocomplete")) === "one-time-code",
+  );
+  await page.fill("#codigo", "12ab34");
+  checar("letras digitadas no código são descartadas", (await page.inputValue("#codigo")) === "1234");
+  checar(
+    "\"Reenviar código\" começa desabilitado, com a contagem regressiva",
+    await page.locator("button", { hasText: /Reenviar código \(\d+s\)/ }).isDisabled(),
+  );
+  const codigoDaTela = await codigoDemoDaTela(page);
+  checar("fora de produção mostra o código de demonstração", /^\d{6}$/.test(codigoDaTela), codigoDaTela);
+  await page.fill("#codigo", codigoDaTela === "000000" ? "111111" : "000000");
+  await page.click("button[type=submit]");
+  await page.locator("#codigo[aria-invalid=true]").waitFor({ timeout: 8000 }).catch(() => {});
+  checar("código errado: \"Código inválido.\" embaixo do campo do código", (await invalido(page, "#codigo")) && (await temTexto(page, "Código inválido.")));
+  await page.click("button:has-text('Corrigir meus dados')");
+  checar(
+    "\"Corrigir meus dados\" volta ao formulário sem apagar o que foi digitado",
+    (await page.inputValue("#nomeCompleto")) === NOME_ALUNA &&
+      (await page.inputValue("#emailInstitucional")) === emailAluno &&
+      (await page.inputValue("#senha")) === SENHA_ALUNA &&
+      (await page.isChecked("input[name=aceiteLgpd]")),
+  );
+  await page.click("button[type=submit]");
+  await page.locator("#codigo").waitFor({ timeout: 15000 });
+  const codigoNovo = await codigoDemoDaTela(page);
+  await page.fill("#codigo", codigoNovo);
+  await page.click("button:has-text('Confirmar e criar conta')");
   await page.waitForFunction(() => location.hash.startsWith("#/eventos"), null, { timeout: 15000 });
-  checar("cadastro válido entra direto na tela de eventos", (await page.evaluate(() => location.hash)).startsWith("#/eventos"));
+  checar("código certo cria a conta e entra direto na tela de eventos", (await page.evaluate(() => location.hash)).startsWith("#/eventos"));
   await sair(page);
   await page.goto(`${APP}/cadastro`);
   await page.fill("#nomeCompleto", "Outra Pessoa");
   await page.fill("#rgm", `7${String(Date.now()).slice(-10)}`);
   await page.fill("#emailInstitucional", emailAluno);
-  await page.fill("#senha", "SenhaAluna123");
-  await page.fill("#confirmarSenha", "SenhaAluna123");
+  await page.fill("#senha", SENHA_ALUNA);
+  await page.fill("#confirmarSenha", SENHA_ALUNA);
   await page.check("input[name=aceiteLgpd]");
   await page.click("button[type=submit]");
   await page.locator("#emailInstitucional[aria-invalid=true]").waitFor({ timeout: 8000 }).catch(() => {});
@@ -216,7 +304,10 @@ try {
 
   // segundo aluno (vai ser inativado) e inscricoes pra contagem da agenda
   const emailAluno2 = `ui.aluno2.${sufixo}@alunos.umc.br`;
-  const cadastro2 = await api("POST", "/auth/registro", undefined, { nomeCompleto: NOME_INATIVO, rgm: `6${String(Date.now()).slice(-10)}`, emailInstitucional: emailAluno2, senha: "SenhaAluno123", aceiteLgpd: true });
+  // cadastro pela API em 2 passos: os dados (devolve o codigoDemo fora de producao) e a confirmacao
+  const inicio2 = await api("POST", "/auth/registro", undefined, { nomeCompleto: NOME_INATIVO, rgm: `6${String(Date.now()).slice(-10)}`, emailInstitucional: emailAluno2, senha: SENHA_ALUNO2, aceiteLgpd: true });
+  const cadastro2 = await api("POST", "/auth/registro/confirmar", undefined, { emailInstitucional: emailAluno2, codigo: inicio2.corpo?.codigoDemo });
+  if (cadastro2.status !== 201) throw new Error(`cadastro do segundo aluno falhou: ${JSON.stringify(cadastro2.corpo)}`);
   await api("POST", "/inscricoes", tokenSecretaria, { participanteId: cadastro2.corpo.participanteId, eventoId });
 
   // ---------------------------------------------------------------- aluno: agenda, questionario, certificado, feedback
@@ -226,7 +317,7 @@ try {
   await api("POST", "/eventos", tokenSecretaria, {
     titulo: `Evento Encerrado UI ${sufixo}`, horario: quatroDiasAtras, salaId: sala.corpo.id, palestranteId: palestrante.corpo.id, tema: "Tema", cargaHoraria: 1, questionario: questionario(),
   });
-  await entrar(page, emailAluno, "SenhaAluna123");
+  await entrar(page, emailAluno, SENHA_ALUNA);
   await page.goto(`${APP}/eventos`);
   await page.locator(".agenda-item", { hasText: `Evento UI ${sufixo}` }).locator("button:has-text('Inscrever-se')").click();
   checar("aluno se inscreve pela tela", await esperarToast(page, "Inscrição confirmada"));
@@ -271,7 +362,7 @@ try {
   const eventoAmanha = await api("POST", "/eventos", tokenSecretaria, {
     titulo: `Evento Amanha UI ${sufixo}`, horario: amanha, salaId: sala.corpo.id, palestranteId: palestrante.corpo.id, tema: "Tema", cargaHoraria: 1, questionario: questionario(),
   });
-  await api("POST", `/eventos/${eventoAmanha.corpo.id}/inscricoes`, await tokenDe(emailAluno, "SenhaAluna123"));
+  await api("POST", `/eventos/${eventoAmanha.corpo.id}/inscricoes`, await tokenDe(emailAluno, SENHA_ALUNA));
 
   titulo("Check-in pela tela da secretaria");
   await entrar(page, secretaria.email, secretaria.senha);
@@ -293,7 +384,7 @@ try {
   await linhaCheckin.locator(".badge", { hasText: "Presente" }).waitFor({ timeout: 8000 }).catch(() => {});
   checar("confirmar presença pela tela marca a inscrição como Presente", (await linhaCheckin.locator(".badge", { hasText: "Presente" }).count()) === 1);
   await sair(page);
-  await entrar(page, emailAluno, "SenhaAluna123");
+  await entrar(page, emailAluno, SENHA_ALUNA);
 
   titulo("E / Questionário: pergunta sem resposta");
   await page.goto(`${APP}/eventos/${eventoId}/questionario`);
@@ -373,7 +464,7 @@ try {
   titulo("Meus dados do aluno e reprovação no questionário (RF026)");
   // evento em que a aluna fica abaixo de 60% nas duas tentativas (sala propria, sem conflito de horario):
   // sem terceira chance, o certificado desse evento nao sai mais
-  const tokenAluna = await tokenDe(emailAluno, "SenhaAluna123");
+  const tokenAluna = await tokenDe(emailAluno, SENHA_ALUNA);
   const salaReprovado = await api("POST", "/salas", tokenSecretaria, { nome: `Sala Reprovado UI ${sufixo}`, capacidade: 10 });
   const tituloReprovado = `Evento Reprovado UI ${sufixo}`;
   const eventoReprovado = await api("POST", "/eventos", tokenSecretaria, {
@@ -431,7 +522,7 @@ try {
   await api("PUT", `/participantes/${cadastro2.corpo.participanteId}`, tokenSecretaria, { ativo: false, motivoInativacao: "Motivo interno da equipe" });
   await page.goto(`${APP}/login`);
   await page.fill("#emailLogin", emailAluno2);
-  await page.fill("#senha", "SenhaAluno123");
+  await page.fill("#senha", SENHA_ALUNO2);
   await page.click("button[type=submit]");
   await page.getByText("Sua conta está inativa. Procure a secretaria.").waitFor({ timeout: 8000 }).catch(() => {});
   checar("aluno inativo vê a mensagem padrão no login", await temTexto(page, "Sua conta está inativa. Procure a secretaria."));
@@ -442,6 +533,14 @@ try {
   const linhaInativo = page.locator("tr", { hasText: NOME_INATIVO });
   await linhaInativo.waitFor();
   checar("Participantes mostra o badge Inativo", (await linhaInativo.locator(".badge", { hasText: "Inativo" }).count()) === 1);
+  await page.locator("tr", { hasText: NOME_ALUNA }).locator("button:has-text('Editar')").click();
+  checar(
+    "na edição o e-mail aparece só para leitura, com a explicação",
+    (await page.inputValue(".modal #email")) === emailAluno &&
+      (await page.locator(".modal #email[readonly]").count()) === 1 &&
+      (await temTexto(page, "O e-mail é o login do aluno, foi confirmado no cadastro e não pode ser alterado.")),
+  );
+  await page.click(".modal button:has-text('Cancelar')");
   checar(
     "secretaria vê as colunas 2FA e Acesso, mas sem os botões Resetar 2FA/Desbloquear",
     (await page.locator("th", { hasText: "2FA" }).count()) === 1 &&
@@ -555,6 +654,15 @@ try {
   await page.locator("#codigo").waitFor();
   await page.click("button[type=submit]");
   checar("etapa 2 vazia: código, nova senha e confirmação marcados", (await invalido(page, "#codigo")) && (await invalido(page, "#novaSenha")) && (await invalido(page, "#confirmarSenha")));
+  checar("a nova senha mostra a mesma lista de requisitos", (await page.locator(".requisitos-senha li").count()) === 4);
+  await page.fill("#codigo", "123456");
+  await page.fill("#novaSenha", "novasenha123");
+  await page.fill("#confirmarSenha", "novasenha123");
+  await page.click("button[type=submit]");
+  checar(
+    "nova senha sem maiúscula e sem caractere especial: erro embaixo do campo, com a regra",
+    (await invalido(page, "#novaSenha")) && (await temTexto(page, "A senha deve ter de 8 a 64 caracteres")),
+  );
 
   titulo("Console do navegador");
   checar("nenhum erro de JavaScript nas telas", errosDoNavegador.length === 0, errosDoNavegador.join(" | "));

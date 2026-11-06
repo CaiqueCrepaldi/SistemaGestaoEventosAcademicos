@@ -12,13 +12,14 @@ const MAX_TENTATIVAS = 5;
 export const MAX_TENTATIVAS_POR_IP = 20;
 const BLOQUEIO_MS = 15 * 60 * 1000;
 
-// prefixo da chave identifica o fluxo e o alvo: login/recuperacao usam o HMAC do e-mail
-// (idDoEmail, nunca e-mail em texto puro), o codigo do 2FA usa o id do usuario — ou o IP
-export function chaveConta(fluxo: "login" | "recuperacao" | "mfa", identificador: string): string {
+// prefixo da chave identifica o fluxo e o alvo: login/recuperacao/cadastro usam o HMAC do e-mail
+// (idDoEmail, nunca e-mail em texto puro), o codigo do 2FA usa o id do usuario — ou o IP.
+// "cadastro" conta os envios do codigo de confirmacao do e-mail (cadastro + reenvios)
+export function chaveConta(fluxo: "login" | "recuperacao" | "mfa" | "cadastro", identificador: string): string {
   return `${fluxo}:conta:${identificador}`;
 }
 // "validacao" = consulta publica de certificado (sem login), limitada so por IP
-export function chaveIp(fluxo: "login" | "recuperacao" | "validacao", ip: string): string {
+export function chaveIp(fluxo: "login" | "recuperacao" | "validacao" | "cadastro", ip: string): string {
   return `${fluxo}:ip:${ip}`;
 }
 

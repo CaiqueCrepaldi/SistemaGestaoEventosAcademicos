@@ -31,6 +31,14 @@ export interface SolicitarRecuperacaoResult {
   codigoDemo?: string;
 }
 
+// resposta do cadastro (passo 1) e do reenvio: a conta ainda nao existe, o codigo foi pro e-mail
+export interface EnvioCodigoCadastro {
+  emailInstitucional: string;
+  expiraEm: string;
+  // so fora de producao, pra testar sem e-mail configurado
+  codigoDemo?: string;
+}
+
 // login com 2FA ativo ainda nao abre sessao: devolve um token temporario que so serve pra etapa
 // do codigo
 export type ResultadoLogin = { tipo: "sessao"; sessao: SessaoUsuario } | { tipo: "mfa_pendente"; tokenEtapa: string };
@@ -98,8 +106,15 @@ export const authService = {
     return api.get<UsuarioPerfil>("/usuarios/me");
   },
 
+  // cadastro em 2 passos: os dados (manda o codigo pro e-mail) e a confirmacao do codigo (cria a conta)
   cadastrarAluno(dados: CadastroAlunoInput) {
-    return api.post<void>("/auth/registro", dados);
+    return api.post<EnvioCodigoCadastro>("/auth/registro", dados);
+  },
+  confirmarCadastro(emailInstitucional: string, codigo: string) {
+    return api.post<UsuarioPerfil>("/auth/registro/confirmar", { emailInstitucional, codigo });
+  },
+  reenviarCodigoCadastro(emailInstitucional: string) {
+    return api.post<EnvioCodigoCadastro>("/auth/registro/reenviar-codigo", { emailInstitucional });
   },
   solicitarRecuperacaoSenha(email: string) {
     return api.post<SolicitarRecuperacaoResult>("/auth/recuperacao-senha", { email });

@@ -5,7 +5,10 @@ import { prisma } from "../db/prisma";
 export type AcaoAuditoria =
   | "LOGIN_SUCESSO"
   | "LOGIN_FALHA"
-  | "USUARIO_REGISTRADO"
+  // cadastro com confirmacao do e-mail (USUARIO_REGISTRADO, usado antes disso, ficou so nos logs antigos)
+  | "CADASTRO_INICIADO"
+  | "CADASTRO_CODIGO_REENVIADO"
+  | "CADASTRO_CONCLUIDO"
   | "CONSENTIMENTO_LGPD_ACEITO"
   | "RECUPERACAO_SENHA_SOLICITADA"
   | "RECUPERACAO_SENHA_FALHA"

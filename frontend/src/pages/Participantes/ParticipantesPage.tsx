@@ -9,9 +9,11 @@ import { useAuth } from "../../context/AuthContext";
 import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
 import { ApiError, participanteService, usuarioService } from "../../services";
 import type { Participante } from "../../types";
-import { normalizarRgm, validarEmail, validarNome, validarRgm } from "../../utils/validacao";
+import { normalizarRgm, validarNome, validarRgm } from "../../utils/validacao";
 
-const VAZIO = { nome: "", email: "", rgm: "" };
+// o que a equipe corrige: nome e RGM. O e-mail e o login do aluno, confirmado no cadastro — aparece
+// so para leitura e nunca vai no PUT (o backend recusa o campo com 422)
+const VAZIO = { nome: "", rgm: "" };
 
 // alunos cadastrados: a equipe corrige dados, inativa (com motivo) e reativa. Inativo = nao entra
 // no sistema, nao se inscreve, nao faz check-in nem questionario; certificados ja emitidos valem.
@@ -50,7 +52,7 @@ export function ParticipantesPage() {
 
   function abrirEdicao(participante: Participante) {
     setEditando(participante);
-    setForm({ nome: participante.nome, email: participante.email, rgm: participante.rgm });
+    setForm({ nome: participante.nome, rgm: participante.rgm });
     edicao.limpar();
   }
 
@@ -58,8 +60,6 @@ export function ParticipantesPage() {
     const faltando: ErrosFormulario = {};
     if (!form.nome.trim()) faltando.nome = "Informe o nome.";
     else if (!validarNome(form.nome)) faltando.nome = "O nome deve conter apenas letras.";
-    if (!form.email.trim()) faltando.email = "Informe o e-mail.";
-    else if (!validarEmail(form.email)) faltando.email = "Informe um e-mail válido.";
     if (!form.rgm) faltando.rgm = "Informe o RGM.";
     else if (!validarRgm(form.rgm)) faltando.rgm = "O RGM deve ter exatamente 11 dígitos.";
     return faltando;
@@ -80,7 +80,7 @@ export function ParticipantesPage() {
       await carregar();
     } catch (erro) {
       setConfirmandoSalvar(false);
-      if (erro instanceof ApiError && erro.code === "DUPLICIDADE_PARTICIPANTE") edicao.mostrar({ email: erro.message, rgm: erro.message });
+      if (erro instanceof ApiError && erro.code === "DUPLICIDADE_PARTICIPANTE") edicao.mostrar({ rgm: erro.message });
       else if (!edicao.mostrarErroDaApi(erro)) toast.error(erro instanceof Error ? erro.message : "Não foi possível salvar o participante.");
     }
   }
@@ -271,8 +271,12 @@ export function ParticipantesPage() {
             <Campo nome="nome" rotulo="Nome" obrigatorio erro={edicao.erros.nome}>
               <input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} autoFocus />
             </Campo>
-            <Campo nome="email" rotulo="E-mail" obrigatorio erro={edicao.erros.email} dica="Também é o e-mail de login do aluno.">
-              <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <Campo
+              nome="email"
+              rotulo="E-mail"
+              dica="O e-mail é o login do aluno, foi confirmado no cadastro e não pode ser alterado."
+            >
+              <input type="email" value={editando.email} readOnly />
             </Campo>
             <Campo nome="rgm" rotulo="RGM" obrigatorio erro={edicao.erros.rgm}>
               <input

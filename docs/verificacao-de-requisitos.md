@@ -1,6 +1,7 @@
 # Verificação de requisitos — SGEA
 
-**Data:** 29/09/2026 · **Versão:** 1
+**Data:** 06/11/2026 · **Versão:** 2 (a versão 1, de 29/09/2026, recebeu as
+atualizações de 03/11 e 04/11 registradas abaixo)
 
 Lista dos requisitos do sistema, como cada um foi testado, o resultado e o
 que precisou ser corrigido. Os requisitos vêm de
@@ -18,9 +19,9 @@ apaga no final (os registros de auditoria ficam, como em qualquer operação).
 
 | Teste | O que faz | Comando | Resultado |
 |---|---|---|---|
-| Requisitos pela API | Sobe o backend numa porta local e faz as chamadas HTTP de verdade, requisito por requisito | `cd backend && npx tsx scripts/testar-requisitos.ts` | **183/183** verificações (04/11/2026, banco `SGEA_dev`) |
-| 2FA pela API | Ativação, login em duas etapas, reuso de código, bloqueio, recuperação, reset, desativação | `cd backend && npx tsx scripts/testar-2fa.ts` | **55/55** (04/11/2026, banco `SGEA_dev`) |
-| Interface | Navegador de verdade (Google Chrome, sem janela) usando as telas no frontend local ligado ao backend local | ver `frontend/testes-interface/testar-interface.mjs` (passo a passo no topo do arquivo) | **83/83** (04/11/2026, no Microsoft Edge — ver a atualização de 04/11) |
+| Requisitos pela API | Sobe o backend numa porta local e faz as chamadas HTTP de verdade, requisito por requisito | `cd backend && npx tsx scripts/testar-requisitos.ts` | **231/231** verificações (06/11/2026, banco `SGEA_dev`) |
+| 2FA pela API | Ativação, login em duas etapas, reuso de código, bloqueio, recuperação, reset, desativação | `cd backend && npx tsx scripts/testar-2fa.ts` | **55/55** (06/11/2026, banco `SGEA_dev`) |
+| Interface | Navegador de verdade (Google Chrome, sem janela) usando as telas no frontend local ligado ao backend local | ver `frontend/testes-interface/testar-interface.mjs` (passo a passo no topo do arquivo) | **110/110** (06/11/2026, no Microsoft Edge — ver a atualização de 04/11) |
 | Hash de senha | Mostra o formato do hash bcrypt gravado no banco de dev e prova que a mesma senha gera hashes diferentes | `cd backend && npx tsx scripts/demonstrar-hash-senha.ts` | ver `docs/lgpd/07` |
 | Conversão dos dados pessoais | Simulação, aplicação e segunda aplicação (idempotência) no dev | `cd backend && npx tsx scripts/converter-dados-pessoais.ts [--aplicar]` (o script saiu do código em 03/11/2026, junto com as colunas que ele convertia; está no histórico do git, commit `8c2e7df`) | 3 usuários, 3 participantes e 98 logs convertidos; a 2ª rodada não achou nada |
 
@@ -90,11 +91,28 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
 > e-mail de confirmação da inscrição enviado pelo backend e limite de login
 > por IP maior que o limite por conta.
 
+> **Atualização de 06/11/2026:** entraram a confirmação do e-mail no
+> cadastro por código de 6 dígitos (item 39), a regra da senha nova com a
+> lista de requisitos na tela (item 40), o e-mail do aluno não editável
+> (item 41), a confirmação ao clicar em "Sair" (item 42) e os Termos de Uso
+> e a Política de Privacidade na versão 3 (item 43). A migration
+> `20261106120000_cadastros_pendentes` só cria a tabela
+> `cadastros_pendentes`. As suítes ganharam as seções novas — API **R32**
+> (código, reenvio, validade e limites) e **R33** (regra da senha), **R01**,
+> **R15** e **R17** refeitos; Interface "Sair pede confirmação", "Regras da
+> senha com checklist", "Cadastro: confirmação do e-mail por código", o
+> e-mail só para leitura em Participantes e a lista de requisitos em
+> "Esqueci a senha". As três suítes rodaram no `SGEA_dev` com a migration
+> aplicada: **requisitos 231/231**, **2FA 55/55** e **Interface 110/110**
+> (no Microsoft Edge). As contagens também cobrem as mudanças de 05/11/2026:
+> "Esqueci a senha" com resposta genérica e as listas da equipe (Check-in,
+> Inscrições e Certificados) buscadas e paginadas no servidor (API **R31**).
+
 ## Requisitos
 
 | # | Requisito | Como foi testado | Resultado | O que foi corrigido |
 |---|---|---|---|---|
-| 1 | Cadastro público de aluno: nome só com letras, RGM de 11 dígitos, e-mail `@alunos.umc.br`, senha com 8+ caracteres, aceite dos Termos obrigatório, sem e-mail/RGM duplicado | API R01; Interface "Cadastro de aluno" | OK | Formulário passou a marcar cada campo com o problema (item E). Texto do aceite reescrito: "Li e aceito os Termos de Uso e estou ciente da Política de Privacidade" (não é consentimento). E-mail/RGM duplicado agora aparece embaixo do campo certo |
+| 1 | Cadastro público de aluno: nome só com letras, RGM de 11 dígitos, e-mail `@alunos.umc.br`, senha na regra da senha nova (item 40), aceite dos Termos obrigatório, sem e-mail/RGM duplicado; desde 06/11/2026 a conta só é criada depois da confirmação do e-mail (item 39) | API R01; Interface "Cadastro de aluno" | OK (06/11/2026) | Formulário passou a marcar cada campo com o problema (item E). Texto do aceite reescrito: "Li e aceito os Termos de Uso e estou ciente da Política de Privacidade" (não é consentimento). E-mail/RGM duplicado agora aparece embaixo do campo certo |
 | 2 | Login com mensagem genérica (não revela se o e-mail existe) e limite de tentativas | API R02; testes do bloco 2 | OK | — |
 | 3 | Dados da própria conta (`GET /usuarios/me`) | API R03 | OK | — |
 | 4 | Permissões por perfil: aluno barrado em rota da equipe; sem token → 401 | API R04 | OK | — |
@@ -111,9 +129,9 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
 | 15 | Agenda com inscritos/capacidade de cada evento | API R09 (contagem); Interface "Agenda e certificados" | OK após correção | **Corrigido:** para o aluno a Agenda mostrava 0 ou 1 inscrito (contava só as inscrições dele, as únicas que ele enxerga). A API passou a devolver a contagem de inscritos por evento |
 | 16 | Feedback só de palestra com certificado, um por evento, sempre em nome do próprio aluno | API R14 | OK | — |
 | 17 | Feedback não é editado; aluno exclui o próprio e pode enviar outro; equipe só exclui, com motivo (item D) | API R22; Interface "Feedback do aluno" e "Feedback pela equipe" | OK | Implementado nesta rodada |
-| 18 | Participantes: listagem e correção de nome/e-mail/RGM pela equipe | API R15 | OK após correção | **Corrigido:** corrigir o nome ou o e-mail do participante não atualizava a conta de login do aluno — ele continuava entrando com o e-mail antigo e o nome antigo aparecia no topo da tela e na auditoria. Agora a correção vale para os dois. E-mail gravado sempre em minúsculo |
+| 18 | Participantes: listagem e correção de nome e RGM pela equipe (o e-mail deixou de ser editável em 06/11/2026 — item 41) | API R15 | OK (06/11/2026) | **Corrigido (29/09/2026):** corrigir o nome do participante não atualizava a conta de login do aluno — o nome antigo aparecia no topo da tela e na auditoria. Agora a correção vale para a conta |
 | 19 | Inativação e reativação padronizadas (item C) | API R16; Interface "Inativação", "Inscrição manual" e "Participantes: 2FA e acesso" | OK (API R16 e Interface, 04/11/2026; a conferência do selo "Inativo" na tela passou para Participantes) | Implementado nesta rodada (ver `docs/lgpd/03` e `07`) |
-| 20 | Recuperação de senha por código | API R17; Interface "Esqueci a senha" | OK | Campos obrigatórios (item E) |
+| 20 | Recuperação de senha por código, com a mesma resposta para e-mail com e sem conta (desde 05/11/2026) e a nova senha na regra da senha nova (item 40) | API R17; Interface "Esqueci a senha" | OK (06/11/2026) | Campos obrigatórios (item E). **Alterado em 05/11/2026:** antes respondia `404` para e-mail sem conta, revelando quem tinha cadastro |
 | 21 | Trilha de auditoria: filtros, responsáveis, nada de dado pessoal no detalhe | API R18; Interface "Auditoria: filtro pelas ações novas" | OK após correção | **Corrigido:** a tela de Auditoria não conhecia as ações criadas nos blocos de segurança (2FA, bloqueio por tentativas etc.): elas não apareciam no filtro e a tabela mostrava só o código |
 | 22 | Exclusão de evento **bloqueada** quando há qualquer inscrição (RF009/RNF010): `409 EVENTO_COM_INSCRICOES` ("Cancele as inscrições antes de excluir o evento."), nada é apagado em cascata; evento sem inscrição é excluído normalmente | API R19 (refeita em 04/11/2026); a tela Eventos avisa sem abrir a confirmação quando o evento tem inscritos | OK (API R19, 04/11/2026) | **Alterado em 04/11/2026:** antes a exclusão levava junto inscrições, feedbacks e tentativas de questionário (o R19 antigo conferia essa cascata) |
 | 23 | Dashboard da equipe: 7 indicadores (desde 04/11/2026, com a ocupação média das salas — item 36), próximos eventos com ocupação e gráfico de presença por evento, tudo de `GET /api/dashboard` (só equipe, sem dado pessoal) | API R04 (aluno → 403) e R25; Interface "Equipe entra só com a senha" (7 indicadores, gráfico e menu "Dashboard") | OK (API R04 e R25; Interface com os 7 indicadores, 04/11/2026) | Refeito em 03/11/2026: antes eram 4 indicadores calculados no navegador; o item de menu "Principal" passou a se chamar "Dashboard" |
@@ -133,6 +151,12 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
 | 37 | Deploy só pela Vercel | Conferência do `frontend/package.json` e do `package-lock.json` | OK | Removidos o script `deploy` (gh-pages) e a dependência `gh-pages` (`npm uninstall`, que tirou só ela e as dependências exclusivas dela do lock) |
 | 38 | Direitos do titular (RF026, versão enxuta): página **"Meus dados"** (só aluno, menu depois de "Minha conta"), só para consulta, com dados cadastrais (nome, e-mail, RGM, cadastro, aceite e versão dos termos, situação do 2FA), inscrições e presenças, questionários (acertos e percentual, sem gabarito nem respostas), certificados e avaliações — `GET /api/meus-dados`, sempre do participante do token, sem cache; os demais pedidos (cópia, correção, exclusão, revisão humana da correção automática do questionário, oposição) pelo e-mail `privacidade@sgeacademicos.com.br`, em até 15 dias | API R30 (401 sem token, 403 para a equipe, conteúdo comparado com o banco, nada de gabarito/respostas/senha/ids, consulta não grava nada, `/meus-dados/exportacao` → 404); Interface "Meus dados do aluno e reprovação no questionário (RF026)" (menu, seções, reprovado nas 2 tentativas sem nova tentativa nem pedido de revisão nem certificado, sem botão de baixar nem bloco de pedidos, nome no topo sem a janela "Informações do usuário") e "Auditoria: filtro pelas ações novas" (sem a opção "Dados exportados pelo titular", equipe sem o item no menu) | OK (04/11/2026) | Implementado em 04/11/2026, sem mudança no banco. No mesmo dia saíram a exportação em JSON, o bloco "Outros pedidos sobre seus dados", o link "Pedir revisão do resultado" e a janela "Informações do usuário". Política de Privacidade (página e `docs/lgpd/politica-de-privacidade.md`) e `docs/lgpd/08` descrevem exatamente isso |
 
+| 39 | Confirmação do e-mail no cadastro: `POST /api/auth/registro` valida tudo, guarda o cadastro em `cadastros_pendentes` por 15 minutos (senha e código só como hash) e manda um código de 6 dígitos ao e-mail institucional (`202`, sem criar conta); `POST /api/auth/registro/confirmar` cria a conta com o código certo (`201`), com o instante e a versão do aceite; código errado → `422 CODIGO_INVALIDO`, no 5º erro o código deixa de valer; expirado → `422 CODIGO_EXPIRADO`; `POST /api/auth/registro/reenviar-codigo` gera código novo (60 s entre envios, `429`); 5 envios por e-mail e 20 por IP (`429`); pendente expirado apagado no cadastro, a cada login e na tentativa de confirmar/reenviar; falha de envio em produção → `503` com o pendente guardado; auditoria `CADASTRO_INICIADO`, `CADASTRO_CODIGO_REENVIADO` e `CADASTRO_CONCLUIDO` sem dado pessoal. Tela: etapa 2 com o e-mail, a validade, o aviso de spam e o de que sair da página não conclui o cadastro; campo só numérico; "Reenviar código" com contagem de 60 s; "Corrigir meus dados" sem perder o que foi digitado; com o código certo entra direto em Eventos | API R01 e R32; Interface "Cadastro: confirmação do e-mail por código" | OK (06/11/2026) | Implementado em 06/11/2026 (migration `20261106120000_cadastros_pendentes`, só cria a tabela nova) |
+| 40 | Regra da senha nova (cadastro e nova senha da recuperação): de 8 a 64 caracteres, com pelo menos uma letra maiúscula (acentuada conta), um número e um caractere especial; a mesma função no frontend e no backend (RNF006); o login não confere a regra. Tela: lista "Mínimo de 8 caracteres / Uma letra maiúscula / Um número / Um caractere especial" com ✓ verde ou • cinza a cada tecla (ícone e texto, `aria-live`), aviso acima de 64 caracteres e erro embaixo do campo ao enviar | API R33 e R17; Interface "Regras da senha com checklist" e "Esqueci a senha" | OK (06/11/2026) | Implementado em 06/11/2026. Antes a regra era só "8 caracteres ou mais". As senhas da seed passaram a seguir a regra (`Admin@123`, `Secretaria@123`, `Aluno@123`); contas que já existiam mantêm a senha |
+| 41 | E-mail do aluno não editável: `PUT /api/participantes/{id}` com `email` (mesmo igual ao atual) → `422` "O e-mail não pode ser alterado."; nome e RGM continuam corrigíveis; na tela Participantes o e-mail aparece só para leitura, com a explicação; o e-mail dos palestrantes continua editável | API R15; Interface "Inativação" (edição do participante) | OK (06/11/2026) | Implementado em 06/11/2026. Antes a equipe trocava o e-mail, que era também o login do aluno |
+| 42 | Confirmação ao sair: o botão "Sair" abre "Sair do sistema?" ("Você vai precisar entrar de novo com seu e-mail e senha.", botões "Sair" e "Cancelar"); a saída automática (sessão expirada, troca de senha, inativação) continua sem confirmação | Interface "Sair pede confirmação" (e todas as saídas do teste passam pela confirmação) | OK (06/11/2026) | Implementado em 06/11/2026 |
+| 43 | Termos de Uso e Política de Privacidade na versão 3 (06/11/2026), com o mesmo texto na página e no markdown: confirmação do e-mail (dados guardados por até 15 minutos, art. 7º, V), SendGrid enviando o código, e-mail não alterável, regra da senha; sem a anonimização, que o sistema não faz; `VERSAO_TERMOS_ATUAL` = "3" | Leitura das páginas e dos markdowns; API R01 (a conta nova grava a versão 3) | OK (06/11/2026); o reaceite de quem aceitou a versão 2 ainda não tem tela (ver pendências) | Implementado em 06/11/2026. Antes a página mostrava a versão 1 e o markdown a versão 2, com promessas que o sistema não cumpria (anonimização automática, declaração de maioridade) |
+
 ## Outras correções encontradas na verificação
 
 - `docs/api-contract.md` e `docs/funcionalidades-principais.md` descreviam
@@ -148,13 +172,15 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
 ## Pendências registradas (fora desta rodada)
 
 - Continuam pendentes: tela da equipe para registrar e responder as
-  solicitações do titular que chegam por e-mail, correção e anonimização
-  feitas pelo próprio aluno (hoje pelo e-mail, ver `docs/lgpd/08`), rotina
-  automática de retenção e publicação da Política/Termos v2 no site (a
-  página ao vivo continua na Versão 1, mas a seção "Seus direitos" já está
-  igual à da v2).
-- `POST /auth/recuperacao-senha` responde 404 quando o e-mail não está
-  cadastrado (limitação registrada em `docs/lgpd/07`, decisão pendente).
+  solicitações do titular que chegam por e-mail, correção feita pelo
+  próprio aluno (hoje pelo e-mail, ver `docs/lgpd/08`) e rotina automática
+  de retenção.
+- **Reaceite dos Termos sem tela:** com a versão 3 vigente desde
+  06/11/2026, o login devolve `precisaAceitarTermos: true` para quem aceitou
+  a versão 2, e a rota `POST /api/auth/aceitar-termos` existe, mas o
+  frontend ainda não pede o novo aceite (decisão de deixar para depois).
+- ~~`POST /auth/recuperacao-senha` responde 404 quando o e-mail não está
+  cadastrado~~ — resolvido em 05/11/2026 (item 20).
 - Documentos de LGPD (`docs/lgpd/01` inventário, `02` matriz e `04`
   retenção) ainda não citam a tabela `certificados`, que guarda cópia de
   nome e RGM do aluno junto com o certificado emitido. A remoção de um aluno

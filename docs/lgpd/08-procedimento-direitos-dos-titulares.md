@@ -1,8 +1,10 @@
 # Procedimento para atender aos direitos dos titulares — SGEA
 
-**Data:** 04/11/2026 · **Versão:** 3 (RF026 em versão enxuta: página "Meus
-dados" só para ver os próprios dados; todos os outros direitos atendidos
-manualmente pelo e-mail de privacidade)
+**Data:** 06/11/2026 · **Versão:** 4 (correção limitada a nome e RGM: o
+e-mail do aluno não pode ser alterado, e a mudança de e-mail institucional
+tem procedimento próprio; sem anonimização. A versão 3, de 04/11/2026,
+trouxe o RF026 em versão enxuta: página "Meus dados" só para ver os
+próprios dados e os outros direitos atendidos pelo e-mail de privacidade)
 
 **Situação atual:** o titular (aluno) exerce sozinho, dentro do sistema,
 só o **acesso**, pela página "Meus dados". Todos os outros direitos —
@@ -17,8 +19,8 @@ registrar e acompanhar esses pedidos (ver "Fora desta versão", no fim).
 |---|---|---|---|
 | Confirmação da existência de tratamento e acesso aos dados | **No sistema:** página "Meus dados" (`GET /api/meus-dados`) — dados cadastrais (nome, e-mail, RGM, data do cadastro, data e versão do aceite dos termos, situação do 2FA), inscrições e presenças, resultados dos questionários (acertos e percentual, sem gabarito nem respostas), certificados e avaliações | Nada a fazer. Se a pessoa não consegue entrar no sistema, ela pede por e-mail (ver "Atendimento pelo e-mail", passo 4) | Imediato (tela) |
 | Portabilidade (cópia dos dados para levar a outro serviço) | E-mail | Monta a cópia com o mesmo conteúdo da página "Meus dados", a partir das telas de gestão (Participantes, Inscrições, Check-in, Certificados e Feedback), e envia ao titular pelo e-mail cadastrado. O sistema não gera essa cópia sozinho (a exportação em arquivo existiu por poucas horas em 04/11/2026 e saiu) | Até 15 dias |
-| Correção de dado incorreto ou desatualizado | E-mail | Corrige nome, e-mail ou RGM na tela **Participantes** (vale também para a conta de login do aluno); fica na auditoria (`PARTICIPANTE_ATUALIZADO`, só com os nomes dos campos) | Até 15 dias |
-| Anonimização ou eliminação | E-mail | Inativa o aluno na tela **Participantes** (derruba as sessões e cancela as inscrições pendentes de eventos futuros) e depois exclui. **Exceção:** aluno com certificado emitido não pode ser excluído (`409 PARTICIPANTE_COM_CERTIFICADO`) — a conta fica inativada e o registro do certificado é mantido, porque comprova a participação; isso é explicado na resposta e na Política (seção 7 do texto da página do sistema). A anonimização automática ainda não existe | Até 15 dias |
+| Correção de dado incorreto ou desatualizado | E-mail | Corrige **nome ou RGM** na tela **Participantes** (o nome vale também para a conta de login do aluno); fica na auditoria (`PARTICIPANTE_ATUALIZADO`, só com os nomes dos campos). O **e-mail não pode ser alterado** (a tela mostra só para leitura e a API recusa com `422`): ele é o login, confirmado por código no cadastro. Mudança de e-mail institucional segue o procedimento abaixo | Até 15 dias |
+| Eliminação | E-mail | Inativa o aluno na tela **Participantes** (derruba as sessões e cancela as inscrições pendentes de eventos futuros) e depois exclui. **Exceção:** aluno com certificado emitido não pode ser excluído (`409 PARTICIPANTE_COM_CERTIFICADO`) — a conta fica inativada e o registro do certificado é mantido, porque comprova a participação; isso é explicado na resposta e na Política (seção 7). O sistema não faz anonimização: a Política de Privacidade (versão 3) não a oferece | Até 15 dias |
 | Revisão de decisão automatizada (art. 20 — o questionário corrigido pelo sistema libera o certificado) | E-mail (não há atalho na tela) | Uma pessoa da equipe confere as respostas da tentativa contra o gabarito do evento e responde explicando o resultado. A revisão só verifica se a correção automática está certa: **não é uma nova tentativa** — o aluno tem 2 tentativas e, se não atingir 60% em nenhuma, não recebe o certificado daquele evento. Não existe tela para alterar o resultado: se a revisão encontrar erro do sistema (ex.: gabarito errado), a correção é feita pela equipe técnica e registrada na resposta | Até 15 dias |
 | Oposição ao tratamento / informação sobre compartilhamento | E-mail | Responde com base na Política de Privacidade (operadores: Vercel, TiDB Cloud, SendGrid) e avalia o pedido de oposição caso a caso | Até 15 dias |
 | Revogação de consentimento (feedback) | **No sistema:** o próprio aluno exclui o feedback dele a qualquer momento na tela Feedback (botão "Excluir", com confirmação; `DELETE /api/feedbacks/:id`) e pode enviar outro para o mesmo evento. Ninguém edita feedback depois de enviado | Nada a fazer. A equipe só exclui feedback com motivo de lista fechada; tudo fica na auditoria (`FEEDBACK_EXCLUIDO`) | Imediato |
@@ -44,6 +46,29 @@ registrar e acompanhar esses pedidos (ver "Fora desta versão", no fim).
    própria pessoa usar a página "Meus dados"; se não for possível (ex.:
    conta inativada), a equipe envia a cópia como na linha "Portabilidade".
 
+## Mudança do e-mail institucional
+
+O e-mail do aluno não é editável no sistema, nem pela equipe: é a
+identificação de acesso, confirmada por código no cadastro, e trocá-lo por
+um endereço não confirmado entregaria a conta (e os certificados) a quem
+controla o endereço novo. Quando o aluno informa que o e-mail institucional
+mudou, a equipe analisa o caso:
+
+1. **Conferir a identidade** pelo RGM e, se ainda for possível, por uma
+   resposta enviada do e-mail antigo. Confirmar também o e-mail novo,
+   escrevendo para ele e esperando a resposta (é o equivalente manual do
+   código do cadastro). O e-mail novo precisa terminar em `@alunos.umc.br`.
+2. **Aluno sem certificado emitido:** inativar e excluir a conta antiga na
+   tela Participantes; o aluno faz um cadastro novo com o e-mail novo (o RGM
+   fica livre com a exclusão). Inscrições da conta antiga não passam para a
+   nova.
+3. **Aluno com certificado emitido** (a conta não pode ser excluída): a
+   troca do `usuarios.emailLogin` é feita pela equipe técnica direto no
+   banco, depois das confirmações do passo 1, e registrada na resposta ao
+   titular. Os certificados já emitidos não mudam (guardam o nome e o RGM,
+   não o e-mail).
+4. **Responder** ao aluno pelo e-mail novo, dentro de 15 dias.
+
 ## Tabela de solicitações (`solicitacoes_titular`)
 
 A tabela existe no banco (com `tipo`, `status`, `descricao`, `resposta`,
@@ -59,7 +84,8 @@ que possam existir são da exportação em arquivo que saiu do sistema.
   tabela `solicitacoes_titular` e a auditoria
   `SOLICITACAO_TITULAR_CRIADA`/`SOLICITACAO_TITULAR_ATENDIDA`, já previstas
   no código.
-- Cópia dos dados, correção e anonimização feitas pelo próprio aluno na
+- Cópia dos dados e correção de nome/RGM feitas pelo próprio aluno na
   página "Meus dados" (hoje pelo e-mail).
-- Rotina automática de anonimização de conta sem uso (ver
-  `04-plano-de-retencao-e-descarte.md`).
+- Anonimização (de conta sem uso ou a pedido): não existe no sistema e saiu
+  da Política de Privacidade na versão 3; o plano antigo continua descrito
+  em `04-plano-de-retencao-e-descarte.md`.

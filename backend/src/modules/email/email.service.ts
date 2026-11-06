@@ -83,8 +83,22 @@ async function enviarCodigoRecuperacao(destinatario: string, codigo: string): Pr
   return enviar("recuperacao-senha", destinatario, assunto, html);
 }
 
+// monta e envia o email com o codigo que confirma o e-mail institucional no cadastro (a conta so e
+// criada depois que o aluno digita este codigo)
+async function enviarCodigoCadastro(destinatario: string, codigo: string): Promise<ResultadoEnvio> {
+  const assunto = "Código de confirmação do cadastro";
+  const html = `
+    <p>Use o código abaixo para confirmar seu e-mail e concluir o cadastro no Sistema de Gestão de Eventos Acadêmicos:</p>
+    <p style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">${codigo}</p>
+    <p>Esse código vale por 15 minutos.</p>
+    <p>Se você não pediu este cadastro, ignore este e-mail: nenhuma conta será criada.</p>
+  `;
+  return enviar("confirmacao-cadastro", destinatario, assunto, html);
+}
+
 export const emailService = {
   enviarConfirmacaoInscricao,
   enviarCancelamentoInscricao,
   enviarCodigoRecuperacao,
+  enviarCodigoCadastro,
 };

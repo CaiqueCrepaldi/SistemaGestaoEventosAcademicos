@@ -79,16 +79,31 @@ frontend já esconde as telas certas por perfil, mas isso é cosmético — um
 aluno batendo direto em `/api/participantes` via curl precisa tomar 403
 mesmo que aquela tela nunca apareça pra ele.
 
-### `POST /api/auth/registro` — auto-cadastro de aluno (endpoint dedicado)
+### Cadastro de aluno com confirmação do e-mail (endpoints dedicados)
 
 É o único perfil com cadastro público. Administrador e secretaria são
 provisionados de outro jeito (o frontend hoje nem tem tela pra isso, fica
 fora do escopo).
 
-No registro o backend precisa criar dois registros vinculados: um `Usuario`
-(login) e um `Participante` (o que já existia antes de aluno ter login, e é
-usado por inscrição/check-in/agenda). É assim que o modelo de
-Inscrição/Check-in continua igual — sempre referenciando `participanteId`.
+O cadastro tem 2 passos. A conta só passa a existir depois que o aluno
+digita o código de 6 dígitos enviado ao e-mail institucional; até lá, os
+dados ficam na tabela `cadastros_pendentes` por até 15 minutos (senha e
+código só como hash bcrypt). Ao confirmar, o backend cria os dois registros
+vinculados: um `Usuario` (login) e um `Participante` (usado por
+inscrição/check-in/agenda, sempre referenciado por `participanteId`).
+
+#### Regra da senha nova
+
+Vale no cadastro e na nova senha da recuperação (`utils/validacao.ts` no
+backend e no frontend, mesma regra): de 8 a 64 caracteres, com pelo menos
+uma letra maiúscula (acentuada conta), um número e um caractere especial
+(qualquer caractere que não seja letra, número ou espaço). Mensagem do
+erro, no campo `senha`/`novaSenha`: "A senha deve ter de 8 a 64 caracteres,
+com pelo menos uma letra maiúscula, um número e um caractere especial." O
+login **não** confere a regra: quem já tem conta continua entrando com a
+senha que tem.
+
+#### `POST /api/auth/registro` — passo 1: dados e envio do código
 
 Request:
 ```json
@@ -96,13 +111,47 @@ Request:
   "nomeCompleto": "João Pedro Lima",
   "rgm": "20240100110",
   "emailInstitucional": "joao.lima@alunos.umc.br",
-  "senha": "SenhaForte123",
+  "senha": "Senha@Forte123",
   "aceiteLgpd": true
 }
 ```
 `aceiteLgpd` precisa ser `true` — é o aceite dos Termos de Uso/Política de
 Privacidade (LGPD). Validado com `z.literal(true)`, então "esconder o
 checkbox no frontend" nunca é suficiente pra pular essa exigência.
+
+Valida tudo (formato, regra da senha, aceite, e-mail ou RGM já usados por
+uma conta) e **não cria conta**: apaga os cadastros pendentes expirados e
+qualquer pendente com o mesmo e-mail ou RGM (cadastro refeito), grava o
+pendente com validade de 15 minutos (`aceiteEm` = instante do aceite,
+`versaoTermos` = versão vigente) e manda o código pelo SendGrid.
+
+Response `202`:
+```json
+{
+  "emailInstitucional": "joao.lima@alunos.umc.br",
+  "expiraEm": "2026-11-06T15:15:00.000Z",
+  "codigoDemo": "123456"
+}
+```
+`codigoDemo` só vem fora de produção, pra testar sem e-mail configurado.
+
+Erros:
+| Status | code | Quando |
+|---|---|---|
+| 409 | `RGM_DUPLICADO` | já existe conta com esse RGM |
+| 409 | `EMAIL_DUPLICADO` | já existe conta com esse e-mail |
+| 422 | `VALIDACAO` | campo obrigatório faltando, e-mail fora do padrão institucional, senha fora da regra, `aceiteLgpd` ausente ou `false` |
+| 429 | `MUITAS_TENTATIVAS` | limite de envios de código: 5 por e-mail e 20 por IP em 15 min (cadastro e reenvio contam juntos) |
+| 503 | `EMAIL_INDISPONIVEL` | só em produção: o e-mail não saiu. O pendente fica guardado e o aluno usa "Reenviar código" |
+
+#### `POST /api/auth/registro/confirmar` — passo 2: código e criação da conta
+
+Request: `{ "emailInstitucional": "joao.lima@alunos.umc.br", "codigo": "123456" }`.
+
+Com o código certo, numa transação: confere de novo se o e-mail e o RGM
+continuam livres, cria o `Participante` e o `Usuario` (perfil `ALUNO`) com
+a senha do pendente, `consentimentoLgpdEm` = `aceiteEm` e
+`versaoTermosAceitos` = `versaoTermos` do pendente, e apaga o pendente.
 
 Response `201`:
 ```json
@@ -113,7 +162,8 @@ Response `201`:
   "perfil": "ALUNO",
   "rgm": "20240100110",
   "participanteId": "9c1a4d2e-participante-uuid",
-  "consentimentoLgpdEm": "2026-09-25T17:52:31.626Z"
+  "consentimentoLgpdEm": "2026-11-06T15:00:00.000Z",
+  "versaoTermosAceitos": "3"
 }
 ```
 Senha não volta no corpo em nenhum endpoint, nunca. No banco ela fica só
@@ -121,15 +171,33 @@ como hash bcrypt (custo 12, salt aleatório por senha, embutido no próprio
 hash); nome, e-mail e RGM ficam em texto (ver
 `docs/lgpd/07-medidas-tecnicas-de-seguranca.md`).
 `consentimentoLgpdEm` é a data/hora exata do aceite, gravada no servidor no
-momento do registro (nunca confia em timestamp vindo do cliente) — `null`
-pras contas provisionadas antes desse controle existir (admin/secretaria).
+passo 1 (nunca confia em timestamp vindo do cliente) — `null` pras contas
+provisionadas antes desse controle existir (admin/secretaria). O frontend
+faz o login automático com o e-mail e a senha digitados.
 
 Erros:
 | Status | code | Quando |
 |---|---|---|
-| 409 | `RGM_DUPLICADO` | já existe usuário/participante com esse RGM |
-| 409 | `EMAIL_DUPLICADO` | já existe usuário com esse e-mail |
-| 422 | `VALIDACAO` | campo obrigatório faltando, e-mail fora do padrão institucional, senha fraca (pelo menos 8 caracteres como piso), `aceiteLgpd` ausente ou `false` |
+| 422 | `CODIGO_EXPIRADO` | não há cadastro pendente pra esse e-mail, ou ele expirou ("O código expirou. Preencha o cadastro novamente."); o expirado é apagado na hora |
+| 422 | `CODIGO_INVALIDO` | código errado ("Código inválido.", soma 1 tentativa). No 5º erro o código deixa de valer, mesmo o certo, até o aluno pedir outro |
+| 422 | `VALIDACAO` | código fora do formato (6 dígitos), no campo `codigo` |
+| 409 | `EMAIL_DUPLICADO` / `RGM_DUPLICADO` | outra pessoa concluiu um cadastro com o mesmo e-mail ou RGM nesse meio tempo (o pendente é apagado) |
+
+#### `POST /api/auth/registro/reenviar-codigo`
+
+Request: `{ "emailInstitucional": "joao.lima@alunos.umc.br" }`. Gera um
+código novo (o anterior deixa de valer), zera as tentativas, soma 1 em
+`envios` e renova a validade para 15 minutos. Response `200` igual à do
+passo 1.
+
+Erros: `422 CODIGO_EXPIRADO` (sem pendente ou expirado); `429
+AGUARDE_REENVIO` se o último envio foi há menos de 60 segundos ("Aguarde N
+segundos para pedir um novo código."); `429 MUITAS_TENTATIVAS` (mesmo
+limite de envios do passo 1); `503 EMAIL_INDISPONIVEL` (só em produção).
+
+Os pendentes expirados também são apagados a cada login, sem rotina
+agendada. Uma falha nessa limpeza (por exemplo, a tabela ainda não existir
+no banco) nunca impede o login: só fica no log do servidor.
 
 ### `POST /api/auth/login` (endpoint dedicado)
 
@@ -187,16 +255,20 @@ com o RGM, que hoje é só numérico).
 Gera um código, manda por e-mail (ou loga, se for ambiente de teste) e
 responde `200` com `{}` — o código em si nunca volta no corpo em produção
 (fora de produção, o backend devolve `codigoDemo` no corpo pra testar sem
-e-mail configurado). `404 USUARIO_NAO_ENCONTRADO` se não achar ninguém com
-esse e-mail.
+e-mail configurado). E-mail sem conta recebe a **mesma** resposta `200`
+`{}`: a tela diz "Se houver uma conta com o e-mail informado, enviamos um
+código", então ninguém descobre por aqui quem tem conta.
 
 `POST /api/auth/recuperacao-senha/confirmar` — Request:
 `{ "email": "...", "codigo": "123456", "novaSenha": "..." }`.
-`200` se der certo (as sessões abertas da conta são encerradas). `422
-CODIGO_INVALIDO` se o código estiver errado, expirado, ou não existir
-nenhum pendente pra esse usuário.
+`novaSenha` segue a regra da senha nova (ver "Cadastro de aluno"); fora da
+regra, `422 VALIDACAO` no campo `novaSenha`. `200` se der certo (as sessões
+abertas da conta são encerradas). `422 CODIGO_INVALIDO` se o código estiver
+errado, expirado, não existir nenhum pendente ou o e-mail não tiver conta
+(a mesma resposta nos quatro casos).
 
-O pedido de código também tem limite de 5 por conta e por IP (`429`).
+O pedido de código também tem limite: 5 por conta e 20 por IP em 15
+minutos (`429`).
 
 ### Autenticação em dois fatores (TOTP)
 
@@ -266,10 +338,13 @@ ou apagar.
 | `LOGIN_SUCESSO`, `LOGIN_FALHA` | login (a falha nunca grava o e-mail digitado; conta inativa também gera `LOGIN_FALHA`) |
 | `SENHA_HASH_ATUALIZADO` | hash da senha refeito com custo 12 no login (detalhe: custo antigo → novo) |
 | `ACESSO_NEGADO` | usuário autenticado barrado por perfil/posse/check-in (detalhe: método + rota, sem query string) |
-| `USUARIO_REGISTRADO` | cadastro público de aluno |
+| `CADASTRO_INICIADO` | passo 1 do cadastro: dados validados, código enviado (detalhe: só o id do cadastro pendente; sem responsável, a conta ainda não existe) |
+| `CADASTRO_CODIGO_REENVIADO` | novo código do cadastro (detalhe: id do pendente e número do envio) |
+| `CADASTRO_CONCLUIDO` | código confirmado e conta criada (responsável e detalhe: o id da conta criada) |
+| `USUARIO_REGISTRADO` | só em registros antigos: cadastro de aluno antes da confirmação do e-mail (06/11/2026) |
 | `CONSENTIMENTO_LGPD_ACEITO` | aceite dos termos; `criadoEm` é idêntico a `usuarios.consentimentoLgpdEm` |
 | `RECUPERACAO_SENHA_SOLICITADA`, `RECUPERACAO_SENHA_FALHA`, `SENHA_REDEFINIDA` | fluxo "esqueci a senha" (falha: e-mail não cadastrado, código incorreto/expirado, excesso de tentativas) |
-| `EMAIL_ENVIADO`, `EMAIL_FALHA` | envio de e-mail (recuperação de senha, confirmação de inscrição, aviso de cancelamento de inscrição pela equipe); nunca grava o endereço; marca "(simulado)" quando o SendGrid não está configurado |
+| `EMAIL_ENVIADO`, `EMAIL_FALHA` | envio de e-mail (código de confirmação do cadastro, recuperação de senha, confirmação de inscrição, aviso de cancelamento de inscrição pela equipe); nunca grava o endereço nem o código; marca "(simulado)" quando o SendGrid não está configurado |
 | `SALA_CRIADA` / `_ATUALIZADA` / `_REMOVIDA` | salas |
 | `PALESTRANTE_CRIADO` / `_ATUALIZADO` / `_REMOVIDO` | palestrantes |
 | `EVENTO_CRIADO` / `_ATUALIZADO` / `_REMOVIDO` | eventos (só evento sem inscrição é removido; registros antigos de remoção informam quantas inscrições/feedbacks/tentativas foram junto, da época da exclusão em cascata) |
@@ -450,9 +525,9 @@ Representa qualquer pessoa que pode se inscrever em evento (todo aluno já
 ganha um Participante automaticamente no registro, então ele nunca chama
 esses endpoints diretamente). Não existe cadastro manual — a tela
 `/participantes`, exclusiva de admin/secretaria, lista com busca por
-nome/e-mail/RGM (a mesma lista é usada pela tela de Check-in), pode
-corrigir nome/e-mail/RGM, inativar/reativar um aluno e, só quando ele já
-está inativo, removê-lo de vez.
+nome/e-mail/RGM, pode corrigir nome e RGM (o e-mail não: ele é o login do
+aluno, confirmado por código no cadastro), inativar/reativar um aluno e, só
+quando ele já está inativo, removê-lo de vez.
 
 ```ts
 interface Participante {
@@ -467,7 +542,7 @@ interface Participante {
 
 `GET /api/participantes` e `GET /api/participantes/{id}` — admin/secretaria
 only, `403` pra aluno. Não existe `POST` (participante só nasce via
-`POST /api/auth/registro`).
+`POST /api/auth/registro/confirmar`, quando o aluno confirma o e-mail).
 
 A listagem (`GET /api/participantes`) traz também a situação da conta de
 acesso do aluno, que a tela mostra nas colunas **2FA** e **Acesso**:
@@ -483,17 +558,24 @@ interface ParticipanteNaListagem extends Participante {
 Nunca vêm segredo do 2FA, códigos de recuperação nem hash de senha. Resetar
 o 2FA e desbloquear são só do administrador (ver "Ações sobre a conta").
 
-`GET /api/participantes/alunos` — admin/secretaria only. Só os participantes
-com conta de perfil `ALUNO`, em ordem alfabética (pt-BR), no mesmo formato
-de `Participante` (com `ativo`). É o que a tela de Check-in carrega ao
-abrir; o filtro por nome/e-mail/RGM roda no cliente em cima dessa lista.
+`GET /api/participantes/alunos?busca=&limite=` — admin/secretaria only. Só
+os participantes com conta de perfil `ALUNO`, em ordem alfabética, no mesmo
+formato de `Participante` (com `ativo`), buscando no servidor por nome,
+e-mail ou RGM e trazendo no máximo `limite` (padrão 20, até 50). Usada no
+Check-in e na inscrição manual, que buscam enquanto se digita.
 
 `PUT /api/participantes/{id}` — admin/secretaria, patch parcial. Usado pra:
 
-- **Corrigir dados** (`nome`, `email`, `rgm`), com as mesmas regras do
-  cadastro. A mudança vai também para a conta de login do aluno (o e-mail
-  novo passa a ser o login). `409 DUPLICIDADE_PARTICIPANTE` se o e-mail ou
-  o RGM já estiver em uso.
+- **Corrigir dados** (`nome`, `rgm`), com as mesmas regras do cadastro. O
+  nome vai para a conta do aluno. `409 DUPLICIDADE_PARTICIPANTE` se o RGM
+  já estiver em uso.
+- **O e-mail não pode ser alterado**: é o login do aluno, confirmado por
+  código no cadastro. Se o corpo trouxer `email` (mesmo igual ao atual), a
+  resposta é `422 VALIDACAO` com a mensagem "O e-mail não pode ser
+  alterado." (no campo `email`) e nada é gravado. Se o e-mail institucional
+  de um aluno mudar, o caso vai pelo canal de privacidade (ver
+  `docs/lgpd/08-procedimento-direitos-dos-titulares.md`). O e-mail dos
+  palestrantes continua editável (palestrante não tem conta de acesso).
 - **Inativar** (`{ "ativo": false, "motivoInativacao": "..." }`, motivo
   obrigatório, até 500 caracteres, visível só para a equipe). Efeitos: as
   sessões abertas do aluno caem na hora; o login passa a responder `403
@@ -1004,7 +1086,7 @@ Pra 422, com detalhe por campo:
   "path": "/api/auth/registro",
   "erros": [
     { "campo": "emailInstitucional", "mensagem": "E-mail institucional inválido." },
-    { "campo": "senha", "mensagem": "A senha deve ter ao menos 8 caracteres." }
+    { "campo": "senha", "mensagem": "A senha deve ter de 8 a 64 caracteres, com pelo menos uma letra maiúscula, um número e um caractere especial." }
   ]
 }
 ```
@@ -1019,6 +1101,9 @@ Códigos usados neste documento:
 | 403 | `CONTA_INATIVA` | aluno inativado pela secretaria (login, autoinscrição, questionário) |
 | 404 | `*_NAO_ENCONTRADO(A)` | id não existe |
 | 409 | `RGM_DUPLICADO` / `EMAIL_DUPLICADO` | conflito de unicidade no cadastro |
+| 422 | `CODIGO_EXPIRADO` / `CODIGO_INVALIDO` | código do cadastro (ou da recuperação de senha, `CODIGO_INVALIDO`) expirado ou errado |
+| 429 | `AGUARDE_REENVIO` | reenvio do código do cadastro antes de 60 segundos |
+| 503 | `EMAIL_INDISPONIVEL` | o código do cadastro não pôde ser enviado (só em produção) |
 | 409 | `JA_INSCRITO` | inscrição duplicada no mesmo evento |
 | 409 | `EVENTO_LOTADO` | capacidade da sala esgotada |
 | 409 | `FEEDBACK_JA_ENVIADO` | feedback duplicado pro mesmo evento |

@@ -92,9 +92,15 @@ contas da equipe):
 
 | Perfil | Login | Senha |
 |---|---|---|
-| Administrador | admin@umc.br | admin123 |
-| Secretaria | secretaria@umc.br | secretaria123 |
-| Aluno | aluno@alunos.umc.br | aluno123 |
+| Administrador | admin@umc.br | Admin@123 |
+| Secretaria | secretaria@umc.br | Secretaria@123 |
+| Aluno | aluno@alunos.umc.br | Aluno@123 |
+
+As senhas seguem a regra de senha nova (de 8 a 64 caracteres, com maiúscula,
+número e caractere especial). Num banco populado antes de 06/11/2026 essas
+contas continuam com as senhas antigas (`admin123`, `secretaria123`,
+`aluno123`): o seed não altera conta que já existe, e o login não exige a
+regra nova de quem já tem conta.
 
 O aluno de demonstração já está inscrito e com presença confirmada num
 evento, pronto pra testar o questionário e a emissão do certificado sem

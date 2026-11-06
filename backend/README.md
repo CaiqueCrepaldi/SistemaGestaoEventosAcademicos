@@ -108,9 +108,13 @@ desenvolvimento, criadas pelo seed — em produção use outras senhas):
 
 | Perfil | E-mail | Senha |
 |---|---|---|
-| Administrador | admin@umc.br | admin123 |
-| Secretaria | secretaria@umc.br | secretaria123 |
-| Aluno | aluno@alunos.umc.br | aluno123 |
+| Administrador | admin@umc.br | Admin@123 |
+| Secretaria | secretaria@umc.br | Secretaria@123 |
+| Aluno | aluno@alunos.umc.br | Aluno@123 |
+
+Num banco populado antes de 06/11/2026 essas contas continuam com as senhas
+antigas (`admin123`, `secretaria123`, `aluno123`): o seed não altera conta
+que já existe, e o login não exige a regra de senha nova de quem já tem conta.
 
 ## Implantação em produção: dados pessoais sem duplicação (migration de 03/11/2026)
 
@@ -167,6 +171,56 @@ entrar. Siga a ordem:
 6. **Teste**: entrar com cada perfil, abrir Participantes, cadastrar um aluno
    de teste. Depois de uma ou duas semanas sem problema, apagar os backups
    (`DROP TABLE ..._bkp_20261103;` e os backups antigos).
+
+## Implantação em produção: confirmação de e-mail no cadastro (migration de 06/11/2026)
+
+A migration `20261106120000_cadastros_pendentes` **só cria a tabela nova**
+`cadastros_pendentes`, sem relação com as outras e sem alterar nada que já
+existe. Por isso ela pode (e deve) ir para o banco **antes** do código: a
+versão que está no ar continua funcionando normalmente com a tabela criada,
+e o login não depende dela. Siga a ordem:
+
+0. **Conferir o SendGrid na Vercel** (Settings → Environment Variables do
+   projeto): `SENDGRID_API_KEY` e `EMAIL_FROM` precisam estar preenchidas em
+   Production. Sem elas, o código do cadastro não sai e o cadastro de aluno
+   responde `503` ("Não foi possível enviar o código agora…"); login e o
+   resto do sistema continuam funcionando.
+1. **Aplicar a migration no banco de produção, ANTES do push.** No
+   PowerShell, de dentro de `backend/`, com a URL de produção:
+   ```powershell
+   $env:DATABASE_URL = "mysql://...SGEA?sslaccept=strict"
+   npx prisma migrate status    # deve listar só 20261106120000_cadastros_pendentes como pendente
+   npx prisma migrate deploy
+   Remove-Item Env:DATABASE_URL
+   ```
+   Se o `migrate status` listar qualquer outra migration pendente, pare e
+   confira antes de aplicar.
+2. **Push na `main`** e esperar a Vercel mostrar o deploy como Ready.
+3. **Testar em produção:**
+   - Cadastrar um aluno de teste com um e-mail `@alunos.umc.br` real:
+     conferir se o código chega (e se não cai no spam), digitar o código e
+     ver a conta entrar direto em Eventos. Testar também "Reenviar código"
+     (libera depois de 60 segundos) e um código errado.
+   - Entrar com cada perfil (administrador, secretaria e aluno). Os Termos
+     de Uso e a Política de Privacidade passaram para a versão 3
+     (`VERSAO_TERMOS_ATUAL` = "3"): contas novas já gravam a versão 3.
+     Quem aceitou a versão 2 recebe `precisaAceitarTermos: true` no login,
+     mas **a tela que pede o novo aceite ainda não existe** (ficou para
+     depois), então ninguém vê pedido de aceite por enquanto — o login
+     funciona normalmente.
+   - Em Participantes, abrir "Editar" de um aluno: o e-mail aparece só para
+     leitura e não pode ser alterado.
+   - Clicar em "Sair": deve pedir confirmação ("Sair do sistema?").
+   - Opcional: na tela Auditoria, filtrar por "Cadastro concluído (e-mail
+     confirmado)".
+4. **Se a migration for esquecida:** o login continua funcionando (a
+   limpeza dos cadastros vencidos, feita a cada login, falha sem impedir a
+   entrada e só registra o erro no log do servidor), mas o **cadastro de
+   aluno novo falha** até a migration ser aplicada. Basta rodar o passo 1;
+   não precisa de novo deploy.
+
+Para desfazer (só se for preciso voltar a versão anterior do código): a
+tabela pode ficar no banco, porque o código antigo não a usa.
 
 ## Scripts disponíveis
 

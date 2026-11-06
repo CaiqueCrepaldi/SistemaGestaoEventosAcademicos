@@ -1,5 +1,5 @@
 import { randomInt, randomUUID } from "crypto";
-import type { Usuario as UsuarioDb } from "@prisma/client";
+import { Prisma, type Usuario as UsuarioDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { conferirSenha, CUSTO_HASH, custoDoHash, gerarHashSenha, precisaRefazerHash } from "../../utils/password";
@@ -20,7 +20,14 @@ import { env } from "../../config/env";
 import { VERSAO_TERMOS_ATUAL } from "../../config/termos";
 import { emailService } from "../email/email.service";
 import type { Usuario } from "../../types/domain";
-import type { ConfirmarRecuperacaoInput, LoginInput, RegistroInput, SolicitarRecuperacaoInput } from "./auth.schemas";
+import type {
+  ConfirmarCadastroInput,
+  ConfirmarRecuperacaoInput,
+  LoginInput,
+  ReenviarCodigoCadastroInput,
+  RegistroInput,
+  SolicitarRecuperacaoInput,
+} from "./auth.schemas";
 
 const CODIGO_VALIDADE_MS = 15 * 60 * 1000; // 15 min
 const MAX_TENTATIVAS_CODIGO = 5;
@@ -47,65 +54,272 @@ export function usuarioParaDominio(usuario: UsuarioComParticipante): Usuario {
   };
 }
 
-// cria o Participante (RGM) e a conta ALUNO vinculada (nome e e-mail), checando antes se o e-mail
-// ou o RGM ja existem. Os dois indices unicos do banco garantem isso tambem em corrida (P2002 -> 409)
-async function registrarAluno(dados: RegistroInput) {
-  const emailLogin = normalizarEmail(dados.emailInstitucional);
-
-  const emailDuplicado = await prisma.usuario.findUnique({ where: { emailLogin } });
-  if (emailDuplicado) {
-    throw AppError.conflito("EMAIL_DUPLICADO", "Já existe uma conta com este e-mail.");
-  }
-
-  const rgmDuplicado = await prisma.participante.findUnique({ where: { rgm: dados.rgm } });
-  if (rgmDuplicado) {
-    throw AppError.conflito("RGM_DUPLICADO", "Já existe um cadastro com este RGM.");
-  }
-
-  const senhaHash = await gerarHashSenha(dados.senha);
-
-  // instante unico do aceite: vai igual pra usuarios.consentimentoLgpdEm e pro log de auditoria
-  const consentimentoEm = new Date();
-  const participanteId = randomUUID();
-
-  // os dois juntos ou nenhum: participante sem conta ficaria sem nome nem e-mail
-  const [participante, usuario] = await prisma.$transaction([
-    prisma.participante.create({ data: { id: participanteId, rgm: dados.rgm } }),
-    prisma.usuario.create({
-      data: {
-        id: randomUUID(),
-        nome: dados.nomeCompleto,
-        emailLogin,
-        senhaHash,
-        perfil: "ALUNO",
-        participanteId,
-        // aceiteLgpd ja foi validado como obrigatoriamente true no schema — registra o momento exato
-        // e a versao vigente dos Termos/Politica (ver config/termos.ts)
-        consentimentoLgpdEm: consentimentoEm,
-        versaoTermosAceitos: VERSAO_TERMOS_ATUAL,
-      },
-    }),
-  ]);
-
-  await registrarAuditoria(usuario.id, "USUARIO_REGISTRADO", "cadastro publico de aluno");
-  await registrarAuditoria(
-    usuario.id,
-    "CONSENTIMENTO_LGPD_ACEITO",
-    `termos de uso e política de privacidade aceitos em ${consentimentoEm.toISOString()}`,
-    consentimentoEm,
-  );
-
-  return usuarioParaDTO(usuarioParaDominio({ ...usuario, participante }));
-}
+// ---------------------------------------------------------------- cadastro com confirmacao do e-mail
+// o cadastro acontece em 2 passos: POST /registro valida os dados e guarda um CadastroPendente (sem
+// criar conta), mandando um codigo de 6 digitos pro e-mail institucional; POST /registro/confirmar
+// confere o codigo e so entao cria o Participante e a conta ALUNO. Assim a conta (e os certificados)
+// so existem pra quem de fato recebe o e-mail informado
+const CADASTRO_VALIDADE_MS = 15 * 60 * 1000; // 15 min
+const INTERVALO_REENVIO_MS = 60 * 1000; // 60 s entre um envio de codigo e o proximo
 
 // mensagem generica de bloqueio: a mesma pra conta real ou inexistente, pra nao dar pista
 function erroBloqueado(): AppError {
   return new AppError(429, "MUITAS_TENTATIVAS", "Muitas tentativas. Tente novamente em alguns minutos.");
 }
 
+function erroCodigoExpirado(): AppError {
+  return new AppError(422, "CODIGO_EXPIRADO", "O código expirou. Preencha o cadastro novamente.");
+}
+
+// e-mail ou RGM ja usados por uma conta -> 409 no campo certo. Roda de novo dentro da transacao da
+// confirmacao, porque outra pessoa pode ter concluido um cadastro com o mesmo RGM nesse meio tempo
+async function conferirEmailERgmLivres(emailLogin: string, rgm: string, cliente: Prisma.TransactionClient = prisma) {
+  if (await cliente.usuario.findUnique({ where: { emailLogin }, select: { id: true } })) {
+    throw AppError.conflito("EMAIL_DUPLICADO", "Já existe uma conta com este e-mail.");
+  }
+  if (await cliente.participante.findUnique({ where: { rgm }, select: { id: true } })) {
+    throw AppError.conflito("RGM_DUPLICADO", "Já existe um cadastro com este RGM.");
+  }
+}
+
+// limite de envios do codigo (cadastro + reenvios): 5 por e-mail e 20 por IP, bloqueio de 15 min
+function chavesDeEnvio(emailLogin: string, ip: string) {
+  return { conta: chaveConta("cadastro", idDoEmail(emailLogin)), ip: chaveIp("cadastro", ip) };
+}
+
+async function recusarSeLimiteDeEnvios(chaves: { conta: string; ip: string }) {
+  if ((await estaBloqueado(chaves.conta)) || (await estaBloqueado(chaves.ip))) {
+    throw new AppError(429, "MUITAS_TENTATIVAS", "Limite de envios de código atingido. Tente novamente em 15 minutos.");
+  }
+}
+
+async function contarEnvio(chaves: { conta: string; ip: string }) {
+  await incrementarTentativa(chaves.conta);
+  await incrementarTentativa(chaves.ip, MAX_TENTATIVAS_POR_IP);
+}
+
+// apaga os cadastros que passaram dos 15 minutos sem confirmacao (dados provisorios nao ficam guardados)
+async function apagarCadastrosExpirados(): Promise<number> {
+  const { count } = await prisma.cadastroPendente.deleteMany({ where: { expiraEm: { lte: new Date() } } });
+  return count;
+}
+
+// a mesma limpeza, rodada a cada login: uma falha aqui (ex.: tabela ainda nao criada no banco) nunca
+// impede o login — so fica registrada no log do servidor, sem detalhe do banco
+async function apagarCadastrosExpiradosSemFalhar() {
+  try {
+    await apagarCadastrosExpirados();
+  } catch (erro) {
+    const codigo = erro instanceof Error ? ((erro as { code?: string }).code ?? erro.name) : "erro desconhecido";
+    console.error(`[cadastro] falha ao apagar cadastros pendentes expirados: ${codigo}`);
+  }
+}
+
+// manda o codigo pro e-mail institucional. Em producao, falha de envio vira 503 (o pendente fica
+// guardado pro aluno usar "Reenviar codigo"); fora de producao segue, porque o codigoDemo resolve.
+// Em producao, SendGrid sem configuracao ("simulado") tambem e falha: o codigo nao chegaria a ninguem
+// e o codigoDemo nao volta na resposta, entao o aluno ficaria preso na etapa do codigo sem aviso
+async function enviarCodigoDoCadastro(pendenteId: string, destinatario: string, codigo: string) {
+  let motivoFalha: string;
+  try {
+    const resultado = await emailService.enviarCodigoCadastro(destinatario, codigo);
+    if (resultado === "enviado" || !env.isProduction) {
+      await registrarAuditoria(
+        null,
+        "EMAIL_ENVIADO",
+        `código de confirmação do cadastro ${pendenteId}${resultado === "simulado" ? " (simulado: SendGrid não configurado)" : ""}`,
+      );
+      return;
+    }
+    motivoFalha = "SendGrid não configurado";
+  } catch {
+    // email.service.ts ja loga o detalhe sanitizado da falha
+    motivoFalha = "falha no envio";
+  }
+
+  console.error(`[cadastro] o código de confirmação do e-mail não foi enviado (${motivoFalha})`);
+  await registrarAuditoria(null, "EMAIL_FALHA", `código de confirmação do cadastro ${pendenteId}: ${motivoFalha}`);
+  if (env.isProduction) {
+    throw new AppError(
+      503,
+      "EMAIL_INDISPONIVEL",
+      "Não foi possível enviar o código agora. Aguarde um minuto e clique em \"Reenviar código\".",
+    );
+  }
+}
+
+function respostaDoEnvio(emailLogin: string, expiraEm: Date, codigo: string) {
+  return {
+    emailInstitucional: emailLogin,
+    expiraEm: expiraEm.toISOString(),
+    // fora de producao devolve o codigo no corpo, so pra testar sem e-mail configurado
+    ...(env.isProduction ? {} : { codigoDemo: codigo }),
+  };
+}
+
+// passo 1: valida tudo (o schema ja conferiu formato, senha e aceite), guarda o cadastro pendente com
+// validade de 15 minutos e manda o codigo. Nenhuma conta e criada aqui
+async function iniciarCadastro(dados: RegistroInput, ip: string) {
+  const emailLogin = normalizarEmail(dados.emailInstitucional);
+  const chaves = chavesDeEnvio(emailLogin, ip);
+  await recusarSeLimiteDeEnvios(chaves);
+  await conferirEmailERgmLivres(emailLogin, dados.rgm);
+
+  // expirados de qualquer pessoa e um pendente anterior com o mesmo e-mail ou RGM (cadastro refeito)
+  const agora = new Date();
+  await prisma.cadastroPendente.deleteMany({
+    where: { OR: [{ expiraEm: { lte: agora } }, { emailLogin }, { rgm: dados.rgm }] },
+  });
+
+  await contarEnvio(chaves);
+  const codigo = gerarCodigoNumerico();
+  const expiraEm = new Date(agora.getTime() + CADASTRO_VALIDADE_MS);
+  let pendente;
+  try {
+    pendente = await prisma.cadastroPendente.create({
+      data: {
+        id: randomUUID(),
+        nome: dados.nomeCompleto,
+        emailLogin,
+        rgm: dados.rgm,
+        senhaHash: await gerarHashSenha(dados.senha),
+        codigoHash: await gerarHashSenha(codigo),
+        ultimoEnvioEm: agora,
+        // aceiteLgpd ja foi validado como obrigatoriamente true no schema: o instante do aceite e a
+        // versao vigente vao pra conta quando o cadastro for confirmado
+        aceiteEm: agora,
+        versaoTermos: VERSAO_TERMOS_ATUAL,
+        expiraEm,
+      },
+    });
+  } catch (erro) {
+    // dois envios do mesmo e-mail ao mesmo tempo: o indice unico segura o segundo
+    if (erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === "P2002") {
+      throw AppError.conflito("CADASTRO_EM_ANDAMENTO", "Já existe um cadastro em andamento com este e-mail. Tente novamente.");
+    }
+    throw erro;
+  }
+
+  await registrarAuditoria(null, "CADASTRO_INICIADO", `cadastro pendente ${pendente.id}: código enviado, validade de 15 minutos`);
+  await enviarCodigoDoCadastro(pendente.id, emailLogin, codigo);
+  return respostaDoEnvio(emailLogin, expiraEm, codigo);
+}
+
+// pendente do e-mail ainda valido; expirado e apagado na hora (o aluno preenche o cadastro de novo)
+async function buscarPendenteValido(emailLogin: string) {
+  const pendente = await prisma.cadastroPendente.findUnique({ where: { emailLogin } });
+  if (!pendente) throw erroCodigoExpirado();
+  if (pendente.expiraEm <= new Date()) {
+    await prisma.cadastroPendente.deleteMany({ where: { id: pendente.id } });
+    throw erroCodigoExpirado();
+  }
+  return pendente;
+}
+
+// passo 2: confere o codigo e cria a conta. No 5º erro o codigo deixa de valer (precisa reenviar)
+async function confirmarCadastro(dados: ConfirmarCadastroInput) {
+  const emailLogin = normalizarEmail(dados.emailInstitucional);
+  const pendente = await buscarPendenteValido(emailLogin);
+
+  const mensagemCodigoEsgotado = `Você errou o código ${MAX_TENTATIVAS_CODIGO} vezes. Clique em "Reenviar código" para receber outro.`;
+  if (pendente.tentativas >= MAX_TENTATIVAS_CODIGO) {
+    throw new AppError(422, "CODIGO_INVALIDO", mensagemCodigoEsgotado);
+  }
+  if (!(await conferirSenha(dados.codigo, pendente.codigoHash))) {
+    const tentativas = pendente.tentativas + 1;
+    await prisma.cadastroPendente.update({ where: { id: pendente.id }, data: { tentativas } });
+    throw new AppError(422, "CODIGO_INVALIDO", tentativas >= MAX_TENTATIVAS_CODIGO ? mensagemCodigoEsgotado : "Código inválido.");
+  }
+
+  let usuario: UsuarioComParticipante;
+  try {
+    // tudo junto ou nada: participante, conta e a saida do pendente
+    usuario = await prisma.$transaction(async (tx) => {
+      await conferirEmailERgmLivres(pendente.emailLogin, pendente.rgm, tx);
+      const participanteId = randomUUID();
+      await tx.participante.create({ data: { id: participanteId, rgm: pendente.rgm } });
+      const criado = await tx.usuario.create({
+        data: {
+          id: randomUUID(),
+          nome: pendente.nome,
+          emailLogin: pendente.emailLogin,
+          // a senha ja chegou como hash no passo 1 — o texto puro nunca foi guardado
+          senhaHash: pendente.senhaHash,
+          perfil: "ALUNO",
+          participanteId,
+          consentimentoLgpdEm: pendente.aceiteEm,
+          versaoTermosAceitos: pendente.versaoTermos,
+        },
+        include: { participante: { select: COM_RGM } },
+      });
+      await tx.cadastroPendente.delete({ where: { id: pendente.id } });
+      return criado;
+    });
+  } catch (erro) {
+    // e-mail ou RGM tomados por outro cadastro nesse meio tempo: este pendente nunca vai poder concluir
+    if (erro instanceof AppError) {
+      await prisma.cadastroPendente.deleteMany({ where: { id: pendente.id } });
+      throw erro;
+    }
+    if (erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === "P2002") {
+      await prisma.cadastroPendente.deleteMany({ where: { id: pendente.id } });
+      throw AppError.conflito("EMAIL_DUPLICADO", "Já existe uma conta com este e-mail ou RGM.");
+    }
+    // confirmacao em dobro (duplo clique): o primeiro ja concluiu e apagou o pendente
+    if (erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === "P2025") throw erroCodigoExpirado();
+    throw erro;
+  }
+
+  await limparTentativas(chaveConta("cadastro", idDoEmail(emailLogin)));
+  await registrarAuditoria(usuario.id, "CADASTRO_CONCLUIDO", `conta ${usuario.id} criada após a confirmação do e-mail (cadastro pendente ${pendente.id})`);
+  await registrarAuditoria(
+    usuario.id,
+    "CONSENTIMENTO_LGPD_ACEITO",
+    `termos de uso e política de privacidade (versão ${pendente.versaoTermos}) aceitos em ${pendente.aceiteEm.toISOString()}`,
+    pendente.aceiteEm,
+  );
+
+  return usuarioParaDTO(usuarioParaDominio(usuario));
+}
+
+// novo codigo pro mesmo cadastro: o anterior deixa de valer, as tentativas zeram e a validade volta a
+// ser de 15 minutos. Minimo de 60 s entre envios
+async function reenviarCodigoCadastro(dados: ReenviarCodigoCadastroInput, ip: string) {
+  const emailLogin = normalizarEmail(dados.emailInstitucional);
+  const chaves = chavesDeEnvio(emailLogin, ip);
+  await recusarSeLimiteDeEnvios(chaves);
+  const pendente = await buscarPendenteValido(emailLogin);
+
+  const desdeUltimoEnvio = Date.now() - pendente.ultimoEnvioEm.getTime();
+  if (desdeUltimoEnvio < INTERVALO_REENVIO_MS) {
+    const segundos = Math.ceil((INTERVALO_REENVIO_MS - desdeUltimoEnvio) / 1000);
+    throw new AppError(429, "AGUARDE_REENVIO", `Aguarde ${segundos} segundos para pedir um novo código.`);
+  }
+
+  await contarEnvio(chaves);
+  const codigo = gerarCodigoNumerico();
+  const agora = new Date();
+  const expiraEm = new Date(agora.getTime() + CADASTRO_VALIDADE_MS);
+  const atualizado = await prisma.cadastroPendente.update({
+    where: { id: pendente.id },
+    data: { codigoHash: await gerarHashSenha(codigo), tentativas: 0, envios: { increment: 1 }, ultimoEnvioEm: agora, expiraEm },
+  });
+
+  await registrarAuditoria(
+    null,
+    "CADASTRO_CODIGO_REENVIADO",
+    `cadastro pendente ${pendente.id}: novo código enviado (envio ${atualizado.envios}), validade renovada para 15 minutos`,
+  );
+  await enviarCodigoDoCadastro(pendente.id, emailLogin, codigo);
+  return respostaDoEnvio(emailLogin, expiraEm, codigo);
+}
+
 // confere email+senha e devolve o token assinado. Bloqueia por excesso de tentativas (conta E ip,
 // o que vier primeiro) antes mesmo de consultar o banco, pra nao vazar se a conta existe
 async function login(dados: LoginInput, ip: string) {
+  // cadastros pendentes vencidos saem a cada login (nao ha rotina agendada); nunca impede o login
+  await apagarCadastrosExpiradosSemFalhar();
+
   const chaveDaConta = chaveConta("login", idDoEmail(dados.emailLogin));
   const chaveDoIp = chaveIp("login", ip);
 
@@ -297,7 +511,9 @@ async function confirmarRecuperacaoSenha(dados: ConfirmarRecuperacaoInput) {
 }
 
 export const authService = {
-  registrarAluno,
+  iniciarCadastro,
+  confirmarCadastro,
+  reenviarCodigoCadastro,
   login,
   aceitarTermos,
   solicitarRecuperacaoSenha,

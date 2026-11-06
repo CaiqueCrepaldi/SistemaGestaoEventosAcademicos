@@ -1,9 +1,12 @@
 # Evidências de implementação e testes — SGEA
 
-**Data:** 29/09/2026 · **Versão:** 3 (hash de senha com custo 12, inativação
-padronizada, feedback sem edição, campos obrigatórios nos formulários, 2FA
-opcional, nome/e-mail/RGM sem criptografia; a versão 2, de 28/09/2026,
-cobria até o 2FA obrigatório para a equipe)
+**Data:** 06/11/2026 · **Versão:** 4 (confirmação do e-mail no cadastro,
+regra da senha nova, e-mail do aluno não editável e confirmação ao sair,
+com a rodada de testes de 06/11/2026. A versão 3, de 29/09/2026, cobria o
+hash de senha com custo 12, a inativação padronizada, o feedback sem
+edição, os campos obrigatórios, o 2FA opcional e o fim da criptografia de
+nome/e-mail/RGM; a versão 2, de 28/09/2026, cobria até o 2FA obrigatório
+para a equipe)
 
 Para cada controle, onde está no código, como foi testado e o resultado.
 Controles que ainda não existem aparecem como "pendente" — não têm
@@ -14,11 +17,11 @@ cada um, está em `docs/verificacao-de-requisitos.md`.
 
 ## Testes automatizados (todos no banco de desenvolvimento `SGEA_dev`)
 
-| Teste | Comando | Resultado em 29/09/2026 |
+| Teste | Comando | Resultado em 06/11/2026 (em 29/09/2026) |
 |---|---|---|
-| Requisitos pela API (inclui os itens B, C, D, F e G) | `cd backend && npx tsx scripts/testar-requisitos.ts` | **123/123** verificações |
-| 2FA pela API | `cd backend && npx tsx scripts/testar-2fa.ts` | **53/53** |
-| Interface com navegador de verdade (Chrome) | passo a passo no topo de `frontend/testes-interface/testar-interface.mjs` | **60/60** |
+| Requisitos pela API (inclui os itens B, C, D, F e G) | `cd backend && npx tsx scripts/testar-requisitos.ts` | **231/231** verificações (123/123) |
+| 2FA pela API | `cd backend && npx tsx scripts/testar-2fa.ts` | **55/55** (53/53) |
+| Interface com navegador de verdade | passo a passo no topo de `frontend/testes-interface/testar-interface.mjs` (em 06/11/2026 rodado no Microsoft Edge, numa cópia com `channel: "msedge"`, porque a máquina não tinha o Chrome) | **110/110** (60/60) |
 | Demonstração do hash de senha | `cd backend && npx tsx scripts/demonstrar-hash-senha.ts` | ver `07-medidas-tecnicas-de-seguranca.md`, seção "Formato do hash de senha" |
 
 Os scripts se recusam a rodar se o `DATABASE_URL` não for o `SGEA_dev`,
@@ -46,7 +49,11 @@ criam os próprios dados e apagam no final.
 | Senha nunca em texto puro | `password.ts` (bcrypt) | R24: o valor gravado é um hash `$2a$12$…`, diferente da senha | Confirmado |
 | Trilha de auditoria | `utils/auditoria.ts` chamado em cada `*.service.ts` de escrita | R18: filtros por ação e responsável; parâmetro inválido → `422`; lista de responsáveis. Interface: filtro por "Feedback excluído" mostra o responsável e o motivo | Confirmado |
 | Log nunca contém dado sensível no `detalhe` | Todos os `registrarAuditoria(...)` | R18: nenhum log do teste contém e-mail, RGM, senha, código, comentário de feedback, nome editado ou motivo de inativação; `testar-2fa.ts`: nenhum segredo nem código | Confirmado, 0 vazamentos |
-| Aceite de Termos/Política obrigatório e datado pelo servidor | `auth.schemas.ts` (`z.literal(true)`), `auth.service.ts` | R01: cadastro sem aceite → `422`; com aceite → `201`, com data/hora e versão dos Termos gravadas | Confirmado |
+| Aceite de Termos/Política obrigatório e datado pelo servidor | `auth.schemas.ts` (`z.literal(true)`), `auth.service.ts` | R01: cadastro sem aceite → `422`; com aceite → `202` e, depois do código, a conta recebe o instante do aceite e a versão 3 dos Termos | Confirmado (06/11/2026) |
+| Conta só depois da confirmação do e-mail | `auth.service.ts` (`iniciarCadastro`, `confirmarCadastro`, `reenviarCodigoCadastro`), tabela `cadastros_pendentes` | R01: dados válidos → `202` sem criar conta nem participante; senha e código só como hash bcrypt, validade de 15 min; código errado → `422 CODIGO_INVALIDO`; código certo → `201`, pendente apagado; confirmar de novo → `422 CODIGO_EXPIRADO`. R32: reenvio antes de 60 s → `429`; no 5º erro o código deixa de valer (nem o certo passa); reenvio gera código novo, invalida o anterior, zera tentativas e renova a validade; expirado → `422 CODIGO_EXPIRADO` e é apagado sem criar conta; refazer o cadastro substitui o pendente; 6º envio para o mesmo e-mail → `429` (limite guarda só o HMAC do e-mail); o login apaga pendentes expirados; auditoria `CADASTRO_INICIADO`/`_CODIGO_REENVIADO`/`_CONCLUIDO` sem e-mail, RGM, senha ou código. Interface: etapa do código com aviso de spam e de saída, campo só numérico, "Reenviar código" com contagem de 60 s, código errado embaixo do campo, "Corrigir meus dados" sem perder o que foi digitado, código certo entra direto em Eventos | Confirmado (06/11/2026) |
+| Regra da senha nova (cadastro e recuperação) | `utils/validacao.ts` (backend e frontend), `auth.schemas.ts`, `RequisitosSenha.tsx` | R33: sem maiúscula, sem número, sem caractere especial, só com espaço como "especial" e com 65 caracteres → `422` no campo `senha` com a mensagem da regra; 64 caracteres com maiúscula acentuada (Á) → aceita. R17: nova senha fora da regra → `422` no campo `novaSenha`. Interface: lista com 4 requisitos (• pendente, ✓ cumprido, a cada tecla, em `aria-live`), aviso acima de 64 caracteres, erro embaixo do campo ao enviar com requisito faltando, a mesma lista em "Esqueci a senha" | Confirmado (06/11/2026) |
+| E-mail do aluno não editável | `participantes.routes.ts`, `participantes.schemas.ts`, `ParticipantesPage.tsx` | R15: `PUT` com `email` (mesmo igual ao atual) → `422` "O e-mail não pode ser alterado.", nada gravado; nome corrigido → `200`, e-mail igual; RGM continua validado; o aluno entra com o e-mail do cadastro. Interface: na edição o e-mail aparece só para leitura, com a explicação | Confirmado (06/11/2026) |
+| Confirmação ao sair | `Layout.tsx` | Interface: "Sair" abre "Sair do sistema?"; "Cancelar" mantém no sistema; "Sair" volta para o login | Confirmado (06/11/2026) |
 | Minimização: telefone do palestrante removido; e-mail do palestrante fora da resposta para ALUNO | `schema.prisma`, `utils/dto.ts`, `palestrantes.routes.ts` | R06: aluno recebe só `id` e `nome`; equipe recebe o e-mail | Confirmado |
 | Cabeçalhos de segurança e limite de corpo | `expressApp.ts`, `errorHandler.ts` | Requisição local (28/09/2026): sem `X-Powered-By`; CSP, HSTS, `X-Content-Type-Options` e `X-Frame-Options` presentes; corpo de 300 kb → `413` | Confirmado |
 | Separação de ambientes | `backend/.env` → `SGEA_dev`; `.env.production.local` só para migration e scripts com `--producao` | Todos os testes desta versão rodaram no `SGEA_dev` e se recusam a rodar em outro banco | Confirmado |
@@ -58,7 +65,7 @@ criam os próprios dados e apagam no final.
 | Controle | Onde vai ficar | Como será testado (planejado) |
 |---|---|---|
 | Conversão dos dados pessoais em produção e retirada do código de leitura em dois formatos | Conversão: rota temporária `POST /api/manutencao/conversao-dados-pessoais` (só ADMINISTRADOR, commit `3ef98dd`), porque a `ENCRYPTION_KEY` de produção só existe na Vercel como Secret; mesma lógica e mesmas travas do script `converter-dados-pessoais.ts`. Testada num banco separado (`SGEA_dev_migracao`) com dados cifrados no formato antigo: 11/11 verificações, incluindo a recusa quando um valor não decifra. Segunda implantação: migration `20261103150000_dados_pessoais_sem_duplicacao` + código sem os índices e sem as cópias (já pronto, aguardando a conversão em produção) | Simulação e aplicação da conversão em produção mostrando só contagens; depois, `testar-requisitos.ts` R24 (cada dado numa tabela só, login com e-mail normalizado) e busca/unicidade direto nas colunas |
-| Reaceite de Termos/Política quando a versão muda | Falta a tela que pede o novo aceite (o backend já grava a versão e tem a rota) | Mudar a versão vigente e confirmar que o próximo login pede o aceite e registra `TERMOS_REACEITOS` |
+| Reaceite de Termos/Política quando a versão muda | Falta a tela que pede o novo aceite. A versão vigente já é a 3 (06/11/2026); o backend grava a versão no cadastro, devolve `precisaAceitarTermos` no login e tem a rota `POST /api/auth/aceitar-termos` | Entrar com conta que aceitou a versão 2 e confirmar que a tela pede o aceite e registra `TERMOS_REACEITOS` |
 | Página "Meus dados" (acesso, correção, exportação, exclusão, revisão de decisão automatizada) | Novo módulo frontend + backend | Teste de cada ação, incluindo exportação (JSON com todos os campos esperados e nenhum a mais) |
 | Anonimização em vez de exclusão definitiva | `participantes.service.ts` | Após excluir, nome/e-mail/RGM não identificam mais a pessoa; inscrições/certificados continuam sem vínculo pessoal; comentário de feedback apagado, nota mantida |
 | Rotina de retenção automática (conta sem uso há 24 meses, códigos expirados, logs de 5 anos, registros de limite por IP) | Rota protegida + agendamento | Rodar duas vezes seguidas sem repetir ação (idempotência); cada critério com dado fabricado no banco de teste |

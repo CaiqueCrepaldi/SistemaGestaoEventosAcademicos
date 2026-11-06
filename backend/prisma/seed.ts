@@ -167,7 +167,7 @@ async function seed() {
   });
 
   // aluno@alunos.umc.br / aluno123 e a conta de demonstracao; Beatriz e Lucas sao alunos de exemplo
-  const participanteJoao = await garantirAluno("João Pedro Lima", "aluno@alunos.umc.br", "20240100111", "aluno123");
+  const participanteJoao = await garantirAluno("João Pedro Lima", "aluno@alunos.umc.br", "20240100111", "Aluno@123");
   const participanteBeatriz = await garantirAluno("Beatriz Fernandes", "beatriz.fernandes@alunos.umc.br", "20240100222", null);
   const participanteLucas = await garantirAluno("Lucas Martins", "lucas.martins@alunos.umc.br", "20230100333", null);
 
@@ -178,7 +178,7 @@ async function seed() {
       id: randomUUID(),
       nome: "Ana Ribeiro",
       emailLogin: "admin@umc.br",
-      senhaHash: await gerarHashSenha("admin123"),
+      senhaHash: await gerarHashSenha("Admin@123"),
       perfil: "ADMINISTRADOR",
     },
   });
@@ -189,7 +189,7 @@ async function seed() {
       id: randomUUID(),
       nome: "Carlos Souza",
       emailLogin: "secretaria@umc.br",
-      senhaHash: await gerarHashSenha("secretaria123"),
+      senhaHash: await gerarHashSenha("Secretaria@123"),
       perfil: "SECRETARIA",
     },
   });

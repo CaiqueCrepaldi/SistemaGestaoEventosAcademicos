@@ -2,10 +2,11 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Campo, LegendaObrigatorio } from "../../components/ui/Campo";
 import { PasswordInput } from "../../components/ui/PasswordInput";
+import { RequisitosSenha } from "../../components/ui/RequisitosSenha";
 import { toast } from "../../components/ui/Toast";
 import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
 import { authService } from "../../services/authService";
-import { validarEmail } from "../../utils/validacao";
+import { MENSAGEM_REGRA_SENHA, validarEmail, validarSenhaNova } from "../../utils/validacao";
 
 // fluxo de 2 etapas: pedir codigo pelo e-mail cadastrado, depois confirmar codigo + nova senha
 export function EsqueciSenhaPage() {
@@ -47,7 +48,7 @@ export function EsqueciSenhaPage() {
     const faltando: ErrosFormulario = {};
     if (!codigo.trim()) faltando.codigo = "Informe o código recebido por e-mail.";
     if (!novaSenha) faltando.novaSenha = "Crie a nova senha.";
-    else if (novaSenha.length < 8) faltando.novaSenha = "A senha deve ter no mínimo 8 caracteres.";
+    else if (!validarSenhaNova(novaSenha)) faltando.novaSenha = MENSAGEM_REGRA_SENHA;
     if (!confirmarSenha) faltando.confirmarSenha = "Repita a nova senha.";
     else if (novaSenha && confirmarSenha !== novaSenha) faltando.confirmarSenha = "As senhas não coincidem.";
     if (mostrar(faltando)) return;
@@ -100,9 +101,10 @@ export function EsqueciSenhaPage() {
               <input value={codigo} onChange={(e) => setCodigo(e.target.value)} inputMode="numeric" autoComplete="one-time-code" autoFocus />
             </Campo>
 
-            <Campo nome="novaSenha" rotulo="Nova senha" obrigatorio erro={erros.novaSenha} dica="Mínimo de 8 caracteres.">
+            <Campo nome="novaSenha" rotulo="Nova senha" obrigatorio erro={erros.novaSenha}>
               <PasswordInput value={novaSenha} onChange={setNovaSenha} autoComplete="new-password" />
             </Campo>
+            <RequisitosSenha senha={novaSenha} />
 
             <Campo nome="confirmarSenha" rotulo="Confirmar nova senha" obrigatorio erro={erros.confirmarSenha}>
               <PasswordInput value={confirmarSenha} onChange={setConfirmarSenha} autoComplete="new-password" />

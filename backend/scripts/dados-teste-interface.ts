@@ -21,12 +21,13 @@ const ARQUIVO = join(__dirname, "..", "..", "frontend", "testes-interface", "dad
 async function main() {
   const { prisma } = await import("../src/db/prisma");
   const { gerarHashSenha } = await import("../src/utils/password");
+  const { indiceBusca } = await import("../src/utils/criptografia");
   const acao = process.argv[2];
 
   try {
     if (acao === "preparar") {
       const sufixo = randomUUID().slice(0, 6);
-      const senha = "SenhaUi12345";
+      const senha = "Senha@Ui12345";
       const contas: Record<string, { id: string; email: string; senha: string }> = {};
       for (const perfil of ["ADMINISTRADOR", "SECRETARIA"] as const) {
         const email = `ui-${perfil.toLowerCase()}-${sufixo}@teste.invalido`;
@@ -71,6 +72,11 @@ async function main() {
       }
       await prisma.sala.deleteMany({ where: { nome: { contains: sufixo } } });
       await prisma.palestrante.deleteMany({ where: { email: { contains: sufixo } } });
+      // cadastros que ficaram sem confirmar e o contador de envios do codigo dos e-mails do teste
+      await prisma.cadastroPendente.deleteMany({ where: { emailLogin: { contains: sufixo } } });
+      await prisma.limiteAcesso.deleteMany({
+        where: { chave: { in: usuarios.map((u) => `cadastro:conta:${indiceBusca(u.emailLogin)}`) } },
+      });
       await prisma.limiteAcesso.deleteMany({ where: { chave: { contains: "127.0.0.1" } } });
       console.log(`[dados-teste-interface] limpo: ${usuarios.length} conta(s), ${eventos.length} evento(s)`);
       return;

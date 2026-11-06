@@ -1,6 +1,7 @@
-import type { ComponentType } from "react";
+import { useState, type ComponentType } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { ConfirmDialog } from "./ui/ConfirmDialog";
 import {
   AuditoriaIcon,
   CertificadoIcon,
@@ -54,6 +55,9 @@ const NAV_ITEMS: NavItem[] = [
 // topbar + menu lateral, envolve toda pagina autenticada
 export function Layout() {
   const { usuario, logout } = useAuth();
+  // o clique em "Sair" pede confirmacao; a saida automatica (sessao expirada, troca de senha,
+  // inativacao) chama logout() direto, sem passar por aqui
+  const [confirmandoSaida, setConfirmandoSaida] = useState(false);
   const menuItens = NAV_ITEMS.filter((item) => !usuario || item.perfis.includes(usuario.perfil));
 
   return (
@@ -69,11 +73,25 @@ export function Layout() {
             <strong>{usuario?.nome}</strong>
             <span>{usuario ? PERFIL_LABEL[usuario.perfil] : ""}</span>
           </div>
-          <button className="btn btn-ghost" onClick={() => logout()}>
+          <button className="btn btn-ghost" onClick={() => setConfirmandoSaida(true)}>
             Sair
           </button>
         </div>
       </header>
+
+      {confirmandoSaida && (
+        <ConfirmDialog
+          title="Sair do sistema?"
+          message="Você vai precisar entrar de novo com seu e-mail e senha."
+          confirmLabel="Sair"
+          cancelLabel="Cancelar"
+          onConfirm={() => {
+            setConfirmandoSaida(false);
+            logout();
+          }}
+          onCancel={() => setConfirmandoSaida(false)}
+        />
+      )}
 
       <nav className="main-nav">
         {menuItens.map((item) => {

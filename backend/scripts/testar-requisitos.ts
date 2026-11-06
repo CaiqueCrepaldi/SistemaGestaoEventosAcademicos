@@ -78,6 +78,19 @@ function rgmAleatorio(): string {
   return `9${String(Math.floor(Math.random() * 1e10)).padStart(10, "0")}`;
 }
 
+// senhas que seguem a regra de senha nova (8 a 64, maiuscula, numero e caractere especial)
+const SENHA_ALUNO = "Senha@Aluno123";
+const SENHA_ALUNO2 = "Senha#Aluno456";
+const SENHA_NOVA = "Nova@Senha123";
+
+// cadastro completo pelo fluxo de 2 passos: os dados (202 com o codigoDemo, fora de producao) e a
+// confirmacao do codigo (201 com a conta). Devolve a resposta da confirmacao, ou a do passo 1 se falhar
+async function cadastrarAluno(dados: { nomeCompleto: string; rgm: string; emailInstitucional: string; senha: string; aceiteLgpd: boolean }): Promise<Resposta> {
+  const inicio = await chamar("POST", "/auth/registro", { corpo: dados });
+  if (inicio.status !== 202) return inicio;
+  return chamar("POST", "/auth/registro/confirmar", { corpo: { emailInstitucional: dados.emailInstitucional, codigo: inicio.corpo.codigoDemo } });
+}
+
 async function main() {
   const { criarApp } = await import("../src/expressApp");
   const { prisma } = await import("../src/db/prisma");
@@ -92,6 +105,10 @@ async function main() {
   base = `http://127.0.0.1:${(servidor.address() as AddressInfo).port}/api`;
 
   const contas: Conta[] = [];
+  // e-mails usados no cadastro: no fim saem os pendentes e o contador de envios do codigo deles
+  const emailsDeCadastro: string[] = [];
+  // logs gravados por este teste (1 min de folga pra diferenca de relogio com o banco)
+  const inicioDoTeste = new Date(Date.now() - 60 * 1000);
   const salas: string[] = [];
   const palestrantes: string[] = [];
   const eventos: string[] = [];
@@ -149,10 +166,11 @@ async function main() {
     );
 
     // ------------------------------------------------------------------ cadastro e login
-    requisito("R01 Cadastro público de aluno");
+    requisito("R01 Cadastro público de aluno (conta só depois de confirmar o e-mail)");
     const emailAluno = `req.aluno.${sufixo}@alunos.umc.br`;
+    emailsDeCadastro.push(emailAluno);
     const rgmAluno = rgmAleatorio();
-    const cadastroValido = { nomeCompleto: "Aluno Teste Requisitos", rgm: rgmAluno, emailInstitucional: emailAluno, senha: "SenhaAluno123", aceiteLgpd: true };
+    const cadastroValido = { nomeCompleto: "Aluno Teste Requisitos", rgm: rgmAluno, emailInstitucional: emailAluno, senha: SENHA_ALUNO, aceiteLgpd: true };
     r = await chamar("POST", "/auth/registro", { corpo: { ...cadastroValido, nomeCompleto: "Aluno 123" } });
     checar("nome com número -> 422", r.status === 422, r.corpo);
     checar(
@@ -164,28 +182,192 @@ async function main() {
     checar("RGM com 10 dígitos -> 422", r.status === 422, r.corpo);
     r = await chamar("POST", "/auth/registro", { corpo: { ...cadastroValido, emailInstitucional: `x.${sufixo}@gmail.com` } });
     checar("e-mail fora do domínio institucional -> 422", r.status === 422, r.corpo);
-    r = await chamar("POST", "/auth/registro", { corpo: { ...cadastroValido, senha: "1234567" } });
+    r = await chamar("POST", "/auth/registro", { corpo: { ...cadastroValido, senha: "Aa1!567" } });
     checar("senha com 7 caracteres -> 422", r.status === 422, r.corpo);
     r = await chamar("POST", "/auth/registro", { corpo: { ...cadastroValido, aceiteLgpd: false } });
     checar("sem aceite dos termos -> 422", r.status === 422, r.corpo);
     r = await chamar("POST", "/auth/registro", { corpo: cadastroValido });
-    checar("cadastro válido -> 201, sem senha na resposta", r.status === 201 && r.corpo.senhaHash === undefined && r.corpo.perfil === "ALUNO", r.corpo);
-    const aluno: Conta = { id: r.corpo.id, email: emailAluno, senha: "SenhaAluno123", perfil: "ALUNO", participanteId: r.corpo.participanteId };
+    checar(
+      "dados válidos -> 202 com o e-mail e a validade (e o codigoDemo fora de produção)",
+      r.status === 202 && r.corpo.emailInstitucional === emailAluno && !!r.corpo.expiraEm && /^\d{6}$/.test(r.corpo.codigoDemo ?? ""),
+      r.corpo,
+    );
+    const codigoCadastro: string = r.corpo.codigoDemo;
+    checar("o passo 1 não cria conta nem participante", !(await prisma.usuario.findUnique({ where: { emailLogin: emailAluno } })) && !(await prisma.participante.findUnique({ where: { rgm: rgmAluno } })));
+    const pendenteAluno = await prisma.cadastroPendente.findUnique({ where: { emailLogin: emailAluno } });
+    checar(
+      "cadastro pendente guarda senha e código só como hash bcrypt, validade de 15 minutos e a versão dos termos",
+      !!pendenteAluno &&
+        pendenteAluno.senhaHash.startsWith("$2a$12$") &&
+        pendenteAluno.codigoHash.startsWith("$2a$12$") &&
+        pendenteAluno.codigoHash !== codigoCadastro &&
+        Math.abs(pendenteAluno.expiraEm.getTime() - pendenteAluno.aceiteEm.getTime() - 15 * 60 * 1000) < 1000 &&
+        pendenteAluno.versaoTermos === "3",
+      pendenteAluno && { expira: pendenteAluno.expiraEm, versao: pendenteAluno.versaoTermos },
+    );
+    r = await chamar("POST", "/auth/registro/confirmar", { corpo: { emailInstitucional: emailAluno, codigo: codigoCadastro === "000000" ? "111111" : "000000" } });
+    checar("código errado -> 422 CODIGO_INVALIDO \"Código inválido.\"", r.status === 422 && r.corpo.code === "CODIGO_INVALIDO" && r.corpo.message === "Código inválido.", r.corpo);
+    r = await chamar("POST", "/auth/registro/confirmar", { corpo: { emailInstitucional: emailAluno, codigo: "12a" } });
+    checar("código fora do formato (6 dígitos) -> 422 no campo codigo", r.status === 422 && r.corpo.erros?.some((e: { campo: string }) => e.campo === "codigo"), r.corpo);
+    r = await chamar("POST", "/auth/registro/confirmar", { corpo: { emailInstitucional: emailAluno.toUpperCase(), codigo: codigoCadastro } });
+    checar("código certo -> 201 com a conta ALUNO, sem senha na resposta", r.status === 201 && r.corpo.senhaHash === undefined && r.corpo.perfil === "ALUNO" && !!r.corpo.participanteId, r.corpo);
+    const aluno: Conta = { id: r.corpo.id, email: emailAluno, senha: SENHA_ALUNO, perfil: "ALUNO", participanteId: r.corpo.participanteId };
     contas.push(aluno);
+    const contaCriada = await prisma.usuario.findUnique({ where: { id: aluno.id } });
+    checar(
+      "a conta recebe a senha do cadastro, o instante do aceite e a versão 3 dos termos; o pendente é apagado",
+      !!contaCriada &&
+        contaCriada.senhaHash === pendenteAluno?.senhaHash &&
+        contaCriada.consentimentoLgpdEm?.getTime() === pendenteAluno?.aceiteEm.getTime() &&
+        contaCriada.versaoTermosAceitos === "3" &&
+        !(await prisma.cadastroPendente.findUnique({ where: { emailLogin: emailAluno } })),
+    );
+    r = await chamar("POST", "/auth/registro/confirmar", { corpo: { emailInstitucional: emailAluno, codigo: codigoCadastro } });
+    checar("confirmar de novo (pendente já usado) -> 422 CODIGO_EXPIRADO", r.status === 422 && r.corpo.code === "CODIGO_EXPIRADO", r.corpo);
     r = await chamar("POST", "/auth/registro", { corpo: { ...cadastroValido, rgm: rgmAleatorio() } });
-    checar("e-mail já cadastrado -> 409", r.status === 409, r.corpo);
+    checar("e-mail já cadastrado -> 409", r.status === 409 && r.corpo.code === "EMAIL_DUPLICADO", r.corpo);
     r = await chamar("POST", "/auth/registro", { corpo: { ...cadastroValido, emailInstitucional: `outro.${sufixo}@alunos.umc.br` } });
-    checar("RGM já cadastrado -> 409", r.status === 409, r.corpo);
+    checar("RGM já cadastrado -> 409", r.status === 409 && r.corpo.code === "RGM_DUPLICADO", r.corpo);
 
     const emailAluno2 = `req.aluno2.${sufixo}@alunos.umc.br`;
-    r = await chamar("POST", "/auth/registro", {
-      corpo: { nomeCompleto: "Segundo Aluno Teste", rgm: rgmAleatorio(), emailInstitucional: emailAluno2, senha: "SenhaAluno456", aceiteLgpd: true },
-    });
-    const aluno2: Conta = { id: r.corpo.id, email: emailAluno2, senha: "SenhaAluno456", perfil: "ALUNO", participanteId: r.corpo.participanteId };
+    emailsDeCadastro.push(emailAluno2);
+    r = await cadastrarAluno({ nomeCompleto: "Segundo Aluno Teste", rgm: rgmAleatorio(), emailInstitucional: emailAluno2, senha: SENHA_ALUNO2, aceiteLgpd: true });
+    checar("segundo aluno cadastrado pelo fluxo completo -> 201", r.status === 201, r.corpo);
+    const aluno2: Conta = { id: r.corpo.id, email: emailAluno2, senha: SENHA_ALUNO2, perfil: "ALUNO", participanteId: r.corpo.participanteId };
     contas.push(aluno2);
 
+    requisito("R32 Confirmação do e-mail: código, reenvio, validade e limites");
+    const emailPendente = `req.pendente.${sufixo}@alunos.umc.br`;
+    emailsDeCadastro.push(emailPendente);
+    const rgmPendente = rgmAleatorio();
+    const cadastroPendente = { nomeCompleto: "Aluno Pendente Teste", rgm: rgmPendente, emailInstitucional: emailPendente, senha: SENHA_ALUNO, aceiteLgpd: true };
+    r = await chamar("POST", "/auth/registro", { corpo: cadastroPendente });
+    let codigoPendente: string = r.corpo.codigoDemo;
+    // o intervalo de 60 s entre envios e simulado voltando o relogio do ultimo envio no banco de dev
+    const voltarUltimoEnvio = () =>
+      prisma.cadastroPendente.update({ where: { emailLogin: emailPendente }, data: { ultimoEnvioEm: new Date(Date.now() - 61 * 1000) } });
+    r = await chamar("POST", "/auth/registro/reenviar-codigo", { corpo: { emailInstitucional: emailPendente } });
+    checar("reenviar antes de 60 s -> 429 com os segundos que faltam", r.status === 429 && r.corpo.code === "AGUARDE_REENVIO" && /Aguarde \d+ segundos/.test(r.corpo.message), r.corpo);
+    for (let i = 1; i <= 4; i++) {
+      r = await chamar("POST", "/auth/registro/confirmar", { corpo: { emailInstitucional: emailPendente, codigo: codigoPendente === "000000" ? "111111" : "000000" } });
+    }
+    r = await chamar("POST", "/auth/registro/confirmar", { corpo: { emailInstitucional: emailPendente, codigo: codigoPendente === "000000" ? "111111" : "000000" } });
+    checar("5º erro -> 422 avisando que é preciso pedir outro código", r.status === 422 && r.corpo.code === "CODIGO_INVALIDO" && r.corpo.message.includes("Reenviar código"), r.corpo);
+    r = await chamar("POST", "/auth/registro/confirmar", { corpo: { emailInstitucional: emailPendente, codigo: codigoPendente } });
+    checar("depois de 5 erros nem o código certo vale -> 422", r.status === 422 && r.corpo.code === "CODIGO_INVALIDO", r.corpo);
+    await voltarUltimoEnvio();
+    r = await chamar("POST", "/auth/registro/reenviar-codigo", { corpo: { emailInstitucional: emailPendente.toUpperCase() } });
+    checar("reenviar depois de 60 s -> 200 com código novo", r.status === 200 && /^\d{6}$/.test(r.corpo.codigoDemo ?? ""), r.corpo);
+    const codigoAntigo = codigoPendente;
+    codigoPendente = r.corpo.codigoDemo;
+    const pendenteReenviado = await prisma.cadastroPendente.findUnique({ where: { emailLogin: emailPendente } });
+    checar(
+      "o reenvio zera as tentativas, conta o envio e renova a validade para 15 minutos",
+      pendenteReenviado?.tentativas === 0 &&
+        pendenteReenviado.envios === 2 &&
+        Math.abs(pendenteReenviado.expiraEm.getTime() - Date.now() - 15 * 60 * 1000) < 10000,
+      pendenteReenviado && { tentativas: pendenteReenviado.tentativas, envios: pendenteReenviado.envios },
+    );
+    if (codigoAntigo !== codigoPendente) {
+      r = await chamar("POST", "/auth/registro/confirmar", { corpo: { emailInstitucional: emailPendente, codigo: codigoAntigo } });
+      checar("o código anterior deixa de valer -> 422", r.status === 422 && r.corpo.code === "CODIGO_INVALIDO", r.corpo);
+    }
+    await prisma.cadastroPendente.update({ where: { emailLogin: emailPendente }, data: { expiraEm: new Date(Date.now() - 1000) } });
+    r = await chamar("POST", "/auth/registro/confirmar", { corpo: { emailInstitucional: emailPendente, codigo: codigoPendente } });
+    checar(
+      "código expirado -> 422 CODIGO_EXPIRADO \"O código expirou. Preencha o cadastro novamente.\"",
+      r.status === 422 && r.corpo.code === "CODIGO_EXPIRADO" && r.corpo.message === "O código expirou. Preencha o cadastro novamente.",
+      r.corpo,
+    );
+    checar("o cadastro expirado é apagado e nenhuma conta é criada", !(await prisma.cadastroPendente.findUnique({ where: { emailLogin: emailPendente } })) && !(await prisma.usuario.findUnique({ where: { emailLogin: emailPendente } })));
+    r = await chamar("POST", "/auth/registro/reenviar-codigo", { corpo: { emailInstitucional: emailPendente } });
+    checar("reenviar sem cadastro pendente -> 422 CODIGO_EXPIRADO", r.status === 422 && r.corpo.code === "CODIGO_EXPIRADO", r.corpo);
+
+    // cadastro refeito com o mesmo e-mail substitui o pendente anterior (e o mesmo RGM tambem)
+    r = await chamar("POST", "/auth/registro", { corpo: cadastroPendente });
+    const primeiroId = (await prisma.cadastroPendente.findUnique({ where: { emailLogin: emailPendente } }))?.id;
+    await voltarUltimoEnvio();
+    r = await chamar("POST", "/auth/registro", { corpo: { ...cadastroPendente, nomeCompleto: "Aluno Pendente Corrigido" } });
+    const pendentesDoEmail = await prisma.cadastroPendente.findMany({ where: { OR: [{ emailLogin: emailPendente }, { rgm: rgmPendente }] } });
+    checar(
+      "preencher de novo substitui o cadastro pendente (um só por e-mail/RGM, com os dados novos)",
+      r.status === 202 && pendentesDoEmail.length === 1 && pendentesDoEmail[0].id !== primeiroId && pendentesDoEmail[0].nome === "Aluno Pendente Corrigido",
+      pendentesDoEmail.length,
+    );
+    // ja houve 4 envios pra este e-mail (3 cadastros + 1 reenvio); o 5º passa e o 6º e barrado
+    await voltarUltimoEnvio();
+    r = await chamar("POST", "/auth/registro/reenviar-codigo", { corpo: { emailInstitucional: emailPendente } });
+    checar("5º envio de código para o mesmo e-mail -> 200", r.status === 200, r.corpo);
+    await voltarUltimoEnvio();
+    r = await chamar("POST", "/auth/registro/reenviar-codigo", { corpo: { emailInstitucional: emailPendente } });
+    checar("6º envio para o mesmo e-mail em 15 minutos -> 429 (limite de 5 por e-mail)", r.status === 429 && r.corpo.code === "MUITAS_TENTATIVAS", r.corpo);
+    r = await chamar("POST", "/auth/registro", { corpo: cadastroPendente });
+    checar("o limite vale também para preencher o cadastro de novo -> 429", r.status === 429, r.corpo);
+    const bloqueioCadastro = await prisma.limiteAcesso.findUnique({ where: { chave: `cadastro:conta:${indiceBusca(emailPendente)}` } });
+    checar("o limite de envios guarda só o HMAC do e-mail, nunca o e-mail", !!bloqueioCadastro?.bloqueadoAte && !bloqueioCadastro.chave.includes(emailPendente));
+
+    // a cada login, os cadastros vencidos de qualquer pessoa sao apagados (nao ha rotina agendada)
+    const emailVencido = `req.vencido.${sufixo}@alunos.umc.br`;
+    await prisma.cadastroPendente.create({
+      data: {
+        id: randomUUID(),
+        nome: "Cadastro Vencido",
+        emailLogin: emailVencido,
+        rgm: rgmAleatorio(),
+        senhaHash: "x",
+        codigoHash: "x",
+        aceiteEm: new Date(),
+        versaoTermos: "3",
+        expiraEm: new Date(Date.now() - 60 * 1000),
+      },
+    });
+    await entrar(admin);
+    checar("o login apaga os cadastros pendentes expirados", !(await prisma.cadastroPendente.findUnique({ where: { emailLogin: emailVencido } })));
+
+    const logsCadastro = await prisma.logAuditoria.findMany({
+      where: { acao: { in: ["CADASTRO_INICIADO", "CADASTRO_CODIGO_REENVIADO", "CADASTRO_CONCLUIDO"] }, criadoEm: { gte: inicioDoTeste } },
+    });
+    checar(
+      "auditoria registra início, reenvio e conclusão do cadastro (a conclusão com o id da conta)",
+      ["CADASTRO_INICIADO", "CADASTRO_CODIGO_REENVIADO"].every((acao) => logsCadastro.some((l) => l.acao === acao)) &&
+        logsCadastro.some((l) => l.acao === "CADASTRO_CONCLUIDO" && l.usuarioId === aluno.id && (l.detalhe ?? "").includes(aluno.id)),
+      logsCadastro.map((l) => l.acao),
+    );
+    const textosSensiveisCadastro = [emailAluno, emailAluno2, emailPendente, rgmAluno, rgmPendente, SENHA_ALUNO, SENHA_ALUNO2, codigoCadastro, codigoPendente, codigoAntigo];
+    checar(
+      "nenhum log do cadastro tem e-mail, RGM, senha ou código",
+      logsCadastro.every((l) => !textosSensiveisCadastro.some((s) => (l.detalhe ?? "").includes(s))),
+      logsCadastro.filter((l) => textosSensiveisCadastro.some((s) => (l.detalhe ?? "").includes(s))).map((l) => l.detalhe),
+    );
+
+    requisito("R33 Regras da senha nova (cadastro e recuperação)");
+    const cadastroSenha = { ...cadastroValido, emailInstitucional: `req.senha.${sufixo}@alunos.umc.br`, rgm: rgmAleatorio() };
+    emailsDeCadastro.push(cadastroSenha.emailInstitucional);
+    const casosDeSenha: [string, string][] = [
+      ["sem letra maiúscula", "senha@aluno123"],
+      ["sem número", "Senha@Aluno"],
+      ["sem caractere especial", "SenhaAluno123"],
+      ["só com espaço como \"especial\"", "Senha Aluno123"],
+      ["com 65 caracteres", `Aa1!${"x".repeat(61)}`],
+    ];
+    for (const [caso, senha] of casosDeSenha) {
+      r = await chamar("POST", "/auth/registro", { corpo: { ...cadastroSenha, senha } });
+      checar(
+        `senha ${caso} -> 422 no campo senha, com a mensagem da regra`,
+        r.status === 422 &&
+          r.corpo.erros?.some(
+            (e: { campo: string; mensagem: string }) =>
+              e.campo === "senha" && e.mensagem === "A senha deve ter de 8 a 64 caracteres, com pelo menos uma letra maiúscula, um número e um caractere especial.",
+          ),
+        r.corpo,
+      );
+    }
+    r = await chamar("POST", "/auth/registro", { corpo: { ...cadastroSenha, senha: `Áa1!${"x".repeat(60)}` } });
+    checar("64 caracteres, com a maiúscula acentuada (Á) -> aceita (202)", r.status === 202, r.corpo);
+    await prisma.cadastroPendente.deleteMany({ where: { emailLogin: cadastroSenha.emailInstitucional } });
+
     requisito("R02 Login");
-    r = await chamar("POST", "/auth/login", { corpo: { emailLogin: emailAluno, senha: "SenhaAluno123" } });
+    r = await chamar("POST", "/auth/login", { corpo: { emailLogin: emailAluno, senha: SENHA_ALUNO } });
     checar("aluno com senha certa -> sessão", r.status === 200 && !!r.corpo.token, r.corpo);
     aluno.token = r.corpo.token;
     aluno2.token = await entrar(aluno2);
@@ -200,7 +382,7 @@ async function main() {
     // nao travam o login de todo mundo, mas chutar a senha de UMA conta continua bloqueado
     const outrasPessoas = Array.from({ length: 6 }, (_, i) => `outra.pessoa.${i}.${sufixo}@alunos.umc.br`);
     for (const email of outrasPessoas) await chamar("POST", "/auth/login", { corpo: { emailLogin: email, senha: "errada123" } });
-    r = await chamar("POST", "/auth/login", { corpo: { emailLogin: emailAluno, senha: "SenhaAluno123" } });
+    r = await chamar("POST", "/auth/login", { corpo: { emailLogin: emailAluno, senha: SENHA_ALUNO } });
     checar("erros de várias contas no mesmo IP não bloqueiam o login de outra pessoa (limite por IP é 20)", r.status === 200, r.corpo);
     const contaChutada = `chute.${sufixo}@alunos.umc.br`;
     for (let i = 0; i < 5; i++) await chamar("POST", "/auth/login", { corpo: { emailLogin: contaChutada, senha: "errada123" } });
@@ -229,16 +411,16 @@ async function main() {
         !("email" in participanteNoBanco),
       { usuario: usuarioNoBanco && Object.keys(usuarioNoBanco), participante: participanteNoBanco && Object.keys(participanteNoBanco) },
     );
-    checar("senha continua só como hash bcrypt", usuarioNoBanco?.senhaHash.startsWith("$2a$12$") === true && usuarioNoBanco.senhaHash !== "SenhaAluno123");
+    checar("senha continua só como hash bcrypt", usuarioNoBanco?.senhaHash.startsWith("$2a$12$") === true && usuarioNoBanco.senhaHash !== SENHA_ALUNO);
     r = await chamar("GET", "/usuarios/me", { token: aluno.token });
     checar(
       "a API continua devolvendo o RGM junto com a conta (vem do participante)",
       r.status === 200 && r.corpo.rgm === rgmAluno && r.corpo.nome === "Aluno Teste Requisitos",
       r.corpo,
     );
-    r = await chamar("POST", "/auth/login", { corpo: { emailLogin: `  ${emailAluno.toUpperCase()} `, senha: "SenhaAluno123" } });
+    r = await chamar("POST", "/auth/login", { corpo: { emailLogin: `  ${emailAluno.toUpperCase()} `, senha: SENHA_ALUNO } });
     checar("login aceita o e-mail com maiúsculas e espaços (normalizado)", r.status === 200 && !!r.corpo.token, r.status);
-    const logCadastro = await prisma.logAuditoria.findFirst({ where: { usuarioId: aluno.id, acao: "USUARIO_REGISTRADO" } });
+    const logCadastro = await prisma.logAuditoria.findFirst({ where: { usuarioId: aluno.id, acao: "CADASTRO_CONCLUIDO" } });
     checar("log guarda o nome do responsável em texto puro (atorNome)", logCadastro?.atorNome === "Aluno Teste Requisitos");
 
     requisito("R04 Permissões por perfil (aluno barrado nas rotas da equipe)");
@@ -805,15 +987,23 @@ async function main() {
     const novoEmailAluno2 = `req.aluno2.corrigido.${sufixo}@alunos.umc.br`;
     r = await chamar("PUT", `/participantes/${aluno2.participanteId}`, {
       token: secretaria.token,
-      corpo: { nome: "Segundo Aluno Editado", email: novoEmailAluno2.toUpperCase() },
+      corpo: { nome: "Segundo Aluno Editado", email: novoEmailAluno2 },
     });
-    checar("equipe edita nome e e-mail -> 200 (e-mail gravado em minúsculo)", r.status === 200 && r.corpo.nome === "Segundo Aluno Editado" && r.corpo.email === novoEmailAluno2, r.corpo);
-    r = await chamar("POST", "/auth/login", { corpo: { emailLogin: novoEmailAluno2, senha: aluno2.senha } });
-    checar("a correção vale também pra conta de login do aluno (entra com o e-mail novo)", r.status === 200 && r.corpo.usuario?.nome === "Segundo Aluno Editado", r.corpo);
-    aluno2.token = r.corpo.token;
+    checar(
+      "e-mail no corpo da edição -> 422 \"O e-mail não pode ser alterado.\" (nada é gravado)",
+      r.status === 422 && r.corpo.message === "O e-mail não pode ser alterado." && r.corpo.erros?.some((e: { campo: string }) => e.campo === "email"),
+      r.corpo,
+    );
+    r = await chamar("PUT", `/participantes/${aluno2.participanteId}`, { token: secretaria.token, corpo: { email: emailAluno2 } });
+    checar("mesmo o e-mail igual ao atual é recusado -> 422", r.status === 422, r.status);
+    r = await chamar("PUT", `/participantes/${aluno2.participanteId}`, { token: secretaria.token, corpo: { nome: "Segundo Aluno Editado" } });
+    checar("equipe corrige o nome -> 200, e-mail continua o mesmo", r.status === 200 && r.corpo.nome === "Segundo Aluno Editado" && r.corpo.email === emailAluno2, r.corpo);
+    r = await chamar("PUT", `/participantes/${aluno2.participanteId}`, { token: secretaria.token, corpo: { rgm: "12345" } });
+    checar("RGM continua validado na correção -> 422", r.status === 422, r.status);
     r = await chamar("POST", "/auth/login", { corpo: { emailLogin: emailAluno2, senha: aluno2.senha } });
-    checar("o e-mail antigo não entra mais", r.status === 401, r.status);
-    aluno2.email = novoEmailAluno2;
+    checar("o aluno continua entrando com o e-mail do cadastro (já com o nome corrigido)", r.status === 200 && r.corpo.usuario?.nome === "Segundo Aluno Editado", r.corpo);
+    aluno2.token = r.corpo.token;
+    checar("nenhuma conta foi criada ou alterada com o e-mail recusado", !(await prisma.usuario.findUnique({ where: { emailLogin: novoEmailAluno2 } })));
 
     // ------------------------------------------------------------------ C: inativacao e reativacao
     requisito("R16 Inativação e reativação");
@@ -894,20 +1084,26 @@ async function main() {
       pedidoSemConta.status === 200 && JSON.stringify(pedidoSemConta.corpo) === "{}",
       pedidoSemConta,
     );
-    const confirmacaoSemConta = await chamar("POST", "/auth/recuperacao-senha/confirmar", { corpo: { email: emailSemConta, codigo: "123456", novaSenha: "NovaSenha123" } });
+    const confirmacaoSemConta = await chamar("POST", "/auth/recuperacao-senha/confirmar", { corpo: { email: emailSemConta, codigo: "123456", novaSenha: SENHA_NOVA } });
     checar(
       "confirmar com e-mail sem conta -> o mesmo 422 de código errado",
       confirmacaoSemConta.status === 422 && confirmacaoSemConta.corpo.code === "CODIGO_INVALIDO",
       confirmacaoSemConta.corpo,
     );
     await prisma.limiteAcesso.deleteMany({ where: { chave: `recuperacao:conta:${indiceBusca(emailSemConta)}` } });
-    r = await chamar("POST", "/auth/recuperacao-senha/confirmar", { corpo: { email: emailAluno, codigo: codigoDemo === "000000" ? "111111" : "000000", novaSenha: "NovaSenha123" } });
-    checar("código errado -> 422", r.status === 422, r.corpo);
+    r = await chamar("POST", "/auth/recuperacao-senha/confirmar", { corpo: { email: emailAluno, codigo: codigoDemo === "000000" ? "111111" : "000000", novaSenha: SENHA_NOVA } });
+    checar("código errado -> 422", r.status === 422 && r.corpo.code === "CODIGO_INVALIDO", r.corpo);
     r = await chamar("POST", "/auth/recuperacao-senha/confirmar", { corpo: { email: emailAluno, codigo: codigoDemo, novaSenha: "NovaSenha123" } });
+    checar(
+      "nova senha fora da regra (sem caractere especial) -> 422 no campo novaSenha, senha não muda",
+      r.status === 422 && r.corpo.erros?.some((e: { campo: string }) => e.campo === "novaSenha"),
+      r.corpo,
+    );
+    r = await chamar("POST", "/auth/recuperacao-senha/confirmar", { corpo: { email: emailAluno, codigo: codigoDemo, novaSenha: SENHA_NOVA } });
     checar("código certo troca a senha -> 200", r.status === 200, r.corpo);
     r = await chamar("GET", "/usuarios/me", { token: aluno.token });
     checar("sessão antiga cai depois da troca -> 401", r.status === 401, r.status);
-    aluno.senha = "NovaSenha123";
+    aluno.senha = SENHA_NOVA;
     aluno.token = await entrar(aluno);
     checar("login com a senha nova funciona", !!aluno.token);
 
@@ -920,7 +1116,7 @@ async function main() {
     r = await chamar("GET", "/logs-auditoria/responsaveis", { token: admin.token });
     checar("lista de responsáveis", r.status === 200 && r.corpo.some((u: { id: string }) => u.id === admin.id), r.status);
     const logsDoTeste = await prisma.logAuditoria.findMany({ where: { usuarioId: { in: contas.map((c) => c.id) } } });
-    const sensiveis = [emailAluno, emailAluno2, novoEmailAluno2, rgmAluno, "Avaliação corrigida", "Segundo Aluno Editado", "SenhaAluno123", "NovaSenha123", codigoDemo, "Ótima palestra", "Teste automatizado"];
+    const sensiveis = [emailAluno, emailAluno2, novoEmailAluno2, rgmAluno, "Avaliação corrigida", "Segundo Aluno Editado", SENHA_ALUNO, SENHA_ALUNO2, SENHA_NOVA, codigoDemo, "Ótima palestra", "Teste automatizado"];
     checar(
       "nenhum log do teste tem e-mail, RGM, senha, código, comentário ou motivo",
       logsDoTeste.every((l) => !sensiveis.some((s) => (l.detalhe ?? "").includes(s))),
@@ -1005,6 +1201,9 @@ async function main() {
       await prisma.usuario.deleteMany({ where: { id: conta.id } });
       if (conta.participanteId) await prisma.participante.deleteMany({ where: { id: conta.participanteId } });
     }
+    // cadastros que ficaram pendentes e o contador de envios do codigo de cada e-mail usado
+    await prisma.cadastroPendente.deleteMany({ where: { emailLogin: { in: emailsDeCadastro } } });
+    await prisma.limiteAcesso.deleteMany({ where: { chave: { in: emailsDeCadastro.map((email) => `cadastro:conta:${indiceBusca(email)}`) } } });
     for (const id of salas) await prisma.sala.deleteMany({ where: { id } });
     for (const id of palestrantes) await prisma.palestrante.deleteMany({ where: { id } });
     await limparContadorDoIpLocal();

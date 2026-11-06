@@ -29,13 +29,13 @@ enum StatusPresenca {
 // I da LGPD — protegidos por controle de acesso por perfil, HTTPS, banco com acesso restrito e
 // auditoria). emailLogin sempre minusculo e sem espaco (normalizado na gravacao e na busca)
 model Usuario {
-  id             String   @id
-  nome           String   @db.Text
-  emailLogin     String   @unique @db.VarChar(255)
-  senhaHash      String
-  perfil         Perfil
-  participanteId String?
-  participante   Participante? @relation(fields: [participanteId], references: [id], onDelete: SetNull)
+  id                  String        @id
+  nome                String        @db.Text
+  emailLogin          String        @unique @db.VarChar(255)
+  senhaHash           String
+  perfil              Perfil
+  participanteId      String?
+  participante        Participante? @relation(fields: [participanteId], references: [id], onDelete: SetNull)
   // data/hora em que aceitou os termos de uso/politica de privacidade no cadastro (LGPD);
   // null pra contas provisionadas antes desse controle existir (admin/secretaria, seeds antigos)
   consentimentoLgpdEm DateTime?
@@ -44,23 +44,23 @@ model Usuario {
   // o middleware autenticar recusa mesmo com assinatura/prazo validos. Token antigo (de antes
   // dessa coluna existir) nao carrega versao nenhuma e e tratado como versao 1, o valor inicial
   // de toda conta — ninguem e deslogado por causa da migracao em si, so por uma troca de verdade
-  versaoToken    Int      @default(1)
+  versaoToken         Int           @default(1)
   // versao dos Termos de Uso/Politica de Privacidade aceita por ultimo (ex.: "2"); null pra quem
   // aceitou antes desse controle existir — forca reaceite no proximo login (ver auth.service.ts)
   versaoTermosAceitos String?
   // 2FA por aplicativo autenticador (TOTP, RFC 6238). O segredo fica cifrado com criptografar(),
   // nunca em texto puro nem em log. Segredo preenchido com mfaAtivo=false = configuracao
   // iniciada e ainda nao confirmada com um codigo valido
-  mfaAtivo          Boolean   @default(false)
-  mfaSegredoCifrado String?   @db.Text
+  mfaAtivo            Boolean       @default(false)
+  mfaSegredoCifrado   String?       @db.Text
   // ultimo passo de tempo TOTP aceito (floor(unix/30)): codigo do mesmo passo ou anterior e recusado
-  mfaUltimoPasso    Int?
-  mfaAtivadoEm      DateTime?
-  criadoEm       DateTime @default(now())
+  mfaUltimoPasso      Int?
+  mfaAtivadoEm        DateTime?
+  criadoEm            DateTime      @default(now())
 
-  checkinsFeitos  Inscricao[]        @relation("CheckinFeitoPor")
-  recuperacoes    RecuperacaoSenha[]
-  logsAuditoria   LogAuditoria[]
+  checkinsFeitos        Inscricao[]            @relation("CheckinFeitoPor")
+  recuperacoes          RecuperacaoSenha[]
+  logsAuditoria         LogAuditoria[]
   solicitacoesAtendidas SolicitacaoTitular[]
   codigosRecuperacaoMfa CodigoRecuperacaoMfa[]
 
@@ -70,17 +70,17 @@ model Usuario {
 // os dados de ALUNO (RGM, situacao, inscricoes...). Nome e e-mail ficam so na conta vinculada
 // (Usuario ALUNO com participanteId = este id): todo Participante nasce do cadastro da conta
 model Participante {
-  id        String   @id
-  rgm       String   @unique @db.VarChar(20)
-  ativo     Boolean  @default(true)
+  id               String   @id
+  rgm              String   @unique @db.VarChar(20)
+  ativo            Boolean  @default(true)
   // 500 e o tamanho real da coluna desde a migration que criou o campo (o schema dizia 191 por engano)
-  motivoInativacao String? @db.VarChar(500)
-  criadoEm  DateTime @default(now())
+  motivoInativacao String?  @db.VarChar(500)
+  criadoEm         DateTime @default(now())
 
-  usuarios   Usuario[]
-  inscricoes Inscricao[]
-  feedbacks  Feedback[]
-  tentativas TentativaQuestionario[]
+  usuarios     Usuario[]
+  inscricoes   Inscricao[]
+  feedbacks    Feedback[]
+  tentativas   TentativaQuestionario[]
   solicitacoes SolicitacaoTitular[]
 
   @@map("participantes")
@@ -109,17 +109,17 @@ model Palestrante {
 // questionario fica como json (10 perguntas com 4 alternativas cada) em vez de tabela
 // separada — nunca e consultado pergunta a pergunta, so lido/gravado inteiro
 model Evento {
-  id            String   @id
+  id            String      @id
   titulo        String
   horario       DateTime
   salaId        String
-  sala          Sala     @relation(fields: [salaId], references: [id], onDelete: Restrict)
+  sala          Sala        @relation(fields: [salaId], references: [id], onDelete: Restrict)
   palestranteId String
   palestrante   Palestrante @relation(fields: [palestranteId], references: [id], onDelete: Restrict)
   tema          String
   cargaHoraria  Float
   questionario  Json
-  criadoEm      DateTime @default(now())
+  criadoEm      DateTime    @default(now())
 
   inscricoes Inscricao[]
   feedbacks  Feedback[]
@@ -180,6 +180,35 @@ model Feedback {
 
   @@unique([participanteId, eventoId])
   @@map("feedbacks")
+}
+
+// cadastro de aluno esperando a confirmacao do e-mail institucional: a conta (Participante + Usuario)
+// so e criada quando o codigo de 6 digitos enviado ao e-mail confere. Guarda provisoriamente os dados
+// digitados no formulario por ate 15 minutos (expiraEm); a linha e apagada ao concluir o cadastro ou
+// depois de expirar (no proprio cadastro e a cada login — sem rotina agendada). Senha e codigo so
+// como hash bcrypt, nunca em texto puro. Tabela isolada (sem relacao com as outras): o login e o
+// resto do sistema nao dependem dela
+model CadastroPendente {
+  id            String   @id
+  nome          String   @db.Text
+  emailLogin    String   @unique @db.VarChar(255)
+  rgm           String   @db.VarChar(20)
+  senhaHash     String
+  codigoHash    String
+  // erros de digitacao do codigo atual; no 5º erro o codigo deixa de valer (zera no reenvio)
+  tentativas    Int      @default(0)
+  // quantos codigos ja foram enviados pra este cadastro (o primeiro + os reenvios)
+  envios        Int      @default(1)
+  ultimoEnvioEm DateTime @default(now())
+  // instante do aceite dos Termos/Politica no formulario e a versao aceita: vao pra conta ao confirmar
+  aceiteEm      DateTime
+  versaoTermos  String   @db.VarChar(20)
+  expiraEm      DateTime
+  criadoEm      DateTime @default(now())
+
+  @@index([rgm])
+  @@index([expiraEm])
+  @@map("cadastros_pendentes")
 }
 
 model RecuperacaoSenha {
@@ -249,16 +278,16 @@ model LimiteAcesso {
 // ACESSO/EXPORTACAO/CORRECAO/EXCLUSAO sao resolvidos na hora (status ATENDIDA automatico); so
 // REVISAO_DECISAO_AUTOMATIZADA e OPOSICAO/OUTRO ficam ABERTA ate a equipe responder
 model SolicitacaoTitular {
-  id             String    @id
+  id             String       @id
   participanteId String
   participante   Participante @relation(fields: [participanteId], references: [id], onDelete: Cascade)
   tipo           String
-  status         String    @default("ABERTA")
-  descricao      String?   @db.Text
-  resposta       String?   @db.Text
+  status         String       @default("ABERTA")
+  descricao      String?      @db.Text
+  resposta       String?      @db.Text
   atendidoPorId  String?
-  atendidoPor    Usuario?  @relation(fields: [atendidoPorId], references: [id], onDelete: SetNull)
-  criadoEm       DateTime  @default(now())
+  atendidoPor    Usuario?     @relation(fields: [atendidoPorId], references: [id], onDelete: SetNull)
+  criadoEm       DateTime     @default(now())
   atendidoEm     DateTime?
 
   @@index([participanteId])

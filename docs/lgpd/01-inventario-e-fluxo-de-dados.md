@@ -1,8 +1,11 @@
 # Inventário de dados pessoais e fluxo de dados — SGEA
 
-**Data:** 29/09/2026 · **Versão:** 3 (nome, e-mail e RGM sem criptografia,
-2FA opcional para todos, situação da conta e regras de feedback; a versão 2,
-de 28/09/2026, incluiu o 2FA, o IP no limite de tentativas e a remoção do
+**Data:** 06/11/2026 · **Versão:** 4 (confirmação do e-mail no cadastro:
+tabela `cadastros_pendentes`, seção 11; e-mail do aluno não editável; IP
+também no limite de envio do código do cadastro. A versão 3, de 29/09/2026,
+tirou a criptografia de nome, e-mail e RGM e incluiu o 2FA opcional para
+todos, a situação da conta e as regras de feedback; a versão 2, de
+28/09/2026, incluiu o 2FA, o IP no limite de tentativas e a remoção do
 telefone do palestrante)
 
 Responde, para cada dado pessoal tratado pelo SGEA, às perguntas da seção 1
@@ -14,7 +17,9 @@ detalhadas em `02-matriz-dados-finalidade-base-legal.md`; aqui o foco é
 
 - **De quem é:** do aluno que se cadastra.
 - **Onde é coletado:** tela pública de Cadastro (`frontend/src/pages/Cadastro/CadastroPage.tsx`),
-  enviado a `POST /api/auth/registro`.
+  enviado a `POST /api/auth/registro`. Os dados ficam primeiro em
+  `cadastros_pendentes` (seção 11) e só passam para a conta quando o aluno
+  confirma o código enviado ao e-mail (`POST /api/auth/registro/confirmar`).
 - **Obrigatório ou opcional:** obrigatório — não é possível criar conta sem os três.
 - **Onde fica armazenado:** cada dado numa tabela só, sem cópia — nome e
   e-mail em `usuarios` (`nome`, `emailLogin`, que é também o e-mail de
@@ -29,9 +34,12 @@ detalhadas em `02-matriz-dados-finalidade-base-legal.md`; aqui o foco é
   índices, depois da conversão única dos registros antigos para texto.
 - **Por quanto tempo:** ver `04-plano-de-retencao-e-descarte.md`.
 - **Quem consulta/altera:** o próprio titular (visão própria, hoje limitada
-  a `GET /usuarios/me`; a Fase 2 adiciona edição na página "Meus dados");
-  ADMINISTRADOR/SECRETARIA podem consultar e corrigir via tela de
-  Participantes — a correção vale também para a conta de login do aluno.
+  a `GET /usuarios/me` e à página "Meus dados", só leitura);
+  ADMINISTRADOR/SECRETARIA podem consultar e corrigir nome e RGM via tela
+  de Participantes. O e-mail não pode ser alterado por ninguém
+  (`PUT /api/participantes/{id}` responde 422 se o campo vier): é o login,
+  confirmado por código no cadastro. Mudança de e-mail institucional vai
+  pelo canal de privacidade (ver `08`).
 - **Compartilhado com terceiro:** SendGrid recebe o e-mail e o nome como
   destinatário de mensagens transacionais. Nenhum dos três é enviado a
   nenhum outro serviço.
@@ -41,7 +49,10 @@ detalhadas em `02-matriz-dados-finalidade-base-legal.md`; aqui o foco é
 ## 2. Senha
 
 - **De quem é:** de qualquer conta (aluno, secretaria, administrador).
-- **Onde é coletado:** telas de Cadastro e "Esqueci minha senha".
+- **Onde é coletado:** telas de Cadastro e "Esqueci minha senha". Toda
+  senha nova precisa ter de 8 a 64 caracteres, com maiúscula, número e
+  caractere especial (mesma regra no frontend e no backend,
+  `utils/validacao.ts`); o login não confere a regra.
 - **Obrigatório:** sim.
 - **Onde fica:** `usuarios.senhaHash` (bcrypt, custo 12, salt aleatório por
   senha embutido no hash; hash antigo de custo 10 é refeito no próximo
@@ -55,7 +66,9 @@ detalhadas em `02-matriz-dados-finalidade-base-legal.md`; aqui o foco é
 
 - **De quem é:** de quem se cadastra.
 - **Onde é coletado:** checkbox na tela de Cadastro, gravado no servidor
-  (nunca confia em timestamp vindo do cliente) — `auth.service.ts`.
+  (nunca confia em timestamp vindo do cliente) — `auth.service.ts`. O
+  instante do aceite e a versão ficam no cadastro pendente
+  (`aceiteEm`, `versaoTermos`) e passam para a conta na confirmação do e-mail.
 - **Obrigatório:** sim, pra criar conta (`z.literal(true)` no schema de
   registro).
 - **Onde fica:** `usuarios.consentimentoLgpdEm` (data/hora) e
@@ -140,13 +153,14 @@ detalhadas em `02-matriz-dados-finalidade-base-legal.md`; aqui o foco é
 - **De quem é:** de qualquer visitante do sistema, mesmo antes de logar.
 - **Onde é tratado:** (1) pela infraestrutura da Vercel, que executa a
   função serverless, em qualquer requisição HTTP; (2) pelo próprio SGEA,
-  só nas rotas de login e de pedido de código de recuperação de senha,
-  como chave do limite de tentativas por IP
-  (`backend/src/utils/limiteAcesso.ts`).
+  só nas rotas de login, de pedido de código de recuperação de senha, de
+  envio do código do cadastro e da validação pública de certificado, como
+  chave do limite de tentativas por IP (`backend/src/utils/limiteAcesso.ts`).
 - **Onde fica:** (1) logs de execução da Vercel, fora do controle direto
   do código do SGEA; (2) tabela `limites_acesso`, coluna `chave`
-  (`login:ip:<ip>` ou `recuperacao:ip:<ip>`), com o número de tentativas
-  e o fim do bloqueio — nada além disso é associado ao IP.
+  (`login:ip:<ip>`, `recuperacao:ip:<ip>`, `cadastro:ip:<ip>` ou
+  `validacao:ip:<ip>`), com o número de tentativas e o fim do bloqueio —
+  nada além disso é associado ao IP.
 - **Por quanto tempo:** (2) o registro permanece depois que o bloqueio
   expira (com o contador zerado); o descarte automático depende da rotina
   de retenção, ainda não implementada.
@@ -173,6 +187,32 @@ detalhadas em `02-matriz-dados-finalidade-base-legal.md`; aqui o foco é
   mais o segredo, e os códigos de recuperação só aparecem na ativação.
 - **Compartilhado:** não. Não há SMS, e-mail nem API externa de QR code no
   fluxo.
+
+## 11. Cadastro aguardando confirmação do e-mail (`cadastros_pendentes`)
+
+- **De quem é:** de quem preenche o Cadastro e ainda não confirmou o
+  e-mail institucional.
+- **Onde é coletado:** `POST /api/auth/registro` (passo 1 do cadastro),
+  depois de validar tudo. O código de 6 dígitos é gerado pelo servidor
+  (`crypto.randomInt`) e enviado ao e-mail informado.
+- **Obrigatório:** sim, para criar conta: sem confirmar o código, nenhuma
+  conta é criada.
+- **Onde fica:** tabela `cadastros_pendentes`: nome, `emailLogin` (único),
+  RGM, `senhaHash` (bcrypt, mesmo custo das senhas), `codigoHash` (bcrypt,
+  nunca o código puro), `tentativas`, `envios`, `ultimoEnvioEm`,
+  `aceiteEm` e `versaoTermos` (o aceite dos Termos) e `expiraEm`. Tabela
+  isolada, sem relação com as outras.
+- **Por quanto tempo:** até 15 minutos. A linha sai ao concluir o cadastro
+  (os dados passam para `usuarios`/`participantes` e o pendente é apagado
+  na mesma transação) ou depois de expirar: o expirado é apagado no próximo
+  cadastro, em cada login e quando alguém tenta confirmar ou reenviar o
+  código daquele e-mail. Preencher o cadastro de novo com o mesmo e-mail ou
+  RGM substitui o pendente anterior.
+- **Quem consulta:** ninguém por tela. Só o próprio fluxo do cadastro lê a
+  linha, pelo e-mail.
+- **Compartilhado:** o código em texto puro vai só no corpo do e-mail ao
+  próprio titular, via SendGrid; nunca fica em log, auditoria ou mensagem
+  de erro.
 
 ## Diagrama do fluxo de dados
 
@@ -202,7 +242,7 @@ flowchart TD
     Vercel["Vercel (hospedagem/computação, vê IP e cabeçalhos)"]
     AppAutenticador["Aplicativo autenticador\n(celular do titular, sem conexão com o SGEA)"]
 
-    Titular -->|"nome, e-mail, RGM, senha"| Cadastro --> Auth
+    Titular -->|"nome, e-mail, RGM, senha; depois o código recebido por e-mail"| Cadastro --> Auth
     Titular -->|"e-mail, senha, código do 2FA"| Login --> Auth
     Auth -->|"QR code do 2FA, gerado no servidor (só na configuração)"| Login
     Titular -.->|"escaneia o QR code"| AppAutenticador
@@ -210,13 +250,14 @@ flowchart TD
     Titular -->|"inscrição, check-in, respostas, feedback"| Uso --> Regras
     Titular -.->|"Fase 2: exportar/corrigir/excluir"| MeusDados -.-> Auth
 
+    Auth -->|"cadastro pendente (até 15 min): nome, e-mail, RGM, hash da senha e do código"| TiDB
     Auth -->|"nome, e-mail, RGM (texto), hash da senha"| TiDB
     Auth -->|"segredo do 2FA"| Cripto --> TiDB
     Regras --> TiDB
     Auth --> Auditoria --> TiDB
     Regras --> Auditoria
 
-    Auth -->|"código de recuperação, confirmação de inscrição"| Terceiros
+    Auth -->|"código do cadastro, código de recuperação, confirmação de inscrição"| Terceiros
     Frontend -.->|"toda requisição passa por"| Vercel -.-> Backend
 ```
 

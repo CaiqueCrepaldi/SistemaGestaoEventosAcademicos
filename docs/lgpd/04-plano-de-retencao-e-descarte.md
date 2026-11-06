@@ -1,8 +1,17 @@
 # Plano de retenção e descarte — SGEA
 
-**Data:** 29/09/2026 · **Versão:** 2 (nomes distintos para "conta sem
-uso" e "aluno inativado", inscrições canceladas na inativação, feedback
-excluído pelo próprio aluno, registros do limite de tentativas)
+**Data:** 06/11/2026 · **Versão:** 3 (cadastro aguardando confirmação do
+e-mail, apagado ao concluir ou depois de 15 minutos; nota sobre a
+anonimização, que saiu da Política de Privacidade versão 3. A versão 2, de
+29/09/2026, separou "conta sem uso" de "aluno inativado" e incluiu as
+inscrições canceladas na inativação, o feedback excluído pelo próprio aluno
+e os registros do limite de tentativas)
+
+> **Anonimização:** a Política de Privacidade versão 3 (06/11/2026) não
+> promete anonimização ao titular, porque ela não existe no sistema: o que
+> existe é a exclusão definitiva (ou a inativação, para quem tem
+> certificado). As linhas e a rotina abaixo que falam em anonimizar ficam
+> como plano, ainda não implementado.
 
 Prazos decididos na Fase 0 (`00-diagnostico.md`, seção "Decisões tomadas").
 Tabela no formato da seção 4.6 do guia, seguida de como cada descarte é
@@ -23,6 +32,7 @@ No código, nas telas e nestes documentos, "inativo/inativado" se refere só
 
 | Categoria | Finalidade | Prazo ou critério | Destino |
 |---|---|---|---|
+| Cadastro aguardando confirmação do e-mail (`cadastros_pendentes`: nome, e-mail, RGM, hash da senha, hash do código, aceite dos Termos) | Garantir que a conta pertence ao dono do e-mail institucional antes de criá-la | Até 15 minutos (`expiraEm`); renovado para 15 minutos a cada reenvio do código | **Apagado ao concluir o cadastro** (na mesma transação que cria a conta) **ou depois de expirar**: no próximo cadastro, a cada login e na tentativa de confirmar ou reenviar o código daquele e-mail. Sem rotina agendada. Preencher o cadastro de novo com o mesmo e-mail ou RGM substitui o pendente anterior |
 | Conta ativa (Usuario + Participante) | Autenticação, participação em eventos | Enquanto ativa | — |
 | Aluno inativado pela equipe | Bloquear o uso do sistema (ex.: uso indevido, dado incorreto, a pedido) | Até a reativação | A conta e o histórico são mantidos; as inscrições **pendentes** em eventos futuros são canceladas na inativação (liberam a vaga, cada uma registrada na auditoria); presenças e certificados continuam valendo; o motivo da inativação é apagado na reativação |
 | Conta sem uso (24 meses sem login) | Autenticação | 24 meses sem login, contados a partir de `LOGIN_SUCESSO` mais recente na auditoria | Anonimizar automaticamente |
@@ -41,7 +51,11 @@ No código, nas telas e nestes documentos, "inativo/inativado" se refere só
 **Já implementado:** o cancelamento das inscrições pendentes em eventos
 futuros na inativação do aluno e a exclusão do feedback (pelo próprio
 aluno ou pela equipe, com motivo) — ambos imediatos e registrados na
-auditoria.
+auditoria. E o descarte do cadastro aguardando confirmação: o pendente sai
+na transação que cria a conta e, se expirar, é apagado por
+`apagarCadastrosExpirados()` (`auth.service.ts`), chamada no cadastro e em
+todo login. A chamada no login nunca impede a entrada: se falhar, só fica
+registrada no log do servidor.
 
 **Ainda não implementado (rotina automática):** o restante desta seção
 descreve o desenho que será construído (item 7 da Fase 2), não algo que já

@@ -1062,6 +1062,92 @@ h1, h2, h3 {
   color: var(--gray-500);
 }
 
+/* o Edge poe um "olhinho" proprio no campo de senha; o PasswordInput ja tem o dele */
+.password-field input::-ms-reveal,
+.password-field input::-ms-clear {
+  display: none;
+}
+
+/* campo so para leitura (ex.: e-mail do aluno na edicao de Participantes): fundo cinza, sem cara de editavel */
+.field input[readonly] {
+  background: var(--gray-100);
+  color: var(--gray-700);
+  cursor: default;
+}
+
+/* texto so pro leitor de tela (ex.: "cumprido"/"pendente" na lista de requisitos da senha) */
+.visualmente-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* lista de requisitos da senha nova (Cadastro e Esqueci a senha) */
+.requisitos-senha {
+  margin: -6px 0 0;
+  font-size: 13px;
+}
+
+.requisitos-senha-titulo {
+  margin: 0 0 4px;
+  color: var(--gray-500);
+}
+
+.requisitos-senha ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.requisitos-senha li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.requisito-icone {
+  display: inline-block;
+  width: 14px;
+  text-align: center;
+  font-weight: 700;
+}
+
+/* verde mais escuro que o --green-600 pra texto pequeno ter contraste 4.5:1 com o fundo branco */
+.requisito-ok {
+  color: #15803d;
+}
+
+.requisito-pendente {
+  color: var(--gray-500);
+}
+
+.requisitos-senha .form-error {
+  margin: 4px 0 0;
+}
+
+/* etapa 2 do cadastro: campo do codigo de 6 digitos */
+.campo-codigo input {
+  font-size: 20px;
+  letter-spacing: 6px;
+  text-align: center;
+}
+
+.cadastro-acoes-codigo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .field-invalido input,
 .field-invalido select,
 .field-invalido textarea,

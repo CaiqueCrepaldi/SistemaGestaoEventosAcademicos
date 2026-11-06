@@ -1,7 +1,11 @@
 # Termos de Uso
 
-**Versão 2 — rascunho de 27/09/2026, atualizado em 29/09/2026.** Substitui a Versão 1 (25/09/2026)
-quando a Fase 2 publicar este texto na página `/termos-de-uso` do sistema.
+**Versão 3 — 06/11/2026.** Substitui a Versão 2. Este é o mesmo texto
+publicado na página `/termos-de-uso` do sistema
+(`frontend/src/pages/Legal/TermosDeUsoPage.tsx`): ao mudar um, mude o
+outro. A versão vigente fica em `VERSAO_TERMOS_ATUAL`
+(`backend/src/config/termos.ts`), publicada sempre junto com a Política de
+Privacidade.
 
 ## 1. O que é o SGEA
 
@@ -9,41 +13,41 @@ O Sistema de Gestão de Eventos Acadêmicos (SGEA) é uma plataforma para
 inscrição e check-in em eventos acadêmicos (palestras, minicursos,
 workshops), aplicação de questionário obrigatório, emissão de certificado
 de participação e envio de feedback. É um protótipo desenvolvido como
-Projeto de Final de Curso da UMC, com finalidade exclusivamente acadêmica —
-não é um serviço comercial.
+Projeto de Final de Curso da UMC, com finalidade exclusivamente acadêmica,
+e não é um serviço comercial.
 
 ## 2. Quem pode usar
 
 O cadastro de aluno é público e exige e-mail institucional terminando em
-`@alunos.umc.br`. Contas de administrador e secretaria são criadas
-diretamente pela instituição, sem cadastro público.
+`@alunos.umc.br`. A conta só é criada depois que você confirma esse e-mail:
+o sistema envia a ele um código de 6 dígitos, que vale por 15 minutos. Se o
+código não for confirmado, nenhuma conta é criada e os dados informados são
+apagados.
 
-Ao se cadastrar, você declara: **"Tenho 18 anos ou mais, ou tenho
-autorização do meu responsável legal."** O SGEA não coleta data de
-nascimento nem qualquer outro dado que confirme sua idade — a declaração
-acima é a única exigência sobre o tema, e sua veracidade é de sua
-responsabilidade.
+Contas de administrador e secretaria são criadas diretamente pela
+instituição, sem cadastro público.
 
 ## 3. Sua conta
 
-- Você é responsável por manter sua senha em sigilo e não compartilhá-la
-  com terceiros.
-- Os dados informados no cadastro (nome, RGM, e-mail) precisam ser
-  verdadeiros.
+- Os dados informados no cadastro (nome, RGM e e-mail) precisam ser
+  verdadeiros, e o e-mail precisa ser seu.
+- O e-mail não pode ser alterado depois do cadastro: ele é a sua
+  identificação de acesso, confirmada por código. Nome e RGM podem ser
+  corrigidos pelo canal de privacidade. Se o seu e-mail institucional
+  mudar, escreva para o canal de privacidade e a equipe analisa o caso.
+- A senha precisa ter de 8 a 64 caracteres, com pelo menos uma letra
+  maiúscula, um número e um caractere especial (por exemplo, ! @ # $ %).
+- Você é responsável por manter sua senha em segredo e não compartilhá-la
+  com ninguém. Se desconfiar que outra pessoa a conhece, troque-a pela
+  opção "Esqueci a senha" na tela de login.
+- A autenticação em dois fatores é opcional para todos os perfis; você pode
+  ativar ou desativar na página "Minha conta".
 - A secretaria pode **inativar** sua conta em caso de uso indevido, dado
-  incorreto ou a seu pedido, sempre informando um motivo (que fica
-  visível só para a equipe). Enquanto a conta estiver inativa, você não
-  consegue entrar no sistema, se inscrever, fazer check-in nem responder
-  questionário; suas inscrições pendentes em eventos futuros são
-  canceladas, e os certificados que você já emitiu continuam válidos. A
-  secretaria pode reativar a conta depois, e aí tudo volta a funcionar.
-- Inativação é diferente de **conta sem uso**: uma conta que fica 24
-  meses sem login é anonimizada automaticamente (ver seção 8 e a Política
-  de Privacidade).
-- A autenticação em dois fatores é opcional para todos os perfis; você
-  pode ativar ou desativar na página "Minha conta".
-- A secretaria também pode anonimizar sua conta em caso de uso indevido,
-  dado incorreto ou a seu próprio pedido (ver seção 8).
+  incorreto ou a seu pedido, sempre informando um motivo (visível só para a
+  equipe). Enquanto a conta estiver inativa, você não consegue entrar no
+  sistema, se inscrever, fazer check-in nem responder questionário; suas
+  inscrições pendentes em eventos futuros são canceladas, e os certificados
+  já emitidos continuam válidos. A secretaria pode reativar a conta depois.
 
 ## 4. Condutas proibidas
 
@@ -56,30 +60,24 @@ responsabilidade.
 
 O certificado de participação só é liberado depois que você realiza o
 check-in presencial no evento e atinge, no mínimo, 60% de acertos no
-questionário obrigatório daquele evento. Essa liberação é uma decisão
-automatizada do sistema — você pode pedir revisão humana desse resultado
-a qualquer momento, pela página "Meus dados" (Fase 2) ou pelo canal de
-privacidade. O certificado é gerado automaticamente em PDF e destinado ao
-uso pessoal do titular, não podendo ser alterado ou emitido em nome de
-terceiros.
+questionário obrigatório daquele evento, em até 2 tentativas. Essa
+liberação é uma decisão automatizada do sistema: você pode pedir a revisão
+humana do resultado pelo canal de privacidade. O certificado é gerado em
+PDF, é destinado ao uso pessoal do titular e não pode ser alterado nem
+emitido em nome de terceiros.
 
-## 6. Feedback e conteúdo enviado
+## 6. Feedback
 
 O envio de feedback sobre uma palestra é opcional e só fica disponível
-depois que você já tem direito ao certificado daquela palestra (presença
-confirmada e aproveitamento mínimo no questionário). O comentário que você
-escreve é seu, mas ao enviá-lo você autoriza o SGEA a exibi-lo para a
-equipe organizadora do evento avaliar — não é publicado para outros
-alunos nem usado para qualquer outra finalidade.
+depois que você tem direito ao certificado daquela palestra (presença
+confirmada e aproveitamento mínimo no questionário). Ao enviá-lo, você
+autoriza o SGEA a exibi-lo para a equipe organizadora avaliar o evento; ele
+não é publicado para outros alunos.
 
-Depois de enviado, o feedback **não pode ser editado** — nem por você, nem
-pela equipe. Você pode excluir o seu a qualquer momento (o sistema pede
-confirmação) e, se quiser, enviar um novo. A equipe organizadora só pode
-excluir um feedback informando um motivo (conteúdo ofensivo, dado pessoal
-exposto, fora do tema ou pedido do próprio aluno), e toda exclusão fica
-registrada na auditoria, indicando se foi você ou a equipe. Se sua conta for
-anonimizada, o texto do comentário é apagado; a nota numérica permanece,
-sem vínculo com você.
+Depois de enviado, o feedback não pode ser editado, nem por você nem pela
+equipe. Você pode excluir o seu a qualquer momento e enviar outro. A equipe
+só pode excluir um feedback informando o motivo, e toda exclusão fica
+registrada na auditoria.
 
 ## 7. Disponibilidade
 
@@ -89,24 +87,19 @@ contínua.
 
 ## 8. Encerramento da conta
 
-Você pode pedir, a qualquer momento, a anonimização da sua conta — pela
-página "Meus dados" (Fase 2) ou pelo canal de privacidade. Antes de
-confirmar, o sistema avisa para você baixar seus certificados, caso ainda
-não tenha. A anonimização remove seu nome, e-mail e RGM de forma
-irreversível; suas inscrições, presenças e certificados continuam
-existindo como estatística do evento, sem identificar você; o texto dos
-seus feedbacks é apagado (a nota permanece). Isso é diferente da versão
-anterior destes Termos, que previa remoção completa do histórico — a
-mudança está detalhada em `docs/lgpd/04-plano-de-retencao-e-descarte.md`.
-A secretaria pode iniciar o mesmo processo em seu nome, em caso de uso
-indevido, dado incorreto ou a seu pedido feito por outro canal.
+Você pode pedir a qualquer momento, pelo canal de privacidade ou à
+secretaria, a inativação e, em seguida, a exclusão definitiva da sua conta.
+A exclusão remove permanentemente o histórico de inscrições, feedbacks e
+tentativas de questionário vinculados a ela. Quem já tem certificado
+emitido tem a conta inativada em vez de excluída, para o certificado
+continuar válido.
 
 ## 9. Limitação de responsabilidade
 
 Estes Termos não transferem a você a responsabilidade pela segurança do
-sistema, nem autorizam o SGEA a usar seus dados para qualquer finalidade
-além das descritas na Política de Privacidade. Direitos previstos em lei
-não são reduzidos por nenhuma cláusula destes Termos.
+sistema, nem autorizam o SGEA a usar seus dados para outra finalidade além
+das descritas na Política de Privacidade. Direitos previstos em lei não são
+reduzidos por nenhuma cláusula destes Termos.
 
 ## 10. Legislação aplicável
 
@@ -117,4 +110,6 @@ Defesa do Consumidor. Para saber como seus dados são tratados, veja a
 
 ---
 
-*Versão 2 — 27/09/2026, atualizado em 29/09/2026 (rascunho, publicação prevista na Fase 2).*
+*Versão 3 — 06/11/2026. Quando este texto mudar, a nova versão é publicada
+nesta página com a data, e a versão que você aceitou fica registrada na sua
+conta.*
