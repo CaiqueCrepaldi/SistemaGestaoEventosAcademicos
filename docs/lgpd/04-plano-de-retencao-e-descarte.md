@@ -1,8 +1,9 @@
 # Plano de retenção e descarte — SGEA
 
 **Data:** 06/11/2026 · **Versão:** 3 (cadastro aguardando confirmação do
-e-mail, apagado ao concluir ou depois de 15 minutos; nota sobre a
-anonimização, que saiu da Política de Privacidade versão 3. A versão 2, de
+e-mail, apagado ao concluir ou depois de 15 minutos; tabela `certificados`;
+exclusão a pedido como acontece hoje; nota sobre a anonimização, que saiu
+da Política de Privacidade versão 3. A versão 2, de
 29/09/2026, separou "conta sem uso" de "aluno inativado" e incluiu as
 inscrições canceladas na inativação, o feedback excluído pelo próprio aluno
 e os registros do limite de tentativas)
@@ -36,8 +37,9 @@ No código, nas telas e nestes documentos, "inativo/inativado" se refere só
 | Conta ativa (Usuario + Participante) | Autenticação, participação em eventos | Enquanto ativa | — |
 | Aluno inativado pela equipe | Bloquear o uso do sistema (ex.: uso indevido, dado incorreto, a pedido) | Até a reativação | A conta e o histórico são mantidos; as inscrições **pendentes** em eventos futuros são canceladas na inativação (liberam a vaga, cada uma registrada na auditoria); presenças e certificados continuam valendo; o motivo da inativação é apagado na reativação |
 | Conta sem uso (24 meses sem login) | Autenticação | 24 meses sem login, contados a partir de `LOGIN_SUCESSO` mais recente na auditoria | Anonimizar automaticamente |
-| Conta excluída a pedido do titular ou pela equipe | — | Imediato, ao confirmar o pedido | Anonimizar |
-| Inscrições, presenças, certificados, tentativas de questionário | Estatística do evento (contagem, taxa de aprovação) | Enquanto a conta associada existir; sobrevivem à anonimização da conta, mas sem vínculo pessoal | Manter, desvinculado (a linha continua, mas deixa de apontar pra um nome/e-mail/RGM legível) |
+| Conta excluída a pedido do titular ou pela equipe | — | Imediato, ao atender o pedido | **Hoje:** a equipe inativa e depois remove a conta e o histórico (inscrições, feedbacks e tentativas de questionário) na tela Participantes; se houver certificado emitido, a remoção é recusada (`409 PARTICIPANTE_COM_CERTIFICADO`) e a conta fica só inativada. **Plano (não implementado):** anonimizar |
+| Inscrições, presenças, tentativas de questionário | Participação no evento; estatística do evento (contagem, taxa de aprovação) | Enquanto a conta associada existir | Apagadas junto com a conta na remoção. A inscrição que deu origem a um certificado fica (ver a linha abaixo). **Plano (não implementado):** sobreviver à anonimização da conta, sem vínculo pessoal |
+| Certificados emitidos (`certificados`: cópia do nome e do RGM gravada na emissão, dados do evento e código de validação) | Permitir a validação pública do código (RF027) e comprovar a participação, com o que foi impresso no PDF | Enquanto o certificado precisar ser verificável (sem prazo automático: nenhuma rotina apaga certificado) | Mantido. O aluno com certificado não é removido, só inativado (sem acesso ao sistema); a inscrição de origem é protegida no banco (`onDelete: Restrict`). A validação pública mostra só nome, evento, data, carga horária e emissão, nunca o RGM |
 | Feedbacks | Avaliação do evento/palestrante | Até o próprio aluno excluir (pode fazer isso a qualquer momento e enviar outro) ou a equipe excluir por um motivo da lista fechada; senão, igual às inscrições | Exclusão imediata, registrada na auditoria (`FEEDBACK_EXCLUIDO`); na anonimização da conta, manter a nota e **apagar** o texto do comentário |
 | Registros do limite de tentativas (`limites_acesso`: conta ou IP) | Bloquear tentativa de adivinhar senha ou de disparar código em massa | O bloqueio expira sozinho em 15 min; a linha fica na tabela com o contador zerado | Excluir pela rotina automática (ainda não implementada) |
 | Códigos de recuperação de senha | Confirmar identidade na troca de senha | 24h após expirar ou ser usado | Excluir |

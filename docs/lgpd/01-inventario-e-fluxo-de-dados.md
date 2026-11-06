@@ -1,8 +1,9 @@
 # Inventário de dados pessoais e fluxo de dados — SGEA
 
 **Data:** 06/11/2026 · **Versão:** 4 (confirmação do e-mail no cadastro:
-tabela `cadastros_pendentes`, seção 11; e-mail do aluno não editável; IP
-também no limite de envio do código do cadastro. A versão 3, de 29/09/2026,
+tabela `cadastros_pendentes`, seção 11; tabela `certificados`, seção 12;
+e-mail do aluno não editável; IP também no limite de envio do código do
+cadastro. A versão 3, de 29/09/2026,
 tirou a criptografia de nome, e-mail e RGM e incluiu o 2FA opcional para
 todos, a situação da conta e as regras de feedback; a versão 2, de
 28/09/2026, incluiu o 2FA, o IP no limite de tentativas e a remoção do
@@ -214,6 +215,39 @@ detalhadas em `02-matriz-dados-finalidade-base-legal.md`; aqui o foco é
   próprio titular, via SendGrid; nunca fica em log, auditoria ou mensagem
   de erro.
 
+## 12. Certificados emitidos (`certificados`)
+
+- **De quem é:** do aluno que recebeu o certificado.
+- **Onde é gerado:** na primeira emissão (`POST /api/certificados/emitir/{inscricaoId}`,
+  pelo próprio aluno ou pela equipe), depois da presença confirmada e de
+  60% no questionário. As emissões seguintes devolvem o mesmo registro,
+  nunca regerado (`certificados.service.ts`).
+- **Obrigatório:** não é dado que o titular digita; existe para quem emite
+  o certificado.
+- **Onde fica:** tabela `certificados`, uma linha por inscrição, com uma
+  **cópia do nome e do RGM** do aluno (`nomeParticipante`, `rgm`) e dos
+  dados do evento impressos no PDF (`tituloEvento`, `temaEvento`,
+  `nomePalestrante`, `dataEvento`, `cargaHoraria`), o `codigoValidacao`
+  (aleatório, `crypto.randomBytes`, sem relação com nenhum id) e
+  `emitidoEm`. É a única cópia de nome e RGM fora de `usuarios` e
+  `participantes`, de propósito: o documento emitido não muda se o evento
+  for editado ou o nome corrigido depois, e a validação confere exatamente
+  o que foi impresso.
+- **Finalidade:** permitir a **validação pública do código** (RF027):
+  quem recebe o certificado confere, sem login, em
+  `GET /api/certificados/validar/{codigo}` ou na página
+  `/validar-certificado`.
+- **Por quanto tempo:** enquanto o certificado precisar ser verificável.
+  Por isso o aluno com certificado não é removido, só inativado: a remoção
+  responde `409 PARTICIPANTE_COM_CERTIFICADO`, e a inscrição de origem é
+  protegida no banco (`onDelete: Restrict`). Ver `04`.
+- **Quem consulta:** o próprio aluno (os certificados dele, na tela
+  Certificados e em "Meus dados"); ADMINISTRADOR/SECRETARIA (todos);
+  qualquer pessoa com o código vê só nome, evento, data, carga horária e
+  emissão — **nunca o RGM** (limite de 30 consultas por IP).
+- **Compartilhado:** não. O PDF é montado no navegador de quem baixa
+  (jsPDF), com os dados que a API devolve.
+
 ## Diagrama do fluxo de dados
 
 ```mermaid
@@ -254,6 +288,9 @@ flowchart TD
     Auth -->|"nome, e-mail, RGM (texto), hash da senha"| TiDB
     Auth -->|"segredo do 2FA"| Cripto --> TiDB
     Regras --> TiDB
+    Regras -->|"certificado: cópia do nome e do RGM + código de validação"| TiDB
+    Publico["Quem confere um certificado (sem login)"] -->|"código"| Regras
+    Regras -.->|"só nome, evento, data e carga horária (sem RGM)"| Publico
     Auth --> Auditoria --> TiDB
     Regras --> Auditoria
 

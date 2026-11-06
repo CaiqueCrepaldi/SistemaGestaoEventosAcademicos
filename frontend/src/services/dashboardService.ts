@@ -11,6 +11,14 @@ export interface TotaisDashboard {
   // presentes / (presentes + ausentes), em %; null enquanto nenhum check-in foi registrado
   taxaPresenca: number | null;
   certificadosLiberados: number;
+  // resultado do questionario de quem teve a presenca confirmada (indicador de aprendizagem, RF021):
+  // aprovado = alguma tentativa com 60% ou mais; reprovado = usou as 2 tentativas abaixo de 60%;
+  // podem responder = nenhuma tentativa, ou 1 abaixo de 60%
+  aprovadosQuestionario: number;
+  reprovadosQuestionario: number;
+  podemResponderQuestionario: number;
+  // aprovados / (aprovados + reprovados), em %; null enquanto ninguem concluiu o questionario
+  taxaAprovacao: number | null;
   // media, entre os eventos, de inscritos / capacidade da sala, em %; null sem nenhum evento
   ocupacaoMediaSalas: number | null;
   // 1 a 5; null sem nenhum feedback
@@ -27,7 +35,8 @@ export interface ProximoEventoDashboard {
   inscritos: number;
 }
 
-export interface PresencaPorEvento {
+// cada evento nos graficos "Presenca por evento" e "Aprendizagem por evento"
+export interface EventoDashboard {
   id: string;
   titulo: string;
   horario: string;
@@ -35,12 +44,16 @@ export interface PresencaPorEvento {
   presentes: number;
   ausentes: number;
   pendentes: number;
+  // entre os presentes: aprovados + reprovados + podemResponder = presentes
+  aprovados: number;
+  reprovados: number;
+  podemResponder: number;
 }
 
 export interface ResumoDashboard {
   totais: TotaisDashboard;
   proximosEventos: ProximoEventoDashboard[];
-  eventos: PresencaPorEvento[];
+  eventos: EventoDashboard[];
 }
 
 export const dashboardService = {

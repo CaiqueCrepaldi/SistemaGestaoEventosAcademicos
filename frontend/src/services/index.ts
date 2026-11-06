@@ -7,7 +7,7 @@ export { authService } from "./authService";
 export type { CadastroAlunoInput, ResultadoLogin, SessaoUsuario, UsuarioPerfil } from "./authService";
 export { usuarioService } from "./usuarioService";
 export { dashboardService } from "./dashboardService";
-export type { PresencaPorEvento, ProximoEventoDashboard, ResumoDashboard, TotaisDashboard } from "./dashboardService";
+export type { EventoDashboard, ProximoEventoDashboard, ResumoDashboard, TotaisDashboard } from "./dashboardService";
 export { certificadoService, formatarCodigoValidacao, urlValidacao } from "./certificadoService";
 export type { CertificadoDisponivel, CertificadoEmitido, CertificadoValidado } from "./certificadoService";
 export { checkinService } from "./checkinService";

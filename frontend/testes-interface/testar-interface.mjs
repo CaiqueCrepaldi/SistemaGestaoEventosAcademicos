@@ -116,12 +116,14 @@ try {
   checar("secretaria sem 2FA entra direto (sem tela de QR code)", (await page.evaluate(() => location.hash)) === "#/" && !(await temTexto(page, "Configurar autenticação")));
   await page.locator(".stat-card").first().waitFor();
   checar(
-    "Dashboard da equipe carrega os 7 indicadores e o gráfico de presença",
-    (await page.locator(".stat-card").count()) === 7 &&
+    "Dashboard da equipe carrega os 8 indicadores e os gráficos de presença e de aprendizagem",
+    (await page.locator(".stat-card").count()) === 8 &&
       (await temTexto(page, "Ocupação média das salas")) &&
       (await temTexto(page, "Certificados liberados")) &&
+      (await temTexto(page, "Aprovação no questionário")) &&
       (await temTexto(page, "Média do feedback")) &&
-      (await temTexto(page, "Presença por evento")),
+      (await temTexto(page, "Presença por evento")) &&
+      (await temTexto(page, "Aprendizagem por evento")),
   );
   checar(
     "menu chama a tela de \"Dashboard\" (não mais \"Principal\") e não tem mais \"Usuários\"",
@@ -595,8 +597,54 @@ try {
   checar("equipe exclui com motivo", await esperarToast(page, "Feedback excluído."));
   await sair(page);
 
-  titulo("C / Participantes: 2FA e acesso (administrador)");
+  titulo("Dashboard: indicador de aprendizagem (RF021)");
+  // a esta altura a aluna foi aprovada no "Evento UI" (10 de 10) e reprovada nas 2 tentativas do
+  // "Evento Reprovado UI", com presenca confirmada nos dois
   await entrar(page, admin.email, admin.senha);
+  await page.locator(".stat-card").first().waitFor();
+  const caixas = await page.locator(".stat-card").evaluateAll((cards) => cards.map((c) => Math.round(c.getBoundingClientRect().top)));
+  checar(
+    "os 8 cards ficam em 2 linhas de 4 no desktop",
+    caixas.length === 8 && new Set(caixas.slice(0, 4)).size === 1 && new Set(caixas.slice(4)).size === 1 && caixas[4] > caixas[0],
+    caixas.join(", "),
+  );
+  const cardAprovacao = page.locator(".stat-card", { hasText: "Aprovação no questionário" });
+  checar(
+    "card \"Aprovação no questionário\" com a taxa em % e a explicação do cálculo",
+    /\d+%/.test(await cardAprovacao.locator(".stat-card-value").innerText()) &&
+      (await cardAprovacao.innerText()).includes("aprovados ÷ alunos que concluíram o questionário"),
+    await cardAprovacao.innerText(),
+  );
+  const cardAprendizagem = page.locator(".card", { hasText: "Aprendizagem por evento" });
+  checar(
+    "gráfico de aprendizagem com a legenda Aprovados / Ainda podem responder / Reprovados",
+    (await cardAprendizagem.locator(".grafico-legenda li").allInnerTexts()).join("|") === "Aprovados|Ainda podem responder|Reprovados",
+  );
+  const barraAprovada = await cardAprendizagem.locator(`.grafico-trilho[aria-label^="Evento UI ${sufixo}:"]`).getAttribute("aria-label");
+  checar(
+    "a aluna aprovada aparece em verde no evento dela (1 aprovado, 0 reprovado)",
+    (barraAprovada ?? "").includes("1 aprovados") &&
+      (barraAprovada ?? "").includes("0 reprovados") &&
+      (await cardAprendizagem.locator(`.grafico-trilho[aria-label^="Evento UI ${sufixo}:"] .grafico-segmento.verde`).count()) === 1,
+    barraAprovada,
+  );
+  const barraReprovada = await cardAprendizagem.locator(`.grafico-trilho[aria-label^="${tituloReprovado}:"]`).getAttribute("aria-label");
+  checar(
+    "a reprovada nas 2 tentativas aparece em vermelho no outro evento (0 aprovado, 1 reprovado)",
+    (barraReprovada ?? "").includes("0 aprovados") &&
+      (barraReprovada ?? "").includes("1 reprovados") &&
+      (await cardAprendizagem.locator(`.grafico-trilho[aria-label^="${tituloReprovado}:"] .grafico-segmento.vermelho`).count()) === 1,
+    barraReprovada,
+  );
+  await cardAprendizagem.locator("summary", { hasText: "Ver dados em tabela" }).click();
+  checar(
+    "\"Ver dados em tabela\" mostra os mesmos números por evento",
+    // o CSS deixa o cabecalho em maiusculas, e o innerText devolve o texto ja transformado
+    (await cardAprendizagem.locator("th").allInnerTexts()).join("|").toLowerCase() === "evento|data|presentes|aprovados|ainda podem responder|reprovados" &&
+      (await cardAprendizagem.locator("tr", { hasText: tituloReprovado }).locator("td").allInnerTexts()).slice(2).join("|") === "1|0|0|1",
+  );
+
+  titulo("C / Participantes: 2FA e acesso (administrador)");
   await page.goto(`${APP}/participantes`);
   const linhaUsuario = page.locator("tr", { hasText: NOME_INATIVO });
   await linhaUsuario.waitFor();

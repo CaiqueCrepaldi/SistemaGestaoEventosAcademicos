@@ -992,15 +992,34 @@ interface ResumoDashboard {
     ausentes: number;
     pendentes: number;
     taxaPresenca: number | null;   // presentes / (presentes + ausentes) × 100; null sem check-in
-    certificadosLiberados: number; // presença confirmada + ≥ 60% no questionário do mesmo evento
+    certificadosLiberados: number; // presença confirmada + ≥ 60% no questionário do mesmo evento (= aprovadosQuestionario)
+    // RF021, indicador de aprendizagem — só entre os alunos com presença confirmada:
+    aprovadosQuestionario: number;      // alguma tentativa com 60% ou mais
+    reprovadosQuestionario: number;     // usou as 2 tentativas, todas abaixo de 60%
+    podemResponderQuestionario: number; // nenhuma tentativa, ou 1 tentativa abaixo de 60%
+    taxaAprovacao: number | null;  // aprovados / (aprovados + reprovados) × 100; null enquanto ninguém concluiu o questionário
     ocupacaoMediaSalas: number | null; // RF021: média, entre os eventos, de inscritos / capacidade da sala × 100; null sem evento
     mediaFeedback: number | null;  // 1 a 5; null sem feedback
     totalFeedbacks: number;
   };
   proximosEventos: { id; titulo; horario; salaNome; capacidade; inscritos }[]; // até 5, do mais próximo
-  eventos: { id; titulo; horario; inscritos; presentes; ausentes; pendentes }[]; // todos, por horário
+  // todos, por horário. aprovados + reprovados + podemResponder = presentes
+  eventos: { id; titulo; horario; inscritos; presentes; ausentes; pendentes; aprovados; reprovados; podemResponder }[];
 }
 ```
+
+**Indicador de aprendizagem (RF021).** Para cada evento, os alunos com
+presença confirmada são divididos pelo resultado do questionário, com a
+mesma regra do certificado: **aprovado** se alguma tentativa chegou a 60%;
+**reprovado** se usou as 2 tentativas abaixo de 60% (não há terceira
+chance); **ainda pode responder** se não tem tentativa ou tem 1 abaixo de
+60%. A taxa de aprovação geral considera só quem concluiu o questionário
+(aprovados + reprovados): quem ainda pode responder fica fora, para a taxa
+não cair só porque o aluno ainda não respondeu. O backend junta presença e
+tentativas pelo aluno internamente, mas a resposta traz só as contagens por
+evento: nenhum id, nome, e-mail ou RGM de aluno. A tela mostra o cartão
+"Aprovação no questionário" e o gráfico "Aprendizagem por evento" (só os
+eventos com alguma presença confirmada).
 
 A taxa de presença considera só os check-ins já registrados (presente ou
 ausente): inscrição pendente de evento futuro não puxa a taxa pra baixo.
@@ -1013,7 +1032,7 @@ arredondado num cartão próprio ("Ocupação média das salas").
 ## Meus dados — direitos do titular (RF026, LGPD art. 18)
 
 Versão enxuta: o aluno **vê** os próprios dados pelo sistema; os demais
-pedidos (cópia dos dados/portabilidade, correção, anonimização/exclusão,
+pedidos (cópia dos dados/portabilidade, correção de nome e RGM, exclusão,
 revisão humana do resultado do questionário, oposição) são atendidos pelo
 e-mail `privacidade@sgeacademicos.com.br`, em até 15 dias (procedimento em
 `docs/lgpd/08-procedimento-direitos-dos-titulares.md`).

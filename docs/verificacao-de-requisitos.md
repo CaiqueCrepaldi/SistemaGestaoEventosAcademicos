@@ -19,9 +19,9 @@ apaga no final (os registros de auditoria ficam, como em qualquer operação).
 
 | Teste | O que faz | Comando | Resultado |
 |---|---|---|---|
-| Requisitos pela API | Sobe o backend numa porta local e faz as chamadas HTTP de verdade, requisito por requisito | `cd backend && npx tsx scripts/testar-requisitos.ts` | **231/231** verificações (06/11/2026, banco `SGEA_dev`) |
+| Requisitos pela API | Sobe o backend numa porta local e faz as chamadas HTTP de verdade, requisito por requisito | `cd backend && npx tsx scripts/testar-requisitos.ts` | **239/239** verificações (06/11/2026, banco `SGEA_dev`, com o indicador de aprendizagem) |
 | 2FA pela API | Ativação, login em duas etapas, reuso de código, bloqueio, recuperação, reset, desativação | `cd backend && npx tsx scripts/testar-2fa.ts` | **55/55** (06/11/2026, banco `SGEA_dev`) |
-| Interface | Navegador de verdade (Google Chrome, sem janela) usando as telas no frontend local ligado ao backend local | ver `frontend/testes-interface/testar-interface.mjs` (passo a passo no topo do arquivo) | **110/110** (06/11/2026, no Microsoft Edge — ver a atualização de 04/11) |
+| Interface | Navegador de verdade (Google Chrome, sem janela) usando as telas no frontend local ligado ao backend local | ver `frontend/testes-interface/testar-interface.mjs` (passo a passo no topo do arquivo) | **116/116** (06/11/2026, no Microsoft Edge — ver a atualização de 04/11) |
 | Hash de senha | Mostra o formato do hash bcrypt gravado no banco de dev e prova que a mesma senha gera hashes diferentes | `cd backend && npx tsx scripts/demonstrar-hash-senha.ts` | ver `docs/lgpd/07` |
 | Conversão dos dados pessoais | Simulação, aplicação e segunda aplicação (idempotência) no dev | `cd backend && npx tsx scripts/converter-dados-pessoais.ts [--aplicar]` (o script saiu do código em 03/11/2026, junto com as colunas que ele convertia; está no histórico do git, commit `8c2e7df`) | 3 usuários, 3 participantes e 98 logs convertidos; a 2ª rodada não achou nada |
 
@@ -108,6 +108,16 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
 > "Esqueci a senha" com resposta genérica e as listas da equipe (Check-in,
 > Inscrições e Certificados) buscadas e paginadas no servidor (API **R31**).
 
+> **Atualização de 06/11/2026 (entrega de 09/11):** entrou o indicador de
+> aprendizagem no Dashboard (RF021, item 44): cartão "Aprovação no
+> questionário" e gráfico "Aprendizagem por evento", com os 8 cartões em 2
+> linhas de 4. Sem mudança no banco. Testes novos: API **R25** ampliado e
+> Interface "Dashboard: indicador de aprendizagem (RF021)". As suítes
+> rodaram de novo no `SGEA_dev`: **requisitos 239/239** e **Interface
+> 116/116** (no Microsoft Edge). Na mesma entrega, os documentos LGPD `01`,
+> `02` e `04` passaram a descrever a tabela `certificados`, e o `02` e o
+> `08` a exclusão a pedido como acontece hoje (ver "Pendências").
+
 ## Requisitos
 
 | # | Requisito | Como foi testado | Resultado | O que foi corrigido |
@@ -134,7 +144,7 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
 | 20 | Recuperação de senha por código, com a mesma resposta para e-mail com e sem conta (desde 05/11/2026) e a nova senha na regra da senha nova (item 40) | API R17; Interface "Esqueci a senha" | OK (06/11/2026) | Campos obrigatórios (item E). **Alterado em 05/11/2026:** antes respondia `404` para e-mail sem conta, revelando quem tinha cadastro |
 | 21 | Trilha de auditoria: filtros, responsáveis, nada de dado pessoal no detalhe | API R18; Interface "Auditoria: filtro pelas ações novas" | OK após correção | **Corrigido:** a tela de Auditoria não conhecia as ações criadas nos blocos de segurança (2FA, bloqueio por tentativas etc.): elas não apareciam no filtro e a tabela mostrava só o código |
 | 22 | Exclusão de evento **bloqueada** quando há qualquer inscrição (RF009/RNF010): `409 EVENTO_COM_INSCRICOES` ("Cancele as inscrições antes de excluir o evento."), nada é apagado em cascata; evento sem inscrição é excluído normalmente | API R19 (refeita em 04/11/2026); a tela Eventos avisa sem abrir a confirmação quando o evento tem inscritos | OK (API R19, 04/11/2026) | **Alterado em 04/11/2026:** antes a exclusão levava junto inscrições, feedbacks e tentativas de questionário (o R19 antigo conferia essa cascata) |
-| 23 | Dashboard da equipe: 7 indicadores (desde 04/11/2026, com a ocupação média das salas — item 36), próximos eventos com ocupação e gráfico de presença por evento, tudo de `GET /api/dashboard` (só equipe, sem dado pessoal) | API R04 (aluno → 403) e R25; Interface "Equipe entra só com a senha" (7 indicadores, gráfico e menu "Dashboard") | OK (API R04 e R25; Interface com os 7 indicadores, 04/11/2026) | Refeito em 03/11/2026: antes eram 4 indicadores calculados no navegador; o item de menu "Principal" passou a se chamar "Dashboard" |
+| 23 | Dashboard da equipe: 8 indicadores (desde 04/11/2026 com a ocupação média das salas — item 36 — e desde 06/11/2026 com a aprovação no questionário — item 44), próximos eventos com ocupação e gráficos de presença e de aprendizagem por evento, tudo de `GET /api/dashboard` (só equipe, sem dado pessoal) | API R04 (aluno → 403) e R25; Interface "Equipe entra só com a senha" (8 indicadores, os dois gráficos e menu "Dashboard") | OK (API R04 e R25; Interface com os 8 indicadores, 06/11/2026) | Refeito em 03/11/2026: antes eram 4 indicadores calculados no navegador; o item de menu "Principal" passou a se chamar "Dashboard" |
 | 24 | 2FA opcional para todos os perfis (item F) | `testar-2fa.ts`; API R20; Interface "Equipe entra só com a senha" e "2FA na Minha conta" | OK | Implementado nesta rodada |
 | 25 | Senha com bcrypt, salt por senha, custo 12 e rehash no login (item B) | API R20; `demonstrar-hash-senha.ts` | OK | Implementado nesta rodada |
 | 26 | Nome, e-mail e RGM em texto puro, sem quebrar os registros antigos (item G, primeira implantação) | API R24; conversão no dev + as três suítes rodadas de novo depois dela | OK; segunda implantação (cada dado numa tabela só, migration `20261103150000`) testada em `SGEA_dev_migracao` com R24, aguardando a conversão em produção | Implementado nesta rodada; a conversão em produção depende de confirmação |
@@ -157,6 +167,8 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
 | 42 | Confirmação ao sair: o botão "Sair" abre "Sair do sistema?" ("Você vai precisar entrar de novo com seu e-mail e senha.", botões "Sair" e "Cancelar"); a saída automática (sessão expirada, troca de senha, inativação) continua sem confirmação | Interface "Sair pede confirmação" (e todas as saídas do teste passam pela confirmação) | OK (06/11/2026) | Implementado em 06/11/2026 |
 | 43 | Termos de Uso e Política de Privacidade na versão 3 (06/11/2026), com o mesmo texto na página e no markdown: confirmação do e-mail (dados guardados por até 15 minutos, art. 7º, V), SendGrid enviando o código, e-mail não alterável, regra da senha; sem a anonimização, que o sistema não faz; `VERSAO_TERMOS_ATUAL` = "3" | Leitura das páginas e dos markdowns; API R01 (a conta nova grava a versão 3) | OK (06/11/2026); o reaceite de quem aceitou a versão 2 ainda não tem tela (ver pendências) | Implementado em 06/11/2026. Antes a página mostrava a versão 1 e o markdown a versão 2, com promessas que o sistema não cumpria (anonimização automática, declaração de maioridade) |
 
+| 44 | Indicador de aprendizagem no Dashboard (RF021): para cada evento, entre os alunos com presença confirmada, quantos foram **aprovados** (alguma tentativa com 60% ou mais), **reprovados** (usaram as 2 tentativas abaixo de 60%) e **ainda podem responder** (nenhuma tentativa, ou 1 abaixo de 60%); taxa de aprovação geral = aprovados ÷ (aprovados + reprovados). Tela: cartão "Aprovação no questionário" ("aprovados ÷ alunos que concluíram o questionário") e gráfico "Aprendizagem por evento" no estilo do "Presença por evento" (barras empilhadas verde/cinza/vermelho, legenda, "Ver dados em tabela"); os 8 cartões em 2 linhas de 4 no desktop. Sem dado pessoal na resposta | API R25 (aprovado e reprovado no evento principal, "ainda pode responder" com 1 tentativa abaixo de 60% no evento passado, soma = presentes em todo evento, contagens e taxa conferidas com o cálculo direto no banco, certificados liberados = aprovados, nenhum nome/e-mail/RGM/id de aluno); Interface "Dashboard: indicador de aprendizagem (RF021)" (2 linhas de 4, cartão com a taxa, legenda, aprovada em verde e reprovada em vermelho, tabela) | OK (06/11/2026) | Implementado em 06/11/2026, sem mudança no banco. "Certificados liberados" passou a sair da mesma conta (são os aprovados entre os presentes) |
+
 ## Outras correções encontradas na verificação
 
 - `docs/api-contract.md` e `docs/funcionalidades-principais.md` descreviam
@@ -175,16 +187,23 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
   solicitações do titular que chegam por e-mail, correção feita pelo
   próprio aluno (hoje pelo e-mail, ver `docs/lgpd/08`) e rotina automática
   de retenção.
-- **Reaceite dos Termos sem tela:** com a versão 3 vigente desde
-  06/11/2026, o login devolve `precisaAceitarTermos: true` para quem aceitou
-  a versão 2, e a rota `POST /api/auth/aceitar-termos` existe, mas o
-  frontend ainda não pede o novo aceite (decisão de deixar para depois).
+- **Tela de novo aceite dos Termos — evolução futura.** Com a versão 3
+  vigente desde 06/11/2026, o login devolve `precisaAceitarTermos: true`
+  para quem aceitou uma versão anterior, e a rota
+  `POST /api/auth/aceitar-termos` existe, mas o frontend ainda não pede o
+  novo aceite. **Decisão:** antes da apresentação, a base é reiniciada e
+  todas as contas são criadas já na versão vigente dos Termos (o cadastro
+  grava a versão 3), então ninguém na demonstração fica com o aceite de uma
+  versão antiga. A tela de reaceite fica para quando os Termos mudarem com
+  contas reais em uso.
 - ~~`POST /auth/recuperacao-senha` responde 404 quando o e-mail não está
   cadastrado~~ — resolvido em 05/11/2026 (item 20).
-- Documentos de LGPD (`docs/lgpd/01` inventário, `02` matriz e `04`
-  retenção) ainda não citam a tabela `certificados`, que guarda cópia de
-  nome e RGM do aluno junto com o certificado emitido. A remoção de um aluno
-  com certificado emitido é recusada (`409 PARTICIPANTE_COM_CERTIFICADO`):
-  no pedido de exclusão feito pelo e-mail, a conta é inativada e o registro
-  do certificado é mantido, como dizem a Política (página do sistema e
-  `docs/lgpd/politica-de-privacidade.md`) e o `docs/lgpd/08`.
+- ~~Documentos de LGPD (`docs/lgpd/01` inventário, `02` matriz e `04`
+  retenção) não citavam a tabela `certificados`~~ — resolvido em 06/11/2026:
+  os três descrevem a cópia do nome e do RGM gravada na emissão, a
+  finalidade (validação pública do código, RF027), a retenção (enquanto o
+  certificado precisar ser verificável) e a regra de que o aluno com
+  certificado não é removido, só inativado. O `02` e o `08` também passaram
+  a descrever a exclusão a pedido como acontece hoje (a equipe remove a
+  conta e o histórico, ou só inativa quando há certificado), sem prometer
+  anonimização, que continua só como plano no `04`.

@@ -4,6 +4,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
 import { toast } from "../../components/ui/Toast";
 import { dashboardService, type ProximoEventoDashboard, type ResumoDashboard } from "../../services";
+import { GraficoAprendizagemPorEvento } from "./GraficoAprendizagemPorEvento";
 import { GraficoPresencaPorEvento } from "./GraficoPresencaPorEvento";
 
 // a partir daqui a barra de ocupacao muda de cor (quase cheio); em 100% vira "lotado"
@@ -60,8 +61,8 @@ function ProximoEvento({ evento }: { evento: ProximoEventoDashboard }) {
   );
 }
 
-// visao geral da equipe: indicadores, proximos eventos com ocupacao e presenca por evento.
-// Tudo vem agregado de GET /api/dashboard numa chamada so
+// visao geral da equipe: 8 indicadores (2 linhas de 4 no desktop), proximos eventos com ocupacao,
+// presenca por evento e aprendizagem por evento. Tudo vem agregado de GET /api/dashboard numa chamada so
 export function DashboardPage() {
   const [resumo, setResumo] = useState<ResumoDashboard | null>(null);
 
@@ -121,6 +122,12 @@ export function DashboardPage() {
           tone="green"
         />
         <StatCard
+          label="Aprovação no questionário"
+          value={totais.taxaAprovacao === null ? "—" : `${Math.round(totais.taxaAprovacao)}%`}
+          hint="aprovados ÷ alunos que concluíram o questionário"
+          tone="blue"
+        />
+        <StatCard
           label="Média do feedback"
           value={totais.mediaFeedback === null ? "—" : `${totais.mediaFeedback.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / 5`}
           hint={totais.totalFeedbacks === 0 ? "Nenhuma avaliação ainda" : plural(totais.totalFeedbacks, "avaliação", "avaliações")}
@@ -148,6 +155,15 @@ export function DashboardPage() {
           <p className="card-subtitulo">Inscrições de cada evento pela situação do check-in</p>
           <GraficoPresencaPorEvento eventos={eventos} />
         </div>
+      </div>
+
+      <div className="card">
+        <h3>Aprendizagem por evento</h3>
+        <p className="card-subtitulo">
+          Alunos com presença confirmada em cada evento pelo resultado do questionário (aprovado com 60% ou mais; reprovado
+          depois das 2 tentativas)
+        </p>
+        <GraficoAprendizagemPorEvento eventos={eventos} />
       </div>
     </div>
   );

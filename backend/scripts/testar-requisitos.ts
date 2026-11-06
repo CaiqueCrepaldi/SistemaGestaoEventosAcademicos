@@ -1125,6 +1125,14 @@ async function main() {
 
     // ------------------------------------------------------------------ dashboard
     requisito("R25 Dashboard da equipe (endpoint agregado)");
+    // aprendizagem: no evento principal o aluno 1 foi aprovado (0% e 100%) e o aluno 2 reprovou nas 2
+    // tentativas (R13). Falta o caso "ainda pode responder": o aluno 2 ganha presenca no evento passado e
+    // responde 1 vez abaixo de 60%
+    r = await chamar("PUT", `/inscricoes/${inscricaoPassada}`, { token: secretaria.token, corpo: { statusPresenca: "PRESENTE" } });
+    checar("presença confirmada do aluno 2 no evento passado (cenário do indicador) -> 200", r.status === 200, r.corpo);
+    aluno2.token = await entrar(aluno2);
+    r = await chamar("POST", `/eventos/${eventoPassadoId}/questionario/respostas`, { token: aluno2.token, corpo: { respostas: Array(10).fill(1) } });
+    checar("aluno 2 responde 1 vez abaixo de 60% no evento passado -> 201", r.status === 201 && r.corpo.percentual < 60, r.corpo);
     r = await chamar("GET", "/dashboard", { token: secretaria.token });
     const totais = r.corpo?.totais;
     checar(
@@ -1151,10 +1159,63 @@ async function main() {
       typeof totais?.ocupacaoMediaSalas === "number" && ocupacaoEsperada !== null && Math.abs(totais.ocupacaoMediaSalas - ocupacaoEsperada) < 0.01,
       { recebido: totais?.ocupacaoMediaSalas, esperado: ocupacaoEsperada },
     );
+    type EventoAprendizagem = { id: string; presentes: number; aprovados: number; reprovados: number; podemResponder: number };
+    const eventosDoDashboard: EventoAprendizagem[] = r.corpo?.eventos ?? [];
+    const aprendizagemDe = (id: string) => eventosDoDashboard.find((e) => e.id === id);
+    checar(
+      "aprendizagem no evento principal: 1 aprovado (alguma tentativa ≥ 60%) e 1 reprovado (2 tentativas abaixo de 60%)",
+      aprendizagemDe(eventoId)?.aprovados === 1 && aprendizagemDe(eventoId)?.reprovados === 1 && aprendizagemDe(eventoId)?.podemResponder === 0,
+      aprendizagemDe(eventoId),
+    );
+    checar(
+      "aprendizagem no evento passado: presente com 1 tentativa abaixo de 60% ainda pode responder",
+      aprendizagemDe(eventoPassadoId)?.podemResponder === 1 && aprendizagemDe(eventoPassadoId)?.aprovados === 0 && aprendizagemDe(eventoPassadoId)?.reprovados === 0,
+      aprendizagemDe(eventoPassadoId),
+    );
+    checar(
+      "em todo evento, aprovados + reprovados + ainda podem responder = presentes",
+      eventosDoDashboard.length > 0 && eventosDoDashboard.every((e) => e.aprovados + e.reprovados + e.podemResponder === e.presentes),
+    );
+    // a mesma conta feita direto no banco, tentativa por tentativa (sem o agrupamento do backend)
+    const [presencasDb, tentativasDb] = await Promise.all([
+      prisma.inscricao.findMany({ where: { statusPresenca: "PRESENTE" }, select: { participanteId: true, eventoId: true } }),
+      prisma.tentativaQuestionario.findMany({ select: { participanteId: true, eventoId: true, percentual: true } }),
+    ]);
+    const esperado = new Map<string, { aprovados: number; reprovados: number; podemResponder: number }>();
+    for (const p of presencasDb) {
+      const notas = tentativasDb.filter((t) => t.participanteId === p.participanteId && t.eventoId === p.eventoId).map((t) => t.percentual);
+      const conta = esperado.get(p.eventoId) ?? { aprovados: 0, reprovados: 0, podemResponder: 0 };
+      if (notas.some((n) => n >= 60)) conta.aprovados += 1;
+      else if (notas.length >= 2) conta.reprovados += 1;
+      else conta.podemResponder += 1;
+      esperado.set(p.eventoId, conta);
+    }
+    checar(
+      "aprovados, reprovados e ainda podem responder de cada evento batem com o banco",
+      eventosDoDashboard.every((e) => {
+        const conta = esperado.get(e.id) ?? { aprovados: 0, reprovados: 0, podemResponder: 0 };
+        return e.aprovados === conta.aprovados && e.reprovados === conta.reprovados && e.podemResponder === conta.podemResponder;
+      }),
+    );
+    const aprovadosDb = [...esperado.values()].reduce((s, c) => s + c.aprovados, 0);
+    const reprovadosDb = [...esperado.values()].reduce((s, c) => s + c.reprovados, 0);
+    const taxaEsperada = aprovadosDb + reprovadosDb > 0 ? (aprovadosDb / (aprovadosDb + reprovadosDb)) * 100 : null;
+    checar(
+      "taxa de aprovação = aprovados ÷ (aprovados + reprovados), sem contar quem ainda pode responder",
+      typeof totais?.taxaAprovacao === "number" &&
+        taxaEsperada !== null &&
+        Math.abs(totais.taxaAprovacao - taxaEsperada) < 0.01 &&
+        totais.aprovadosQuestionario === aprovadosDb &&
+        totais.reprovadosQuestionario === reprovadosDb,
+      { recebido: totais?.taxaAprovacao, esperado: taxaEsperada },
+    );
+    checar("certificados liberados = aprovados entre os presentes", totais?.certificadosLiberados === totais?.aprovadosQuestionario, totais);
     const textoDashboard = JSON.stringify(r.corpo);
     checar(
-      "dashboard não traz dado pessoal (nome, e-mail, RGM de aluno)",
-      ![emailAluno, emailAluno2, novoEmailAluno2, rgmAluno, "Aluno Teste Requisitos", "Segundo Aluno Editado"].some((s) => textoDashboard.includes(s)),
+      "dashboard não traz dado pessoal (nome, e-mail, RGM de aluno) nem id de aluno",
+      ![emailAluno, emailAluno2, novoEmailAluno2, rgmAluno, "Aluno Teste Requisitos", "Segundo Aluno Editado", aluno.participanteId!, aluno2.participanteId!, aluno.id, aluno2.id].some(
+        (s) => textoDashboard.includes(s),
+      ),
     );
 
     // ------------------------------------------------------------------ RF009/RNF010: exclusao bloqueada
