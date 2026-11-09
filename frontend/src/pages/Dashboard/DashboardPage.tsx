@@ -48,12 +48,12 @@ function ProximoEvento({ evento }: { evento: ProximoEventoDashboard }) {
       <div
         className={"ocupacao" + nivel}
         role="progressbar"
-        aria-label={`Ocupação de ${evento.titulo}`}
+        aria-label={`Vagas preenchidas de ${evento.titulo}`}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(percentual)}
         aria-valuetext={`${numero(evento.inscritos)} de ${numero(evento.capacidade)} vagas (${Math.round(percentual)}%)`}
-        title={`${Math.round(percentual)}% das vagas ocupadas`}
+        title={`${Math.round(percentual)}% das vagas preenchidas`}
       >
         <div className="ocupacao-preenchimento" style={{ width: `${percentual}%` }} />
       </div>
@@ -106,7 +106,7 @@ export function DashboardPage() {
         <StatCard
           label="Ocupação média das salas"
           value={totais.ocupacaoMediaSalas === null ? "—" : `${Math.round(totais.ocupacaoMediaSalas)}%`}
-          hint={totais.ocupacaoMediaSalas === null ? "Nenhum evento cadastrado" : "Inscritos ÷ capacidade, média dos eventos"}
+          hint={totais.ocupacaoMediaSalas === null ? "Nenhum evento encerrado ainda" : "Presentes ÷ capacidade, média dos eventos encerrados"}
           tone="purple"
         />
         <StatCard
@@ -138,7 +138,7 @@ export function DashboardPage() {
       <div className="grid-2">
         <div className="card">
           <h3>Próximos eventos</h3>
-          <p className="card-subtitulo">Ocupação das vagas da sala</p>
+          <p className="card-subtitulo">Vagas preenchidas (inscritos ÷ capacidade da sala)</p>
           {proximosEventos.length === 0 ? (
             <p className="empty-cell">Nenhum evento futuro cadastrado.</p>
           ) : (

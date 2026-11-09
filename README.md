@@ -37,7 +37,9 @@ Três perfis de usuário:
   presença/ausência); consulta da nota de todos os alunos no questionário de
   cada evento; emissão de certificado de qualquer participante; **Dashboard**
   (indicadores de eventos, inscrições, presença, certificados e feedback,
-  ocupação dos próximos eventos e gráfico de presença por evento). A única
+  vagas preenchidas dos próximos eventos, ocupação real das salas — presentes
+  ÷ capacidade nos eventos encerrados, também por sala na tela Salas — e
+  gráficos de presença e de aprendizagem por evento). A única
   diferença: só o **Administrador** reseta o 2FA e remove o bloqueio por
   tentativas de um aluno (botões na tela Participantes).
 - **Aluno** — perfil com cadastro público (`/cadastro`, sem precisar de

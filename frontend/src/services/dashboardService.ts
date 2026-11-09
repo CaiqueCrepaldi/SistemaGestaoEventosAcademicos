@@ -19,7 +19,8 @@ export interface TotaisDashboard {
   podemResponderQuestionario: number;
   // aprovados / (aprovados + reprovados), em %; null enquanto ninguem concluiu o questionario
   taxaAprovacao: number | null;
-  // media, entre os eventos, de inscritos / capacidade da sala, em %; null sem nenhum evento
+  // RF021, ocupacao real: media, entre os eventos ENCERRADOS, de presentes / capacidade da sala, em %;
+  // null enquanto nenhum evento tiver terminado
   ocupacaoMediaSalas: number | null;
   // 1 a 5; null sem nenhum feedback
   mediaFeedback: number | null;

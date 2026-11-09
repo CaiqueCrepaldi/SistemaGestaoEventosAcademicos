@@ -1,5 +1,6 @@
 import type { StatusPresenca } from "@prisma/client";
 import { prisma } from "../../db/prisma";
+import { resumoDeOcupacao } from "../../utils/ocupacao";
 import { MAX_TENTATIVAS_QUESTIONARIO, PERCENTUAL_APROVACAO } from "../../utils/questionario";
 
 // quantos eventos futuros a lista "Proximos eventos" do dashboard mostra
@@ -39,7 +40,7 @@ async function resumo() {
   const [eventos, porEventoEStatus, presencas, tentativasPorAluno, feedbacks] = await Promise.all([
     prisma.evento.findMany({
       orderBy: { horario: "asc" },
-      select: { id: true, titulo: true, horario: true, sala: { select: { nome: true, capacidade: true } } },
+      select: { id: true, titulo: true, horario: true, cargaHoraria: true, sala: { select: { nome: true, capacidade: true } } },
     }),
     prisma.inscricao.groupBy({ by: ["eventoId", "statusPresenca"], _count: { _all: true } }),
     prisma.inscricao.findMany({ where: { statusPresenca: "PRESENTE" }, select: { participanteId: true, eventoId: true } }),
@@ -107,13 +108,18 @@ async function resumo() {
   // Quem ainda pode responder fica fora, senao a taxa cairia so porque o aluno nao respondeu ainda
   const concluiramQuestionario = totalAprovados + totalReprovados;
 
-  // RF021: media, entre os eventos, de inscritos / capacidade da sala (em %). Sala sem capacidade
-  // (nao deveria existir) fica fora da conta; null enquanto nao houver evento
-  const comCapacidade = porEvento.filter((e) => e.capacidade > 0);
-  const ocupacaoMediaSalas =
-    comCapacidade.length > 0
-      ? comCapacidade.reduce((soma, e) => soma + (e.inscritos / e.capacidade) * 100, 0) / comCapacidade.length
-      : null;
+  // RF021: ocupacao REAL das salas — media, entre os eventos ENCERRADOS, de presentes (check-in
+  // PRESENTE) / capacidade da sala, em %. Mesma funcao da listagem de salas (utils/ocupacao.ts); sala sem
+  // capacidade fica fora; null enquanto nenhum evento tiver terminado
+  const { ocupacaoMedia: ocupacaoMediaSalas } = resumoDeOcupacao(
+    eventos.map((evento) => ({
+      horario: evento.horario,
+      cargaHoraria: evento.cargaHoraria,
+      capacidade: evento.sala.capacidade,
+      presentes: contagemPorEvento.get(evento.id)?.PRESENTE ?? 0,
+    })),
+    agora,
+  );
 
   const futuros = porEvento.filter((e) => new Date(e.horario) >= agora);
 

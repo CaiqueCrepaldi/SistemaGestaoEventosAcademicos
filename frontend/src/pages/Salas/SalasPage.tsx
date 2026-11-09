@@ -115,12 +115,14 @@ export function SalasPage() {
         }
       />
 
-      <div className="card">
+      <div className="card table-scroll">
         <table className="table">
           <thead>
             <tr>
               <th>Nome</th>
               <th>Capacidade</th>
+              <th>Eventos realizados</th>
+              <th title="Presentes ÷ capacidade, média dos eventos encerrados">Ocupação média</th>
               <th />
             </tr>
           </thead>
@@ -129,6 +131,14 @@ export function SalasPage() {
               <tr key={sala.id}>
                 <td>{sala.nome}</td>
                 <td>{sala.capacidade} lugares</td>
+                <td>{sala.eventosRealizados ?? 0}</td>
+                <td>
+                  {sala.ocupacaoMedia == null ? (
+                    <span title="Sem eventos encerrados nesta sala">—</span>
+                  ) : (
+                    <span title="Presentes ÷ capacidade, média dos eventos encerrados">{Math.round(sala.ocupacaoMedia)}%</span>
+                  )}
+                </td>
                 <td className="table-actions">
                   <button className="btn btn-ghost" onClick={() => abrirEdicao(sala)}>
                     Editar
@@ -141,7 +151,7 @@ export function SalasPage() {
             ))}
             {salas.length === 0 && (
               <tr>
-                <td colSpan={3} className="empty-cell">
+                <td colSpan={5} className="empty-cell">
                   {carregando ? "Carregando…" : "Nenhuma sala cadastrada."}
                 </td>
               </tr>

@@ -3,18 +3,33 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { autenticar, autorizar } from "../../middleware/auth";
 import { validarCorpo } from "../../middleware/validate";
 import { salaParaDTO } from "../../utils/dto";
+import { ocupacaoPorSala } from "../../utils/ocupacao";
 import { salasService } from "./salas.service";
 import { salaSchema, salaUpdateSchema } from "./salas.schemas";
 
 export const salasRouter = Router();
 
-// lista todas as salas
+// lista todas as salas. Qualquer perfil logado le nome e capacidade (o aluno usa na tela Eventos);
+// so a equipe recebe tambem a ocupacao real de cada sala (RF021: eventos encerrados e presentes /
+// capacidade — utils/ocupacao.ts, a mesma conta do Dashboard)
 salasRouter.get(
   "/",
   autenticar,
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
     const salas = await salasService.listar();
-    res.json(salas.map(salaParaDTO));
+    const perfil = req.usuario!.perfil;
+    if (perfil !== "ADMINISTRADOR" && perfil !== "SECRETARIA") {
+      res.json(salas.map(salaParaDTO));
+      return;
+    }
+    const ocupacao = await ocupacaoPorSala();
+    res.json(
+      salas.map((sala) => ({
+        ...salaParaDTO(sala),
+        eventosRealizados: ocupacao.get(sala.id)?.eventosRealizados ?? 0,
+        ocupacaoMedia: ocupacao.get(sala.id)?.ocupacaoMedia ?? null,
+      })),
+    );
   }),
 );
 

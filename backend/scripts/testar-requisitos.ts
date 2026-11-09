@@ -133,6 +133,25 @@ async function main() {
     return conta;
   }
 
+  // ocupacao real (RF021) calculada direto no banco, sem a funcao do backend: media, entre os eventos ja
+  // encerrados (horario + carga horaria no passado) de sala com capacidade, de PRESENTE / capacidade
+  async function ocupacaoEsperadaNoBanco(salaId?: string): Promise<number | null> {
+    const agora = Date.now();
+    const eventosDb = await prisma.evento.findMany({
+      where: salaId ? { salaId } : undefined,
+      select: {
+        horario: true,
+        cargaHoraria: true,
+        sala: { select: { capacidade: true } },
+        _count: { select: { inscricoes: { where: { statusPresenca: "PRESENTE" } } } },
+      },
+    });
+    const percentuais = eventosDb
+      .filter((e) => e.horario.getTime() + e.cargaHoraria * 3600 * 1000 <= agora && e.sala.capacidade > 0)
+      .map((e) => (e._count.inscricoes / e.sala.capacidade) * 100);
+    return percentuais.length > 0 ? percentuais.reduce((soma, p) => soma + p, 0) / percentuais.length : null;
+  }
+
   // login completo (as contas do teste nao ativam 2FA, entao a senha basta)
   async function entrar(conta: Conta): Promise<string> {
     const r = await chamar("POST", "/auth/login", { corpo: { emailLogin: conta.email, senha: conta.senha } });
@@ -1148,15 +1167,12 @@ async function main() {
         eventoNoDashboard.inscritos === eventoNoDashboard.presentes + eventoNoDashboard.ausentes + eventoNoDashboard.pendentes,
       eventoNoDashboard,
     );
-    const ocupacoes = (
-      await prisma.evento.findMany({ select: { sala: { select: { capacidade: true } }, _count: { select: { inscricoes: true } } } })
-    )
-      .filter((e) => e.sala.capacidade > 0)
-      .map((e) => (e._count.inscricoes / e.sala.capacidade) * 100);
-    const ocupacaoEsperada = ocupacoes.length > 0 ? ocupacoes.reduce((soma, o) => soma + o, 0) / ocupacoes.length : null;
+    const ocupacaoEsperada = await ocupacaoEsperadaNoBanco();
     checar(
-      "ocupação média das salas = média de inscritos / capacidade entre os eventos (RF021)",
-      typeof totais?.ocupacaoMediaSalas === "number" && ocupacaoEsperada !== null && Math.abs(totais.ocupacaoMediaSalas - ocupacaoEsperada) < 0.01,
+      "ocupação média das salas = média de presentes / capacidade entre os eventos encerrados (RF021)",
+      ocupacaoEsperada === null
+        ? totais?.ocupacaoMediaSalas === null
+        : typeof totais?.ocupacaoMediaSalas === "number" && Math.abs(totais.ocupacaoMediaSalas - ocupacaoEsperada) < 0.01,
       { recebido: totais?.ocupacaoMediaSalas, esperado: ocupacaoEsperada },
     );
     type EventoAprendizagem = { id: string; presentes: number; aprovados: number; reprovados: number; podemResponder: number };
@@ -1216,6 +1232,114 @@ async function main() {
       ![emailAluno, emailAluno2, novoEmailAluno2, rgmAluno, "Aluno Teste Requisitos", "Segundo Aluno Editado", aluno.participanteId!, aluno2.participanteId!, aluno.id, aluno2.id].some(
         (s) => textoDashboard.includes(s),
       ),
+    );
+
+    // ------------------------------------------------------------------ RF021: ocupacao real das salas
+    requisito("R34 Ocupação das salas pelo uso real (presentes ÷ capacidade, só eventos encerrados)");
+    r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: `Sala Ocupação ${sufixo}`, capacidade: 10 } });
+    const salaOcupacaoId: string = r.corpo.id;
+    salas.push(salaOcupacaoId);
+    r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: `Sala Sem Uso ${sufixo}`, capacidade: 5 } });
+    const salaSemUsoId: string = r.corpo.id;
+    salas.push(salaSemUsoId);
+    // 4 alunos só deste cenário, criados direto no banco (participante + conta), apagados no fim com os outros
+    const alunosOcupacao: string[] = [];
+    for (let i = 1; i <= 4; i++) {
+      const participanteOcupacao = await prisma.participante.create({ data: { id: randomUUID(), rgm: rgmAleatorio() } });
+      const contaOcupacao = await prisma.usuario.create({
+        data: {
+          id: randomUUID(),
+          nome: `Aluno Ocupacao ${i}`,
+          emailLogin: `req.ocupacao.${i}.${sufixo}@alunos.umc.br`,
+          senhaHash: "!",
+          perfil: "ALUNO",
+          participanteId: participanteOcupacao.id,
+        },
+      });
+      contas.push({ id: contaOcupacao.id, email: contaOcupacao.emailLogin, senha: "", perfil: "ALUNO", participanteId: participanteOcupacao.id });
+      alunosOcupacao.push(participanteOcupacao.id);
+    }
+    const criarEventoNaSala = async (titulo: string, horario: Date, sala: string) => {
+      const resposta = await chamar("POST", "/eventos", {
+        token: admin.token,
+        corpo: { titulo: `${titulo} ${sufixo}`, horario: horario.toISOString(), salaId: sala, palestranteId, tema: "Tema", cargaHoraria: 2, questionario: questionario() },
+      });
+      eventos.push(resposta.corpo.id);
+      return resposta.corpo.id as string;
+    };
+    const inscrever = (eventoDaInscricao: string, participanteId: string, statusPresenca: "PRESENTE" | "AUSENTE" | "PENDENTE") =>
+      prisma.inscricao.create({ data: { id: randomUUID(), participanteId, eventoId: eventoDaInscricao, statusPresenca } });
+
+    // encerrado: comecou ha 3 dias, durou 2h. 4 inscritos, 2 presentes -> 20% (e nao 40%)
+    const eventoEncerradoOcupacao = await criarEventoNaSala("Evento Encerrado Ocupação", new Date(Date.now() - 3 * 24 * 3600 * 1000), salaOcupacaoId);
+    await inscrever(eventoEncerradoOcupacao, alunosOcupacao[0], "PRESENTE");
+    await inscrever(eventoEncerradoOcupacao, alunosOcupacao[1], "PRESENTE");
+    await inscrever(eventoEncerradoOcupacao, alunosOcupacao[2], "AUSENTE");
+    await inscrever(eventoEncerradoOcupacao, alunosOcupacao[3], "PENDENTE");
+    const ocupacaoDaSala = async () => {
+      const lista = await chamar("GET", "/salas", { token: secretaria.token });
+      return lista.corpo.find((s: { id: string }) => s.id === salaOcupacaoId) as { eventosRealizados: number; ocupacaoMedia: number | null };
+    };
+    let salaNaLista = await ocupacaoDaSala();
+    checar(
+      "evento encerrado numa sala de 10 lugares, com 4 inscritos e 2 presentes -> ocupação 20% (não 40%)",
+      salaNaLista?.eventosRealizados === 1 && salaNaLista.ocupacaoMedia !== null && Math.abs(salaNaLista.ocupacaoMedia - 20) < 0.01,
+      salaNaLista,
+    );
+
+    // futuro (daqui a 3 dias) e em andamento (comecou ha 30 min, dura 2h), na mesma sala: ficam fora da
+    // conta mesmo com presente marcado
+    const eventoFuturoOcupacao = await criarEventoNaSala("Evento Futuro Ocupação", new Date(Date.now() + 3 * 24 * 3600 * 1000), salaOcupacaoId);
+    await inscrever(eventoFuturoOcupacao, alunosOcupacao[0], "PRESENTE");
+    await inscrever(eventoFuturoOcupacao, alunosOcupacao[1], "PRESENTE");
+    const eventoAndamentoOcupacao = await criarEventoNaSala("Evento Em Andamento Ocupação", new Date(Date.now() - 30 * 60 * 1000), salaOcupacaoId);
+    await inscrever(eventoAndamentoOcupacao, alunosOcupacao[0], "PRESENTE");
+    salaNaLista = await ocupacaoDaSala();
+    checar(
+      "evento futuro e evento em andamento na mesma sala não mudam a média nem contam como realizados",
+      salaNaLista?.eventosRealizados === 1 && salaNaLista.ocupacaoMedia !== null && Math.abs(salaNaLista.ocupacaoMedia - 20) < 0.01,
+      salaNaLista,
+    );
+    checar(
+      "a ocupação da sala bate com o cálculo direto no banco",
+      Math.abs((salaNaLista?.ocupacaoMedia ?? -1) - ((await ocupacaoEsperadaNoBanco(salaOcupacaoId)) ?? -2)) < 0.01,
+    );
+
+    // sala só com evento futuro
+    await criarEventoNaSala("Evento Futuro Sem Uso", new Date(Date.now() + 4 * 24 * 3600 * 1000), salaSemUsoId);
+    r = await chamar("GET", "/salas", { token: secretaria.token });
+    const salaSemUso = r.corpo.find((s: { id: string }) => s.id === salaSemUsoId);
+    checar("sala sem evento encerrado -> eventosRealizados 0 e ocupacaoMedia null", salaSemUso?.eventosRealizados === 0 && salaSemUso.ocupacaoMedia === null, salaSemUso);
+
+    // dashboard x salas: a media geral do dashboard e a media das salas ponderada pelos eventos realizados
+    const salasDaEquipe: { capacidade: number; eventosRealizados: number; ocupacaoMedia: number | null }[] = r.corpo;
+    const comOcupacao = salasDaEquipe.filter((s) => s.ocupacaoMedia !== null);
+    const eventosConsiderados = comOcupacao.reduce((soma, s) => soma + s.eventosRealizados, 0);
+    const mediaPelasSalas = eventosConsiderados > 0 ? comOcupacao.reduce((soma, s) => soma + s.ocupacaoMedia! * s.eventosRealizados, 0) / eventosConsiderados : null;
+    const dashboardOcupacao = (await chamar("GET", "/dashboard", { token: secretaria.token })).corpo?.totais?.ocupacaoMediaSalas;
+    checar(
+      "dashboard e listagem de salas mostram o mesmo número para os mesmos dados",
+      mediaPelasSalas !== null && typeof dashboardOcupacao === "number" && Math.abs(dashboardOcupacao - mediaPelasSalas) < 0.01,
+      { dashboard: dashboardOcupacao, salas: mediaPelasSalas },
+    );
+    checar(
+      "ocupação do dashboard bate com o cálculo direto no banco",
+      typeof dashboardOcupacao === "number" && Math.abs(dashboardOcupacao - ((await ocupacaoEsperadaNoBanco()) ?? -1)) < 0.01,
+    );
+
+    // permissao mantida: o aluno continua lendo nome e capacidade (usa na tela Eventos), sem os numeros novos
+    r = await chamar("GET", "/salas", { token: aluno.token });
+    checar(
+      "aluno continua listando as salas (nome e capacidade), mas sem eventosRealizados nem ocupacaoMedia",
+      r.status === 200 &&
+        Array.isArray(r.corpo) &&
+        r.corpo.length > 0 &&
+        r.corpo.every((s: Record<string, unknown>) => !("eventosRealizados" in s) && !("ocupacaoMedia" in s)),
+      r.corpo?.[0],
+    );
+    checar(
+      "a listagem com ocupação traz só números, nenhum dado de aluno",
+      !JSON.stringify(salasDaEquipe).includes("Aluno Ocupacao") && !JSON.stringify(salasDaEquipe).includes("req.ocupacao"),
     );
 
     // ------------------------------------------------------------------ RF009/RNF010: exclusao bloqueada

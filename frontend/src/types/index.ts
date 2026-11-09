@@ -5,6 +5,10 @@ export interface Sala {
   id: string;
   nome: string;
   capacidade: number;
+  // so na listagem da equipe (RF021): eventos encerrados na sala e a media de presentes / capacidade
+  // neles, em %; null sem evento encerrado
+  eventosRealizados?: number;
+  ocupacaoMedia?: number | null;
 }
 
 // pessoa convidada pra ministrar um evento

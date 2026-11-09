@@ -515,8 +515,23 @@ interface Sala {
 ```
 
 - `GET /api/salas` e `GET /api/salas/{id}` — qualquer perfil autenticado.
-  O aluno não gerencia sala nenhuma, mas a Agenda e o detalhe do evento
-  mostram o nome da sala de cada sessão, então precisam poder ler a lista.
+  O aluno não gerencia sala nenhuma, mas a tela Eventos e o detalhe do
+  evento mostram o nome da sala de cada sessão, então precisam poder ler a
+  lista.
+- Na listagem (`GET /api/salas`), **só a equipe** recebe também a ocupação
+  real de cada sala (RF021); o aluno continua recebendo só `id`, `nome` e
+  `capacidade`:
+  ```ts
+  interface SalaDaEquipe extends Sala {
+    eventosRealizados: number;     // eventos ENCERRADOS na sala (horário + carga horária já passou)
+    ocupacaoMedia: number | null;  // média, nesses eventos, de presentes (check-in PRESENTE) / capacidade × 100; null sem evento encerrado
+  }
+  ```
+  É a mesma conta do indicador "Ocupação média das salas" do Dashboard
+  (`backend/src/utils/ocupacao.ts`): evento futuro ou em andamento fica fora,
+  sala com capacidade 0 fica fora da média. Calculado com 2 consultas no
+  total (eventos já iniciados e presentes agrupados por evento). Só números,
+  nenhum dado de aluno.
 - `POST` / `PUT /api/salas/{id}` / `DELETE /api/salas/{id}` — admin/secretaria only, `403` pra aluno.
 
 ## Participantes
@@ -998,7 +1013,7 @@ interface ResumoDashboard {
     reprovadosQuestionario: number;     // usou as 2 tentativas, todas abaixo de 60%
     podemResponderQuestionario: number; // nenhuma tentativa, ou 1 tentativa abaixo de 60%
     taxaAprovacao: number | null;  // aprovados / (aprovados + reprovados) × 100; null enquanto ninguém concluiu o questionário
-    ocupacaoMediaSalas: number | null; // RF021: média, entre os eventos, de inscritos / capacidade da sala × 100; null sem evento
+    ocupacaoMediaSalas: number | null; // RF021, uso real: média, entre os eventos ENCERRADOS, de presentes / capacidade da sala × 100; null sem evento encerrado
     mediaFeedback: number | null;  // 1 a 5; null sem feedback
     totalFeedbacks: number;
   };
@@ -1024,10 +1039,19 @@ eventos com alguma presença confirmada).
 A taxa de presença considera só os check-ins já registrados (presente ou
 ausente): inscrição pendente de evento futuro não puxa a taxa pra baixo.
 
-A ocupação média das salas é a média simples dos percentuais de ocupação
-de cada evento (cada evento pesa igual, independentemente do tamanho da
-sala); sala com capacidade 0 fica fora da conta. A tela mostra o valor
-arredondado num cartão próprio ("Ocupação média das salas").
+A ocupação média das salas mede o **uso real**: para cada evento já
+**encerrado** (horário + carga horária no passado), alunos com check-in
+`PRESENTE` ÷ capacidade da sala; o indicador é a média simples desses
+percentuais (cada evento pesa igual). Evento futuro ou em andamento fica
+fora, porque o check-in ainda não aconteceu e puxaria a média para baixo;
+sala com capacidade 0 também fica fora. Sem evento encerrado, `null` (a
+tela mostra "—"). É a mesma função da listagem de salas
+(`backend/src/utils/ocupacao.ts`). A tela mostra o valor arredondado no
+cartão "Ocupação média das salas".
+
+Já a barra dos **próximos eventos** continua sendo inscritos ÷ capacidade:
+ali o que importa são as **vagas preenchidas** antes do evento, e a tela
+chama assim (não de ocupação).
 
 ## Meus dados — direitos do titular (RF026, LGPD art. 18)
 
