@@ -1,7 +1,9 @@
 # Matriz de perfis e permissões — SGEA
 
-**Data:** 09/11/2026 · **Versão:** 6 (check-in pedido pelo aluno e decidido
-pelo professor do evento ou pela equipe. A versão 5, do mesmo dia, trouxe as
+**Data:** 09/11/2026 · **Versão:** 7 (calendário de eventos: o professor vê
+os eventos dos outros só como "Sala ocupada". A versão 6, do mesmo dia, trouxe o
+check-in pedido pelo aluno e decidido pelo professor do evento ou pela equipe.
+A versão 5, do mesmo dia, trouxe as
 propostas de alteração, o questionário travado e a inativação do professor, na
 seção "Perfil PROFESSOR". A versão 4, do
 mesmo dia, trouxe o perfil PROFESSOR e a aprovação de eventos e palestrantes
@@ -128,6 +130,7 @@ professor (ele não descobre que existe).
 | `/api/professores` (listar, criar), `/:id/reenviar-codigo`, `/:id/eventos-em-aberto`, `/:id/inativar` e `/:id/reativar` | GET/POST | ❌ | Só ADMINISTRADOR e SECRETARIA. Inativar exige motivo e, se houver evento em aberto, para quem transferir (professor ativo ou equipe) |
 | `/api/dashboard` | GET | ✅ | Mesmo service; os números contam só os eventos dele, e só aprovados |
 | `/api/eventos` e `/api/eventos/:id` | GET | ✅ | Só os dele, em qualquer situação |
+| `/api/eventos?de=&ate=` (calendário) e `/api/eventos/busca` | GET | ✅ | Calendário: os dele completos; os dos outros (aprovados, pendentes e propostas pendentes) só como sala, início e fim — sem título, palestrante, inscritos nem id. Busca: só os dele, com limite |
 | `/api/eventos` | POST | ✅ | Nasce `PENDENTE` (a equipe cria `APROVADO`); pode usar palestrante aprovado ou um dele ainda pendente; já reserva a sala |
 | `/api/eventos/:id` | PUT/DELETE | ✅ | Só os dele. Evento encerrado: `409 EVENTO_ENCERRADO` para todos os perfis. Evento já aprovado: título, tema e questionário mudam na hora; sala, horário, carga horária e palestrante viram **proposta de alteração** (uma pendente por evento, só antes de o evento começar). Questionário com tentativa de aluno: `409 QUESTIONARIO_TRAVADO` para todos os perfis |
 | `/api/eventos/:id/proposta` | PUT/DELETE | ✅ | Só o dono: corrige a proposta pendente, reenvia a recusada (resposta opcional) ou cancela |

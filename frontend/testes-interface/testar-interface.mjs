@@ -757,7 +757,9 @@ try {
   await confirmaAprovacao.locator("button", { hasText: "Aprovar" }).click();
   checar("aprovar avisa que a alteração foi aprovada", await esperarToast(page, "Alteração aprovada"));
   await page.locator("select[aria-label='Filtrar por situação']").selectOption("");
-  const linhaAprovada = page.locator("tr", { hasText: tituloDoProfessor });
+  await page.fill("input[aria-label='Buscar eventos']", tituloDoProfessor);
+  const linhaAprovada = page.locator(".resultados-eventos tr", { hasText: tituloDoProfessor });
+  await linhaAprovada.waitFor();
   await linhaAprovada.locator(".proposta-resumo").waitFor({ state: "detached", timeout: 8000 }).catch(() => {});
   checar(
     "depois de aprovada, o evento aparece na sala nova e sem proposta",
@@ -765,7 +767,9 @@ try {
   );
 
   // o "Evento UI" ja foi respondido pela aluna na secao do questionario
-  const linhaEventoRespondido = page.locator("tr").filter({ has: page.locator("td", { hasText: new RegExp(`^Evento UI ${sufixo}$`) }) });
+  await page.fill("input[aria-label='Buscar eventos']", `Evento UI ${sufixo}`);
+  const linhaEventoRespondido = page.locator(".resultados-eventos tr").filter({ has: page.locator("td", { hasText: new RegExp(`^Evento UI ${sufixo}$`) }) });
+  await linhaEventoRespondido.waitFor();
   await linhaEventoRespondido.locator("button", { hasText: "Editar" }).click();
   const construtor = page.locator("fieldset.questionario-builder");
   await construtor.waitFor();
@@ -807,6 +811,151 @@ try {
   await linhaProfessor.locator("button", { hasText: "Reativar" }).click();
   await page.locator(".modal", { hasText: "Reativar a conta" }).locator("button", { hasText: "Reativar" }).click();
   checar("reativar devolve o acesso", await esperarToast(page, "Professor reativado"));
+  await sair(page);
+
+  // ---------------------------------------------------------------- etapa 5
+  titulo("Calendário de eventos (equipe e professor)");
+  const chaveDia = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const nomeMes = (d) => {
+    const texto = new Date(d.getFullYear(), d.getMonth(), 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+    return texto.charAt(0).toUpperCase() + texto.slice(1);
+  };
+  const irAoMes = async (d) => {
+    for (let i = 0; i < 24 && (await page.locator(".calendario-titulo").innerText()) !== nomeMes(d); i++) {
+      await page.click("button[aria-label='Próximo mês']");
+    }
+  };
+  const tokenSecretariaCal = await tokenDe(secretaria.email, secretaria.senha);
+  // evento de hoje (comeca em 5 min, antes dos outros de hoje; check-in aberto) com um pedido de check-in da aluna esperando aprovacao
+  const tituloCheckinCal = `Evento Cal UI ${sufixo}`;
+  const eventoCal = await api("POST", "/eventos", tokenSecretariaCal, {
+    titulo: tituloCheckinCal, horario: new Date(Date.now() + 5 * 60 * 1000).toISOString(), salaId: salaProposta.corpo.id, palestranteId: palestrante.corpo.id, tema: "Tema", cargaHoraria: 1, questionario: questionario(),
+  });
+  const tokenAlunaCal = await tokenDe(emailAluno, SENHA_ALUNA);
+  await api("POST", `/eventos/${eventoCal.corpo.id}/inscricoes`, tokenAlunaCal);
+  await api("POST", `/eventos/${eventoCal.corpo.id}/checkin`, tokenAlunaCal);
+  // evento da equipe daqui a 40 dias (outro mes, ou perto disso): pra busca e pro "Sala ocupada" do professor
+  const daqui40 = new Date(Date.now() + 40 * 24 * 3600 * 1000);
+  daqui40.setHours(10, 0, 0, 0);
+  const tituloFuturoCal = `Evento Futuro Cal UI ${sufixo}`;
+  await api("POST", "/eventos", tokenSecretariaCal, {
+    titulo: tituloFuturoCal, horario: daqui40.toISOString(), salaId: salaProposta.corpo.id, palestranteId: palestrante.corpo.id, tema: "Tema", cargaHoraria: 2, questionario: questionario(),
+  });
+
+  await entrar(page, secretaria.email, secretaria.senha);
+  await page.goto(`${APP}/eventos`);
+  await page.locator(".calendario-dia.hoje").waitFor();
+  const hojeCal = new Date();
+  checar(
+    "abre no mês atual, com o nome do mês e o dia de hoje destacado",
+    (await page.locator(".calendario-titulo").innerText()) === nomeMes(hojeCal) &&
+      (await page.locator(`.calendario-dia.hoje[data-dia="${chaveDia(hojeCal)}"]`).count()) === 1 &&
+      (await page.locator(".calendario-semana").first().innerText()).toLowerCase() === "dom",
+  );
+  const chipCheckin = page.locator(".calendario-dia.hoje .cal-chip", { hasText: tituloCheckinCal });
+  await chipCheckin.waitFor({ timeout: 8000 }).catch(() => {});
+  checar(
+    "o evento aparece no dia com horário, título e a marcação \"1 check-in\"",
+    (await chipCheckin.count()) === 1 && (await chipCheckin.innerText()).includes("1 check-in") && ((await chipCheckin.getAttribute("title")) ?? "").includes("esperando aprovação"),
+    (await chipCheckin.count()) ? await chipCheckin.innerText() : "chip não encontrado",
+  );
+  await page.locator(".calendario-dia.hoje").click();
+  const itemDoDia = page.locator(".calendario-lista .calendario-evento", { hasText: tituloCheckinCal });
+  await itemDoDia.waitFor();
+  checar(
+    "clicar no dia mostra a lista dos eventos dele, com os detalhes e as ações",
+    (await page.locator(".calendario-lista .calendario-evento", { hasText: `Evento UI ${sufixo}` }).count()) === 1 &&
+      (await itemDoDia.innerText()).includes("1 check-in esperando aprovação") &&
+      (await itemDoDia.locator("button", { hasText: "Editar" }).count()) === 1,
+  );
+  await itemDoDia.locator("button", { hasText: "Check-ins" }).click();
+  const modalCheckinsCal = page.locator(".modal", { hasText: `Check-ins de ${tituloCheckinCal}` });
+  await modalCheckinsCal.locator(".painel-checkins tr", { hasText: NOME_ALUNA }).waitFor({ timeout: 8000 }).catch(() => {});
+  checar("os Check-ins abrem pelo calendário, com o pedido da aluna", (await modalCheckinsCal.locator(".painel-checkins tr", { hasText: NOME_ALUNA }).count()) === 1);
+  await modalCheckinsCal.locator("button[aria-label='Fechar']").click();
+
+  await page.click("button[aria-label='Próximo mês']");
+  const proximoMes = new Date(hojeCal.getFullYear(), hojeCal.getMonth() + 1, 1);
+  checar("a seta leva ao próximo mês", (await page.locator(".calendario-titulo").innerText()) === nomeMes(proximoMes));
+  await page.click("button[aria-label='Mês anterior']");
+  await page.click("button[aria-label='Mês anterior']");
+  const mesAnterior = new Date(hojeCal.getFullYear(), hojeCal.getMonth() - 1, 1);
+  checar("a outra seta volta ao mês anterior", (await page.locator(".calendario-titulo").innerText()) === nomeMes(mesAnterior));
+  await page.click(".calendario-topo button:has-text('Hoje')");
+  checar("\"Hoje\" volta ao mês atual", (await page.locator(".calendario-titulo").innerText()) === nomeMes(hojeCal));
+
+  // um dia vazio no futuro (o dia seguinte ao evento de daqui a 40 dias, so do teste)
+  const diaVazio = new Date(daqui40.getFullYear(), daqui40.getMonth(), daqui40.getDate() + 1);
+  await irAoMes(diaVazio);
+  await page.locator(`.calendario-dia[data-dia="${chaveDia(diaVazio)}"]`).click();
+  const modalNovo = page.locator(".modal", { hasText: "Novo evento" });
+  await modalNovo.waitFor({ timeout: 8000 }).catch(() => {});
+  checar(
+    "clicar num dia vazio do futuro abre o cadastro com a data preenchida",
+    (await modalNovo.count()) === 1 && (await page.inputValue(".modal #horario")).startsWith(`${chaveDia(diaVazio)}T`),
+    (await modalNovo.count()) ? await page.inputValue(".modal #horario") : "modal não abriu",
+  );
+  await page.click(".modal button:has-text('Cancelar')");
+  await page.click(".calendario-topo button:has-text('Hoje')");
+  const ontemCal = new Date(hojeCal.getFullYear(), hojeCal.getMonth(), hojeCal.getDate() - 1);
+  if (ontemCal.getMonth() === hojeCal.getMonth()) {
+    await page.locator(`.calendario-dia[data-dia="${chaveDia(ontemCal)}"]`).click();
+    checar("dia passado não abre o cadastro", (await page.locator(".modal", { hasText: "Novo evento" }).count()) === 0);
+  }
+
+  await page.fill("input[aria-label='Buscar eventos']", tituloFuturoCal);
+  const resultadoFuturo = page.locator(".resultados-eventos tr", { hasText: tituloFuturoCal });
+  await resultadoFuturo.waitFor();
+  checar("a busca mostra o resultado em lista, com data e horário", (await resultadoFuturo.innerText()).includes(daqui40.toLocaleDateString("pt-BR")));
+  await resultadoFuturo.locator("button", { hasText: tituloFuturoCal }).click();
+  // o mes do evento ainda carrega da API depois do clique
+  await page.locator(".calendario-lista .calendario-evento", { hasText: tituloFuturoCal }).waitFor({ timeout: 8000 }).catch(() => {});
+  checar(
+    "clicar no resultado leva o calendário ao mês e ao dia do evento",
+    (await page.locator(".calendario-titulo").innerText()) === nomeMes(daqui40) &&
+      (await page.locator(`.calendario-dia.selecionado[data-dia="${chaveDia(daqui40)}"]`).count()) === 1 &&
+      (await page.locator(".calendario-lista .calendario-evento", { hasText: tituloFuturoCal }).count()) === 1,
+  );
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.click(".calendario-topo button:has-text('Hoje')");
+  await page.locator(".calendario-dia.hoje .calendario-marcador").waitFor({ timeout: 8000 }).catch(() => {});
+  const larguras = await page.evaluate(() => ({ documento: document.documentElement.scrollWidth, janela: window.innerWidth }));
+  checar(
+    "no celular: sem rolagem lateral, um marcador por dia com evento e a lista do dia embaixo da grade",
+    larguras.documento <= larguras.janela &&
+      (await page.locator(".calendario-dia.hoje .calendario-marcador").isVisible()) &&
+      !(await page.locator(".calendario-dia.hoje .cal-chip").first().isVisible()) &&
+      ((await page.locator(".calendario-lista").boundingBox())?.y ?? 0) > ((await page.locator(".calendario-grade").boundingBox())?.y ?? 0),
+    larguras,
+  );
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await sair(page);
+
+  await entrar(page, emailProfessor, SENHA_PROFESSOR);
+  await page.goto(`${APP}/eventos`);
+  await page.locator(".calendario-titulo").waitFor();
+  await irAoMes(daqui40);
+  const diaOcupado = page.locator(`.calendario-dia[data-dia="${chaveDia(daqui40)}"]`);
+  await diaOcupado.locator(".cal-chip").first().waitFor({ timeout: 8000 }).catch(() => {});
+  checar(
+    "professor: o evento de outro aparece só como \"Sala ocupada\", sem título",
+    (await diaOcupado.locator(".cal-chip.ocupada", { hasText: "Sala ocupada" }).count()) === 1 && !(await diaOcupado.innerText()).includes(tituloFuturoCal),
+    await diaOcupado.innerText(),
+  );
+  await diaOcupado.click();
+  const ocupadaNaLista = page.locator(".calendario-lista .calendario-evento.ocupada");
+  await ocupadaNaLista.first().waitFor({ timeout: 8000 }).catch(() => {});
+  checar(
+    "na lista do dia: sala, início e fim, sem título, palestrante nem ações",
+    (await ocupadaNaLista.count()) === 1 &&
+      (await ocupadaNaLista.innerText()).includes(`Sala Proposta UI ${sufixo}`) &&
+      (await ocupadaNaLista.innerText()).includes("10:00 às 12:00") &&
+      !(await page.locator(".calendario-lista").innerText()).includes(tituloFuturoCal) &&
+      !(await page.locator(".calendario-lista").innerText()).includes("Palestrante Fluxo") &&
+      (await ocupadaNaLista.locator("button").count()) === 0,
+    (await ocupadaNaLista.count()) ? await ocupadaNaLista.innerText() : "não encontrado",
+  );
   await sair(page);
 
   titulo("E / Esqueci a senha");

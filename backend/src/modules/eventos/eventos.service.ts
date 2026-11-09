@@ -9,7 +9,7 @@ import { listarHistorico, registrarHistorico } from "../aprovacoes/aprovacoes.se
 import { camposInformados, registrarAuditoria } from "../../utils/auditoria";
 import { ehEquipe, eventoDoAtorOuFalhar, eventoEncerrado, eventosVisiveis, palestrantesVisiveis, type Ator } from "../../utils/escopo";
 import type { Evento, PerguntaQuestionario, PropostaEvento } from "../../types/domain";
-import type { EventoInput, EventoUpdateInput, PropostaEventoInput } from "./eventos.schemas";
+import type { BuscaEventos, EventoInput, EventoUpdateInput, IntervaloEventos, PropostaEventoInput } from "./eventos.schemas";
 
 // o que acompanha o evento nas leituras: contagem de inscricoes (numero agregado, nao identifica ninguem: a
 // tela Eventos do aluno precisa dela), contagem de tentativas do questionario (trava o questionario) e a
@@ -81,6 +81,95 @@ async function listar(ator: Ator, situacao?: SituacaoAprovacao) {
     include: COM_EXTRAS,
   });
   return eventos.map(paraDominio);
+}
+
+// quantos pedidos de check-in esperam aprovacao em cada evento (marcacao "N check-ins" do calendario)
+async function comCheckinsPendentes(eventos: Evento[]): Promise<Evento[]> {
+  if (eventos.length === 0) return eventos;
+  const grupos = await prisma.inscricao.groupBy({
+    by: ["eventoId"],
+    where: { eventoId: { in: eventos.map((e) => e.id) }, statusPresenca: "SOLICITADO" },
+    _count: { _all: true },
+  });
+  const porEvento = new Map(grupos.map((g) => [g.eventoId, g._count._all]));
+  return eventos.map((evento) => ({ ...evento, checkinsPendentes: porEvento.get(evento.id) ?? 0 }));
+}
+
+// o que o professor ve de um evento que nao e dele: so que a sala esta ocupada, e quando
+export interface SalaOcupada {
+  salaId: string;
+  salaNome: string;
+  inicio: string;
+  fim: string;
+}
+
+function ocupacao(salaId: string, salaNome: string, inicio: Date, cargaHoraria: number): SalaOcupada {
+  return { salaId, salaNome, inicio: inicio.toISOString(), fim: new Date(inicio.getTime() + cargaHoraria * HORA_MS).toISOString() };
+}
+
+// CALENDARIO (equipe e professor): os eventos visiveis que comecam em [de, ate), com o filtro de situacao
+// opcional. A equipe ve todos completos. O professor ve os dele completos e, dos outros (de outro
+// professor ou da equipe), so a sala e o horario — os que reservam a sala: evento APROVADO ou PENDENTE e
+// proposta de alteracao PENDENTE —, sem titulo, palestrante, inscritos nem id. A regra fica aqui, na API:
+// a tela nunca recebe os detalhes do evento de outro
+async function calendario(ator: Ator, intervalo: IntervaloEventos) {
+  const noIntervalo = { gte: intervalo.de, lt: intervalo.ate };
+  const eventos = await prisma.evento.findMany({
+    where: { AND: [eventosVisiveis(ator), filtroSituacao(ator, intervalo.situacao), { horario: noIntervalo }] },
+    orderBy: { horario: "asc" },
+    include: COM_EXTRAS,
+  });
+  const completos = await comCheckinsPendentes(eventos.map(paraDominio));
+  if (ator.perfil !== "PROFESSOR") return { eventos: completos, salasOcupadas: [] as SalaOcupada[] };
+
+  // "nao e dele" inclui o evento sem professor (da equipe): criadoPorId nulo nao entra num "diferente de"
+  const deOutros: Prisma.EventoWhereInput = { OR: [{ criadoPorId: null }, { criadoPorId: { not: ator.id } }] };
+  const [outros, propostas] = await Promise.all([
+    prisma.evento.findMany({
+      where: { AND: [deOutros, { situacao: { in: ["APROVADO", "PENDENTE"] }, horario: noIntervalo }] },
+      select: { horario: true, cargaHoraria: true, sala: { select: { id: true, nome: true } } },
+    }),
+    prisma.propostaAlteracao.findMany({
+      where: { tipo: "EVENTO", situacao: "PENDENTE", novoHorario: noIntervalo, evento: deOutros },
+      select: { novaSalaId: true, novoHorario: true, novaCargaHoraria: true },
+    }),
+  ]);
+  const salasDasPropostas = await prisma.sala.findMany({
+    where: { id: { in: propostas.map((p) => p.novaSalaId!).filter(Boolean) } },
+    select: { id: true, nome: true },
+  });
+  const nomeDaSala = new Map(salasDasPropostas.map((s) => [s.id, s.nome]));
+  const salasOcupadas = [
+    ...outros.map((e) => ocupacao(e.sala.id, e.sala.nome, e.horario, e.cargaHoraria)),
+    ...propostas
+      .filter((p) => p.novaSalaId && p.novoHorario && p.novaCargaHoraria)
+      .map((p) => ocupacao(p.novaSalaId!, nomeDaSala.get(p.novaSalaId!) ?? "Sala", p.novoHorario!, p.novaCargaHoraria!)),
+  ].sort((a, b) => a.inicio.localeCompare(b.inicio));
+  return { eventos: completos, salasOcupadas };
+}
+
+// BUSCA do calendario: titulo, tema, palestrante ou sala (e/ou a situacao), so entre os eventos visiveis
+// (o professor: os dele), de qualquer mes, mais recentes primeiro e com limite — nunca a base inteira
+async function buscar(ator: Ator, busca: BuscaEventos) {
+  const texto: Prisma.EventoWhereInput = busca.q
+    ? {
+        OR: [
+          { titulo: { contains: busca.q } },
+          { tema: { contains: busca.q } },
+          { palestrante: { nome: { contains: busca.q } } },
+          { sala: { nome: { contains: busca.q } } },
+        ],
+      }
+    : {};
+  const encontrados = await prisma.evento.findMany({
+    where: { AND: [eventosVisiveis(ator), filtroSituacao(ator, busca.situacao), texto] },
+    orderBy: [{ horario: "desc" }, { id: "asc" }],
+    // um a mais so pra saber se ficou alguem de fora
+    take: busca.limite + 1,
+    include: COM_EXTRAS,
+  });
+  const itens = await comCheckinsPendentes(encontrados.slice(0, busca.limite).map(paraDominio));
+  return { itens, limite: busca.limite, temMais: encontrados.length > busca.limite };
 }
 
 // busca um evento visivel pra quem chama; 404 se nao existir ou nao for dele (professor) / nao estiver
@@ -682,6 +771,8 @@ async function autoinscrever(eventoId: string, participanteId: string, atorId: s
 
 export const eventosService = {
   listar,
+  calendario,
+  buscar,
   buscarOuFalhar,
   criar,
   atualizar,

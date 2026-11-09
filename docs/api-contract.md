@@ -463,6 +463,24 @@ ocupação, sem precisar baixar todas as inscrições.
   tem uma rota "enxuta" separada pro aluno, ele recebe o objeto `Evento`
   completo (menos o que já é escondido em `Palestrante`, se o frontend um
   dia parar de expandir isso client-side).
+- **Calendário (desde 09/11/2026), `GET /api/eventos?de=&ate=&situacao=`** —
+  equipe e professor. Só os eventos que **começam** em `[de, ate)` (datas
+  ISO; o intervalo pode ter até 62 dias, senão `422`), cada um com
+  `checkinsPendentes` (pedidos de check-in esperando aprovação). A resposta
+  vira `{ eventos, salasOcupadas }`: a equipe recebe todos os eventos
+  completos e `salasOcupadas` vazio; o professor recebe os dele completos e,
+  dos outros (de outro professor ou da equipe), só os que reservam a sala —
+  evento `APROVADO` ou `PENDENTE` e proposta de alteração `PENDENTE` — como
+  `{ salaId, salaNome, inicio, fim }`, **sem** título, palestrante, inscritos
+  nem id. Sem `de`/`ate`, a rota continua devolvendo a lista de sempre; o
+  aluno ignora o intervalo (a programação dele não muda).
+- **Busca do calendário, `GET /api/eventos/busca?q=&situacao=&limite=`** —
+  equipe e professor (só os dele); aluno `403`. Procura `q` no título, no
+  tema, no nome do palestrante e no nome da sala, de qualquer mês, e/ou
+  filtra pela situação (`PENDENTE` e `RECUSADO` incluem as propostas nessa
+  situação). Mais recentes primeiro, no máximo `limite` (padrão 20, máximo
+  50, senão `422`); sem `q` nem `situacao`, `422`. Resposta
+  `{ itens, limite, temMais }`.
 - `POST /api/eventos` — admin/secretaria, `201`, `422` se
   `palestranteId`/`salaId` não existirem.
 - `PUT /api/eventos/{id}` — admin/secretaria, `200`.

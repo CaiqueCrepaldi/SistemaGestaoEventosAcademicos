@@ -127,6 +127,8 @@ export interface Evento {
   criadoEm: string;
   // ja existe tentativa de aluno: o questionario nao muda mais (QUESTIONARIO_TRAVADO)
   questionarioTravado?: boolean;
+  // pedidos de check-in esperando aprovacao (so no calendario e na busca da equipe e do professor)
+  checkinsPendentes?: number;
   // proposta de alteracao aberta (pendente ou recusada) de sala/horario/carga/palestrante
   proposta?: PropostaEvento | null;
 }

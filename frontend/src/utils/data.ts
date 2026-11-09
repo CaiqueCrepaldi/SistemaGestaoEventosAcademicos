@@ -27,6 +27,24 @@ export function inputLocalParaIso(valor: string): string {
   return new Date(valor).toISOString();
 }
 
+// dia no fuso do navegador ("2026-11-05"), a chave de cada dia no calendario. Fatiar a ISO (UTC) jogaria o
+// evento das 21h em diante pro dia seguinte
+export function chaveDoDia(data: Date | string): string {
+  const d = typeof data === "string" ? new Date(data) : data;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// "2026-11-05" -> meia-noite desse dia no fuso do navegador
+export function dataDaChave(chave: string): Date {
+  const [ano, mes, dia] = chave.split("-").map(Number);
+  return new Date(ano, mes - 1, dia);
+}
+
+// "14:00" no fuso do navegador
+export function horaLocal(data: Date | string): string {
+  return new Date(data).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
 // evento encerrado = horario + carga horaria (em horas) ja passou. Mesma regra do backend: depois disso
 // ninguem edita nem exclui o evento (a API responde 409 EVENTO_ENCERRADO), entao a tela esconde os botoes
 export function eventoEncerrado(evento: { horario: string; cargaHoraria: number }, agora = Date.now()): boolean {

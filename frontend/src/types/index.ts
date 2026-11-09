@@ -108,6 +108,8 @@ export interface Evento {
   criadoPorId?: string | null;
   // ja ha tentativa de aluno: ninguem muda mais o questionario
   questionarioTravado?: boolean;
+  // pedidos de check-in esperando aprovacao (so no calendario e na busca da equipe e do professor)
+  checkinsPendentes?: number;
   // proposta de alteracao aberta (pendente ou recusada) de sala/horario/carga/palestrante
   proposta?: PropostaEvento | null;
   // so na resposta da edicao/aprovacao: a mudanca do professor virou proposta; quantos inscritos foram avisados

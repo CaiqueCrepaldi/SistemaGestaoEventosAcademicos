@@ -33,6 +33,7 @@ Três perfis de usuário:
   eventos, salas e palestrantes; lista de participantes com busca,
   correção de dados, inativação/reativação de aluno (com motivo) e a
   situação da conta de cada aluno (2FA ativado e acesso liberado/bloqueado);
+  tela Eventos em calendário do mês (com busca e filtro de situação em lista);
   gestão de inscrições; exclusão de feedback (com motivo); check-in (aprovar ou
   recusar o pedido de check-in feito pelo aluno — o professor faz o mesmo nos
   eventos dele); consulta da nota de todos os alunos no questionário de

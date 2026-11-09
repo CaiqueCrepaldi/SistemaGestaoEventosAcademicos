@@ -2162,6 +2162,153 @@ async function main() {
     const meusE = r.corpo?.inscricoes?.find((i: { evento: string }) => i.evento === `Evento Check-in E ${sufixo}`);
     checar("Meus dados mostra a situação nova e a hora do pedido", r.status === 200 && meusE?.presenca === "RECUSADO" && !!meusE.checkinPedidoEm, meusE);
 
+    // ------------------------------------------------------------------ etapa 5: calendario
+    requisito("R44 Calendário: intervalo de datas, sala ocupada para o professor e busca com limite");
+    // um dia so do teste, daqui a 200 dias (meia-noite UTC), numa sala nova: sem conflito com nada
+    const diaCal = new Date(Math.ceil((Date.now() + 200 * 24 * 3600 * 1000) / (24 * 3600 * 1000)) * 24 * 3600 * 1000);
+    const emHorasCal = (horas: number) => new Date(diaCal.getTime() + horas * 3600 * 1000).toISOString();
+    const deCal = diaCal.toISOString();
+    const ateCal = emHorasCal(48);
+    const salasCal: string[] = [];
+    for (const nome of ["Sala Calendário 1", "Sala Calendário 2"]) {
+      r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: `${nome} ${sufixo}`, capacidade: 20 } });
+      salas.push(r.corpo.id);
+      salasCal.push(r.corpo.id);
+    }
+    const corpoCal = { palestranteId, tema: "Tema do calendário", cargaHoraria: 2, questionario: questionario() };
+    const criarCal = async (token: string, titulo: string, horas: number, sala = salasCal[0]) => {
+      const resposta = await chamar("POST", "/eventos", { token, corpo: { ...corpoCal, titulo: `${titulo} ${sufixo}`, horario: emHorasCal(horas), salaId: sala } });
+      if (resposta.status !== 201) throw new Error(`evento do calendário não criado: ${JSON.stringify(resposta.corpo)}`);
+      eventos.push(resposta.corpo.id);
+      return resposta.corpo.id as string;
+    };
+    const calEquipe = await criarCal(admin.token!, "Calendário Equipe", 10);
+    const calProfA = await criarCal(professorA.token!, "Calendário Prof A", 14);
+    const calProfB = await criarCal(professorB.token!, "Calendário Prof B", 30);
+    const calFora = await criarCal(admin.token!, "Calendário Fora", 50);
+    const calRecusado = await criarCal(professorB.token!, "Calendário Recusado", 20, salasCal[1]);
+    await chamar("POST", `/eventos/${calRecusado}/recusar`, { token: secretaria.token, corpo: { motivo: "Teste do calendário" } });
+    const consultaCal = `/eventos?de=${encodeURIComponent(deCal)}&ate=${encodeURIComponent(ateCal)}`;
+
+    r = await chamar("GET", consultaCal, { token: secretaria.token });
+    const idsSecretaria: string[] = (r.corpo?.eventos ?? []).map((e: { id: string }) => e.id);
+    checar(
+      "o filtro de datas traz só os eventos que começam no intervalo",
+      r.status === 200 &&
+        [calEquipe, calProfA, calProfB, calRecusado].every((id) => idsSecretaria.includes(id)) &&
+        !idsSecretaria.includes(calFora) &&
+        r.corpo.eventos.every((e: { horario: string }) => e.horario >= deCal && e.horario < ateCal),
+      idsSecretaria,
+    );
+    const doProfBVistoPelaSecretaria = r.corpo?.eventos?.find((e: { id: string }) => e.id === calProfB);
+    checar(
+      "a secretaria recebe tudo completo (título, palestrante, inscritos, situação) e nenhuma \"sala ocupada\"",
+      doProfBVistoPelaSecretaria?.titulo === `Calendário Prof B ${sufixo}` &&
+        doProfBVistoPelaSecretaria.palestranteId === palestranteId &&
+        doProfBVistoPelaSecretaria.inscritos === 0 &&
+        doProfBVistoPelaSecretaria.situacao === "PENDENTE" &&
+        Array.isArray(r.corpo.salasOcupadas) &&
+        r.corpo.salasOcupadas.length === 0,
+      doProfBVistoPelaSecretaria,
+    );
+
+    r = await chamar("GET", consultaCal, { token: professorA.token });
+    const doProfA = r.corpo?.eventos ?? [];
+    checar(
+      "o professor recebe os eventos dele completos",
+      r.status === 200 &&
+        doProfA.length === 1 &&
+        doProfA[0].id === calProfA &&
+        doProfA[0].titulo === `Calendário Prof A ${sufixo}` &&
+        doProfA[0].palestranteId === palestranteId &&
+        doProfA[0].inscritos === 0,
+      doProfA,
+    );
+    const ocupadas: { salaId: string; salaNome: string; inicio: string; fim: string }[] = r.corpo?.salasOcupadas ?? [];
+    checar(
+      "os eventos dos outros (equipe e outro professor, aprovados e pendentes) chegam só como sala ocupada, com início e fim",
+      ocupadas.length === 2 &&
+        ocupadas.some((o) => o.inicio === emHorasCal(10) && o.fim === emHorasCal(12) && o.salaId === salasCal[0]) &&
+        ocupadas.some((o) => o.inicio === emHorasCal(30) && o.fim === emHorasCal(32) && o.salaNome === `Sala Calendário 1 ${sufixo}`),
+      ocupadas,
+    );
+    const textoProfA = JSON.stringify(r.corpo?.salasOcupadas ?? []);
+    checar(
+      "sem título, palestrante, inscritos nem id do evento dos outros na resposta pro professor",
+      ocupadas.every((o) => Object.keys(o).sort().join() === "fim,inicio,salaId,salaNome") &&
+        !textoProfA.includes("Calendário Equipe") &&
+        !textoProfA.includes("Calendário Prof B") &&
+        ![calEquipe, calProfB].some((id) => textoProfA.includes(id)) &&
+        !JSON.stringify(r.corpo).includes("Calendário Equipe"),
+      r.corpo,
+    );
+    checar("evento recusado de outro não aparece como sala ocupada", !ocupadas.some((o) => o.inicio === emHorasCal(20)), ocupadas);
+
+    r = await chamar("GET", `/eventos?de=${encodeURIComponent(ateCal)}&ate=${encodeURIComponent(deCal)}`, { token: secretaria.token });
+    checar("intervalo com a data final antes da inicial -> 422", r.status === 422, r.corpo);
+    r = await chamar("GET", `/eventos?de=${encodeURIComponent(deCal)}&ate=${encodeURIComponent(emHorasCal(24 * 70))}`, { token: secretaria.token });
+    checar("intervalo de mais de 62 dias -> 422", r.status === 422, r.corpo);
+
+    // check-ins pendentes no calendario: no evento P do R43 o aluno W pediu e ainda espera
+    const ontemCal = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const amanhaCal = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+    r = await chamar("GET", `/eventos?de=${encodeURIComponent(ontemCal)}&ate=${encodeURIComponent(amanhaCal)}`, { token: professorA.token });
+    checar(
+      "o calendário traz quantos check-ins esperam aprovação em cada evento",
+      r.status === 200 && r.corpo.eventos.find((e: { id: string }) => e.id === eventoP)?.checkinsPendentes === 1,
+      r.corpo?.eventos?.map((e: { id: string; checkinsPendentes: number }) => [e.id, e.checkinsPendentes]),
+    );
+
+    r = await chamar("GET", `/eventos/busca?q=${encodeURIComponent(`Calendário`)}&limite=2`, { token: secretaria.token });
+    checar(
+      "a busca respeita o limite e avisa que ficou evento de fora",
+      r.status === 200 && r.corpo.itens.length === 2 && r.corpo.limite === 2 && r.corpo.temMais === true,
+      { status: r.status, itens: r.corpo?.itens?.length, temMais: r.corpo?.temMais },
+    );
+    r = await chamar("GET", `/eventos/busca?q=${encodeURIComponent(`Calendário Fora ${sufixo}`)}`, { token: secretaria.token });
+    checar(
+      "a busca acha o evento de qualquer mês, completo",
+      r.status === 200 && r.corpo.itens.length === 1 && r.corpo.itens[0].id === calFora && r.corpo.temMais === false,
+      r.corpo,
+    );
+    r = await chamar("GET", `/eventos/busca?q=${encodeURIComponent(`Sala Calendário 2 ${sufixo}`)}`, { token: secretaria.token });
+    checar("a busca também procura pelo nome da sala", r.status === 200 && r.corpo.itens.some((e: { id: string }) => e.id === calRecusado), r.corpo);
+    r = await chamar("GET", `/eventos/busca?q=${encodeURIComponent(sufixo)}&situacao=RECUSADO`, { token: secretaria.token });
+    checar(
+      "a busca combina com o filtro de situação",
+      r.status === 200 && r.corpo.itens.length > 0 && r.corpo.itens.every((e: { situacao: string; proposta: { situacao: string } | null }) => e.situacao === "RECUSADO" || e.proposta?.situacao === "RECUSADO"),
+      r.corpo?.itens?.map((e: { titulo: string; situacao: string }) => [e.titulo, e.situacao]),
+    );
+    r = await chamar("GET", `/eventos/busca?q=${encodeURIComponent(`Calendário`)}`, { token: professorA.token });
+    checar(
+      "a busca do professor só traz os eventos dele",
+      r.status === 200 && r.corpo.itens.length > 0 && r.corpo.itens.every((e: { criadoPorId: string }) => e.criadoPorId === professorA.id),
+      r.corpo?.itens?.map((e: { titulo: string }) => e.titulo),
+    );
+    r = await chamar("GET", "/eventos/busca?q=x&limite=51", { token: secretaria.token });
+    checar("limite acima de 50 -> 422", r.status === 422, r.corpo);
+    r = await chamar("GET", "/eventos/busca", { token: secretaria.token });
+    checar("busca sem texto nem situação -> 422", r.status === 422, r.corpo);
+    r = await chamar("GET", "/eventos/busca?q=Calend", { token: aluno.token });
+    checar("aluno não usa a busca do calendário -> 403", r.status === 403, r.status);
+
+    r = await chamar("GET", "/eventos", { token: secretaria.token });
+    checar(
+      "sem intervalo, a rota continua devolvendo a lista de sempre (todos os eventos, de qualquer mês)",
+      r.status === 200 && Array.isArray(r.corpo) && [calEquipe, calFora, eventoId].every((id) => r.corpo.some((e: { id: string }) => e.id === id)),
+      r.status,
+    );
+    r = await chamar("GET", consultaCal, { token: aluno.token });
+    checar(
+      "o aluno continua recebendo a programação de sempre (só aprovados, sem situação), mesmo mandando o intervalo",
+      r.status === 200 &&
+        Array.isArray(r.corpo) &&
+        r.corpo.some((e: { id: string }) => e.id === calFora) &&
+        !r.corpo.some((e: { id: string }) => [calProfA, calProfB, calRecusado].includes(e.id)) &&
+        r.corpo.every((e: { situacao?: string }) => e.situacao === undefined),
+      r.status,
+    );
+
     // ------------------------------------------------------------------ RF009/RNF010: exclusao bloqueada
     requisito("R19 Exclusão de evento bloqueada com inscrições (RF009/RNF010)");
     r = await chamar("DELETE", `/eventos/${eventoId}`, { token: admin.token });

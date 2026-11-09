@@ -118,6 +118,7 @@ export function eventoParaDTO(evento: Evento, paraAluno: boolean) {
           criadoPorId: evento.criadoPorId,
           questionarioTravado: evento.questionarioTravado ?? false,
           proposta: evento.proposta ?? null,
+          ...(evento.checkinsPendentes !== undefined ? { checkinsPendentes: evento.checkinsPendentes } : {}),
         }),
     questionario: paraAluno
       ? evento.questionario.map((p) => ({

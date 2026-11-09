@@ -40,3 +40,38 @@ export const propostaEventoSchema = eventoSchema
   .partial()
   .extend({ resposta: z.string().trim().max(1000, "A resposta pode ter no máximo 1000 caracteres.").optional() });
 export type PropostaEventoInput = z.infer<typeof propostaEventoSchema>;
+
+const SITUACOES = ["PENDENTE", "APROVADO", "RECUSADO"] as const;
+
+// calendario da equipe e do professor: os eventos que comecam em [de, ate). O mes na tela com as semanas de
+// borda da no maximo 42 dias; 62 da folga sem deixar alguem baixar a base inteira de uma vez
+export const INTERVALO_MAXIMO_DIAS = 62;
+export const intervaloEventosSchema = z
+  .object({
+    de: z.coerce.date({ invalid_type_error: "Data inicial inválida." }),
+    ate: z.coerce.date({ invalid_type_error: "Data final inválida." }),
+    situacao: z.enum(SITUACOES).optional(),
+  })
+  .refine((c) => c.ate.getTime() > c.de.getTime(), { message: "A data final precisa ser depois da inicial.", path: ["ate"] })
+  .refine((c) => c.ate.getTime() - c.de.getTime() <= INTERVALO_MAXIMO_DIAS * 24 * 3600 * 1000, {
+    message: `O intervalo pode ter no máximo ${INTERVALO_MAXIMO_DIAS} dias.`,
+    path: ["ate"],
+  });
+export type IntervaloEventos = z.infer<typeof intervaloEventosSchema>;
+
+// busca do calendario (titulo, tema, palestrante ou sala) e o filtro de situacao, no servidor e com limite
+export const LIMITE_BUSCA_EVENTOS_PADRAO = 20;
+export const LIMITE_BUSCA_EVENTOS_MAXIMO = 50;
+export const buscaEventosSchema = z
+  .object({
+    q: z
+      .string()
+      .trim()
+      .max(100, "A busca pode ter no máximo 100 caracteres.")
+      .optional()
+      .transform((valor) => valor || undefined),
+    situacao: z.enum(SITUACOES).optional(),
+    limite: z.coerce.number().int().min(1).max(LIMITE_BUSCA_EVENTOS_MAXIMO).default(LIMITE_BUSCA_EVENTOS_PADRAO),
+  })
+  .refine((c) => c.q || c.situacao, { message: "Informe o texto da busca ou a situação.", path: ["q"] });
+export type BuscaEventos = z.infer<typeof buscaEventosSchema>;

@@ -10,6 +10,8 @@ export { dashboardService } from "./dashboardService";
 export type { EventoDashboard, ProximoEventoDashboard, ResumoDashboard, TotaisDashboard } from "./dashboardService";
 export { certificadoService, formatarCodigoValidacao, urlValidacao } from "./certificadoService";
 export type { CertificadoDisponivel, CertificadoEmitido, CertificadoValidado } from "./certificadoService";
+export { calendarioService } from "./calendarioService";
+export type { MesDoCalendario, ResultadoBuscaEventos, SalaOcupada } from "./calendarioService";
 export { checkinService } from "./checkinService";
 export type { EventoCheckin, JanelaCheckin, PainelCheckin, PedidoCheckin } from "./checkinService";
 export { inscricaoAlunoService } from "./inscricaoAlunoService";

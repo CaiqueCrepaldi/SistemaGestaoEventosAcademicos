@@ -1653,3 +1653,274 @@ h1, h2, h3 {
 .checkin-situacao.checkin-aguardando { color: var(--orange-600); }
 .checkin-situacao.checkin-confirmado { color: var(--green-600); }
 .checkin-situacao.checkin-recusado { color: var(--red-600); }
+
+/* Calendario do mes (tela Eventos da equipe e do professor) */
+.calendario-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+  align-items: start;
+}
+.calendario-card {
+  min-width: 0;
+}
+/* o espaco entre a grade e a lista vem do gap (sem somar a margem dos cards) */
+.calendario-layout {
+  margin-bottom: 20px;
+}
+.calendario-layout > .card {
+  margin-bottom: 0;
+}
+.calendario-topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.calendario-titulo {
+  margin: 0;
+  font-size: 18px;
+  min-width: 170px;
+  text-align: center;
+}
+.calendario-grade {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-top: 1px solid var(--gray-200);
+  border-left: 1px solid var(--gray-200);
+}
+.calendario-semana {
+  padding: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--gray-500);
+  text-align: center;
+  border-right: 1px solid var(--gray-200);
+  border-bottom: 1px solid var(--gray-200);
+  background: var(--gray-50);
+}
+.calendario-dia {
+  position: relative;
+  min-width: 0;
+  min-height: 104px;
+  padding: 4px;
+  border-right: 1px solid var(--gray-200);
+  border-bottom: 1px solid var(--gray-200);
+  background: #ffffff;
+  cursor: pointer;
+  overflow: hidden;
+}
+.calendario-dia:hover {
+  background: var(--gray-50);
+}
+.calendario-dia:focus-visible {
+  outline: 2px solid var(--blue-600);
+  outline-offset: -2px;
+}
+.calendario-dia.fora-do-mes {
+  background: var(--gray-50);
+}
+.calendario-dia.fora-do-mes > * {
+  opacity: 0.45;
+}
+.calendario-dia.selecionado {
+  box-shadow: inset 0 0 0 2px var(--blue-600);
+}
+.calendario-dia-numero {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 4px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-700);
+}
+.calendario-dia.hoje .calendario-dia-numero {
+  background: var(--yellow-500);
+  color: var(--on-yellow);
+}
+.calendario-itens {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cal-chip {
+  min-width: 0;
+  padding: 1px 4px;
+  border-radius: 4px;
+  border-left: 3px solid var(--blue-600);
+  background: #eff6ff;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.cal-chip.pendente {
+  border-left-color: var(--orange-600);
+  background: var(--orange-50);
+}
+.cal-chip.recusado {
+  border-left-color: var(--red-600);
+  background: var(--red-50);
+}
+.cal-chip.ocupada {
+  border-left-color: var(--gray-400);
+  background: var(--gray-100);
+  color: var(--gray-500);
+  font-style: italic;
+}
+.cal-chip.encerrado {
+  opacity: 0.55;
+}
+.cal-chip-linha {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+.cal-chip-hora {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+.cal-chip-titulo {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cal-marca {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+}
+.cal-marca.pendente { color: var(--orange-600); }
+.cal-marca.recusado { color: var(--red-600); }
+.cal-marca.encerrado { color: var(--gray-500); }
+.cal-checkins {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--orange-600);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.calendario-mais {
+  display: inline-block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gray-500);
+}
+.calendario-marcador {
+  display: none;
+}
+.calendario-lista-topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.calendario-lista-topo h3 {
+  margin: 0;
+}
+.calendario-lista h3::first-letter {
+  text-transform: uppercase;
+}
+.calendario-eventos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.calendario-evento {
+  padding: 10px 12px;
+  border: 1px solid var(--gray-200);
+  border-left: 4px solid var(--blue-600);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.calendario-evento.ocupada {
+  border-left-color: var(--gray-400);
+  background: var(--gray-50);
+}
+.calendario-evento.encerrado {
+  opacity: 0.75;
+}
+.calendario-evento-hora {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-700);
+}
+.calendario-evento-titulo {
+  font-weight: 600;
+}
+.calendario-evento-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  white-space: normal;
+  text-align: left;
+  margin-top: 4px;
+}
+.link-botao {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--blue-600);
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* tela media: a lista do dia vai pra baixo da grade */
+@media (max-width: 1100px) {
+  .calendario-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* celular: a grade mostra so um marcador por dia com evento; a lista do dia fica embaixo */
+@media (max-width: 640px) {
+  .calendario-dia {
+    min-height: 48px;
+    padding: 2px;
+    text-align: center;
+  }
+  .calendario-itens,
+  .calendario-mais {
+    display: none;
+  }
+  .calendario-marcador {
+    display: block;
+    width: 7px;
+    height: 7px;
+    margin: 4px auto 0;
+    border-radius: 999px;
+    background: var(--blue-600);
+  }
+  .calendario-semana {
+    padding: 4px 0;
+    font-size: 11px;
+  }
+  .calendario-titulo {
+    min-width: 0;
+    font-size: 16px;
+  }
+}

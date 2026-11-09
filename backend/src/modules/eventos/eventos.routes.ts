@@ -11,7 +11,9 @@ import { questionarioService } from "../questionario/questionario.service";
 import { respostasQuestionarioSchema } from "../questionario/questionario.schemas";
 import { recusaSchema, reenvioSchema } from "../aprovacoes/aprovacoes.schemas";
 import { eventosService } from "./eventos.service";
-import { eventoSchema, eventoUpdateSchema, propostaEventoSchema } from "./eventos.schemas";
+import { lerConsulta } from "../../utils/paginacao";
+import { expirarCheckins } from "../../utils/checkin";
+import { buscaEventosSchema, eventoSchema, eventoUpdateSchema, intervaloEventosSchema, propostaEventoSchema } from "./eventos.schemas";
 
 export const eventosRouter = Router();
 
@@ -22,15 +24,41 @@ function atorDe(req: Request) {
 const SITUACOES = ["PENDENTE", "APROVADO", "RECUSADO"] as const;
 
 // lista os eventos que o perfil pode ver (utils/escopo.ts): equipe todos, professor os dele, aluno so os
-// aprovados. ?situacao=PENDENTE filtra (ex.: "Aguardando aprovacao"). Questionario redigido pro ALUNO
+// aprovados. ?situacao=PENDENTE filtra (ex.: "Aguardando aprovacao"). Questionario redigido pro ALUNO.
+// CALENDARIO: com ?de=&ate= (equipe e professor), so os eventos que comecam no intervalo, com os check-ins
+// pendentes de cada um, e a resposta vira { eventos, salasOcupadas } — pro professor, os eventos dos outros
+// chegam so como sala ocupada (sem titulo, palestrante nem inscritos). Sem intervalo, a lista de sempre; o
+// aluno nao usa o intervalo (a programacao dele nao muda)
 eventosRouter.get(
   "/",
   autenticar,
   asyncHandler(async (req, res) => {
+    const paraAluno = req.usuario!.perfil === "ALUNO";
+    if (!paraAluno && (req.query.de !== undefined || req.query.ate !== undefined)) {
+      const intervalo = lerConsulta(intervaloEventosSchema, req.query);
+      // a contagem de check-ins pendentes depende das janelas ja expiradas
+      await expirarCheckins(req.usuario!.sub);
+      const { eventos, salasOcupadas } = await eventosService.calendario(atorDe(req), intervalo);
+      res.json({ eventos: eventos.map((e) => eventoParaDTO(e, false)), salasOcupadas });
+      return;
+    }
     const situacao = SITUACOES.find((s) => s === req.query.situacao);
     const eventos = await eventosService.listar(atorDe(req), situacao);
-    const paraAluno = req.usuario!.perfil === "ALUNO";
     res.json(eventos.map((e) => eventoParaDTO(e, paraAluno)));
+  }),
+);
+
+// GET /api/eventos/busca?q=&situacao=&limite= — busca do calendario (titulo, tema, palestrante ou sala) e
+// filtro de situacao, no servidor e com limite (padrao 20, maximo 50). Equipe e professor (so os dele)
+eventosRouter.get(
+  "/busca",
+  autenticar,
+  autorizar("ADMINISTRADOR", "SECRETARIA", "PROFESSOR"),
+  asyncHandler(async (req, res) => {
+    const busca = lerConsulta(buscaEventosSchema, req.query);
+    await expirarCheckins(req.usuario!.sub);
+    const { itens, limite, temMais } = await eventosService.buscar(atorDe(req), busca);
+    res.json({ itens: itens.map((e) => eventoParaDTO(e, false)), limite, temMais });
   }),
 );
 
