@@ -39,38 +39,21 @@ Prisma Migrate no passo 3 — não precisa criar nada na mão.
 
 ### 2. Variáveis de ambiente
 
-Crie um arquivo `backend/.env` (não é versionado, ver `.gitignore`) com:
-
-```
-PORT=8080
-NODE_ENV=development
-CORS_ORIGIN=http://localhost:5173
-DATABASE_URL="mysql://usuario:senha@host.tidbcloud.com:4000/sgea?sslaccept=strict"
-JWT_SECRET=troque-este-valor-por-um-segredo-longo-e-aleatorio
-JWT_EXPIRES_IN=8h
-ENCRYPTION_KEY=
-SENDGRID_API_KEY=
-EMAIL_FROM=
-```
-
-`DATABASE_URL`, `JWT_SECRET` e `ENCRYPTION_KEY` são obrigatórios pra o
-servidor subir (troque o `JWT_SECRET` por um valor aleatório e longo em
-qualquer ambiente real — quem souber esse segredo consegue forjar token de
-admin). Deixe `SENDGRID_API_KEY`/`EMAIL_FROM` em branco em dev: sem eles, o
-backend só imprime o e-mail no console em vez de enviar de verdade.
-
-`ENCRYPTION_KEY` cifra o segredo do 2FA (AES-256-GCM, ver
-`src/utils/criptografia.ts`) e assina o HMAC dos códigos de recuperação do
-2FA e das chaves do limite de tentativas. Nome, e-mail e RGM ficam em texto
-puro. Precisa ser uma chave de 32 bytes em base64:
+Copie o `backend/.env.example` para `backend/.env` (o `.env` não é
+versionado, ver `.gitignore`) e troque todo valor que tem `TROQUE`:
 
 ```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+cp .env.example .env
 ```
 
-**Trocar essa chave torna ilegível todo dado já cifrado com a antiga (o 2FA
-de todo mundo para de funcionar) — guarde-a com o mesmo cuidado que o
-`JWT_SECRET`, nunca a perca.**
+O que cada variável faz, quais são obrigatórias e como gerar os segredos
+está na seção [Variáveis de ambiente](#variáveis-de-ambiente), mais abaixo.
+O servidor não sobe se faltar uma obrigatória ou se ela ainda estiver com o
+valor de exemplo.
+
+**Trocar a `ENCRYPTION_KEY` torna ilegível todo dado já cifrado com a
+antiga (o 2FA de todo mundo para de funcionar) — guarde-a com o mesmo
+cuidado que o `JWT_SECRET`, nunca a perca.**
 
 Pra enviar de verdade: cria conta grátis em
 [sendgrid.com](https://signup.sendgrid.com/) (100 e-mails/dia de graça),
@@ -87,7 +70,7 @@ o e-mail verificado (o SendGrid recusa qualquer outro remetente).
 cd backend
 npm install
 npm run db:migrate   # cria as tabelas no banco (pede um nome pra migration, ex: init)
-npm run db:seed      # popula com os dados de demonstração
+npm run db:seed      # popula com os dados de demonstração (precisa das SEED_*_SENHA no .env)
 npm run dev
 ```
 
@@ -97,24 +80,66 @@ conferir que o processo subiu.
 
 ### Apontar o frontend pra essa API
 
-No `frontend/.env` (crie se não existir):
+Copie o `frontend/.env.example` para `frontend/.env` se precisar mudar o
+endereço da API (sem ele, o frontend usa `http://localhost:8080/api`):
 
 ```
 VITE_API_URL=http://localhost:8080/api
 ```
 
-As contas de demonstração são as mesmas dos dois lados (só no banco de
-desenvolvimento, criadas pelo seed — em produção use outras senhas):
+As contas de demonstração são criadas pelo seed, só no banco de
+desenvolvimento:
 
 | Perfil | E-mail | Senha |
 |---|---|---|
-| Administrador | admin@umc.br | Admin@123 |
-| Secretaria | secretaria@umc.br | Secretaria@123 |
-| Aluno | aluno@alunos.umc.br | Aluno@123 |
+| Administrador | admin@umc.br | a de `SEED_ADMIN_SENHA` no seu `backend/.env` |
+| Secretaria | secretaria@umc.br | a de `SEED_SECRETARIA_SENHA` |
+| Aluno | aluno@alunos.umc.br | a de `SEED_ALUNO_SENHA` (opcional; sem ela, o aluno entra pelo "Esqueci a senha") |
 
-Num banco populado antes de 06/11/2026 essas contas continuam com as senhas
-antigas (`admin123`, `secretaria123`, `aluno123`): o seed não altera conta
-que já existe, e o login não exige a regra de senha nova de quem já tem conta.
+Nenhuma senha fica no código nem na documentação. O seed nunca muda a senha
+de uma conta que já existe: num banco populado antes, as contas continuam
+com a senha que tinham. Para definir uma senha nova numa conta que já
+existe, use o script `scripts/definir-senha.ts` (ver "Scripts disponíveis").
+
+## Variáveis de ambiente
+
+Local: `backend/.env`, copiado do `backend/.env.example`. Produção: painel
+da Vercel (**Settings → Environment Variables**), nunca no repositório.
+O frontend tem o seu, `frontend/.env.example`, com só a `VITE_API_URL`.
+
+| Variável | Obrigatória? | Para que serve |
+|---|---|---|
+| `DATABASE_URL` | **Sim** | Conexão com o banco (TiDB Cloud, formato "Prisma"). Em dev, o `SGEA_dev`; nunca o de produção |
+| `JWT_SECRET` | **Sim** | Assina o token de login. Gere com `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`. Trocar derruba todas as sessões |
+| `ENCRYPTION_KEY` | **Sim** | Chave AES-256 (base64 de exatamente 32 bytes) do segredo do 2FA e dos HMAC. Gere com `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. Nunca trocar depois que houver 2FA ativo |
+| `PORT` | Não (padrão `8080`) | Porta do servidor local; número inteiro |
+| `NODE_ENV` | Não (padrão `development`) | `production` só na Vercel: aí o `codigoDemo` nunca volta na resposta |
+| `CORS_ORIGIN` | Não (padrão `http://localhost:5173`) | Endereço do frontend que pode chamar a API |
+| `JWT_EXPIRES_IN` | Não (padrão `8h`) | Duração da sessão: `8h`, `30m`, `1d` ou o número de segundos |
+| `SENDGRID_API_KEY` | Não | Chave do SendGrid (começa com `SG.`). Sem ela, os e-mails ficam simulados |
+| `EMAIL_FROM` | Não | Remetente verificado no SendGrid; vai junto com a chave |
+| `SEED_ADMIN_SENHA` | Só para o seed | Senha da conta `admin@umc.br` criada pelo seed |
+| `SEED_SECRETARIA_SENHA` | Só para o seed | Senha da conta `secretaria@umc.br` criada pelo seed |
+| `SEED_ALUNO_SENHA` | Não | Senha do aluno de demonstração; sem ela, ele fica sem senha utilizável |
+
+**O servidor não sobe** se `DATABASE_URL`, `JWT_SECRET` ou `ENCRYPTION_KEY`
+estiver ausente, vazia ou ainda com o valor de exemplo (qualquer valor com
+"troque"), se a `ENCRYPTION_KEY` não tiver 32 bytes, se a `PORT` não for um
+número inteiro ou se o `JWT_EXPIRES_IN` estiver num formato inválido. A
+mensagem diz o nome da variável e o que fazer, nunca o valor
+(`src/config/env.ts`).
+
+**E-mail:** sem `SENDGRID_API_KEY` e `EMAIL_FROM` válidos (vazios, com
+valor de exemplo ou chave sem `SG.`), o servidor sobe com um aviso e os
+e-mails ficam simulados: o log só diz o tipo do e-mail, sem destinatário nem
+conteúdo. Em produção esse aviso é um erro, porque sem e-mail o cadastro de
+aluno não funciona (o código de confirmação não chega).
+
+**Seed:** `SEED_ADMIN_SENHA` e `SEED_SECRETARIA_SENHA` são obrigatórias para
+o `npm run db:seed`, e toda senha precisa seguir a regra de senha do sistema
+(8 a 64 caracteres, com maiúscula, número e caractere especial). Se faltar
+alguma ou ela estiver fora da regra, o seed para antes de gravar qualquer
+coisa.
 
 ## Implantação em produção: dados pessoais sem duplicação (migration de 03/11/2026)
 
@@ -234,6 +259,35 @@ tabela pode ficar no banco, porque o código antigo não a usa.
 | `npm run db:migrate` | Cria/atualiza as tabelas no banco a partir do `schema.prisma`. |
 | `npm run db:seed` | Popula o banco com os dados de demonstração (idempotente, pode rodar de novo). |
 | `npm run db:studio` | Abre o Prisma Studio (interface visual pra ver/editar os dados). |
+| `npx tsx scripts/definir-senha.ts email@dominio` | Define uma senha nova para uma conta que já existe (ver abaixo). |
+| `npx tsx scripts/resetar-2fa.ts email@dominio` | Zera o 2FA de uma conta (emergência; mesmo esquema de flags). |
+
+### Definir a senha de uma conta que já existe
+
+Útil para as contas de equipe criadas pelo seed num banco antigo (o seed não
+muda a senha de conta que já existe) ou para uma conta cujo e-mail não
+recebe o código do "Esqueci a senha". Rode de dentro de `backend/`, num
+terminal interativo:
+
+```powershell
+npx tsx scripts/definir-senha.ts admin@umc.br                       # simulação no banco do .env
+npx tsx scripts/definir-senha.ts admin@umc.br --aplicar             # pede a senha e grava no banco do .env
+npx tsx scripts/definir-senha.ts admin@umc.br --producao            # simulação no banco de produção
+npx tsx scripts/definir-senha.ts admin@umc.br --producao --aplicar  # pede a senha e grava em produção
+```
+
+- Sem `--aplicar`, só mostra a conta encontrada (id, perfil, 2FA e se o
+  login está bloqueado) e não muda nada.
+- `--producao` carrega o `.env.production.local`; se o arquivo não
+  existir, o script para sem fazer nada.
+- Com `--aplicar`, pede a senha nova duas vezes **sem mostrar o que é
+  digitado** e confere a regra de senha do sistema.
+- Ao gravar:
+  - usa o mesmo hash bcrypt do sistema;
+  - encerra as sessões abertas da conta;
+  - limpa o bloqueio de tentativas de login;
+  - registra `SENHA_REDEFINIDA` na auditoria.
+- A senha nunca aparece na tela nem no log. O 2FA da conta não muda.
 
 ## Estrutura
 

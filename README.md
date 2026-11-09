@@ -86,21 +86,19 @@ e RGM ficam sem criptografia, protegidos por controle de acesso por perfil,
 HTTPS, banco com acesso restrito e auditoria (ver
 [`docs/lgpd/07-medidas-tecnicas-de-seguranca.md`](docs/lgpd/07-medidas-tecnicas-de-seguranca.md)).
 
-Contas de demonstração (criadas pelo seed, só no banco de desenvolvimento
-— em produção as senhas precisam ser outras, e o ideal é ativar o 2FA nas
-contas da equipe):
+Contas de demonstração (criadas pelo seed, só no banco de desenvolvimento;
+o ideal é ativar o 2FA nas contas da equipe):
 
 | Perfil | Login | Senha |
 |---|---|---|
-| Administrador | admin@umc.br | Admin@123 |
-| Secretaria | secretaria@umc.br | Secretaria@123 |
-| Aluno | aluno@alunos.umc.br | Aluno@123 |
+| Administrador | admin@umc.br | a de `SEED_ADMIN_SENHA` no seu `backend/.env` |
+| Secretaria | secretaria@umc.br | a de `SEED_SECRETARIA_SENHA` |
+| Aluno | aluno@alunos.umc.br | a de `SEED_ALUNO_SENHA` (opcional) |
 
-As senhas seguem a regra de senha nova (de 8 a 64 caracteres, com maiúscula,
-número e caractere especial). Num banco populado antes de 06/11/2026 essas
-contas continuam com as senhas antigas (`admin123`, `secretaria123`,
-`aluno123`): o seed não altera conta que já existe, e o login não exige a
-regra nova de quem já tem conta.
+Nenhuma senha fica no código nem na documentação: cada um define as suas no
+`backend/.env`. As variáveis, quais são obrigatórias e como gerar os
+segredos estão em
+[`backend/README.md` → Variáveis de ambiente](backend/README.md#variáveis-de-ambiente).
 
 O aluno de demonstração já está inscrito e com presença confirmada num
 evento, pronto pra testar o questionário e a emissão do certificado sem
@@ -119,8 +117,10 @@ backend (`backend/`) rodando — ver [`backend/README.md`](backend/README.md)
 pra como subir ele — porque toda a aplicação fala direto com a API/banco
 real, não existe mais um modo "mock" com dado fake no navegador.
 
-Cria `frontend/.env.local` (não é versionado) com a variável abaixo
-apontando pro backend:
+Para apontar para outro backend, copie o `frontend/.env.example` para
+`frontend/.env` (não é versionado) e ajuste a variável abaixo. Sem ela, o
+frontend usa `http://localhost:8080/api`; em produção, o valor fica nas
+variáveis da Vercel:
 
 ```
 VITE_API_URL=http://localhost:8080/api

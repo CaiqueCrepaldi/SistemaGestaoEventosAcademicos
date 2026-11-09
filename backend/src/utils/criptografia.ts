@@ -10,12 +10,10 @@ const ALGORITMO = "aes-256-gcm";
 const TAMANHO_IV = 12;
 const TAMANHO_TAG = 16;
 
+// a chave ja chega decodificada e conferida (32 bytes) do config/env.ts, que derruba a inicializacao
+// se a ENCRYPTION_KEY for invalida — a regra fica num lugar so
 function chave(): Buffer {
-  const buffer = Buffer.from(env.encryptionKey, "base64");
-  if (buffer.length !== 32) {
-    throw new Error("ENCRYPTION_KEY precisa decodificar (base64) pra exatamente 32 bytes (AES-256).");
-  }
-  return buffer;
+  return env.chaveCriptografia;
 }
 
 // criptografa um texto; formato salvo eh base64(iv + authTag + cifrado)

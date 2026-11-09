@@ -1,10 +1,39 @@
 // popula o banco com os mesmos dados de demonstracao que o backend usava em memoria
 // roda com "npm run db:seed" (so preenche o que ainda nao existe, ver upsert abaixo)
+import "dotenv/config";
 import { randomUUID } from "crypto";
 import type { Prisma } from "@prisma/client";
 import type { PerguntaQuestionario } from "../src/types/domain";
 import { gerarHashSenha, SENHA_INUTILIZAVEL } from "../src/utils/password";
+import { MENSAGEM_REGRA_SENHA, senhaAtendeRegras } from "../src/utils/validacao";
 import { prisma } from "../src/db/prisma";
+
+// senhas das contas de demonstracao: vem do backend/.env (SEED_*_SENHA), nunca do codigo nem do log.
+// Conferidas ANTES de gravar qualquer coisa — se faltar alguma obrigatoria, o seed nao toca no banco
+class SenhaDoSeedInvalida extends Error {}
+
+function senhaDoSeed(variavel: string, obrigatoria: boolean): string | null {
+  const valor = process.env[variavel] ?? "";
+  if (valor.trim() === "" || /troque/i.test(valor)) {
+    if (!obrigatoria) return null;
+    throw new SenhaDoSeedInvalida(
+      `${variavel} está ausente, vazia ou com o valor de exemplo. Defina uma senha no backend/.env (ver backend/.env.example).`,
+    );
+  }
+  if (!senhaAtendeRegras(valor)) {
+    throw new SenhaDoSeedInvalida(`${variavel} não segue a regra de senha. ${MENSAGEM_REGRA_SENHA}`);
+  }
+  return valor;
+}
+
+function lerSenhasDoSeed() {
+  return {
+    admin: senhaDoSeed("SEED_ADMIN_SENHA", true)!,
+    secretaria: senhaDoSeed("SEED_SECRETARIA_SENHA", true)!,
+    // opcional: sem ela o aluno de demonstracao fica sem senha utilizavel (entra pelo "Esqueci a senha")
+    aluno: senhaDoSeed("SEED_ALUNO_SENHA", false),
+  };
+}
 
 // aluno = participante (RGM) + conta ALUNO (nome e e-mail, que ficam so na conta). senha null = conta
 // sem senha utilizavel (entra pela recuperacao de senha), pros alunos de exemplo que nao sao conta de demo
@@ -118,6 +147,12 @@ async function garantirEvento(titulo: string, dados: DadosEvento) {
 
 // idempotente: sala/evento usam "cria se nao existir", o resto usa upsert por email/rgm (campo unico de verdade)
 async function seed() {
+  // primeiro as senhas: se alguma obrigatoria faltar, para aqui, antes de gravar qualquer coisa
+  const senhas = lerSenhasDoSeed();
+  if (!senhas.aluno) {
+    console.log("[seed] SEED_ALUNO_SENHA não definida: o aluno de demonstração é criado sem senha utilizável");
+  }
+
   const salaAuditorio = await garantirSala("Auditório A", 120);
   const sala204 = await garantirSala("Sala 204", 40);
   const salaLab1 = await garantirSala("Laboratório de Informática 1", 30);
@@ -166,8 +201,9 @@ async function seed() {
     questionario: questionarioPosteres,
   });
 
-  // aluno@alunos.umc.br / aluno123 e a conta de demonstracao; Beatriz e Lucas sao alunos de exemplo
-  const participanteJoao = await garantirAluno("João Pedro Lima", "aluno@alunos.umc.br", "20240100111", "Aluno@123");
+  // aluno@alunos.umc.br e a conta de demonstracao (senha do SEED_ALUNO_SENHA, se houver); Beatriz e
+  // Lucas sao alunos de exemplo, sempre sem senha utilizavel
+  const participanteJoao = await garantirAluno("João Pedro Lima", "aluno@alunos.umc.br", "20240100111", senhas.aluno);
   const participanteBeatriz = await garantirAluno("Beatriz Fernandes", "beatriz.fernandes@alunos.umc.br", "20240100222", null);
   const participanteLucas = await garantirAluno("Lucas Martins", "lucas.martins@alunos.umc.br", "20230100333", null);
 
@@ -178,7 +214,7 @@ async function seed() {
       id: randomUUID(),
       nome: "Ana Ribeiro",
       emailLogin: "admin@umc.br",
-      senhaHash: await gerarHashSenha("Admin@123"),
+      senhaHash: await gerarHashSenha(senhas.admin),
       perfil: "ADMINISTRADOR",
     },
   });
@@ -189,7 +225,7 @@ async function seed() {
       id: randomUUID(),
       nome: "Carlos Souza",
       emailLogin: "secretaria@umc.br",
-      senhaHash: await gerarHashSenha("Secretaria@123"),
+      senhaHash: await gerarHashSenha(senhas.secretaria),
       perfil: "SECRETARIA",
     },
   });
@@ -265,7 +301,12 @@ async function seed() {
 
 seed()
   .catch((erro) => {
-    console.error("[seed] falhou", erro);
+    if (erro instanceof SenhaDoSeedInvalida) {
+      console.error(`[seed] parado antes de gravar qualquer coisa: ${erro.message}`);
+    } else {
+      // so a mensagem: o objeto de erro do Prisma pode repetir os dados da gravacao
+      console.error("[seed] falhou:", erro instanceof Error ? erro.message : erro);
+    }
     process.exitCode = 1;
   })
   .finally(() => prisma.$disconnect());

@@ -186,4 +186,4 @@ Permitir que a secretaria bloqueie o uso do sistema por um aluno (uso indevido, 
 
 ## Contas de teste
 
-O seed (`backend/prisma/seed.ts`) cria, no banco de desenvolvimento, um administrador, uma secretaria e um aluno de demonstração já inscrito e com presença confirmada no evento "Abertura e Palestra Magna: IA na Educação", pronto para testar o questionário e a emissão do certificado. Logins e senhas no `README.md` (valem só para o banco de desenvolvimento).
+O seed (`backend/prisma/seed.ts`) cria, no banco de desenvolvimento, um administrador, uma secretaria e um aluno de demonstração já inscrito e com presença confirmada no evento "Abertura e Palestra Magna: IA na Educação", pronto para testar o questionário e a emissão do certificado. Os logins estão no `README.md`; as senhas vêm das variáveis `SEED_*_SENHA` do `backend/.env` local, nunca do código nem da documentação.

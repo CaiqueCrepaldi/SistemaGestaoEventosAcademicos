@@ -3,7 +3,7 @@ import { Prisma, type Usuario as UsuarioDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { conferirSenha, CUSTO_HASH, custoDoHash, gerarHashSenha, precisaRefazerHash } from "../../utils/password";
-import { assinarToken, assinarTokenEtapa, duracaoEmSegundos } from "../../utils/jwt";
+import { assinarToken, assinarTokenEtapa } from "../../utils/jwt";
 import { usuarioParaDTO } from "../../utils/dto";
 import { normalizarEmail } from "../../utils/validacao";
 import { registrarAuditoria } from "../../utils/auditoria";
@@ -386,7 +386,7 @@ export function emitirSessao(usuario: UsuarioComParticipante) {
   return {
     token,
     tokenType: "Bearer",
-    expiresIn: duracaoEmSegundos(env.jwtExpiresIn),
+    expiresIn: env.jwtExpiresInSegundos,
     usuario: usuarioParaDTO(usuarioParaDominio(usuario)),
     // versao aceita no cadastro/ultimo aceite diverge da vigente: front pede novo aceite antes de liberar a tela
     precisaAceitarTermos: usuario.versaoTermosAceitos !== VERSAO_TERMOS_ATUAL,
