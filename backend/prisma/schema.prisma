@@ -28,10 +28,21 @@ enum SituacaoAprovacao {
   RECUSADO
 }
 
+// check-in pedido pelo aluno e aprovado por quem cuida do evento (professor dono ou equipe). A janela
+// abre 1 hora antes do inicio e fecha 24 horas depois do fim; quando fecha, SOLICITADO vira RECUSADO e
+// PENDENTE vira AUSENTE (utils/checkin.ts: expirarCheckins). SOLICITADO e RECUSADO entraram no fim
+// do enum para a migration so acrescentar valores
 enum StatusPresenca {
+  // inscrito, ainda sem pedido
   PENDENTE
+  // aprovado: so ele libera o questionario e o certificado
   PRESENTE
+  // nao pediu check-in ate a janela fechar
   AUSENTE
+  // o aluno pediu e espera a aprovacao
+  SOLICITADO
+  // pedido recusado (ou expirado sem decisao); o aluno nao pede de novo
+  RECUSADO
 }
 
 // a CONTA de acesso de qualquer perfil e a fonte unica do nome e do e-mail da pessoa — o aluno nao
@@ -162,17 +173,20 @@ model Evento {
 }
 
 model Inscricao {
-  id             String         @id
-  participanteId String
-  participante   Participante   @relation(fields: [participanteId], references: [id], onDelete: Restrict)
-  eventoId       String
-  evento         Evento         @relation(fields: [eventoId], references: [id], onDelete: Cascade)
-  statusPresenca StatusPresenca @default(PENDENTE)
-  dataCheckin    DateTime?
-  usuarioId      String?
-  usuario        Usuario?       @relation("CheckinFeitoPor", fields: [usuarioId], references: [id], onDelete: SetNull)
-  dataInscricao  DateTime       @default(now())
-  certificado    Certificado?
+  id                  String         @id
+  participanteId      String
+  participante        Participante   @relation(fields: [participanteId], references: [id], onDelete: Restrict)
+  eventoId            String
+  evento              Evento         @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  statusPresenca      StatusPresenca @default(PENDENTE)
+  // quando o aluno pediu o check-in (null = ainda nao pediu, ou presenca registrada antes desse fluxo)
+  checkinSolicitadoEm DateTime?
+  // quem decidiu o pedido (aprovou/recusou) e quando; antes do pedido pelo aluno, quem marcou a presenca
+  dataCheckin         DateTime?
+  usuarioId           String?
+  usuario             Usuario?       @relation("CheckinFeitoPor", fields: [usuarioId], references: [id], onDelete: SetNull)
+  dataInscricao       DateTime       @default(now())
+  certificado         Certificado?
 
   @@unique([participanteId, eventoId])
   @@map("inscricoes")

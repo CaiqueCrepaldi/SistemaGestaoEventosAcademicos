@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { autenticar, autorizar } from "../../middleware/auth";
+import { expirarCheckinsAntes } from "../../utils/checkin";
 import { buscaSchema, lerConsulta, paginacaoSchema } from "../../utils/paginacao";
 import { AppError } from "../../errors/AppError";
 import { certificadoParaDTO, certificadoPublicoParaDTO } from "../../utils/dto";
@@ -26,6 +27,7 @@ certificadosRouter.get(
 certificadosRouter.get(
   "/",
   autenticar,
+  expirarCheckinsAntes,
   asyncHandler(async (req, res) => {
     const eventoId = typeof req.query.eventoId === "string" ? req.query.eventoId : undefined;
     let participanteId: string | undefined;
@@ -54,6 +56,7 @@ certificadosRouter.get(
   "/situacao",
   autenticar,
   autorizar("ADMINISTRADOR", "SECRETARIA", "PROFESSOR"),
+  expirarCheckinsAntes,
   asyncHandler(async (req, res) => {
     res.json(
       await certificadosService.situacaoParaGestao({
@@ -69,6 +72,7 @@ certificadosRouter.get(
 certificadosRouter.post(
   "/emitir/:inscricaoId",
   autenticar,
+  expirarCheckinsAntes,
   asyncHandler(async (req, res) => {
     const { certificado, novo } = await certificadosService.emitir(req.params.inscricaoId, {
       id: req.usuario!.sub,

@@ -33,8 +33,9 @@ Três perfis de usuário:
   eventos, salas e palestrantes; lista de participantes com busca,
   correção de dados, inativação/reativação de aluno (com motivo) e a
   situação da conta de cada aluno (2FA ativado e acesso liberado/bloqueado);
-  gestão de inscrições; exclusão de feedback (com motivo); check-in (confirmar
-  presença/ausência); consulta da nota de todos os alunos no questionário de
+  gestão de inscrições; exclusão de feedback (com motivo); check-in (aprovar ou
+  recusar o pedido de check-in feito pelo aluno — o professor faz o mesmo nos
+  eventos dele); consulta da nota de todos os alunos no questionário de
   cada evento; emissão de certificado de qualquer participante; **Dashboard**
   (indicadores de eventos, inscrições, presença, certificados e feedback,
   vagas preenchidas dos próximos eventos, ocupação real das salas — presentes
@@ -47,9 +48,11 @@ Três perfis de usuário:
   `@alunos.umc.br`). Só lê eventos, agenda, salas e palestrantes; se
   inscreve sozinho nos eventos que quiser (com
   verificação de vaga e de inscrição duplicada); recebe e-mail de
-  confirmação; responde ao questionário do evento depois que a presença é
-  confirmada no check-in; só emite o próprio certificado se atingir 60% de
-  acertos. Não acessa telas de gestão, participantes ou check-in.
+  confirmação; pede o próprio check-in na tela Eventos (de 1 hora antes do
+  início até 24 horas depois do fim do evento) e responde ao questionário
+  depois que o professor do evento ou a equipe aprova o pedido; só emite o
+  próprio certificado se atingir 60% de acertos. Não acessa telas de gestão,
+  participantes nem a tela Check-in da equipe.
 
 As telas de **Salas** (`/salas`) e **Palestrantes** (`/palestrantes`) têm
 cadastro completo (criar, editar, excluir) restrito a administrador/

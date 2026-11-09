@@ -3,8 +3,16 @@ import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
-import { ApiError, eventoService, inscricaoAlunoService, inscricaoService, palestranteService, salaService } from "../../services";
-import type { Evento, Inscricao, Palestrante, Sala } from "../../types";
+import { ApiError, checkinService, eventoService, inscricaoAlunoService, inscricaoService, palestranteService, salaService } from "../../services";
+import type { Evento, Inscricao, Palestrante, Sala, StatusPresenca } from "../../types";
+import { dataHora, janelaDoCheckin, rotuloPresencaParaAluno, situacaoDaJanela } from "../../utils/presenca";
+
+const COR_DO_CHECKIN: Partial<Record<StatusPresenca, string>> = {
+  SOLICITADO: "checkin-aguardando",
+  PRESENTE: "checkin-confirmado",
+  RECUSADO: "checkin-recusado",
+  AUSENTE: "checkin-recusado",
+};
 
 const FILTROS_VAZIOS = { dia: "", horaInicio: "", horaFim: "", salaId: "", busca: "" };
 
@@ -49,6 +57,8 @@ export function EventosAluno() {
   const [avisoPorEvento, setAvisoPorEvento] = useState<Record<string, string>>({});
   // evento cuja inscricao o aluno esta cancelando (aguardando a confirmacao)
   const [cancelandoInscricao, setCancelandoInscricao] = useState<Evento | null>(null);
+  // evento em que o aluno esta pedindo o check-in (aguardando a confirmacao "estou no local")
+  const [pedindoCheckin, setPedindoCheckin] = useState<Evento | null>(null);
 
   useEffect(() => {
     // o backend ja devolve so as inscricoes do proprio aluno
@@ -108,6 +118,23 @@ export function EventosAluno() {
     }
   }
 
+  // o aluno pede o check-in (a API confere janela, inscricao e situacao); quem aprova e o professor do
+  // evento ou a equipe. Nao sai e-mail
+  async function fazerCheckin() {
+    if (!pedindoCheckin) return;
+    const evento = pedindoCheckin;
+    try {
+      const atualizada = await checkinService.solicitar(evento.id);
+      setInscricoes((prev) => prev.map((i) => (i.id === atualizada.id ? { ...i, ...atualizada } : i)));
+      setAvisoPorEvento((prev) => ({ ...prev, [evento.id]: "Check-in enviado. Aguarde a aprovação." }));
+      toast.success("Check-in enviado. Aguarde a aprovação.");
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Não foi possível fazer o check-in.");
+    } finally {
+      setPedindoCheckin(null);
+    }
+  }
+
   const agora = Date.now();
   const jaComecou = (evento: Evento) => new Date(evento.horario).getTime() <= agora;
   const nomeDaSala = (evento: Evento) => salas.find((s) => s.id === evento.salaId)?.nome ?? "—";
@@ -126,18 +153,28 @@ export function EventosAluno() {
     }
     return true;
   });
-  const proximos = filtrados.filter((e) => !jaComecou(e));
+  // evento ja comecado em que o aluno esta inscrito e o check-in ainda esta aberto continua nos proximos:
+  // e la que ele faz o check-in e acompanha a aprovacao
+  const minhaInscricaoEm = (evento: Evento) =>
+    inscricoes.find((i) => i.participanteId === usuario?.participanteId && i.eventoId === evento.id);
+  const emAndamentoComigo = (evento: Evento) =>
+    jaComecou(evento) && Boolean(minhaInscricaoEm(evento)) && situacaoDaJanela(evento, agora) === "ABERTA";
+  const proximos = filtrados.filter((e) => !jaComecou(e) || emAndamentoComigo(e));
   // encerrados do mais recente pro mais antigo, e so quando o aluno pede
-  const encerrados = mostrarEncerrados ? filtrados.filter(jaComecou).reverse() : [];
+  const encerrados = mostrarEncerrados ? filtrados.filter((e) => jaComecou(e) && !emAndamentoComigo(e)).reverse() : [];
   const filtrosAtivos = Object.values(filtros).some(Boolean);
 
   function itemDoEvento(evento: Evento) {
     const sala = salas.find((s) => s.id === evento.salaId);
-    const minhaInscricao = inscricoes.find((i) => i.participanteId === usuario?.participanteId && i.eventoId === evento.id);
+    const minhaInscricao = minhaInscricaoEm(evento);
     const jaInscrito = Boolean(minhaInscricao);
     const comecou = jaComecou(evento);
     // mesma regra do backend: depois que o evento comeca, o aluno nao se inscreve nem cancela
     const podeCancelar = minhaInscricao?.statusPresenca === "PENDENTE" && !comecou;
+    // check-in: o botao so aparece com a janela aberta e a inscricao ainda sem pedido
+    const janela = situacaoDaJanela(evento, agora);
+    const podeFazerCheckin = minhaInscricao?.statusPresenca === "PENDENTE" && janela === "ABERTA";
+    const situacaoCheckin = minhaInscricao && minhaInscricao.statusPresenca !== "PENDENTE" ? minhaInscricao.statusPresenca : null;
     return (
       <li key={evento.id} className="agenda-item">
         <div className="agenda-time" style={{ width: 60 }}>
@@ -150,6 +187,12 @@ export function EventosAluno() {
           <div className="simple-list-sub">
             Local: {nomeDaSala(evento)} · {evento.inscritos ?? 0}/{sala?.capacidade || "—"} inscritos
           </div>
+          {situacaoCheckin && (
+            <p className={"checkin-situacao " + (COR_DO_CHECKIN[situacaoCheckin] ?? "")}>{rotuloPresencaParaAluno(situacaoCheckin)}</p>
+          )}
+          {minhaInscricao?.statusPresenca === "PENDENTE" && janela === "ANTES" && (
+            <p className="form-hint">O check-in abre em {dataHora(janelaDoCheckin(evento).abre)} (1 hora antes do início).</p>
+          )}
           {avisoPorEvento[evento.id] && <p className="form-hint">{avisoPorEvento[evento.id]}</p>}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, alignSelf: "center" }}>
@@ -161,6 +204,11 @@ export function EventosAluno() {
           >
             {jaInscrito ? "Inscrito" : comecou ? "Encerrado" : "Inscrever-se"}
           </button>
+          {podeFazerCheckin && (
+            <button className="btn btn-primary" onClick={() => setPedindoCheckin(evento)}>
+              Fazer check-in
+            </button>
+          )}
           {podeCancelar && (
             <button className="btn btn-ghost btn-danger" onClick={() => setCancelandoInscricao(evento)}>
               Cancelar inscrição
@@ -255,6 +303,17 @@ export function EventosAluno() {
           <h2 style={{ margin: "24px 0 12px" }}>Eventos encerrados</h2>
           {secaoPorDia(encerrados)}
         </>
+      )}
+
+      {pedindoCheckin && (
+        <ConfirmDialog
+          title={`Check-in em "${pedindoCheckin.titulo}"`}
+          message="Confirma que você está no local do evento?"
+          confirmLabel="Fazer check-in"
+          cancelLabel="Voltar"
+          onConfirm={() => void fazerCheckin()}
+          onCancel={() => setPedindoCheckin(null)}
+        />
       )}
 
       {cancelandoInscricao && (

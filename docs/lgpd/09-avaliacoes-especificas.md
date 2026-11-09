@@ -18,11 +18,14 @@ o próprio guia exige.
 - **Presença e desempenho no questionário:** protegidos — só o próprio
   aluno e a equipe enxergam a nota de alguém; não existe tela nem endpoint
   que exponha ranking ou comparação entre alunos.
-- **Quem pode alterar presença/nota:** só ADMINISTRADOR/SECRETARIA
-  confirmam presença (rota de check-in); a nota do questionário é
-  calculada pelo servidor a partir das respostas do próprio aluno, sem
-  edição manual possível por ninguém. Toda confirmação de presença gera
-  log de auditoria (`PRESENCA_CONFIRMADA`/`PRESENCA_MARCADA_AUSENTE`).
+- **Quem pode alterar presença/nota:** o aluno pede o check-in e só o
+  professor do evento, a secretaria ou o administrador aprovam ou recusam
+  (rotas `/api/checkin`); a nota do questionário é calculada pelo servidor
+  a partir das respostas do próprio aluno, sem edição manual possível por
+  ninguém. Todo pedido e toda decisão geram log de auditoria
+  (`CHECKIN_SOLICITADO`, `CHECKIN_APROVADO`, `CHECKIN_RECUSADO`,
+  `CHECKIN_REVERTIDO`, `CHECKIN_APROVADO_TODOS`; até 09/11/2026,
+  `PRESENCA_CONFIRMADA`/`PRESENCA_MARCADA_AUSENTE`).
 
 ## 5.2 Crianças e adolescentes — não se aplica, com justificativa
 

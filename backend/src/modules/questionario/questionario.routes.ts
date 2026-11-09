@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { autenticar, autorizar } from "../../middleware/auth";
+import { expirarCheckinsAntes } from "../../utils/checkin";
 import { tentativaParaDTO } from "../../utils/dto";
 import { eventosVisiveis } from "../../utils/escopo";
 import { questionarioService } from "./questionario.service";
@@ -13,6 +14,7 @@ questionarioRouter.get(
   "/",
   autenticar,
   autorizar("ADMINISTRADOR", "SECRETARIA", "PROFESSOR"),
+  expirarCheckinsAntes,
   asyncHandler(async (req, res) => {
     const participanteId = typeof req.query.participanteId === "string" ? req.query.participanteId : undefined;
     // o professor so ve as notas dos eventos dele

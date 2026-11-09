@@ -350,10 +350,13 @@ ou apagar.
 | `EVENTO_CRIADO` / `_ATUALIZADO` / `_REMOVIDO` | eventos (só evento sem inscrição é removido; registros antigos de remoção informam quantas inscrições/feedbacks/tentativas foram junto, da época da exclusão em cascata) |
 | `PARTICIPANTE_ATUALIZADO`, `_INATIVADO`, `_REATIVADO`, `_REMOVIDO` | participantes (a inativação informa quantas inscrições foram canceladas; a remoção informa o que foi junto) |
 | `INSCRICAO_CRIADA` | inscrição manual (secretaria/admin) ou autoinscrição do aluno — o detalhe diz qual |
-| `INSCRICAO_ATUALIZADA` | reversão de presença pra pendente |
+| `INSCRICAO_ATUALIZADA` | só em registros antigos (reversão de presença pra pendente, quando a equipe marcava a presença) |
 | `INSCRICAO_CANCELADA` | cancelamento de inscrição — o detalhe diz se foi o próprio aluno, a secretaria/o administrador ou a inativação do aluno (nesse caso, uma linha por inscrição pendente em evento futuro) |
 | `INSCRICAO_REMOVIDA` | só em registros antigos (o `DELETE /api/inscricoes/{id}` agora é um cancelamento e grava `INSCRICAO_CANCELADA`) |
-| `PRESENCA_CONFIRMADA`, `PRESENCA_MARCADA_AUSENTE` | check-in |
+| `PRESENCA_CONFIRMADA`, `PRESENCA_MARCADA_AUSENTE` | só em registros antigos (check-in marcado direto pela equipe, até 09/11/2026) |
+| `CHECKIN_SOLICITADO`, `CHECKIN_APROVADO`, `CHECKIN_RECUSADO`, `CHECKIN_REVERTIDO` | check-in pedido pelo aluno e decidido pelo professor do evento ou pela equipe (só o id da inscrição; a reversão diz de/para) |
+| `CHECKIN_APROVADO_TODOS` | "Aprovar todos" de um evento, com a quantidade aprovada |
+| `CHECKIN_EXPIRADO` | janela do check-in fechada: quantos pedidos sem decisão viraram RECUSADO e quantas inscrições sem pedido viraram AUSENTE (uma linha por execução que mudou algo) |
 | `QUESTIONARIO_RESPONDIDO` | percentual de acertos e se atingiu os 60% que liberam o certificado |
 | `CERTIFICADO_EMITIDO` | emissão de certificado — o detalhe diz se foi a primeira emissão (registro gravado) ou uma nova via do mesmo certificado, e quem pediu (aluno, secretaria, administrador). Nunca grava nome, RGM nem o código de validação |
 | `FEEDBACK_CRIADO`, `FEEDBACK_EXCLUIDO` | feedbacks; a exclusão diz se foi o próprio aluno ou a equipe (e, nesse caso, o motivo). `FEEDBACK_ATUALIZADO`/`_REMOVIDO` só aparecem em registros antigos |
@@ -617,15 +620,18 @@ confere isso explicitamente (`409 USUARIO_PROTEGIDO`) como garantia extra.
 ## Inscrições
 
 ```ts
-type StatusPresenca = "PENDENTE" | "PRESENTE" | "AUSENTE";
+// PENDENTE: inscrito, sem pedido | SOLICITADO: o aluno pediu o check-in | PRESENTE: aprovado (libera o
+// questionário) | RECUSADO: recusado ou expirado sem decisão (final) | AUSENTE: não pediu até a janela fechar
+type StatusPresenca = "PENDENTE" | "SOLICITADO" | "PRESENTE" | "RECUSADO" | "AUSENTE";
 
 interface Inscricao {
   id: string;
   participanteId: string;
   eventoId: string;
   statusPresenca: StatusPresenca;
-  dataCheckin: string | null;   // setado só no check-in
-  usuarioId: string | null;     // quem fez o check-in, não quem se inscreveu
+  checkinSolicitadoEm: string | null; // quando o aluno pediu o check-in
+  dataCheckin: string | null;   // quando o pedido foi decidido (aprovado/recusado)
+  usuarioId: string | null;     // quem decidiu o pedido, não quem se inscreveu
   dataInscricao: string;        // data da autoinscrição
 }
 ```
@@ -653,36 +659,54 @@ da autoinscrição (`409 JA_INSCRITO` / `409 EVENTO_LOTADO`). Aluno toma
 `409 PARTICIPANTE_INATIVO` ("Aluno inativo: não é possível inscrevê-lo em
 eventos.").
 
-### `PUT /api/inscricoes/{id}` — atualização parcial (admin/secretaria)
+### Check-in pedido pelo aluno (desde 09/11/2026)
 
-É essa mesma rota genérica que o Check-in usa pra confirmar presença ou
-marcar ausência — não existe uma rota `/checkin/...` separada. O corpo é
-um patch parcial:
+A equipe e o professor **não marcam mais presença direto**: o antigo
+`PUT /api/inscricoes/{id}` saiu (responde 404). O aluno pede o check-in e
+quem cuida do evento decide.
 
-- Confirmar presença: `{ "statusPresenca": "PRESENTE", "dataCheckin": "<agora>" }` —
-  o backend ignora qualquer `usuarioId` que vier no corpo e seta o do
-  token (de quem está fazendo o check-in). É esse evento que libera o
-  certificado.
-- Marcar ausente: `{ "statusPresenca": "AUSENTE", "dataCheckin": null }`.
+**Janela:** abre 1 hora antes do início (`ANTECEDENCIA_CHECKIN_MS`) e fecha
+24 horas depois do fim (`PRAZO_CHECKIN_APOS_FIM_MS`; fim = `horario` +
+`cargaHoraria`), em `backend/src/utils/checkin.ts`. Fora dela, pedido e
+decisão respondem `409 CHECKIN_NAO_LIBERADO` ("O check-in deste evento só
+abre 1 hora antes do início.") ou `409 CHECKIN_ENCERRADO`.
 
-Confirmar presença de um aluno **inativo** retorna `409 PARTICIPANTE_INATIVO`
-("Aluno inativo: não é possível confirmar presença.") — a tela de Check-in
-também desabilita o botão, mas a regra vale na API.
+**Expiração (sem processo agendado):** `expirarCheckins` roda antes das
+rotas que leem ou usam a presença (listas de check-in e inscrições,
+dashboard, questionário, certificados e Meus dados). Nos eventos cuja janela
+fechou, SOLICITADO vira RECUSADO e PENDENTE vira AUSENTE, com `updateMany`
+(idempotente). Uma linha `CHECKIN_EXPIRADO` por execução que mudou algo.
+
+#### `POST /api/eventos/{eventoId}/checkin` — o aluno pede (só ALUNO)
+
+Sem corpo; o participante é sempre o do token. Recusa: conta inativa
+(`403 CONTA_INATIVA`), evento inexistente ou não aprovado
+(`404 EVENTO_NAO_ENCONTRADO`), sem inscrição (`404 INSCRICAO_NAO_ENCONTRADA`),
+fora da janela (`409`, acima) e inscrição que não está PENDENTE
+(`409 CHECKIN_JA_SOLICITADO`, `409 CHECKIN_JA_DECIDIDO` ou
+`409 CHECKIN_ENCERRADO`). Grava SOLICITADO e `checkinSolicitadoEm`; devolve a
+inscrição. Sem e-mail.
+
+#### `/api/checkin` — quem decide (professor dono do evento, secretaria, administrador)
+
+| Rota | O que faz |
+|---|---|
+| `GET /api/checkin/eventos` | eventos APROVADOS com a janela aberta que o perfil enxerga (professor: só os dele), com `inscritos`, `solicitados`, `presentes`, `recusados`, `semPedido` |
+| `GET /api/checkin/eventos/{eventoId}` | painel "Check-ins": `janela`, `pedidos` (SOLICITADO, com nome, RGM e `checkinSolicitadoEm`), `decididos` (PRESENTE/RECUSADO, com quem decidiu, quando e `presencaTravada`), `semPedido` e `ausentes` |
+| `POST /api/checkin/inscricoes/{id}/aprovar` | SOLICITADO → PRESENTE; também reverte RECUSADO → PRESENTE |
+| `POST /api/checkin/inscricoes/{id}/recusar` | SOLICITADO → RECUSADO (sem motivo); também reverte PRESENTE → RECUSADO |
+| `POST /api/checkin/eventos/{eventoId}/aprovar-todos` | aprova só os SOLICITADO daquele evento, de alunos ativos; devolve `{ aprovados }` |
+
+O professor de outro evento recebe `403`. A decisão grava `usuarioId` (do
+token) e `dataCheckin` (relógio do servidor). Sem pedido do aluno:
+`409 CHECKIN_NAO_SOLICITADO`; a mesma decisão de novo: `409 CHECKIN_JA_DECIDIDO`;
+aprovar aluno **inativo**: `409 PARTICIPANTE_INATIVO`.
 
 **Presença travada depois do questionário (RF015)**: se o aluno já tem
-alguma tentativa do questionário daquele evento, qualquer mudança de
-presença responde `409 PRESENCA_TRAVADA` ("A presença não pode mais ser
-alterada: o aluno já respondeu o questionário."). A mesma trava vale para
-excluir/cancelar a inscrição. A tela de Check-in desabilita "Confirmar
-presença" e "Ausente" nesses casos (ela consulta
-`GET /api/questionario-tentativas?participanteId=`).
-
-Aluno toma `403` em qualquer `PUT`/`DELETE` de inscrição — ele não confirma
-a própria presença, isso é sempre feito por quem está na recepção do
-evento. A tela de Check-in carrega todos os alunos de uma vez em
-`GET /api/participantes/alunos` e filtra por nome/e-mail/RGM no cliente.
-Funciona para o volume de dados de uma feira acadêmica; se crescer, um
-`?busca=` nessa rota resolveria sem mudar o frontend.
+alguma tentativa do questionário daquele evento, a decisão não muda mais
+(`409 PRESENCA_TRAVADA`, "A presença não pode mais ser alterada: o aluno já
+respondeu o questionário."). A mesma trava vale para excluir/cancelar a
+inscrição.
 
 ### Cancelamento de inscrição (RF025)
 
@@ -691,11 +715,12 @@ Regra única, a mesma para o aluno e para a equipe, aplicada no service
 
 1. o aluno **não respondeu** o questionário do evento — senão `409
    PRESENCA_TRAVADA` (ver acima);
-2. a presença está **`PENDENTE`** — senão `409 PRESENCA_JA_REGISTRADA`
-   ("Não é possível cancelar: a presença desta inscrição já foi registrada
-   no check-in.");
-3. o evento **ainda não começou** (`horario` no futuro) — senão `409
-   EVENTO_JA_INICIADO` ("Não é possível cancelar: o evento já começou.").
+2. o evento **ainda não começou** (`horario` no futuro) — senão `409
+   EVENTO_JA_INICIADO` ("Não é possível cancelar: o evento já começou.");
+3. o aluno **não pediu o check-in** — com o pedido em aberto, `409
+   CHECKIN_JA_SOLICITADO` (ele já está no evento); com o pedido já decidido,
+   `409 PRESENCA_JA_REGISTRADA` ("Não é possível cancelar: o check-in desta
+   inscrição já foi decidido.").
 
 O cancelamento apaga a inscrição e libera a vaga na hora: o aluno pode se
 inscrever de novo se ainda houver vaga. Auditoria: `INSCRICAO_CANCELADA`,
@@ -1085,7 +1110,7 @@ interface MeusDados {
     termos: { aceitoEm: string | null; versao: string | null };  // aceite dos Termos/Política
     doisFatores: { ativo: boolean; ativadoEm: string | null };
   };
-  inscricoes: { evento; dataEvento; inscritoEm; presenca: "PENDENTE" | "PRESENTE" | "AUSENTE"; checkinEm: string | null }[];
+  inscricoes: { evento; dataEvento; inscritoEm; presenca: StatusPresenca; checkinPedidoEm: string | null; checkinEm: string | null }[];  // pedido e decisão do check-in
   questionarios: { evento; respondidoEm; acertos; totalPerguntas; percentual }[];  // uma linha por tentativa
   certificados: { evento; dataEvento; cargaHoraria; codigoValidacao; emitidoEm; nomeImpresso; rgmImpresso }[];
   avaliacoes: { evento; nota; comentario; enviadaEm }[];
@@ -1150,11 +1175,13 @@ Códigos usados neste documento:
 | 409 | `JA_INSCRITO` | inscrição duplicada no mesmo evento |
 | 409 | `EVENTO_LOTADO` | capacidade da sala esgotada |
 | 409 | `FEEDBACK_JA_ENVIADO` | feedback duplicado pro mesmo evento |
-| 409 | `PARTICIPANTE_INATIVO` | inscrição manual ou check-in de aluno inativo |
+| 409 | `PARTICIPANTE_INATIVO` | inscrição manual ou aprovação do check-in de aluno inativo |
+| 409 | `CHECKIN_NAO_LIBERADO`, `CHECKIN_ENCERRADO` | pedido ou decisão de check-in fora da janela (antes de 1 h do início / mais de 24 h depois do fim) |
+| 409 | `CHECKIN_JA_SOLICITADO`, `CHECKIN_JA_DECIDIDO`, `CHECKIN_NAO_SOLICITADO` | pedido repetido ou já decidido; decisão sem pedido do aluno ou repetida; cancelamento com o pedido em aberto |
 | 409 | `CONFLITO_DE_SALA` | a sala já está ocupada por outro evento no intervalo do evento |
 | 409 | `EVENTO_COM_INSCRICOES` | exclusão de evento que ainda tem inscrição |
 | 409 | `PRESENCA_TRAVADA` | mudança de presença ou cancelamento depois de o aluno responder o questionário |
-| 409 | `PRESENCA_JA_REGISTRADA` | cancelamento de inscrição com presença já registrada no check-in |
+| 409 | `PRESENCA_JA_REGISTRADA` | cancelamento de inscrição com o check-in já decidido |
 | 409 | `EVENTO_JA_INICIADO` | autoinscrição ou cancelamento de inscrição de evento que já começou |
 | 409 | `CERTIFICADO_NAO_LIBERADO` | emissão sem presença confirmada ou sem a nota mínima |
 | 409 | `PARTICIPANTE_COM_CERTIFICADO` | remoção de aluno que tem certificado emitido |

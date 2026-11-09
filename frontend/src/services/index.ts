@@ -11,6 +11,7 @@ export type { EventoDashboard, ProximoEventoDashboard, ResumoDashboard, TotaisDa
 export { certificadoService, formatarCodigoValidacao, urlValidacao } from "./certificadoService";
 export type { CertificadoDisponivel, CertificadoEmitido, CertificadoValidado } from "./certificadoService";
 export { checkinService } from "./checkinService";
+export type { EventoCheckin, JanelaCheckin, PainelCheckin, PedidoCheckin } from "./checkinService";
 export { inscricaoAlunoService } from "./inscricaoAlunoService";
 export { inscricaoGestaoService } from "./inscricaoGestaoService";
 export type { FiltrosInscricoesGestao, InscricaoGestao } from "./inscricaoGestaoService";

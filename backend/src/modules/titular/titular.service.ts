@@ -21,6 +21,9 @@ export interface MeusDados {
     dataEvento: string;
     inscritoEm: string;
     presenca: StatusPresenca;
+    // quando o aluno pediu o check-in
+    checkinPedidoEm: string | null;
+    // quando o pedido foi decidido (aprovado ou recusado)
     checkinEm: string | null;
   }[];
   questionarios: {
@@ -72,6 +75,7 @@ async function montar(participanteId: string): Promise<MeusDados> {
         orderBy: { evento: { horario: "asc" } },
         select: {
           statusPresenca: true,
+          checkinSolicitadoEm: true,
           dataCheckin: true,
           dataInscricao: true,
           evento: { select: { titulo: true, horario: true } },
@@ -109,6 +113,7 @@ async function montar(participanteId: string): Promise<MeusDados> {
       dataEvento: i.evento.horario.toISOString(),
       inscritoEm: i.dataInscricao.toISOString(),
       presenca: i.statusPresenca,
+      checkinPedidoEm: i.checkinSolicitadoEm?.toISOString() ?? null,
       checkinEm: i.dataCheckin?.toISOString() ?? null,
     })),
     questionarios: participante.tentativas.map((t) => ({

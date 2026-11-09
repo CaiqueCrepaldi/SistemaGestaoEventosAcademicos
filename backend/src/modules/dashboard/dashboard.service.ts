@@ -10,7 +10,7 @@ const LIMITE_PROXIMOS = 5;
 type ContagemPresenca = Record<StatusPresenca, number>;
 
 function contagemVazia(): ContagemPresenca {
-  return { PRESENTE: 0, AUSENTE: 0, PENDENTE: 0 };
+  return { PENDENTE: 0, SOLICITADO: 0, PRESENTE: 0, RECUSADO: 0, AUSENTE: 0 };
 }
 
 // resultado do questionario de quem teve a presenca confirmada num evento (indicador de aprendizagem)
@@ -58,7 +58,7 @@ async function resumo(ator: Ator) {
     prisma.feedback.aggregate({ where: { evento: escopo }, _avg: { nota: true }, _count: { _all: true } }),
   ]);
 
-  // presentes/ausentes/pendentes de cada evento
+  // situacao do check-in de cada evento
   const contagemPorEvento = new Map<string, ContagemPresenca>();
   for (const linha of porEventoEStatus) {
     const contagem = contagemPorEvento.get(linha.eventoId) ?? contagemVazia();
@@ -91,16 +91,18 @@ async function resumo(ator: Ator) {
       horario: evento.horario.toISOString(),
       salaNome: evento.sala.nome,
       capacidade: evento.sala.capacidade,
-      inscritos: contagem.PRESENTE + contagem.AUSENTE + contagem.PENDENTE,
+      inscritos: contagem.PENDENTE + contagem.SOLICITADO + contagem.PRESENTE + contagem.RECUSADO + contagem.AUSENTE,
+      // check-in pedido pelo aluno: presente = aprovado; ausente = nao pediu a tempo ou teve o pedido
+      // recusado; aguardando = ainda sem pedido ou com o pedido esperando decisao
       presentes: contagem.PRESENTE,
-      ausentes: contagem.AUSENTE,
-      pendentes: contagem.PENDENTE,
+      ausentes: contagem.AUSENTE + contagem.RECUSADO,
+      aguardando: contagem.PENDENTE + contagem.SOLICITADO,
     };
   });
 
   const totalPresentes = porEvento.reduce((soma, e) => soma + e.presentes, 0);
   const totalAusentes = porEvento.reduce((soma, e) => soma + e.ausentes, 0);
-  const totalPendentes = porEvento.reduce((soma, e) => soma + e.pendentes, 0);
+  const totalAguardando = porEvento.reduce((soma, e) => soma + e.aguardando, 0);
   const checkinsRegistrados = totalPresentes + totalAusentes;
 
   // certificado liberado = presenca confirmada + nota minima no questionario do MESMO evento, ou seja,
@@ -132,11 +134,11 @@ async function resumo(ator: Ator) {
     totais: {
       eventos: eventos.length,
       eventosFuturos: futuros.length,
-      inscricoes: totalPresentes + totalAusentes + totalPendentes,
+      inscricoes: totalPresentes + totalAusentes + totalAguardando,
       presentes: totalPresentes,
       ausentes: totalAusentes,
-      pendentes: totalPendentes,
-      // entre os check-ins ja registrados (presente ou ausente); null enquanto nao houver nenhum
+      aguardando: totalAguardando,
+      // entre as presencas ja definidas (presente, ou ausente/recusado); null enquanto nao houver nenhuma
       taxaPresenca: checkinsRegistrados > 0 ? (totalPresentes / checkinsRegistrados) * 100 : null,
       certificadosLiberados,
       aprovadosQuestionario: totalAprovados,
@@ -163,7 +165,7 @@ async function resumo(ator: Ator) {
       inscritos: e.inscritos,
       presentes: e.presentes,
       ausentes: e.ausentes,
-      pendentes: e.pendentes,
+      aguardando: e.aguardando,
       // entre os presentes: aprovados + reprovados + podemResponder = presentes
       aprovados: e.aprovados,
       reprovados: e.reprovados,

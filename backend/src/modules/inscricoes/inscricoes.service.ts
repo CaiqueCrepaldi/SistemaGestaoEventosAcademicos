@@ -8,7 +8,7 @@ import { COM_CONTA_DO_ALUNO, paraDominio as participanteParaDominio } from "../p
 import { registrarAuditoria } from "../../utils/auditoria";
 import { eventosVisiveis, inscricaoDoAtorOuFalhar, type Ator } from "../../utils/escopo";
 import type { Inscricao, Perfil, StatusPresenca } from "../../types/domain";
-import type { InscricaoCheckinInput, InscricaoInput } from "./inscricoes.schemas";
+import type { InscricaoInput } from "./inscricoes.schemas";
 
 interface FiltrosListagem {
   eventoId?: string;
@@ -22,6 +22,7 @@ interface FiltrosListagem {
 export function paraDominio(inscricao: InscricaoDb): Inscricao {
   return {
     ...inscricao,
+    checkinSolicitadoEm: inscricao.checkinSolicitadoEm ? inscricao.checkinSolicitadoEm.toISOString() : null,
     dataCheckin: inscricao.dataCheckin ? inscricao.dataCheckin.toISOString() : null,
     dataInscricao: inscricao.dataInscricao.toISOString(),
   };
@@ -157,72 +158,17 @@ async function criarManual(dados: InscricaoInput, ator: Ator) {
 }
 
 // RF015: depois que o aluno responde o questionario do evento, a presenca daquela inscricao fica
-// travada — nao muda mais de status e a inscricao nao pode ser excluida (o certificado depende dela)
-async function garantirPresencaDestravada(participanteId: string, eventoId: string) {
+// travada — nao muda mais de status e a inscricao nao pode ser excluida (o certificado depende dela).
+// Usada aqui (cancelamento) e na decisao do check-in (modules/checkin)
+export async function garantirPresencaDestravada(participanteId: string, eventoId: string) {
   const tentativas = await prisma.tentativaQuestionario.count({ where: { participanteId, eventoId } });
   if (tentativas > 0) {
     throw AppError.conflito("PRESENCA_TRAVADA", "A presença não pode mais ser alterada: o aluno já respondeu o questionário.");
   }
 }
 
-// o check-in abre 1 hora antes do inicio do evento (a recepcao atende quem chega cedo) e nao fecha:
-// da pra registrar presenca ou ausencia depois que o evento acabou. Antes disso a presenca nao pode
-// ser marcada — senao o aluno faria o questionario e emitiria o certificado de um evento que nem aconteceu
-export const ANTECEDENCIA_CHECKIN_MS = 60 * 60 * 1000;
-
-async function garantirCheckinAberto(eventoId: string) {
-  const evento = await prisma.evento.findUnique({ where: { id: eventoId }, select: { horario: true } });
-  if (evento && evento.horario.getTime() - ANTECEDENCIA_CHECKIN_MS > Date.now()) {
-    throw AppError.conflito("CHECKIN_NAO_LIBERADO", "O check-in deste evento só abre 1 hora antes do início.");
-  }
-}
-
-// muda o status de presenca (confirma, marca ausente ou reverte pra pendente). O professor so nos
-// eventos dele (404 nos outros)
-async function atualizarCheckin(id: string, dados: InscricaoCheckinInput, ator: Ator) {
-  const usuarioIdDoToken = ator.id;
-  const existente = paraDominio(await inscricaoDoAtorOuFalhar(ator, id));
-  await garantirPresencaDestravada(existente.participanteId, existente.eventoId);
-  // voltar pra pendente nao registra presenca nenhuma, entao nao depende da janela do check-in
-  if (dados.statusPresenca === "PRESENTE" || dados.statusPresenca === "AUSENTE") {
-    await garantirCheckinAberto(existente.eventoId);
-  }
-
-  if (dados.statusPresenca === "PRESENTE") {
-    // aluno inativado nao pode ter presenca confirmada (a tela do check-in tambem bloqueia, mas a regra vale na API)
-    const participante = await prisma.participante.findUnique({
-      where: { id: existente.participanteId },
-      select: { ativo: true },
-    });
-    if (participante && !participante.ativo) {
-      throw AppError.conflito("PARTICIPANTE_INATIVO", "Aluno inativo: não é possível confirmar presença.");
-    }
-
-    // ignora qualquer dataCheckin/usuarioId vindo do cliente, sempre usa horario do servidor
-    const inscricao = await prisma.inscricao.update({
-      where: { id },
-      data: { statusPresenca: "PRESENTE", dataCheckin: new Date(), usuarioId: usuarioIdDoToken },
-    });
-    await registrarAuditoria(usuarioIdDoToken, "PRESENCA_CONFIRMADA", `inscricao ${id}`);
-    return paraDominio(inscricao);
-  }
-
-  if (dados.statusPresenca === "AUSENTE") {
-    const inscricao = await prisma.inscricao.update({
-      where: { id },
-      data: { statusPresenca: "AUSENTE", dataCheckin: null },
-    });
-    await registrarAuditoria(usuarioIdDoToken, "PRESENCA_MARCADA_AUSENTE", `inscricao ${id}`);
-    return paraDominio(inscricao);
-  }
-
-  const inscricao = await prisma.inscricao.update({
-    where: { id },
-    data: { statusPresenca: "PENDENTE", dataCheckin: null },
-  });
-  await registrarAuditoria(usuarioIdDoToken, "INSCRICAO_ATUALIZADA", `inscrição ${id}: presença revertida para pendente`);
-  return paraDominio(inscricao);
-}
+// a presenca nao e mais marcada aqui: o aluno pede o check-in e o professor do evento ou a equipe
+// aprova (modules/checkin)
 
 // quem cancela: o proprio aluno, alguem da equipe ou o professor dono do evento
 type QuemCancela = Ator;
@@ -265,7 +211,7 @@ async function avisarCancelamentoPorEmail(
 }
 
 // RF025: regra UNICA de cancelamento, a mesma pro aluno (DELETE /eventos/:eventoId/inscricoes) e
-// pra equipe (DELETE /inscricoes/:id): so cancela inscricao com presenca PENDENTE, de evento que
+// pra equipe (DELETE /inscricoes/:id): so cancela inscricao PENDENTE (sem pedido de check-in), de evento que
 // ainda nao comecou e cujo questionario o aluno nao respondeu. A vaga volta na hora — o aluno pode
 // se inscrever de novo se ainda houver vaga
 async function cancelar(id: string, ator: QuemCancela) {
@@ -276,16 +222,24 @@ async function cancelar(id: string, ator: QuemCancela) {
   if (!inscricao) throw AppError.naoEncontrado("INSCRICAO_NAO_ENCONTRADA", "Inscrição não encontrada.");
 
   await garantirPresencaDestravada(inscricao.participanteId, inscricao.eventoId);
-  if (inscricao.statusPresenca !== "PENDENTE") {
-    throw AppError.conflito(
-      "PRESENCA_JA_REGISTRADA",
-      "Não é possível cancelar: a presença desta inscrição já foi registrada no check-in.",
-    );
-  }
+  // evento que ja comecou: nada a cancelar (vem antes da presenca: quando a janela do check-in fecha, a
+  // inscricao sem pedido vira AUSENTE, e o motivo de verdade continua sendo o evento ja ter comecado)
   if (inscricao.evento.horario <= new Date()) {
     throw AppError.conflito("EVENTO_JA_INICIADO", "Não é possível cancelar: o evento já começou.");
   }
-
+  // quem ja pediu o check-in esta no evento: a inscricao nao e mais cancelada
+  if (inscricao.statusPresenca === "SOLICITADO") {
+    throw AppError.conflito(
+      "CHECKIN_JA_SOLICITADO",
+      "Não é possível cancelar: o check-in desta inscrição já foi pedido (o aluno já está no evento).",
+    );
+  }
+  if (inscricao.statusPresenca !== "PENDENTE") {
+    throw AppError.conflito(
+      "PRESENCA_JA_REGISTRADA",
+      "Não é possível cancelar: o check-in desta inscrição já foi decidido.",
+    );
+  }
   await prisma.inscricao.delete({ where: { id } });
 
   const pelaEquipe = ator.perfil !== "ALUNO";
@@ -355,7 +309,6 @@ export const inscricoesService = {
   listarParaGestao,
   buscarOuFalhar,
   criarManual,
-  atualizarCheckin,
   remover,
   cancelarPeloAluno,
 };

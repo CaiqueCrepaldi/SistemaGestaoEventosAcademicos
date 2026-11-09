@@ -366,27 +366,63 @@ try {
   });
   await api("POST", `/eventos/${eventoAmanha.corpo.id}/inscricoes`, await tokenDe(emailAluno, SENHA_ALUNA));
 
-  titulo("Check-in pela tela da secretaria");
+  titulo("Check-in: o aluno pede, a equipe aprova");
+  await entrar(page, emailAluno, SENHA_ALUNA);
+  await page.goto(`${APP}/eventos`);
+  const itemAmanha = page.locator(".agenda-item", { hasText: `Evento Amanha UI ${sufixo}` });
+  await itemAmanha.waitFor();
+  checar(
+    "evento que começa daqui a mais de 1h: sem botão de check-in e com o aviso de quando abre",
+    (await itemAmanha.locator("button", { hasText: "Fazer check-in" }).count()) === 0 && (await itemAmanha.innerText()).includes("O check-in abre em"),
+    await itemAmanha.innerText(),
+  );
+  const itemCheckinAluna = page.locator(".agenda-item", { hasText: `Evento UI ${sufixo}` }).first();
+  await itemCheckinAluna.locator("button", { hasText: "Fazer check-in" }).click();
+  const confirmaLocal = page.locator(".modal", { hasText: "Confirma que você está no local do evento?" });
+  await confirmaLocal.waitFor({ timeout: 8000 }).catch(() => {});
+  checar("antes de enviar, a tela pergunta se o aluno está no local do evento", (await confirmaLocal.count()) === 1);
+  await confirmaLocal.locator("button", { hasText: "Fazer check-in" }).click();
+  checar("o pedido de check-in sai e a tela avisa", await esperarToast(page, "Check-in enviado. Aguarde a aprovação."));
+  checar(
+    "a inscrição mostra \"Aguardando aprovação do check-in\" e o botão some",
+    (await itemCheckinAluna.innerText()).includes("Aguardando aprovação do check-in") &&
+      (await itemCheckinAluna.locator("button", { hasText: "Fazer check-in" }).count()) === 0,
+    await itemCheckinAluna.innerText(),
+  );
+  await sair(page);
+
   await entrar(page, secretaria.email, secretaria.senha);
   await page.goto(`${APP}/checkin`);
-  await page.fill("input.search-input", NOME_ALUNA);
-  await page.locator(".simple-list-item", { hasText: NOME_ALUNA }).click();
-  const linhaCheckin = page.locator("tr", { hasText: `Evento UI ${sufixo}` });
-  await linhaCheckin.waitFor();
-  const linhaAmanha = page.locator("tr", { hasText: `Evento Amanha UI ${sufixo}` });
-  await linhaAmanha.waitFor({ timeout: 8000 }).catch(() => {});
+  const eventoNaTelaCheckin = page.locator(".simple-list-item", { hasText: `Evento UI ${sufixo}` });
+  await eventoNaTelaCheckin.waitFor();
   checar(
-    "check-in de evento que começa daqui a mais de 1h: botões desabilitados e aviso de quando abre",
-    (await linhaAmanha.locator("button:has-text('Confirmar presença')").isDisabled()) &&
-      (await linhaAmanha.locator("button:has-text('Ausente')").isDisabled()) &&
-      (await linhaAmanha.innerText()).includes("O check-in abre em"),
-    await linhaAmanha.innerText().catch(() => "linha não encontrada"),
+    "tela Check-in lista o evento com o check-in aberto e o pedido pendente; o de amanhã não aparece",
+    (await eventoNaTelaCheckin.innerText()).includes("1 pedido(s) pendente(s)") &&
+      (await page.locator(".simple-list-item", { hasText: `Evento Amanha UI ${sufixo}` }).count()) === 0,
+    await eventoNaTelaCheckin.innerText(),
   );
-  await linhaCheckin.locator("button:has-text('Confirmar presença')").click();
-  await linhaCheckin.locator(".badge", { hasText: "Presente" }).waitFor({ timeout: 8000 }).catch(() => {});
-  checar("confirmar presença pela tela marca a inscrição como Presente", (await linhaCheckin.locator(".badge", { hasText: "Presente" }).count()) === 1);
+  await eventoNaTelaCheckin.click();
+  const linhaPedido = page.locator(".painel-checkins tr", { hasText: NOME_ALUNA });
+  await linhaPedido.waitFor();
+  checar("o painel mostra o pedido com o nome e o RGM da aluna", (await linhaPedido.innerText()).includes(rgmAluno), await linhaPedido.innerText());
+  await linhaPedido.locator("button", { hasText: "Aprovar" }).click();
+  const confirmaAprovacaoCheckin = page.locator(".modal", { hasText: "Tem certeza que deseja aprovar?" });
+  await confirmaAprovacaoCheckin.waitFor();
+  await confirmaAprovacaoCheckin.locator(".modal-footer button", { hasText: "Aprovar" }).click();
+  checar("aprovar pede confirmação e avisa", await esperarToast(page, "Check-in aprovado."));
+  const linhaDecidida = page.locator(".painel-checkins tr", { hasText: NOME_ALUNA });
+  await linhaDecidida.locator(".badge", { hasText: "Presente" }).waitFor({ timeout: 8000 }).catch(() => {});
+  checar(
+    "a aluna vai para \"Já decididos\" como Presente, com a opção de reverter",
+    (await linhaDecidida.locator(".badge", { hasText: "Presente" }).count()) === 1 &&
+      (await linhaDecidida.locator("button", { hasText: "Reverter para recusado" }).count()) === 1,
+  );
   await sair(page);
   await entrar(page, emailAluno, SENHA_ALUNA);
+  await page.goto(`${APP}/eventos`);
+  const itemPresenca = page.locator(".agenda-item", { hasText: `Evento UI ${sufixo}` }).first();
+  await itemPresenca.waitFor();
+  checar("a aluna vê \"Presença confirmada\"", (await itemPresenca.innerText()).includes("Presença confirmada"), await itemPresenca.innerText());
 
   titulo("E / Questionário: pergunta sem resposta");
   await page.goto(`${APP}/eventos/${eventoId}/questionario`);
@@ -473,7 +509,9 @@ try {
     titulo: tituloReprovado, horario: new Date(Date.now() + 30 * 60 * 1000).toISOString(), salaId: salaReprovado.corpo.id, palestranteId: palestrante.corpo.id, tema: "Tema", cargaHoraria: 1, questionario: questionario(),
   });
   const inscricaoReprovado = await api("POST", `/eventos/${eventoReprovado.corpo.id}/inscricoes`, tokenAluna);
-  await api("PUT", `/inscricoes/${inscricaoReprovado.corpo.id}`, tokenSecretaria, { statusPresenca: "PRESENTE" });
+  // check-in pelo fluxo novo: a aluna pede e a secretaria aprova
+  await api("POST", `/eventos/${eventoReprovado.corpo.id}/checkin`, tokenAluna);
+  await api("POST", `/checkin/inscricoes/${inscricaoReprovado.corpo.id}/aprovar`, tokenSecretaria);
   for (let i = 0; i < 2; i++) {
     await api("POST", `/eventos/${eventoReprovado.corpo.id}/questionario/respostas`, tokenAluna, { respostas: Array(10).fill(1) });
   }

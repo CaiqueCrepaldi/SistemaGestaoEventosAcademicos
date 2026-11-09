@@ -1632,3 +1632,24 @@ h1, h2, h3 {
   padding-left: 20px;
   font-size: 14px;
 }
+
+/* Check-in pedido pelo aluno: painel "Check-ins" (tela Check-in e dentro do evento) e situacao na tela do aluno */
+.painel-checkins-titulo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 12px 0 8px;
+}
+.painel-checkins-titulo h3 {
+  margin: 0;
+}
+.checkin-situacao {
+  margin: 6px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.checkin-situacao.checkin-aguardando { color: var(--orange-600); }
+.checkin-situacao.checkin-confirmado { color: var(--green-600); }
+.checkin-situacao.checkin-recusado { color: var(--red-600); }

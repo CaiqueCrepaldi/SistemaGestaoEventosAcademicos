@@ -12,7 +12,7 @@ export interface MeusDados {
     termos: { aceitoEm: string | null; versao: string | null };
     doisFatores: { ativo: boolean; ativadoEm: string | null };
   };
-  inscricoes: { evento: string; dataEvento: string; inscritoEm: string; presenca: StatusPresenca; checkinEm: string | null }[];
+  inscricoes: { evento: string; dataEvento: string; inscritoEm: string; presenca: StatusPresenca; checkinPedidoEm: string | null; checkinEm: string | null }[];
   questionarios: { evento: string; respondidoEm: string; acertos: number; totalPerguntas: number; percentual: number }[];
   certificados: {
     evento: string;

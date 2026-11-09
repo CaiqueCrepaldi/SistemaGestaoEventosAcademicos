@@ -66,8 +66,16 @@ export type AcaoAuditoria =
   | "INSCRICAO_ATUALIZADA"
   | "INSCRICAO_REMOVIDA"
   | "INSCRICAO_CANCELADA"
+  // presenca marcada direto pela equipe: so nos logs anteriores ao check-in pedido pelo aluno
   | "PRESENCA_CONFIRMADA"
   | "PRESENCA_MARCADA_AUSENTE"
+  // check-in pedido pelo aluno e decidido pelo professor do evento ou pela equipe
+  | "CHECKIN_SOLICITADO"
+  | "CHECKIN_APROVADO"
+  | "CHECKIN_RECUSADO"
+  | "CHECKIN_REVERTIDO"
+  | "CHECKIN_APROVADO_TODOS"
+  | "CHECKIN_EXPIRADO"
   | "QUESTIONARIO_RESPONDIDO"
   | "CERTIFICADO_EMITIDO"
   | "FEEDBACK_CRIADO"

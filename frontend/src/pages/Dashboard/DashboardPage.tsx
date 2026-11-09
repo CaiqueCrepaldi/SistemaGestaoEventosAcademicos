@@ -100,7 +100,7 @@ export function DashboardPage() {
         <StatCard
           label="Inscrições"
           value={numero(totais.inscricoes)}
-          hint={`${numero(totais.pendentes)} aguardando check-in`}
+          hint={`${numero(totais.aguardando)} aguardando check-in ou aprovação`}
           tone="blue"
         />
         <StatCard
@@ -112,7 +112,11 @@ export function DashboardPage() {
         <StatCard
           label="Taxa de presença"
           value={totais.taxaPresenca === null ? "—" : `${Math.round(totais.taxaPresenca)}%`}
-          hint={checkins === 0 ? "Nenhum check-in registrado" : `${numero(totais.presentes)} presentes de ${plural(checkins, "check-in", "check-ins")}`}
+          hint={
+            checkins === 0
+              ? "Nenhuma presença definida ainda"
+              : `${numero(totais.presentes)} presentes de ${plural(checkins, "presença definida", "presenças definidas")} (ausentes incluem recusados)`
+          }
           tone="green"
         />
         <StatCard

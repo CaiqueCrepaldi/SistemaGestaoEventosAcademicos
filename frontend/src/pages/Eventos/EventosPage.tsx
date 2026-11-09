@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { DialogoAprovacao, type AcaoAprovacao } from "../../components/aprovacao/DialogoAprovacao";
 import { ListaMudancas, ResumoProposta } from "../../components/aprovacao/ResumoProposta";
 import { SituacaoAprovacao } from "../../components/aprovacao/SituacaoAprovacao";
+import { PainelCheckins } from "../../components/checkin/PainelCheckins";
 import { Campo, LegendaObrigatorio, MarcaObrigatorio } from "../../components/ui/Campo";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Modal } from "../../components/ui/Modal";
@@ -12,6 +13,7 @@ import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFo
 import { ApiError, aprovacaoService, avisarAprovacoesAlteradas, eventoService, palestranteService, salaService, type AlvoAprovacao } from "../../services";
 import type { Evento, Palestrante, PerguntaQuestionario, Sala, SituacaoAprovacao as Situacao } from "../../types";
 import { eventoEncerrado, inputLocalParaIso, isoParaInputLocal } from "../../utils/data";
+import { situacaoDaJanela } from "../../utils/presenca";
 import { ALTERNATIVAS_POR_PERGUNTA, questionarioVazio } from "../../utils/questionario";
 import { EventosAluno } from "./EventosAluno";
 import { ModalPropostaEvento, mudancasDoEvento } from "./PropostaEvento";
@@ -76,6 +78,8 @@ function EventosEquipe() {
   // proposta de alteracao: corrigir/reenviar (modal proprio) e cancelar (confirmacao)
   const [corrigindoProposta, setCorrigindoProposta] = useState<Evento | null>(null);
   const [cancelandoProposta, setCancelandoProposta] = useState<Evento | null>(null);
+  // evento com o painel "Check-ins" aberto (pedidos de check-in dos alunos)
+  const [checkinsDe, setCheckinsDe] = useState<Evento | null>(null);
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [salas, setSalas] = useState<Sala[]>([]);
   const [palestrantes, setPalestrantes] = useState<Palestrante[]>([]);
@@ -394,6 +398,11 @@ function EventosEquipe() {
                         Reenviar
                       </button>
                     )}
+                    {evento.situacao === "APROVADO" && situacaoDaJanela(evento) !== "ANTES" && (
+                      <button className="btn btn-ghost" onClick={() => setCheckinsDe(evento)}>
+                        Check-ins
+                      </button>
+                    )}
                     {(evento.criadoPorId || evento.proposta) && (
                       <button className="btn btn-ghost" onClick={() => setAcaoAprovacao({ acao: "historico", evento })}>
                         Histórico
@@ -676,6 +685,12 @@ function EventosEquipe() {
           onConfirm={() => void cancelarProposta()}
           onCancel={() => setCancelandoProposta(null)}
         />
+      )}
+
+      {checkinsDe && (
+        <Modal title={`Check-ins de ${checkinsDe.titulo}`} onClose={() => setCheckinsDe(null)} wide>
+          <PainelCheckins eventoId={checkinsDe.id} />
+        </Modal>
       )}
 
       {excluindo && (

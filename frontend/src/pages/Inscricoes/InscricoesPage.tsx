@@ -17,20 +17,7 @@ import {
   type InscricaoGestao,
 } from "../../services";
 import type { Evento, Pagina, Participante, Sala, StatusPresenca } from "../../types";
-
-// traduz o status em cor pra Badge
-function badgeTone(status: StatusPresenca): "green" | "red" | "orange" {
-  if (status === "PRESENTE") return "green";
-  if (status === "AUSENTE") return "red";
-  return "orange";
-}
-
-// traduz o status em texto pra Badge
-function badgeLabel(status: StatusPresenca): string {
-  if (status === "PRESENTE") return "Presente";
-  if (status === "AUSENTE") return "Ausente";
-  return "Pendente";
-}
+import { corPresenca, rotuloPresenca } from "../../utils/presenca";
 
 const FILTROS_VAZIOS = { eventoId: "", status: "" as StatusPresenca | "", busca: "" };
 
@@ -227,7 +214,9 @@ export function InscricoesPage() {
             <select value={filtros.status} onChange={(e) => mudarFiltro({ status: e.target.value as StatusPresenca | "" })}>
               <option value="">Todas</option>
               <option value="PENDENTE">Pendente</option>
+              <option value="SOLICITADO">Check-in pedido</option>
               <option value="PRESENTE">Presente</option>
+              <option value="RECUSADO">Recusado</option>
               <option value="AUSENTE">Ausente</option>
             </select>
           </label>
@@ -260,9 +249,14 @@ export function InscricoesPage() {
                 </td>
                 <td>{inscricao.eventoTitulo}</td>
                 <td>
-                  <Badge tone={badgeTone(inscricao.statusPresenca)}>{badgeLabel(inscricao.statusPresenca)}</Badge>
+                  <Badge tone={corPresenca(inscricao.statusPresenca)}>{rotuloPresenca(inscricao.statusPresenca)}</Badge>
                 </td>
-                <td>{inscricao.dataCheckin ? new Date(inscricao.dataCheckin).toLocaleString("pt-BR") : "—"}</td>
+                <td>
+                  {inscricao.checkinSolicitadoEm ? `Pedido: ${new Date(inscricao.checkinSolicitadoEm).toLocaleString("pt-BR")}` : "—"}
+                  {inscricao.dataCheckin && (
+                    <div className="form-hint">Decidido: {new Date(inscricao.dataCheckin).toLocaleString("pt-BR")}</div>
+                  )}
+                </td>
                 <td className="table-actions">
                   <button className="btn btn-ghost btn-danger" onClick={() => setExcluindo(inscricao)}>
                     Cancelar
@@ -383,7 +377,7 @@ export function InscricoesPage() {
       {excluindo && (
         <ConfirmDialog
           title="Cancelar inscrição"
-          message="Cancelar esta inscrição? O aluno será avisado por e-mail. Só é possível cancelar inscrições com presença pendente, em eventos que ainda não começaram."
+          message="Cancelar esta inscrição? O aluno será avisado por e-mail. Só é possível cancelar inscrições sem pedido de check-in, em eventos que ainda não começaram."
           confirmLabel="Cancelar inscrição"
           cancelLabel="Voltar"
           tone="danger"

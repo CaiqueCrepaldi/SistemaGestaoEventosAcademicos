@@ -129,8 +129,9 @@ export interface Participante {
   bloqueado?: boolean;
 }
 
-// comeca PENDENTE e so muda quando alguem da equipe confirma o checkin
-export type StatusPresenca = "PENDENTE" | "PRESENTE" | "AUSENTE";
+// check-in pedido pelo aluno: PENDENTE (sem pedido) -> SOLICITADO (pediu) -> PRESENTE (aprovado) ou
+// RECUSADO (recusado, ou expirado sem decisao). Quem nao pede ate a janela fechar fica AUSENTE
+export type StatusPresenca = "PENDENTE" | "SOLICITADO" | "PRESENTE" | "RECUSADO" | "AUSENTE";
 
 // vinculo entre um Participante e um Evento, certificado so libera com PRESENTE
 export interface Inscricao {
@@ -138,6 +139,9 @@ export interface Inscricao {
   participanteId: string;
   eventoId: string;
   statusPresenca: StatusPresenca;
+  // quando o aluno pediu o check-in
+  checkinSolicitadoEm?: string | null;
+  // quando o pedido foi decidido e por quem
   dataCheckin: string | null;
   usuarioId: string | null;
 }

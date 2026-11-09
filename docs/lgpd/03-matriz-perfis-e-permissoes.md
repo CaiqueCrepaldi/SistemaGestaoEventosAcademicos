@@ -1,7 +1,9 @@
 # Matriz de perfis e permissões — SGEA
 
-**Data:** 09/11/2026 · **Versão:** 5 (propostas de alteração, questionário
-travado e inativação do professor, na seção "Perfil PROFESSOR". A versão 4, do
+**Data:** 09/11/2026 · **Versão:** 6 (check-in pedido pelo aluno e decidido
+pelo professor do evento ou pela equipe. A versão 5, do mesmo dia, trouxe as
+propostas de alteração, o questionário travado e a inativação do professor, na
+seção "Perfil PROFESSOR". A versão 4, do
 mesmo dia, trouxe o perfil PROFESSOR e a aprovação de eventos e palestrantes
 pela equipe. A versão 3, de
 29/09/2026, trouxe o 2FA opcional para todos os perfis,
@@ -69,7 +71,9 @@ invalidada depois de emitida (versão de token).
 | `/api/participantes/:id` | DELETE | ✅ | ✅ | ❌ | Exclusão definitiva (a mudar na Fase 2 pra anonimização — ver `04-plano-de-retencao-e-descarte.md`); só funciona com o participante já inativo |
 | `/api/inscricoes` | GET | ✅ | ✅ | ✅ (só as próprias) | `participanteId` da query é **ignorado** se quem pede for ALUNO — usa sempre o do token |
 | `/api/inscricoes` | POST | ✅ | ✅ | ❌ | Inscrição manual (a autoinscrição do aluno é a rota de eventos acima); aluno inativo → `409 PARTICIPANTE_INATIVO` |
-| `/api/inscricoes/:id` | PUT | ✅ | ✅ | ❌ | Confirmar presença/ausência (check-in); bloqueia presença de aluno inativo (`409 PARTICIPANTE_INATIVO`) |
+| `/api/eventos/:eventoId/checkin` | POST | ❌ | ❌ | ✅ (só a própria inscrição) | O aluno pede o check-in (participante do token), só dentro da janela e com a inscrição PENDENTE. A antiga marcação direta (`PUT /api/inscricoes/:id`) saiu |
+| `/api/checkin/eventos`, `/api/checkin/eventos/:eventoId` | GET | ✅ | ✅ | ❌ | Eventos com a janela aberta e painel "Check-ins" (o professor: só os eventos dele, `403` nos outros) |
+| `/api/checkin/inscricoes/:id/aprovar` e `/recusar`, `/api/checkin/eventos/:eventoId/aprovar-todos` | POST | ✅ | ✅ | ❌ | Decidem o pedido (ou revertem a decisão, dentro da janela); o professor só nos eventos dele (`403` nos outros); aprovar aluno inativo → `409 PARTICIPANTE_INATIVO` |
 | `/api/inscricoes/:id` | DELETE | ✅ | ✅ | ❌ | — |
 | `/api/inscricoes/:id/confirmacao-email` | POST | ✅ | ✅ | ✅ (só a própria) | Serviço confere `inscricao.participanteId === participanteIdDoToken`, senão `403` |
 | `/api/feedbacks` | GET | ✅ (tudo) | ✅ (tudo) | ✅ (só os próprios) | `participanteId` da query é ignorado se quem pede for ALUNO |
@@ -138,7 +142,8 @@ professor (ele não descobre que existe).
 | `/api/palestrantes/:id/proposta/aprovar` e `/recusar` | POST | ❌ | Só a equipe |
 | `/api/palestrantes/:id` | DELETE | ❌ | Só a equipe |
 | `/api/palestrantes/:id/reenviar` e `/historico` | POST/GET | ✅ | Só os dele |
-| `/api/inscricoes`, `/inscricoes/gestao`, `POST /inscricoes`, `PUT` e `DELETE /inscricoes/:id` | todos | ✅ | Só nos eventos dele (inscrição manual, check-in e cancelamento). Evento não aprovado não aceita inscrição |
+| `/api/inscricoes`, `/inscricoes/gestao`, `POST /inscricoes` e `DELETE /inscricoes/:id` | todos | ✅ | Só nos eventos dele (inscrição manual e cancelamento). Evento não aprovado não aceita inscrição |
+| `/api/checkin/...` (lista, painel, aprovar, recusar, aprovar todos) | todos | ✅ | Só nos eventos dele: no evento de outro professor ou da equipe, `403` |
 | `/api/participantes/alunos` | GET | ✅ | Busca para a inscrição manual, limitada a 20 resultados |
 | `/api/participantes` (resto) | todos | ❌ | Inativar, remover, bloqueio e 2FA continuam só da equipe |
 | `/api/certificados`, `/situacao`, `/emitir/:inscricaoId` | GET/POST | ✅ | Só nos eventos dele |

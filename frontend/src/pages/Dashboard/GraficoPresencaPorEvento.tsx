@@ -1,11 +1,12 @@
 import type { EventoDashboard } from "../../services";
 import { GraficoBarrasPorEvento, type SegmentoGrafico } from "./GraficoBarrasPorEvento";
 
-// presente (verde) | pendente (cinza) | ausente (vermelho)
+// presente = check-in aprovado (verde) | aguardando = sem pedido ou pedido esperando aprovacao (cinza) |
+// ausente = nao pediu a tempo ou teve o pedido recusado (vermelho)
 const SEGMENTOS: readonly SegmentoGrafico[] = [
-  { chave: "presentes", classe: "verde", rotulo: "Presentes" },
-  { chave: "pendentes", classe: "cinza", rotulo: "Pendentes" },
-  { chave: "ausentes", classe: "vermelho", rotulo: "Ausentes" },
+  { chave: "presentes", classe: "verde", rotulo: "Presentes (check-in aprovado)" },
+  { chave: "aguardando", classe: "cinza", rotulo: "Aguardando check-in ou aprovação" },
+  { chave: "ausentes", classe: "vermelho", rotulo: "Ausentes ou recusados" },
 ];
 
 // inscricoes por evento (comprimento da barra) divididas pela situacao do check-in (segmentos)

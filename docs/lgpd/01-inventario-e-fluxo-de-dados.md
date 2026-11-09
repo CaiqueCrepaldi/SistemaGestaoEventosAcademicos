@@ -1,6 +1,6 @@
 # Inventário de dados pessoais e fluxo de dados — SGEA
 
-**Data:** 09/11/2026 · **Versão:** 6 (propostas de alteração, aviso aos inscritos e inativação do professor, seção 15. A versão 5, do mesmo dia, trouxe a conta de professor e o histórico da aprovação, seções 13 e 14. A versão 4, de 06/11/2026, trouxe a confirmação do e-mail no cadastro:
+**Data:** 09/11/2026 · **Versão:** 7 (check-in pedido pelo próprio aluno, seção 4. A versão 6, do mesmo dia, trouxe as propostas de alteração, o aviso aos inscritos e a inativação do professor, seção 15. A versão 5, do mesmo dia, trouxe a conta de professor e o histórico da aprovação, seções 13 e 14. A versão 4, de 06/11/2026, trouxe a confirmação do e-mail no cadastro:
 tabela `cadastros_pendentes`, seção 11; tabela `certificados`, seção 12;
 e-mail do aluno não editável; IP também no limite de envio do código do
 cadastro. A versão 3, de 29/09/2026,
@@ -82,8 +82,13 @@ detalhadas em `02-matriz-dados-finalidade-base-legal.md`; aqui o foco é
 - **De quem é:** do aluno inscrito.
 - **Onde é coletado:** autoinscrição do próprio aluno
   (`POST /eventos/:id/inscricoes`) ou inscrição manual pela secretaria;
-  check-in feito pela equipe na tela correspondente; respostas enviadas
-  pelo próprio aluno na tela de Questionário.
+  check-in pedido pelo próprio aluno na tela Eventos (grava a situação e a
+  hora do pedido, `inscricoes.checkinSolicitadoEm`) e aprovado ou recusado
+  pelo professor do evento ou pela equipe (grava quem decidiu e quando,
+  `usuarioId` e `dataCheckin`); respostas enviadas pelo próprio aluno na
+  tela de Questionário. Quando a janela do check-in fecha (24 horas depois
+  do fim do evento), o pedido sem decisão vira RECUSADO e quem não pediu
+  fica AUSENTE; a auditoria registra só as quantidades.
 - **Obrigatório:** obrigatório pra quem quer participar do evento e emitir
   certificado.
 - **Onde fica:** tabelas `inscricoes` e `tentativas_questionario`.

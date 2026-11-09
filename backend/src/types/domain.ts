@@ -2,7 +2,9 @@
 
 export type Perfil = "ADMINISTRADOR" | "SECRETARIA" | "ALUNO" | "PROFESSOR";
 export type SituacaoAprovacao = "PENDENTE" | "APROVADO" | "RECUSADO";
-export type StatusPresenca = "PENDENTE" | "PRESENTE" | "AUSENTE";
+// PENDENTE (sem pedido), SOLICITADO (aluno pediu o check-in), PRESENTE (aprovado), RECUSADO (recusado ou
+// expirado sem decisao), AUSENTE (nao pediu ate a janela fechar)
+export type StatusPresenca = "PENDENTE" | "SOLICITADO" | "PRESENTE" | "RECUSADO" | "AUSENTE";
 
 export interface Usuario {
   id: string;
@@ -134,6 +136,9 @@ export interface Inscricao {
   participanteId: string;
   eventoId: string;
   statusPresenca: StatusPresenca;
+  // quando o aluno pediu o check-in
+  checkinSolicitadoEm: string | null;
+  // quando o pedido foi decidido e por quem (usuarioId)
   dataCheckin: string | null;
   usuarioId: string | null;
   dataInscricao: string;

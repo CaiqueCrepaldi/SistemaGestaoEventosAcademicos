@@ -150,6 +150,7 @@ export function inscricaoParaDTO(inscricao: Inscricao) {
     participanteId: inscricao.participanteId,
     eventoId: inscricao.eventoId,
     statusPresenca: inscricao.statusPresenca,
+    checkinSolicitadoEm: inscricao.checkinSolicitadoEm,
     dataCheckin: inscricao.dataCheckin,
     usuarioId: inscricao.usuarioId,
     dataInscricao: inscricao.dataInscricao,

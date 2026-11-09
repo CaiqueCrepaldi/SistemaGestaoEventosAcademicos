@@ -19,6 +19,7 @@ import { dashboardRouter } from "./modules/dashboard/dashboard.routes";
 import { titularRouter } from "./modules/titular/titular.routes";
 import { professoresRouter } from "./modules/professores/professores.routes";
 import { aprovacoesRouter } from "./modules/aprovacoes/aprovacoes.routes";
+import { checkinRouter } from "./modules/checkin/checkin.routes";
 
 // monta a instancia do express com todos os middlewares e rotas
 export function criarApp() {
@@ -55,6 +56,7 @@ export function criarApp() {
   apiRouter.use("/meus-dados", titularRouter);
   apiRouter.use("/professores", professoresRouter);
   apiRouter.use("/aprovacoes", aprovacoesRouter);
+  apiRouter.use("/checkin", checkinRouter);
   app.use("/api", apiRouter);
 
   // qualquer rota nao mapeada cai aqui, 404 no formato padrao

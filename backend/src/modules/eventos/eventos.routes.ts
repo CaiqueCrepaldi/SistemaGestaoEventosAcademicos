@@ -4,6 +4,8 @@ import { autenticar, autorizar } from "../../middleware/auth";
 import { validarCorpo } from "../../middleware/validate";
 import { eventoParaDTO, inscricaoParaDTO, tentativaParaDTO } from "../../utils/dto";
 import { AppError } from "../../errors/AppError";
+import { expirarCheckinsAntes } from "../../utils/checkin";
+import { checkinService } from "../checkin/checkin.service";
 import { inscricoesService } from "../inscricoes/inscricoes.service";
 import { questionarioService } from "../questionario/questionario.service";
 import { respostasQuestionarioSchema } from "../questionario/questionario.schemas";
@@ -184,6 +186,7 @@ eventosRouter.delete(
   "/:eventoId/inscricoes",
   autenticar,
   autorizar("ALUNO"),
+  expirarCheckinsAntes,
   asyncHandler(async (req, res) => {
     const participanteId = req.usuario!.participanteId;
     if (!participanteId) {
@@ -191,6 +194,24 @@ eventosRouter.delete(
     }
     await inscricoesService.cancelarPeloAluno(req.params.eventoId, participanteId, req.usuario!.sub);
     res.status(204).send();
+  }),
+);
+
+// o ALUNO pede o check-in do evento em que esta inscrito — sempre o participante do token. So dentro da
+// janela (1 hora antes do inicio ate 24 horas depois do fim) e so a partir da inscricao PENDENTE; quem
+// aprova e o professor do evento ou a equipe (/api/checkin)
+eventosRouter.post(
+  "/:eventoId/checkin",
+  autenticar,
+  autorizar("ALUNO"),
+  expirarCheckinsAntes,
+  asyncHandler(async (req, res) => {
+    const participanteId = req.usuario!.participanteId;
+    if (!participanteId) {
+      throw AppError.acessoNegado("Esta conta não está vinculada a um participante.");
+    }
+    const inscricao = await checkinService.solicitar(req.params.eventoId, participanteId, req.usuario!.sub);
+    res.json(inscricaoParaDTO(inscricao));
   }),
 );
 
@@ -209,6 +230,7 @@ eventosRouter.post(
   "/:eventoId/questionario/respostas",
   autenticar,
   autorizar("ALUNO"),
+  expirarCheckinsAntes,
   validarCorpo(respostasQuestionarioSchema),
   asyncHandler(async (req, res) => {
     const participanteId = req.usuario!.participanteId;
@@ -225,6 +247,7 @@ eventosRouter.get(
   "/:eventoId/questionario/tentativas",
   autenticar,
   autorizar("ALUNO"),
+  expirarCheckinsAntes,
   asyncHandler(async (req, res) => {
     const participanteId = req.usuario!.participanteId;
     if (!participanteId) {

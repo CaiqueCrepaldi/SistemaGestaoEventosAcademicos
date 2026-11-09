@@ -2,6 +2,7 @@ import { Router, type Request } from "express";
 import { AppError } from "../../errors/AppError";
 import { autenticar, autorizar } from "../../middleware/auth";
 import { asyncHandler } from "../../utils/asyncHandler";
+import { expirarCheckinsAntes } from "../../utils/checkin";
 import { titularService } from "./titular.service";
 
 export const titularRouter = Router();
@@ -24,6 +25,7 @@ function participanteDoToken(req: Request): string {
 // GET /api/meus-dados — tudo o que o sistema guarda sobre o aluno (acesso, art. 18, II)
 titularRouter.get(
   "/",
+  expirarCheckinsAntes,
   asyncHandler(async (req, res) => {
     res.json(await titularService.meusDados(participanteDoToken(req)));
   }),

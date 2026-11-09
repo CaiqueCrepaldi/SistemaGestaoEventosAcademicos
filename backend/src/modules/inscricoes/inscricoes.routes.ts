@@ -6,9 +6,10 @@ import { buscaSchema, lerConsulta, paginacaoSchema } from "../../utils/paginacao
 import { asyncHandler } from "../../utils/asyncHandler";
 import { autenticar, autorizar } from "../../middleware/auth";
 import { validarCorpo } from "../../middleware/validate";
+import { expirarCheckinsAntes } from "../../utils/checkin";
 import { inscricaoParaDTO } from "../../utils/dto";
 import { inscricoesService } from "./inscricoes.service";
-import { inscricaoCheckinSchema, inscricaoSchema } from "./inscricoes.schemas";
+import { inscricaoSchema } from "./inscricoes.schemas";
 
 export const inscricoesRouter = Router();
 
@@ -20,6 +21,7 @@ function atorDe(req: Request) {
 inscricoesRouter.get(
   "/",
   autenticar,
+  expirarCheckinsAntes,
   asyncHandler(async (req, res) => {
     const participanteIdQuery = typeof req.query.participanteId === "string" ? req.query.participanteId : undefined;
 
@@ -41,13 +43,14 @@ inscricoesRouter.get(
 // paginada e filtrada no banco, com nome/RGM do aluno e titulo do evento ja junto
 const consultaGestaoSchema = paginacaoSchema.extend({
   eventoId: z.string().trim().min(1).max(64).optional(),
-  status: z.enum(["PENDENTE", "PRESENTE", "AUSENTE"]).optional(),
+  status: z.enum(["PENDENTE", "SOLICITADO", "PRESENTE", "RECUSADO", "AUSENTE"]).optional(),
   busca: buscaSchema,
 });
 inscricoesRouter.get(
   "/gestao",
   autenticar,
   autorizar("ADMINISTRADOR", "SECRETARIA", "PROFESSOR"),
+  expirarCheckinsAntes,
   asyncHandler(async (req, res) => {
     res.json(
       await inscricoesService.listarParaGestao({ ...lerConsulta(consultaGestaoSchema, req.query), escopoEvento: eventosVisiveis(atorDe(req)) }),
@@ -68,17 +71,8 @@ inscricoesRouter.post(
   }),
 );
 
-// mesma rota generica pra confirmar presenca ou marcar ausente (professor so nos eventos dele)
-inscricoesRouter.put(
-  "/:id",
-  autenticar,
-  autorizar("ADMINISTRADOR", "SECRETARIA", "PROFESSOR"),
-  validarCorpo(inscricaoCheckinSchema),
-  asyncHandler(async (req, res) => {
-    const inscricao = await inscricoesService.atualizarCheckin(req.params.id, req.body, atorDe(req));
-    res.json(inscricaoParaDTO(inscricao));
-  }),
-);
+// a presenca nao e mais marcada direto pela equipe (o antigo PUT /inscricoes/:id saiu): o aluno pede o
+// check-in (POST /eventos/:eventoId/checkin) e quem cuida do evento decide (/api/checkin)
 
 // a equipe cancela a inscricao de um aluno — mesma regra do cancelamento pelo proprio aluno (so
 // presenca pendente em evento que nao comecou); o aluno e avisado por e-mail
@@ -86,6 +80,7 @@ inscricoesRouter.delete(
   "/:id",
   autenticar,
   autorizar("ADMINISTRADOR", "SECRETARIA", "PROFESSOR"),
+  expirarCheckinsAntes,
   asyncHandler(async (req, res) => {
     await inscricoesService.remover(req.params.id, atorDe(req));
     res.status(204).send();

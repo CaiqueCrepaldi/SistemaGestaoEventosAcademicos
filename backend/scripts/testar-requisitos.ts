@@ -95,6 +95,8 @@ async function main() {
   const { criarApp } = await import("../src/expressApp");
   const { prisma } = await import("../src/db/prisma");
   const { indiceBusca } = await import("../src/utils/criptografia");
+  const { expirarCheckins } = await import("../src/utils/checkin");
+  const { VERSAO_TERMOS_ATUAL } = await import("../src/config/termos");
 
   // o limite de tentativas por IP (bloco 2) conta os logins errados de proposito deste teste, que
   // sempre saem do 127.0.0.1: zera o contador desse IP no comeco e no fim (so no banco de dev)
@@ -627,10 +629,14 @@ async function main() {
     r = await chamar("POST", `/eventos/${eventoEncostadoId}/inscricoes`, { token: aluno.token });
     checar("quem cancelou pode se inscrever de novo -> 201", r.status === 201, r.corpo);
     const inscricaoEncostadaAluno: string = r.corpo.id;
-    // o evento principal (comeca em 30 min) ja tem o check-in aberto e ainda nao comecou
-    await chamar("PUT", `/inscricoes/${inscricaoAluno2}`, { token: secretaria.token, corpo: { statusPresenca: "AUSENTE" } });
+    // o evento principal (comeca em 30 min) ja tem o check-in aberto e ainda nao comecou: o aluno 2 pede o
+    // check-in (fica SOLICITADO ate o R13, quando a secretaria aprova)
+    r = await chamar("POST", `/eventos/${eventoId}/checkin`, { token: aluno2.token });
+    checar("aluno 2 pede o check-in do evento principal -> 200 SOLICITADO", r.status === 200 && r.corpo.statusPresenca === "SOLICITADO", r.corpo);
     r = await chamar("DELETE", `/eventos/${eventoId}/inscricoes`, { token: aluno2.token });
-    checar("presença já registrada no check-in não cancela -> 409", r.status === 409 && r.corpo.code === "PRESENCA_JA_REGISTRADA", r.corpo);
+    checar("inscrição com check-in pedido não é cancelada pelo aluno -> 409 CHECKIN_JA_SOLICITADO", r.status === 409 && r.corpo.code === "CHECKIN_JA_SOLICITADO", r.corpo);
+    r = await chamar("DELETE", `/inscricoes/${inscricaoAluno2}`, { token: secretaria.token });
+    checar("nem pela equipe -> 409 CHECKIN_JA_SOLICITADO", r.status === 409 && r.corpo.code === "CHECKIN_JA_SOLICITADO", r.corpo);
     r = await chamar("POST", "/eventos", {
       token: admin.token,
       corpo: { ...eventoBase, titulo: `Evento Iniciado ${sufixo}`, salaId: salaPequenaId, horario: emHoras(emBreve, -72), questionario: questionario() },
@@ -668,21 +674,48 @@ async function main() {
     r = await chamar("POST", `/inscricoes/${inscricaoAluno}/confirmacao-email`, { token: aluno.token });
     checar("a rota antiga de disparo pela tela não existe mais -> 404", r.status === 404, r.status);
 
-    requisito("R12 Check-in");
-    r = await chamar("PUT", `/inscricoes/${inscricaoEncostadaAluno}`, { token: secretaria.token, corpo: { statusPresenca: "PRESENTE" } });
+    requisito("R12 Check-in pedido pelo aluno e aprovado pelo professor do evento ou pela equipe");
+    // o "Evento Encostado" comeca daqui a 2h30: a janela (1 hora antes do inicio) ainda nao abriu
+    r = await chamar("POST", `/eventos/${eventoEncostadoId}/checkin`, { token: aluno.token });
     checar(
-      "check-in de evento que começa daqui a mais de 1h -> 409 CHECKIN_NAO_LIBERADO",
-      r.status === 409 && r.corpo.code === "CHECKIN_NAO_LIBERADO",
+      "pedido antes de 1 hora do início -> 409 CHECKIN_NAO_LIBERADO",
+      r.status === 409 && r.corpo.code === "CHECKIN_NAO_LIBERADO" && r.corpo.message === "O check-in deste evento só abre 1 hora antes do início.",
       r.corpo,
     );
-    r = await chamar("PUT", `/inscricoes/${inscricaoEncostadaAluno}`, { token: secretaria.token, corpo: { statusPresenca: "AUSENTE" } });
-    checar("marcar ausente também espera a janela do check-in -> 409", r.status === 409 && r.corpo.code === "CHECKIN_NAO_LIBERADO", r.corpo);
-    r = await chamar("PUT", `/inscricoes/${inscricaoAluno}`, { token: secretaria.token, corpo: { statusPresenca: "AUSENTE" } });
-    checar("marcar ausente -> 200", r.status === 200 && r.corpo.statusPresenca === "AUSENTE", r.corpo);
-    r = await chamar("PUT", `/inscricoes/${inscricaoAluno}`, { token: secretaria.token, corpo: { statusPresenca: "PRESENTE", usuarioId: aluno.id } });
-    checar("confirmar presença grava quem fez o check-in (do token)", r.status === 200 && r.corpo.statusPresenca === "PRESENTE" && r.corpo.usuarioId === secretaria.id && !!r.corpo.dataCheckin, r.corpo);
-    r = await chamar("PUT", `/inscricoes/${inscricaoAluno}`, { token: aluno.token, corpo: { statusPresenca: "PRESENTE" } });
-    checar("aluno não faz check-in -> 403", r.status === 403, r.status);
+    r = await chamar("POST", `/eventos/${eventoId}/checkin`, { token: aluno.token });
+    checar(
+      "pedido dentro da janela grava SOLICITADO e a hora do pedido, ainda sem decisão",
+      r.status === 200 && r.corpo.statusPresenca === "SOLICITADO" && !!r.corpo.checkinSolicitadoEm && r.corpo.usuarioId === null && r.corpo.dataCheckin === null,
+      r.corpo,
+    );
+    checar(
+      "pedido na auditoria (CHECKIN_SOLICITADO, só com ids)",
+      !!(await prisma.logAuditoria.findFirst({ where: { acao: "CHECKIN_SOLICITADO", usuarioId: aluno.id, detalhe: { contains: inscricaoAluno } } })),
+    );
+    r = await chamar("POST", `/eventos/${eventoId}/checkin`, { token: aluno.token });
+    checar("pedir de novo -> 409 CHECKIN_JA_SOLICITADO", r.status === 409 && r.corpo.code === "CHECKIN_JA_SOLICITADO", r.corpo);
+    r = await chamar("POST", `/eventos/${eventoLotadoId}/checkin`, { token: aluno.token });
+    checar("aluno não inscrito no evento -> 404 INSCRICAO_NAO_ENCONTRADA", r.status === 404 && r.corpo.code === "INSCRICAO_NAO_ENCONTRADA", r.corpo);
+    r = await chamar("POST", `/eventos/${eventoId}/checkin`, { token: secretaria.token });
+    checar("só o aluno pede o check-in -> 403", r.status === 403, r.status);
+    r = await chamar("PUT", `/inscricoes/${inscricaoAluno}`, { token: secretaria.token, corpo: { statusPresenca: "PRESENTE" } });
+    checar("a equipe não marca mais presença direto (rota antiga não existe) -> 404", r.status === 404, r.status);
+    r = await chamar("POST", `/checkin/inscricoes/${inscricaoAluno}/aprovar`, { token: aluno.token });
+    checar("aluno não aprova check-in -> 403", r.status === 403, r.status);
+    r = await chamar("POST", `/eventos/${eventoId}/questionario/respostas`, { token: aluno.token, corpo: { respostas: Array(10).fill(0) } });
+    checar("pedido ainda não aprovado (SOLICITADO) não libera o questionário -> 403", r.status === 403, r.corpo);
+    r = await chamar("POST", `/checkin/inscricoes/${inscricaoAluno}/aprovar`, { token: secretaria.token });
+    checar(
+      "secretaria aprova: PRESENTE, com quem decidiu (do token) e quando",
+      r.status === 200 && r.corpo.statusPresenca === "PRESENTE" && r.corpo.usuarioId === secretaria.id && !!r.corpo.dataCheckin,
+      r.corpo,
+    );
+    checar(
+      "aprovação na auditoria (CHECKIN_APROVADO)",
+      !!(await prisma.logAuditoria.findFirst({ where: { acao: "CHECKIN_APROVADO", usuarioId: secretaria.id, detalhe: { contains: inscricaoAluno } } })),
+    );
+    r = await chamar("POST", `/checkin/inscricoes/${inscricaoAluno}/aprovar`, { token: secretaria.token });
+    checar("aprovar de novo -> 409 CHECKIN_JA_DECIDIDO", r.status === 409 && r.corpo.code === "CHECKIN_JA_DECIDIDO", r.corpo);
 
     // ------------------------------------------------------------------ questionario e certificado
     requisito("R13 Questionário obrigatório");
@@ -700,8 +733,9 @@ async function main() {
     checar("equipe vê as tentativas de todos", r.status === 200 && r.corpo.some((t: { participanteId: string }) => t.participanteId === aluno.participanteId), r.status);
     r = await chamar("POST", `/eventos/${eventoLotadoId}/questionario/respostas`, { token: aluno.token, corpo: { respostas: Array(10).fill(0) } });
     checar("sem presença confirmada no evento não responde o questionário -> 403", r.status === 403, r);
-    // aluno 2: presenca confirmada no evento, reprova 2x e esgota as tentativas
-    await chamar("PUT", `/inscricoes/${inscricaoAluno2}`, { token: secretaria.token, corpo: { statusPresenca: "PRESENTE" } });
+    // aluno 2: o pedido de check-in (R27) e aprovado pela secretaria; reprova 2x e esgota as tentativas
+    r = await chamar("POST", `/checkin/inscricoes/${inscricaoAluno2}/aprovar`, { token: secretaria.token });
+    checar("pedido do aluno 2 aprovado -> 200 PRESENTE", r.status === 200 && r.corpo.statusPresenca === "PRESENTE", r.corpo);
     await chamar("POST", `/eventos/${eventoId}/questionario/respostas`, { token: aluno2.token, corpo: { respostas: Array(10).fill(1) } });
     await chamar("POST", `/eventos/${eventoId}/questionario/respostas`, { token: aluno2.token, corpo: { respostas: Array(10).fill(2) } });
     r = await chamar("POST", `/eventos/${eventoId}/questionario/respostas`, { token: aluno2.token, corpo: { respostas: Array(10).fill(0) } });
@@ -709,9 +743,9 @@ async function main() {
 
     // ------------------------------------------------------------------ RF015: presenca travada
     requisito("R28 Presença travada depois do questionário (RF015)");
-    r = await chamar("PUT", `/inscricoes/${inscricaoAluno}`, { token: secretaria.token, corpo: { statusPresenca: "AUSENTE" } });
+    r = await chamar("POST", `/checkin/inscricoes/${inscricaoAluno}/recusar`, { token: secretaria.token });
     checar(
-      "mudar a presença de quem já respondeu o questionário -> 409 com a mensagem da regra",
+      "reverter a presença de quem já respondeu o questionário -> 409 com a mensagem da regra",
       r.status === 409 && r.corpo.code === "PRESENCA_TRAVADA" && r.corpo.message === "A presença não pode mais ser alterada: o aluno já respondeu o questionário.",
       r.corpo,
     );
@@ -1070,8 +1104,11 @@ async function main() {
     checar("inscrição de evento que já aconteceu continua", !!(await prisma.inscricao.findUnique({ where: { id: inscricaoPassada } })));
     r = await chamar("POST", "/inscricoes", { token: secretaria.token, corpo: { participanteId: aluno2.participanteId, eventoId: eventoLotadoId } });
     checar("equipe não inscreve aluno inativo -> 409", r.status === 409 && r.corpo.code === "PARTICIPANTE_INATIVO", r.corpo);
-    r = await chamar("PUT", `/inscricoes/${inscricaoPassada}`, { token: secretaria.token, corpo: { statusPresenca: "PRESENTE" } });
-    checar("check-in de aluno inativo -> 409", r.status === 409, r.corpo);
+    // o evento passado terminou ha 23 h: a janela do check-in ainda esta aberta. O pedido entra direto no
+    // banco (o aluno inativo nao tem sessao), como se tivesse sido feito antes da inativacao
+    await prisma.inscricao.update({ where: { id: inscricaoPassada }, data: { statusPresenca: "SOLICITADO", checkinSolicitadoEm: new Date() } });
+    r = await chamar("POST", `/checkin/inscricoes/${inscricaoPassada}/aprovar`, { token: secretaria.token });
+    checar("aprovar o check-in de aluno inativo -> 409 PARTICIPANTE_INATIVO", r.status === 409 && r.corpo.code === "PARTICIPANTE_INATIVO", r.corpo);
     r = await chamar("GET", "/participantes", { token: admin.token });
     checar(
       "Participantes marca o aluno como inativo e traz a situação da conta (2FA e acesso)",
@@ -1148,8 +1185,8 @@ async function main() {
     // aprendizagem: no evento principal o aluno 1 foi aprovado (0% e 100%) e o aluno 2 reprovou nas 2
     // tentativas (R13). Falta o caso "ainda pode responder": o aluno 2 ganha presenca no evento passado e
     // responde 1 vez abaixo de 60%
-    r = await chamar("PUT", `/inscricoes/${inscricaoPassada}`, { token: secretaria.token, corpo: { statusPresenca: "PRESENTE" } });
-    checar("presença confirmada do aluno 2 no evento passado (cenário do indicador) -> 200", r.status === 200, r.corpo);
+    r = await chamar("POST", `/checkin/inscricoes/${inscricaoPassada}/aprovar`, { token: secretaria.token });
+    checar("check-in do aluno 2 aprovado no evento passado, ainda na janela (cenário do indicador) -> 200", r.status === 200, r.corpo);
     aluno2.token = await entrar(aluno2);
     r = await chamar("POST", `/eventos/${eventoPassadoId}/questionario/respostas`, { token: aluno2.token, corpo: { respostas: Array(10).fill(1) } });
     checar("aluno 2 responde 1 vez abaixo de 60% no evento passado -> 201", r.status === 201 && r.corpo.percentual < 60, r.corpo);
@@ -1157,7 +1194,7 @@ async function main() {
     const totais = r.corpo?.totais;
     checar(
       "equipe recebe os indicadores numa chamada só -> 200",
-      r.status === 200 && typeof totais?.eventos === "number" && totais.inscricoes === totais.presentes + totais.ausentes + totais.pendentes,
+      r.status === 200 && typeof totais?.eventos === "number" && totais.inscricoes === totais.presentes + totais.ausentes + totais.aguardando,
       r.corpo,
     );
     const eventoNoDashboard = r.corpo?.eventos?.find((e: { id: string }) => e.id === eventoLotadoId);
@@ -1165,7 +1202,7 @@ async function main() {
     checar(
       "presença por evento bate com as inscrições do banco",
       eventoNoDashboard?.inscritos === inscricoesDoEventoLotado &&
-        eventoNoDashboard.inscritos === eventoNoDashboard.presentes + eventoNoDashboard.ausentes + eventoNoDashboard.pendentes,
+        eventoNoDashboard.inscritos === eventoNoDashboard.presentes + eventoNoDashboard.ausentes + eventoNoDashboard.aguardando,
       eventoNoDashboard,
     );
     const ocupacaoEsperada = await ocupacaoEsperadaNoBanco();
@@ -1598,8 +1635,17 @@ async function main() {
     checar("excluir evento encerrado -> 409 EVENTO_ENCERRADO", r.status === 409 && r.corpo.code === "EVENTO_ENCERRADO", r.corpo);
     r = await chamar("POST", "/inscricoes", { token: secretaria.token, corpo: { participanteId: aluno.participanteId, eventoId: eventoTravadoId } });
     checar("inscrição manual retroativa no evento encerrado continua funcionando -> 201", r.status === 201, r.corpo);
-    r = await chamar("PUT", `/inscricoes/${r.corpo.id}`, { token: secretaria.token, corpo: { statusPresenca: "PRESENTE" } });
-    checar("registro de presença no evento encerrado continua funcionando -> 200", r.status === 200 && r.corpo.statusPresenca === "PRESENTE", r.corpo);
+    const inscricaoNoEncerrado: string = r.corpo.id;
+    r = await chamar("POST", `/eventos/${eventoTravadoId}/checkin`, { token: aluno.token });
+    checar(
+      "pedido de check-in mais de 24 horas depois do fim -> 409 CHECKIN_ENCERRADO",
+      r.status === 409 && r.corpo.code === "CHECKIN_ENCERRADO",
+      r.corpo,
+    );
+    checar(
+      "a inscrição sem pedido no evento com a janela fechada fica AUSENTE (expiração)",
+      (await prisma.inscricao.findUnique({ where: { id: inscricaoNoEncerrado } }))?.statusPresenca === "AUSENTE",
+    );
 
     // ------------------------------------------------------------------ etapa 3B
     requisito("R39 Proposta de alteração em evento aprovado");
@@ -1900,6 +1946,221 @@ async function main() {
     r = await chamar("POST", "/auth/login", { corpo: { emailLogin: professorA.email, senha: SENHA_PROFESSOR } });
     checar("depois de reativado o professor entra de novo", r.status === 200 && !!r.corpo.token, r.corpo);
     await chamar("POST", `/professores/${professorB.id}/reativar`, { token: secretaria.token });
+
+    // ------------------------------------------------------------------ etapa 4: check-in pedido pelo aluno
+    requisito("R43 Check-in: aprovação pelo professor do evento ou pela equipe, expiração e dashboard");
+    professorA.token = await entrar(professorA);
+    professorB.token = await entrar(professorB);
+    // 4 alunos criados direto no banco (o cadastro ja foi testado no R01), ja com os termos vigentes aceitos
+    const alunosCheckin: Conta[] = [];
+    for (const letra of ["X", "Y", "Z", "W"]) {
+      const participanteIdCheckin = randomUUID();
+      await prisma.participante.create({ data: { id: participanteIdCheckin, rgm: rgmAleatorio() } });
+      const conta: Conta = {
+        id: randomUUID(),
+        email: `req.checkin.${letra.toLowerCase()}.${sufixo}@alunos.umc.br`,
+        senha: SENHA_ALUNO,
+        perfil: "ALUNO",
+        participanteId: participanteIdCheckin,
+      };
+      await prisma.usuario.create({
+        data: {
+          id: conta.id,
+          nome: `Aluno Check-in ${letra}`,
+          emailLogin: conta.email,
+          senhaHash: await bcrypt.hash(SENHA_ALUNO, 4),
+          perfil: "ALUNO",
+          participanteId: participanteIdCheckin,
+          consentimentoLgpdEm: new Date(),
+          versaoTermosAceitos: VERSAO_TERMOS_ATUAL,
+        },
+      });
+      contas.push(conta);
+      conta.token = await entrar(conta);
+      alunosCheckin.push(conta);
+    }
+    const [alunoX, alunoY, alunoZ, alunoW] = alunosCheckin;
+    const salasCheckin: string[] = [];
+    for (const nome of ["Sala Check-in 1", "Sala Check-in 2"]) {
+      r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: `${nome} ${sufixo}`, capacidade: 10 } });
+      salas.push(r.corpo.id);
+      salasCheckin.push(r.corpo.id);
+    }
+    const daquiMeiaHora = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    const corpoCheckin = { horario: daquiMeiaHora, palestranteId, tema: "Tema", cargaHoraria: 1, questionario: questionario() };
+    // evento P: do professor A, ainda PENDENTE de aprovação
+    r = await chamar("POST", "/eventos", { token: professorA.token, corpo: { ...corpoCheckin, titulo: `Evento Check-in P ${sufixo}`, salaId: salasCheckin[0] } });
+    const eventoP: string = r.corpo.id;
+    eventos.push(eventoP);
+    checar("evento do professor nasce PENDENTE", r.status === 201 && r.corpo.situacao === "PENDENTE", r.corpo);
+    r = await chamar("POST", `/eventos/${eventoP}/checkin`, { token: alunoX.token });
+    checar("evento PENDENTE de aprovação: pedido recusado -> 404", r.status === 404 && r.corpo.code === "EVENTO_NAO_ENCONTRADO", r.corpo);
+    await chamar("POST", `/eventos/${eventoP}/aprovar`, { token: secretaria.token });
+    // evento Q: da equipe
+    r = await chamar("POST", "/eventos", { token: admin.token, corpo: { ...corpoCheckin, titulo: `Evento Check-in Q ${sufixo}`, salaId: salasCheckin[1] } });
+    const eventoQ: string = r.corpo.id;
+    eventos.push(eventoQ);
+    const inscricaoDe: Record<string, string> = {};
+    for (const conta of alunosCheckin) {
+      for (const ev of [eventoP, eventoQ]) {
+        r = await chamar("POST", `/eventos/${ev}/inscricoes`, { token: conta.token });
+        inscricaoDe[`${conta.id}:${ev}`] = r.corpo.id;
+      }
+    }
+    const insc = (conta: Conta, ev: string) => inscricaoDe[`${conta.id}:${ev}`];
+    checar("os 4 alunos inscritos em P e Q", Object.values(inscricaoDe).every(Boolean) && Object.keys(inscricaoDe).length === 8);
+
+    r = await chamar("POST", `/eventos/${eventoP}/checkin`, { token: alunoX.token });
+    checar("aluno X pede o check-in de P -> SOLICITADO", r.status === 200 && r.corpo.statusPresenca === "SOLICITADO", r.corpo);
+    r = await chamar("GET", "/checkin/eventos", { token: professorA.token });
+    const pNaLista = Array.isArray(r.corpo) ? r.corpo.find((e: { id: string }) => e.id === eventoP) : undefined;
+    checar(
+      "tela Check-in do professor: só os eventos dele com a janela aberta, com os pedidos pendentes",
+      r.status === 200 && pNaLista?.solicitados === 1 && !r.corpo.some((e: { id: string }) => e.id === eventoQ),
+      r.corpo,
+    );
+    r = await chamar("GET", "/checkin/eventos", { token: secretaria.token });
+    checar("a equipe vê P e Q", r.status === 200 && [eventoP, eventoQ].every((id) => r.corpo.some((e: { id: string }) => e.id === id)), r.status);
+    r = await chamar("GET", `/checkin/eventos/${eventoP}`, { token: professorA.token });
+    checar(
+      "painel do evento lista o pedido com nome, RGM e horário do pedido",
+      r.status === 200 &&
+        r.corpo.pedidos.length === 1 &&
+        r.corpo.pedidos[0].participanteNome === "Aluno Check-in X" &&
+        !!r.corpo.pedidos[0].participanteRgm &&
+        !!r.corpo.pedidos[0].checkinSolicitadoEm &&
+        r.corpo.janela.situacao === "ABERTA",
+      r.corpo,
+    );
+    r = await chamar("GET", `/checkin/eventos/${eventoP}`, { token: professorB.token });
+    checar("painel de evento de outro professor -> 403", r.status === 403, r.status);
+    r = await chamar("POST", `/checkin/inscricoes/${insc(alunoX, eventoP)}/aprovar`, { token: professorB.token });
+    checar("professor de outro evento não aprova -> 403", r.status === 403, r.corpo);
+    r = await chamar("POST", `/checkin/inscricoes/${insc(alunoX, eventoP)}/aprovar`, { token: professorA.token });
+    checar(
+      "o professor aprova o pedido do evento dele -> PRESENTE, decidido por ele",
+      r.status === 200 && r.corpo.statusPresenca === "PRESENTE" && r.corpo.usuarioId === professorA.id,
+      r.corpo,
+    );
+    r = await chamar("POST", `/eventos/${eventoP}/questionario/respostas`, { token: alunoX.token, corpo: { respostas: Array(10).fill(1) } });
+    checar("aprovar libera o questionário -> 201", r.status === 201, r.corpo);
+    r = await chamar("POST", `/checkin/inscricoes/${insc(alunoX, eventoP)}/recusar`, { token: professorA.token });
+    checar("reverter depois da primeira tentativa do questionário -> 409 PRESENCA_TRAVADA", r.status === 409 && r.corpo.code === "PRESENCA_TRAVADA", r.corpo);
+
+    await chamar("POST", `/eventos/${eventoP}/checkin`, { token: alunoY.token });
+    r = await chamar("POST", `/checkin/inscricoes/${insc(alunoY, eventoP)}/recusar`, { token: professorA.token });
+    checar("recusar não exige motivo -> 200 RECUSADO", r.status === 200 && r.corpo.statusPresenca === "RECUSADO", r.corpo);
+    checar(
+      "recusa na auditoria (CHECKIN_RECUSADO)",
+      !!(await prisma.logAuditoria.findFirst({ where: { acao: "CHECKIN_RECUSADO", usuarioId: professorA.id, detalhe: { contains: insc(alunoY, eventoP) } } })),
+    );
+    r = await chamar("POST", `/eventos/${eventoP}/checkin`, { token: alunoY.token });
+    checar("recusado não pede de novo -> 409 CHECKIN_JA_DECIDIDO", r.status === 409 && r.corpo.code === "CHECKIN_JA_DECIDIDO", r.corpo);
+    r = await chamar("POST", `/eventos/${eventoP}/questionario/respostas`, { token: alunoY.token, corpo: { respostas: Array(10).fill(0) } });
+    checar("recusado não responde o questionário -> 403", r.status === 403, r.corpo);
+    r = await chamar("POST", `/checkin/inscricoes/${insc(alunoY, eventoP)}/aprovar`, { token: professorA.token });
+    checar("reverter dentro da janela: RECUSADO -> PRESENTE", r.status === 200 && r.corpo.statusPresenca === "PRESENTE", r.corpo);
+    r = await chamar("POST", `/checkin/inscricoes/${insc(alunoY, eventoP)}/recusar`, { token: professorA.token });
+    checar("reverter dentro da janela: PRESENTE -> RECUSADO", r.status === 200 && r.corpo.statusPresenca === "RECUSADO", r.corpo);
+    checar(
+      "reversão na auditoria (CHECKIN_REVERTIDO, de/para)",
+      !!(await prisma.logAuditoria.findFirst({
+        where: { acao: "CHECKIN_REVERTIDO", usuarioId: professorA.id, detalhe: { contains: `${insc(alunoY, eventoP)}: de PRESENTE para RECUSADO` } },
+      })),
+    );
+    r = await chamar("POST", `/checkin/inscricoes/${insc(alunoW, eventoP)}/aprovar`, { token: professorA.token });
+    checar("sem pedido do aluno não há o que aprovar -> 409 CHECKIN_NAO_SOLICITADO", r.status === 409 && r.corpo.code === "CHECKIN_NAO_SOLICITADO", r.corpo);
+
+    await chamar("POST", `/eventos/${eventoP}/checkin`, { token: alunoZ.token });
+    r = await chamar("POST", `/checkin/inscricoes/${insc(alunoZ, eventoP)}/aprovar`, { token: secretaria.token });
+    checar("a secretaria aprova no evento do professor", r.status === 200 && r.corpo.statusPresenca === "PRESENTE" && r.corpo.usuarioId === secretaria.id, r.corpo);
+    for (const conta of [alunoX, alunoY, alunoZ]) await chamar("POST", `/eventos/${eventoQ}/checkin`, { token: conta.token });
+    r = await chamar("POST", `/checkin/inscricoes/${insc(alunoZ, eventoQ)}/aprovar`, { token: admin.token });
+    checar("o administrador aprova no evento da equipe", r.status === 200 && r.corpo.statusPresenca === "PRESENTE" && r.corpo.usuarioId === admin.id, r.corpo);
+    r = await chamar("POST", `/checkin/inscricoes/${insc(alunoX, eventoQ)}/aprovar`, { token: professorA.token });
+    checar("professor não aprova no evento da equipe -> 403", r.status === 403, r.corpo);
+    // W pede em P (deve continuar SOLICITADO) e nao pede em Q (deve continuar PENDENTE)
+    await chamar("POST", `/eventos/${eventoP}/checkin`, { token: alunoW.token });
+    r = await chamar("POST", `/checkin/eventos/${eventoQ}/aprovar-todos`, { token: professorA.token });
+    checar("\"Aprovar todos\" em evento de outro -> 403", r.status === 403, r.corpo);
+    r = await chamar("POST", `/checkin/eventos/${eventoQ}/aprovar-todos`, { token: secretaria.token });
+    const statusDe = async (conta: Conta, ev: string) => (await prisma.inscricao.findUnique({ where: { id: insc(conta, ev) } }))?.statusPresenca;
+    checar(
+      "\"Aprovar todos\" aprova só os SOLICITADO daquele evento",
+      r.status === 200 &&
+        r.corpo.aprovados === 2 &&
+        (await statusDe(alunoX, eventoQ)) === "PRESENTE" &&
+        (await statusDe(alunoY, eventoQ)) === "PRESENTE" &&
+        (await statusDe(alunoW, eventoQ)) === "PENDENTE" &&
+        (await statusDe(alunoW, eventoP)) === "SOLICITADO",
+      r.corpo,
+    );
+    checar(
+      "\"Aprovar todos\" na auditoria com a quantidade",
+      !!(await prisma.logAuditoria.findFirst({ where: { acao: "CHECKIN_APROVADO_TODOS", usuarioId: secretaria.id, detalhe: { contains: `evento ${eventoQ}: 2 pedido(s)` } } })),
+    );
+
+    // dashboard do professor A: so o evento P (X e Z presentes, Y recusado, W pediu, aluno principal sem pedido)
+    await chamar("POST", `/eventos/${eventoP}/inscricoes`, { token: aluno.token });
+    r = await chamar("GET", "/dashboard", { token: professorA.token });
+    const pNoDashboard = r.corpo?.eventos?.find((e: { id: string }) => e.id === eventoP);
+    checar(
+      "dashboard: presentes = PRESENTE; ausentes = AUSENTE + RECUSADO; aguardando = PENDENTE + SOLICITADO",
+      r.status === 200 && pNoDashboard?.presentes === 2 && pNoDashboard.ausentes === 1 && pNoDashboard.aguardando === 2 && pNoDashboard.inscritos === 5,
+      pNoDashboard,
+    );
+
+    // expiracao: evento E com um pedido sem decisao, um inscrito sem pedido e um presente; depois o
+    // evento e levado pro passado (janela fechada ha 4 h)
+    r = await chamar("POST", "/eventos", {
+      token: admin.token,
+      corpo: { ...corpoCheckin, titulo: `Evento Check-in E ${sufixo}`, salaId: salasCheckin[1], horario: new Date(Date.now() + 3 * 3600 * 1000).toISOString() },
+    });
+    const eventoE: string = r.corpo.id;
+    eventos.push(eventoE);
+    for (const conta of [alunoX, alunoY, alunoZ]) {
+      r = await chamar("POST", `/eventos/${eventoE}/inscricoes`, { token: conta.token });
+      inscricaoDe[`${conta.id}:${eventoE}`] = r.corpo.id;
+    }
+    await prisma.inscricao.update({ where: { id: insc(alunoX, eventoE) }, data: { statusPresenca: "SOLICITADO", checkinSolicitadoEm: new Date() } });
+    await prisma.inscricao.update({ where: { id: insc(alunoZ, eventoE) }, data: { statusPresenca: "PRESENTE", dataCheckin: new Date(), usuarioId: admin.id } });
+    await prisma.evento.update({ where: { id: eventoE }, data: { horario: new Date(Date.now() - 30 * 3600 * 1000), cargaHoraria: 2 } });
+    const primeira = await expirarCheckins(null);
+    const depoisDaPrimeira = [await statusDe(alunoX, eventoE), await statusDe(alunoY, eventoE), await statusDe(alunoZ, eventoE)];
+    checar(
+      "expiração: depois da janela, SOLICITADO vira RECUSADO e PENDENTE vira AUSENTE (PRESENTE fica)",
+      primeira.recusados >= 1 && primeira.ausentes >= 1 && depoisDaPrimeira.join() === "RECUSADO,AUSENTE,PRESENTE",
+      { primeira, depoisDaPrimeira },
+    );
+    const segunda = await expirarCheckins(null);
+    const depoisDaSegunda = [await statusDe(alunoX, eventoE), await statusDe(alunoY, eventoE), await statusDe(alunoZ, eventoE)];
+    checar(
+      "rodar a expiração de novo não muda nada",
+      segunda.recusados === 0 && segunda.ausentes === 0 && depoisDaSegunda.join() === depoisDaPrimeira.join(),
+      { segunda, depoisDaSegunda },
+    );
+    checar(
+      "expiração na auditoria: uma linha só com as quantidades",
+      !!(await prisma.logAuditoria.findFirst({ where: { acao: "CHECKIN_EXPIRADO", criadoEm: { gte: inicioDoTeste }, detalhe: { contains: "pedido(s) sem decisão recusado(s)" } } })),
+    );
+    r = await chamar("POST", `/eventos/${eventoE}/checkin`, { token: alunoY.token });
+    checar("pedido depois da janela -> 409 CHECKIN_ENCERRADO", r.status === 409 && r.corpo.code === "CHECKIN_ENCERRADO", r.corpo);
+    r = await chamar("POST", `/checkin/inscricoes/${insc(alunoX, eventoE)}/aprovar`, { token: secretaria.token });
+    checar("decidir depois da janela -> 409 CHECKIN_ENCERRADO", r.status === 409 && r.corpo.code === "CHECKIN_ENCERRADO", r.corpo);
+    r = await chamar("GET", "/dashboard", { token: secretaria.token });
+    const eNoDashboard = r.corpo?.eventos?.find((e: { id: string }) => e.id === eventoE);
+    checar(
+      "dashboard conta o recusado e o ausente como ausentes",
+      r.status === 200 && eNoDashboard?.presentes === 1 && eNoDashboard.ausentes === 2 && eNoDashboard.aguardando === 0,
+      eNoDashboard,
+    );
+    r = await chamar("GET", `/inscricoes/gestao?eventoId=${eventoE}&status=RECUSADO`, { token: secretaria.token });
+    checar("filtro de inscrições aceita RECUSADO", r.status === 200 && r.corpo.total === 1 && r.corpo.itens[0].id === insc(alunoX, eventoE), r.corpo);
+    r = await chamar("GET", `/inscricoes/gestao?eventoId=${eventoP}&status=SOLICITADO`, { token: secretaria.token });
+    checar("filtro de inscrições aceita SOLICITADO", r.status === 200 && r.corpo.total === 1 && r.corpo.itens[0].id === insc(alunoW, eventoP), r.corpo);
+    r = await chamar("GET", "/meus-dados", { token: alunoX.token });
+    const meusE = r.corpo?.inscricoes?.find((i: { evento: string }) => i.evento === `Evento Check-in E ${sufixo}`);
+    checar("Meus dados mostra a situação nova e a hora do pedido", r.status === 200 && meusE?.presenca === "RECUSADO" && !!meusE.checkinPedidoEm, meusE);
 
     // ------------------------------------------------------------------ RF009/RNF010: exclusao bloqueada
     requisito("R19 Exclusão de evento bloqueada com inscrições (RF009/RNF010)");

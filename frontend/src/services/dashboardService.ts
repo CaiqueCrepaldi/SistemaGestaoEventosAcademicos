@@ -6,9 +6,11 @@ export interface TotaisDashboard {
   eventosFuturos: number;
   inscricoes: number;
   presentes: number;
+  // ausente = nao pediu o check-in a tempo ou teve o pedido recusado
   ausentes: number;
-  pendentes: number;
-  // presentes / (presentes + ausentes), em %; null enquanto nenhum check-in foi registrado
+  // aguardando = ainda sem pedido de check-in ou com o pedido esperando aprovacao
+  aguardando: number;
+  // presentes / (presentes + ausentes), em %; null enquanto nenhuma presenca foi definida
   taxaPresenca: number | null;
   certificadosLiberados: number;
   // resultado do questionario de quem teve a presenca confirmada (indicador de aprendizagem, RF021):
@@ -44,7 +46,7 @@ export interface EventoDashboard {
   inscritos: number;
   presentes: number;
   ausentes: number;
-  pendentes: number;
+  aguardando: number;
   // entre os presentes: aprovados + reprovados + podemResponder = presentes
   aprovados: number;
   reprovados: number;

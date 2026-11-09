@@ -2,12 +2,15 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Badge } from "../../components/ui/Badge";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { formatarCodigoValidacao, titularService, type MeusDados } from "../../services";
+import { rotuloPresencaParaAluno } from "../../utils/presenca";
 import type { StatusPresenca } from "../../types";
 
-const PRESENCA: Record<StatusPresenca, { texto: string; tom: "green" | "red" | "orange" }> = {
-  PRESENTE: { texto: "Presente", tom: "green" },
-  AUSENTE: { texto: "Ausente", tom: "red" },
-  PENDENTE: { texto: "Pendente", tom: "orange" },
+const TOM_DA_PRESENCA: Record<StatusPresenca, "neutral" | "green" | "red" | "orange"> = {
+  PENDENTE: "neutral",
+  SOLICITADO: "orange",
+  PRESENTE: "green",
+  RECUSADO: "red",
+  AUSENTE: "red",
 };
 
 function dataHora(iso: string | null): string {
@@ -111,13 +114,14 @@ export function MeusDadosPage() {
 
           <Secao
             titulo="Inscrições e presenças"
-            colunas={["Evento", "Data do evento", "Inscrição em", "Presença", "Check-in"]}
+            colunas={["Evento", "Data do evento", "Inscrição em", "Presença", "Check-in pedido em", "Check-in decidido em"]}
             vazio="Você não tem inscrições."
             linhas={dados.inscricoes.map((i) => [
               i.evento,
               dataHora(i.dataEvento),
               dataHora(i.inscritoEm),
-              <Badge tone={PRESENCA[i.presenca].tom}>{PRESENCA[i.presenca].texto}</Badge>,
+              <Badge tone={TOM_DA_PRESENCA[i.presenca]}>{rotuloPresencaParaAluno(i.presenca)}</Badge>,
+              dataHora(i.checkinPedidoEm),
               dataHora(i.checkinEm),
             ])}
           />

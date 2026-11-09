@@ -13,7 +13,7 @@ Cada evento cadastrado no sistema possui um questionário de múltipla escolha c
 ### Fluxo do usuário
 
 1. O administrador ou a secretaria cadastra o evento e define as 10 perguntas com suas alternativas, marcando qual é a correta em cada uma (tela **Eventos**).
-2. O aluno se inscreve no evento e tem a presença confirmada pela equipe (**Check-in**).
+2. O aluno se inscreve no evento, pede o check-in quando chega (botão **"Fazer check-in"** na tela Eventos) e o professor do evento, a secretaria ou o administrador aprova o pedido (tela **Check-in** ou painel "Check-ins" dentro do evento).
 3. Na tela **Certificados**, o aluno vê o evento com um botão **"Questionário"**.
 4. Ao responder as 10 perguntas e enviar, o sistema calcula o percentual de acertos e mostra o resultado na hora.
 5. Se o aproveitamento for igual ou maior que 60%, o botão **"Emitir certificado"** é liberado e o aluno pode baixar o PDF. Caso contrário, o aluno pode clicar em **"Refazer questionário"** e tentar novamente (são 2 tentativas por evento).
@@ -93,9 +93,9 @@ Agilizar a inscrição de alunos em eventos e o check-in no dia do evento, permi
 2. A lista de resultados aparece abaixo, atualizando a cada letra digitada.
 3. Ao clicar no participante desejado, o campo é preenchido e o evento é selecionado normalmente; o sistema avisa (toast) se não houver vaga ou se o aluno já estiver inscrito naquele evento.
 
-**Check-in:**
-1. A secretaria digita nome, e-mail ou RGM do aluno que chegou ao evento.
-2. Ao selecionar o participante na lista de resultados, aparecem todas as inscrições dele, com botões para confirmar presença ou marcar ausência.
+**Check-in (desde 09/11/2026, pedido pelo aluno):**
+1. O próprio aluno pede o check-in na tela Eventos, dentro da janela (1 hora antes do início até 24 horas depois do fim), confirmando que está no local.
+2. A tela Check-in da equipe e do professor lista os eventos com a janela aberta e quantos pedidos esperam decisão; clicar no evento abre o painel "Check-ins", com nome, RGM e horário de cada pedido e os botões Aprovar, Recusar e Aprovar todos (todos com confirmação). A busca de aluno por nome, e-mail ou RGM continua só na inscrição manual.
 
 ### Como funciona por trás
 

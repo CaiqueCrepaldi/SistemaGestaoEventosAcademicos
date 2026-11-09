@@ -1,236 +1,93 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { PainelCheckins } from "../../components/checkin/PainelCheckins";
 import { Badge } from "../../components/ui/Badge";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { toast } from "../../components/ui/Toast";
-import { useAuth } from "../../context/AuthContext";
-import { checkinService } from "../../services";
-import { ANTECEDENCIA_CHECKIN_MS, LIMITE_BUSCA_ALUNOS, type InscricaoDetalhada } from "../../services/checkinService";
-import type { Participante, StatusPresenca } from "../../types";
+import { ApiError, checkinService, type EventoCheckin } from "../../services";
+import { dataHora } from "../../utils/presenca";
 
-// mesma mensagem que o backend devolve (409) se alguem tentar mudar a presenca mesmo assim
-const MENSAGEM_PRESENCA_TRAVADA = "A presença não pode mais ser alterada: o aluno já respondeu o questionário.";
-
-// o check-in abre 1 hora antes do inicio (o backend responde 409 CHECKIN_NAO_LIBERADO antes disso)
-function mensagemCheckinFechado(eventoHorario: string): string {
-  const abre = new Date(new Date(eventoHorario).getTime() - ANTECEDENCIA_CHECKIN_MS);
-  const data = abre.toLocaleDateString("pt-BR");
-  const hora = abre.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  return `O check-in abre em ${data} às ${hora} (1 hora antes do início).`;
-}
-
-// traduz o status em cor pra Badge
-function badgeTone(status: StatusPresenca): "green" | "red" | "orange" {
-  if (status === "PRESENTE") return "green";
-  if (status === "AUSENTE") return "red";
-  return "orange";
-}
-
-// traduz o status em texto pra Badge
-function badgeLabel(status: StatusPresenca): string {
-  if (status === "PRESENTE") return "Presente";
-  if (status === "AUSENTE") return "Ausente";
-  return "Pendente";
-}
-
-// lista todos os alunos cadastrados; a busca so filtra essa lista. Confirmacao de presenca por aluno
+// tela Check-in: a equipe e o professor nao marcam mais presenca direto. O aluno pede o check-in pela
+// tela dele e aqui aparecem os eventos com a janela aberta (1 hora antes do inicio ate 24 horas depois
+// do fim) que o perfil enxerga — o professor so os dele —, com quantos pedidos esperam decisao. Clicar
+// no evento abre o painel "Check-ins"
 export function CheckinPage() {
-  const { usuario } = useAuth();
-  const [alunos, setAlunos] = useState<Participante[]>([]);
-  const [carregando, setCarregando] = useState(true);
-  const [erroCarga, setErroCarga] = useState<string | null>(null);
-  const [tentativa, setTentativa] = useState(0);
-  const [termo, setTermo] = useState("");
-  const [selecionado, setSelecionado] = useState<Participante | null>(null);
-  const [inscricoes, setInscricoes] = useState<InscricaoDetalhada[]>([]);
-  const [carregandoInscricoes, setCarregandoInscricoes] = useState(false);
+  const [eventos, setEventos] = useState<EventoCheckin[] | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const [selecionado, setSelecionado] = useState<string | null>(null);
 
-  // busca no servidor por nome, e-mail ou RGM enquanto se digita (espera 300 ms sem digitar pra nao
-  // consultar a cada tecla). Traz no maximo LIMITE_BUSCA_ALUNOS: nunca baixa todos os alunos de uma vez
+  const carregar = useCallback(async () => {
+    try {
+      const lista = await checkinService.eventosAbertos();
+      setEventos(lista);
+      setErro(null);
+      // o evento aberto no painel saiu da lista (a janela fechou): fecha o painel
+      setSelecionado((atual) => (atual && lista.some((e) => e.id === atual) ? atual : null));
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : "Não foi possível carregar os eventos.");
+    }
+  }, []);
+
   useEffect(() => {
-    let descartar = false;
-    setCarregando(true);
-    setErroCarga(null);
-    const espera = setTimeout(() => {
-      checkinService
-        .listarAlunos(termo)
-        .then((lista) => {
-          if (!descartar) setAlunos(lista);
-        })
-        .catch((e) => {
-          if (!descartar) setErroCarga(e instanceof Error ? e.message : "Não foi possível carregar os alunos.");
-        })
-        .finally(() => {
-          if (!descartar) setCarregando(false);
-        });
-    }, termo ? 300 : 0);
-    return () => {
-      descartar = true;
-      clearTimeout(espera);
-    };
-  }, [termo, tentativa]);
+    void carregar();
+  }, [carregar]);
 
-  const filtrados = alunos;
-
-  const selecionadoInativo = selecionado?.ativo === false;
-
-  // guarda o participante clicado e carrega as inscricoes dele
-  async function selecionar(participante: Participante) {
-    setSelecionado(participante);
-    // limpa as do aluno anterior e mostra "Carregando" (e nao "nao possui inscricoes") ate chegarem
-    setInscricoes([]);
-    setCarregandoInscricoes(true);
-    try {
-      setInscricoes(await checkinService.listarInscricoesDoParticipante(participante.id));
-    } catch (e) {
-      setInscricoes([]);
-      toast.error(e instanceof Error ? e.message : "Não foi possível carregar as inscrições.");
-    } finally {
-      setCarregandoInscricoes(false);
-    }
-  }
-
-  // confirma presenca e recarrega a lista pra atualizar o status na tela
-  async function confirmar(inscricaoId: string) {
-    if (!usuario || selecionadoInativo) return;
-    try {
-      await checkinService.confirmarPresenca(inscricaoId, usuario.id);
-      if (selecionado) setInscricoes(await checkinService.listarInscricoesDoParticipante(selecionado.id));
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Não foi possível confirmar a presença.");
-    }
-  }
-
-  // marca ausente e recarrega a lista
-  async function marcarAusente(inscricaoId: string) {
-    try {
-      await checkinService.marcarAusente(inscricaoId);
-      if (selecionado) setInscricoes(await checkinService.listarInscricoesDoParticipante(selecionado.id));
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Não foi possível marcar a ausência.");
-    }
-  }
+  const eventoSelecionado = eventos?.find((e) => e.id === selecionado);
 
   return (
     <div>
-      <PageHeader title="Check-in" />
+      <PageHeader
+        title="Check-in"
+        actions={
+          <button type="button" className="btn btn-ghost" onClick={() => void carregar()}>
+            Atualizar
+          </button>
+        }
+      />
+      <p className="form-hint" style={{ marginBottom: 12 }}>
+        O aluno pede o check-in na tela dele quando chega ao evento. Aqui você aprova ou recusa os pedidos dos eventos com o
+        check-in aberto (de 1 hora antes do início até 24 horas depois do fim).
+      </p>
 
       <div className="grid-2">
         <div className="card">
-          <h3>Alunos</h3>
-          <input
-            className="search-input"
-            placeholder="Buscar por nome, e-mail ou RGM…"
-            value={termo}
-            onChange={(e) => setTermo(e.target.value)}
-            autoFocus
-          />
-          {!carregando && !erroCarga && alunos.length >= LIMITE_BUSCA_ALUNOS && (
-            <p className="form-hint" style={{ margin: "8px 0" }}>
-              Mostrando os {LIMITE_BUSCA_ALUNOS} primeiros{termo.trim() ? " resultados" : " alunos"}. Digite o nome, o
-              e-mail ou o RGM para encontrar quem você procura.
-            </p>
-          )}
+          <h3>Eventos com check-in aberto</h3>
           <ul className="simple-list list-scroll">
-            {carregando && <li className="empty-cell">Carregando alunos…</li>}
-            {erroCarga && (
+            {!eventos && !erro && <li className="empty-cell">Carregando eventos…</li>}
+            {erro && (
               <li className="empty-cell" role="alert">
                 <p className="form-error" style={{ marginBottom: 10 }}>
-                  {erroCarga}
+                  {erro}
                 </p>
-                <button type="button" className="btn btn-primary" onClick={() => setTentativa((n) => n + 1)}>
+                <button type="button" className="btn btn-primary" onClick={() => void carregar()}>
                   Tentar novamente
                 </button>
               </li>
             )}
-            {!carregando &&
-              !erroCarga &&
-              filtrados.map((participante) => (
-                <li
-                  key={participante.id}
-                  className={"simple-list-item clickable" + (selecionado?.id === participante.id ? " selected" : "")}
-                  onClick={() => void selecionar(participante)}
-                >
-                  <div className="simple-list-item-row">
-                    <div className="simple-list-title">{participante.nome}</div>
-                    {participante.ativo === false && <Badge tone="red">Inativo</Badge>}
-                  </div>
-                  <div className="simple-list-sub">
-                    {participante.email} · RGM {participante.rgm}
-                  </div>
-                </li>
-              ))}
-            {!carregando && !erroCarga && filtrados.length === 0 && (
-              <li className="empty-cell">{termo.trim() ? "Nenhum aluno encontrado com essa busca." : "Nenhum aluno cadastrado."}</li>
-            )}
+            {eventos?.map((evento) => (
+              <li
+                key={evento.id}
+                className={"simple-list-item clickable" + (selecionado === evento.id ? " selected" : "")}
+                onClick={() => setSelecionado(evento.id)}
+              >
+                <div className="simple-list-item-row">
+                  <div className="simple-list-title">{evento.titulo}</div>
+                  {evento.solicitados > 0 ? (
+                    <Badge tone="orange">{`${evento.solicitados} pedido(s) pendente(s)`}</Badge>
+                  ) : (
+                    <Badge tone="neutral">Sem pedidos pendentes</Badge>
+                  )}
+                </div>
+                <div className="simple-list-sub">
+                  {dataHora(evento.horario)} · {evento.salaNome} · {evento.presentes} presente(s) de {evento.inscritos} inscrito(s)
+                </div>
+              </li>
+            ))}
+            {eventos && eventos.length === 0 && <li className="empty-cell">Nenhum evento com o check-in aberto agora.</li>}
           </ul>
         </div>
 
         <div className="card">
-          <h3>{selecionado ? `Inscrições de ${selecionado.nome}` : "Selecione um aluno"}</h3>
-          {selecionadoInativo && (
-            <p className="form-error" style={{ marginBottom: 10 }}>
-              Aluno inativo: não é possível confirmar presença.
-            </p>
-          )}
-          {selecionado && (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Evento</th>
-                  <th>Status</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {inscricoes.map((item) => {
-                  // motivo pra nao mexer na presenca agora (a trava do questionario vale mais que a janela)
-                  const bloqueio = item.presencaTravada
-                    ? MENSAGEM_PRESENCA_TRAVADA
-                    : !item.checkinAberto
-                      ? mensagemCheckinFechado(item.eventoHorario)
-                      : null;
-                  return (
-                    <tr key={item.inscricao.id}>
-                      <td>
-                        {item.eventoTitulo}
-                        {bloqueio && <div className="form-hint">{bloqueio}</div>}
-                      </td>
-                      <td>
-                        <Badge tone={badgeTone(item.inscricao.statusPresenca)}>
-                          {badgeLabel(item.inscricao.statusPresenca)}
-                        </Badge>
-                      </td>
-                      <td className="table-actions">
-                        <button
-                          className="btn btn-primary"
-                          onClick={() => void confirmar(item.inscricao.id)}
-                          disabled={selecionadoInativo || bloqueio !== null}
-                          title={bloqueio ?? (selecionadoInativo ? "Aluno inativo" : undefined)}
-                        >
-                          Confirmar presença
-                        </button>
-                        <button
-                          className="btn btn-ghost"
-                          onClick={() => void marcarAusente(item.inscricao.id)}
-                          disabled={bloqueio !== null}
-                          title={bloqueio ?? undefined}
-                        >
-                          Ausente
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {inscricoes.length === 0 && (
-                  <tr>
-                    <td colSpan={3} className="empty-cell">
-                      {carregandoInscricoes ? "Carregando inscrições…" : "Este aluno não possui inscrições."}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          )}
+          <h3>{eventoSelecionado ? `Check-ins de ${eventoSelecionado.titulo}` : "Selecione um evento"}</h3>
+          {selecionado && <PainelCheckins eventoId={selecionado} onAlterado={() => void carregar()} />}
         </div>
       </div>
     </div>
