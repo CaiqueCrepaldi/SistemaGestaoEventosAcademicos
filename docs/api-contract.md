@@ -183,6 +183,25 @@ Erros:
 | 422 | `VALIDACAO` | código fora do formato (6 dígitos), no campo `codigo` |
 | 409 | `EMAIL_DUPLICADO` / `RGM_DUPLICADO` | outra pessoa concluiu um cadastro com o mesmo e-mail ou RGM nesse meio tempo (o pendente é apagado) |
 
+#### Primeiro acesso do professor (convite por link, desde 09/11/2026)
+
+A equipe cria a conta (`POST /api/professores`) ou reenvia o convite
+(`POST /api/professores/{id}/reenviar-convite`); o professor recebe um link
+`APP_URL/#/primeiro-acesso?convite=<chave>` (chave aleatória de 32 bytes,
+base64url; no banco, só o SHA-256). A resposta de criar/reenviar traz
+`emailEnviado` e, só fora de produção, `linkConviteDemo`. Sem `APP_URL`
+configurada: `503 APP_URL_NAO_CONFIGURADA` ("O endereço do sistema não está
+configurado; não é possível enviar o convite.").
+
+- `POST /api/auth/primeiro-acesso/convite` `{ "convite": "..." }` →
+  `200 { "email": "..." }`. Não gasta o convite.
+- `POST /api/auth/primeiro-acesso` `{ "convite", "novaSenha", "aceiteLgpd": true }`
+  → `200 {}`: grava a senha, o aceite e a versão dos Termos e apaga o
+  convite (uso único).
+- Chave inexistente, vencida (24 h) ou já usada, nas duas rotas: `422
+  CONVITE_INVALIDO` ("Convite inválido ou vencido."). Toda chave errada conta
+  no limite por IP (`429 MUITAS_TENTATIVAS`).
+
 #### `POST /api/auth/registro/reenviar-codigo`
 
 Request: `{ "emailInstitucional": "joao.lima@alunos.umc.br" }`. Gera um

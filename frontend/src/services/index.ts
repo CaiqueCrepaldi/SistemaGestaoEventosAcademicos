@@ -24,4 +24,4 @@ export type { MeusDados } from "./titularService";
 export { aprovacaoService, avisarAprovacoesAlteradas, APROVACOES_ALTERADAS_EVENT } from "./aprovacaoService";
 export type { AlvoAprovacao, ContadoresAprovacao, DadosPropostaEvento, DadosPropostaPalestrante, TipoAprovacao } from "./aprovacaoService";
 export { professorService } from "./professorService";
-export type { EnvioCodigoProfessor, EventoEmAberto, Professor, SituacaoProfessor } from "./professorService";
+export type { EnvioConviteProfessor, EventoEmAberto, Professor, SituacaoProfessor } from "./professorService";

@@ -8,6 +8,7 @@ import {
   confirmarCadastroSchema,
   confirmarRecuperacaoSchema,
   loginSchema,
+  consultaConviteSchema,
   primeiroAcessoSchema,
   reenviarCodigoCadastroSchema,
   registroSchema,
@@ -26,7 +27,16 @@ authRouter.post(
   validarCorpo(reenviarCodigoCadastroSchema),
   asyncHandler(authController.reenviarCodigoCadastro),
 );
-// primeiro acesso do professor (publica): codigo do e-mail + senha nova + aceite dos Termos
+// primeiro acesso do professor (publicas), pelo link do convite: a tela consulta a chave (so diz se vale e o
+// e-mail da conta, sem gastar o convite) e depois envia a chave + senha nova + aceite dos Termos. A chave vai
+// no corpo (POST), nunca na URL, pra nao parar em log
+authRouter.post(
+  "/primeiro-acesso/convite",
+  validarCorpo(consultaConviteSchema),
+  asyncHandler(async (req, res) => {
+    res.json(await professoresService.consultarConvite(req.body, req.ip ?? "desconhecido"));
+  }),
+);
 authRouter.post(
   "/primeiro-acesso",
   validarCorpo(primeiroAcessoSchema),

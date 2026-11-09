@@ -96,23 +96,34 @@ async function enviarCodigoCadastro(destinatario: string, codigo: string): Promi
   return enviar("confirmacao-cadastro", destinatario, assunto, html);
 }
 
-// conta de professor criada pela equipe: o codigo do primeiro acesso (vale 24 horas)
-async function enviarCodigoPrimeiroAcesso(destinatario: string, nome: string, codigo: string): Promise<ResultadoEnvio> {
-  const assunto = "Sua conta de professor no SGEA — código de primeiro acesso";
-  const html = `
-    <p>Olá, ${nome}!</p>
-    <p>A equipe criou a sua conta de professor no Sistema de Gestão de Eventos Acadêmicos.
-    Para ativá-la, abra a tela de login, clique em <strong>Primeiro acesso</strong> e informe este código:</p>
-    <p style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">${codigo}</p>
-    <p>O código vale por 24 horas. Lá você define a sua senha e aceita os Termos de Uso.</p>
-    <p>Se você não esperava este e-mail, ignore: a conta não fica ativa sem o código.</p>
-  `;
-  return enviar("primeiro-acesso", destinatario, assunto, html);
-}
-
 // texto que vem do cadastro (titulo do evento, nome da sala/palestrante) entra no html escapado
 function escaparHtml(texto: string): string {
   return texto.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// convite do professor (criacao da conta e reenvio): so o link, sem codigo. O link leva a chave depois do
+// "#" (APP_URL/#/primeiro-acesso?convite=...), parte do endereco que o navegador nunca manda ao servidor.
+// Separado do envio pra o teste conferir o conteudo sem enviar nada
+export function conteudoDoConvite(nome: string, link: string): { assunto: string; html: string } {
+  const linkSeguro = escaparHtml(link);
+  return {
+    assunto: "Convite para criar sua senha no Sistema de Gestão de Eventos Acadêmicos",
+    html: `
+    <p>Olá, ${escaparHtml(nome)}.</p>
+    <p>A equipe da UMC criou sua conta no Sistema de Gestão de Eventos Acadêmicos. Clique no botão abaixo para criar
+    sua senha e aceitar os Termos de Uso. O link vale por 24 horas. Se ele vencer, peça um novo convite à secretaria.</p>
+    <p>
+      <a href="${linkSeguro}" style="display: inline-block; padding: 12px 20px; background: #ffc400; color: #111;
+        font-weight: bold; text-decoration: none; border-radius: 8px;">Criar minha senha</a>
+    </p>
+    <p>Se o botão não funcionar, copie e cole este link no navegador:<br><a href="${linkSeguro}">${linkSeguro}</a></p>
+  `,
+  };
+}
+
+async function enviarConviteProfessor(destinatario: string, nome: string, link: string): Promise<ResultadoEnvio> {
+  const { assunto, html } = conteudoDoConvite(nome, link);
+  return enviar("convite-professor", destinatario, assunto, html);
 }
 
 export interface MudancaEvento {
@@ -145,7 +156,7 @@ async function enviarAlteracaoEvento(destinatario: string, dados: DadosAlteracao
 
 export const emailService = {
   enviarAlteracaoEvento,
-  enviarCodigoPrimeiroAcesso,
+  enviarConviteProfessor,
   enviarConfirmacaoInscricao,
   enviarCancelamentoInscricao,
   enviarCodigoRecuperacao,

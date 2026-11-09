@@ -101,6 +101,36 @@ function sendgrid(): { apiKey: string | null; from: string | null } {
   return { apiKey: null, from: null };
 }
 
+// APP_URL: endereco do frontend (sem barra no fim), usado no link do convite do professor
+// (APP_URL/#/primeiro-acesso?convite=...). Opcional pro servidor subir: sem ela (ou com valor de exemplo,
+// formato invalido, ou localhost em producao), o servidor avisa e criar professor/reenviar convite sao
+// recusados (sem endereco, o link do e-mail nao funcionaria)
+function appUrl(): string | null {
+  const valor = (process.env.APP_URL?.trim() ?? "").replace(/\/+$/, "");
+  let motivo: string | null = null;
+  if (!valor) motivo = "APP_URL ausente";
+  else if (ehValorDeExemplo(valor)) motivo = "APP_URL ainda com o valor de exemplo";
+  else {
+    try {
+      const url = new URL(valor);
+      if (!["http:", "https:"].includes(url.protocol) || url.search || url.hash || url.username) {
+        motivo = "APP_URL em formato inválido (use http(s)://endereço, sem # nem ?)";
+      } else if (isProduction && ["localhost", "127.0.0.1"].includes(url.hostname)) {
+        motivo = "APP_URL aponta para localhost em produção";
+      }
+    } catch {
+      motivo = "APP_URL em formato inválido (use http(s)://endereço, sem barra no fim)";
+    }
+  }
+  if (!motivo) return valor;
+  const aviso =
+    `[config] ${motivo}: o convite do professor (link para criar a senha) não pode ser enviado; criar professor e ` +
+    "reenviar convite ficam recusados. Configure APP_URL com o endereço do frontend, sem barra no fim (em produção, no painel da Vercel).";
+  if (isProduction) console.error(aviso);
+  else console.warn(aviso);
+  return null;
+}
+
 const configuracao = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   isProduction,
@@ -119,6 +149,9 @@ const configuracao = {
   chaveCriptografia: chaveDeCriptografia(),
 
   sendgrid: sendgrid(),
+
+  // null = nao configurada: o convite do professor fica indisponivel (ver appUrl acima)
+  appUrl: appUrl(),
 };
 
 if (problemas.length > 0) {

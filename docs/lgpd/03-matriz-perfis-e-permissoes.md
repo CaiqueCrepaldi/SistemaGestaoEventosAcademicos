@@ -1,6 +1,6 @@
 # Matriz de perfis e permissões — SGEA
 
-**Data:** 09/11/2026 · **Versão:** 7 (calendário de eventos: o professor vê
+**Data:** 09/11/2026 · **Versão:** 8 (primeiro acesso do professor só pelo link do convite. A versão 7, do mesmo dia, trouxe o calendário de eventos: o professor vê
 os eventos dos outros só como "Sala ocupada". A versão 6, do mesmo dia, trouxe o
 check-in pedido pelo aluno e decidido pelo professor do evento ou pela equipe.
 A versão 5, do mesmo dia, trouxe as
@@ -30,7 +30,8 @@ invalidada depois de emitida (versão de token).
 | `/api/auth/registro` | POST | Qualquer pessoa | Cria `Participante` + `Usuario` (perfil `ALUNO`); exige `aceiteLgpd: true`; grava data/hora e versão dos Termos/Política aceitos |
 | `/api/auth/login` | POST | Qualquer pessoa | Sem 2FA: devolve a sessão (JWT). Com 2FA ativo (qualquer perfil que tenha ativado): devolve só o token temporário "2FA pendente" (5 min). Aluno inativado: `403 CONTA_INATIVA` "Sua conta está inativa. Procure a secretaria.", sem o motivo. Limite de 5 tentativas por conta e por IP |
 | `/api/auth/recuperacao-senha` | POST | Qualquer pessoa | Limite de 5 pedidos por conta e por IP. **Responde `404` quando o e-mail não está cadastrado** — limitação registrada em `07-medidas-tecnicas-de-seguranca.md` |
-| `/api/auth/primeiro-acesso` | POST | Qualquer pessoa | Ativa a conta de professor: código de 6 dígitos (vale 24 h, 5 tentativas), senha nova e `aceiteLgpd: true`. E-mail sem conta e código errado recebem o mesmo `422 CODIGO_INVALIDO`; limite por IP |
+| `/api/auth/primeiro-acesso/convite` | POST | Qualquer pessoa | Consulta a chave do convite (link do e-mail): devolve só o e-mail da conta, sem gastar o convite. Chave inexistente, vencida ou usada: o mesmo `422 CONVITE_INVALIDO`; chave errada conta no limite por IP |
+| `/api/auth/primeiro-acesso` | POST | Qualquer pessoa | Ativa a conta de professor: chave do convite (vale 24 h, uso único), senha nova e `aceiteLgpd: true`. Mesmas respostas e limite da consulta. Não há mais código de 6 dígitos nem link na tela de login |
 | `/api/auth/recuperacao-senha/confirmar` | POST | Qualquer pessoa | Exige código válido, não vencido, dentro do limite de tentativas; encerra as sessões abertas da conta |
 
 ## Rota da etapa do 2FA (só com o token temporário)
@@ -127,7 +128,7 @@ professor (ele não descobre que existe).
 
 | Rota | Método | PROFESSOR | Regra |
 |---|---|:---:|---|
-| `/api/professores` (listar, criar), `/:id/reenviar-codigo`, `/:id/eventos-em-aberto`, `/:id/inativar` e `/:id/reativar` | GET/POST | ❌ | Só ADMINISTRADOR e SECRETARIA. Inativar exige motivo e, se houver evento em aberto, para quem transferir (professor ativo ou equipe) |
+| `/api/professores` (listar, criar), `/:id/reenviar-convite`, `/:id/eventos-em-aberto`, `/:id/inativar` e `/:id/reativar` | GET/POST | ❌ | Só ADMINISTRADOR e SECRETARIA. Inativar exige motivo e, se houver evento em aberto, para quem transferir (professor ativo ou equipe) |
 | `/api/dashboard` | GET | ✅ | Mesmo service; os números contam só os eventos dele, e só aprovados |
 | `/api/eventos` e `/api/eventos/:id` | GET | ✅ | Só os dele, em qualquer situação |
 | `/api/eventos?de=&ate=` (calendário) e `/api/eventos/busca` | GET | ✅ | Calendário: os dele completos; os dos outros (aprovados, pendentes e propostas pendentes) só como sala, início e fim — sem título, palestrante, inscritos nem id. Busca: só os dele, com limite |

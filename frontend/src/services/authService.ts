@@ -116,8 +116,12 @@ export const authService = {
   reenviarCodigoCadastro(emailInstitucional: string) {
     return api.post<EnvioCodigoCadastro>("/auth/registro/reenviar-codigo", { emailInstitucional });
   },
-  // primeiro acesso do professor: codigo do e-mail + senha nova + aceite dos Termos
-  primeiroAcesso(dados: { email: string; codigo: string; novaSenha: string; aceiteLgpd: boolean }) {
+  // primeiro acesso do professor pelo link do convite: a tela consulta a chave (so diz se vale e o e-mail da
+  // conta, sem gastar o convite) e depois manda a chave + senha nova + aceite dos Termos
+  consultarConvite(convite: string) {
+    return api.post<{ email: string }>("/auth/primeiro-acesso/convite", { convite });
+  },
+  primeiroAcesso(dados: { convite: string; novaSenha: string; aceiteLgpd: boolean }) {
     return api.post<void>("/auth/primeiro-acesso", dados);
   },
   solicitarRecuperacaoSenha(email: string) {

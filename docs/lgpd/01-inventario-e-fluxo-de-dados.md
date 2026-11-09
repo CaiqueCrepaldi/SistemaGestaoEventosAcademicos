@@ -1,6 +1,6 @@
 # Inventário de dados pessoais e fluxo de dados — SGEA
 
-**Data:** 09/11/2026 · **Versão:** 7 (check-in pedido pelo próprio aluno, seção 4. A versão 6, do mesmo dia, trouxe as propostas de alteração, o aviso aos inscritos e a inativação do professor, seção 15. A versão 5, do mesmo dia, trouxe a conta de professor e o histórico da aprovação, seções 13 e 14. A versão 4, de 06/11/2026, trouxe a confirmação do e-mail no cadastro:
+**Data:** 09/11/2026 · **Versão:** 8 (o professor ativa a conta só pelo link do convite, seção 13. A versão 7, do mesmo dia, trouxe o check-in pedido pelo próprio aluno, seção 4. A versão 6, do mesmo dia, trouxe as propostas de alteração, o aviso aos inscritos e a inativação do professor, seção 15. A versão 5, do mesmo dia, trouxe a conta de professor e o histórico da aprovação, seções 13 e 14. A versão 4, de 06/11/2026, trouxe a confirmação do e-mail no cadastro:
 tabela `cadastros_pendentes`, seção 11; tabela `certificados`, seção 12;
 e-mail do aluno não editável; IP também no limite de envio do código do
 cadastro. A versão 3, de 29/09/2026,
@@ -260,12 +260,16 @@ detalhadas em `02-matriz-dados-finalidade-base-legal.md`; aqui o foco é
 - **Onde é coletado:** `POST /api/professores`: só o **nome completo** e o
   **e-mail institucional** (`@umc.br`). Nada além disso.
 - **Onde fica:** `usuarios` (`nome`, `emailLogin`, perfil `PROFESSOR`), com
-  senha inutilizável e sem aceite dos Termos até o primeiro acesso. O código
-  de 6 dígitos do primeiro acesso fica em `primeiros_acessos` só como hash
-  bcrypt, com validade de 24 horas, limite de 5 tentativas e contagem de
-  envios. No primeiro acesso (`POST /api/auth/primeiro-acesso`) o professor
-  define a senha e aceita os Termos (`consentimentoLgpdEm` e
-  `versaoTermosAceitos`), e a linha de `primeiros_acessos` é apagada.
+  senha inutilizável e sem aceite dos Termos até usar o convite. O convite é
+  um link mandado por e-mail (`APP_URL/#/primeiro-acesso?convite=...`) com
+  uma chave aleatória de 32 bytes; em `primeiros_acessos` fica só o hash
+  SHA-256 dela (coluna `codigoHash`), com validade de 24 horas, uso único e
+  contagem de envios. A chave vai depois do `#` (não chega ao servidor nem
+  a logs ao abrir o link) e a tela a tira do endereço assim que a lê. Abrir
+  o link não gasta o convite; ao enviar a senha e o aceite
+  (`POST /api/auth/primeiro-acesso`), o professor grava a senha e o aceite
+  dos Termos (`consentimentoLgpdEm` e `versaoTermosAceitos`) e a linha de
+  `primeiros_acessos` é apagada.
 - **Para que serve:** criar e organizar os próprios eventos e palestrantes e
   registrar a presença dos alunos inscritos neles.
 - **O que o professor vê dos alunos:** só nos eventos que ele criou, o nome, o

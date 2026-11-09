@@ -27,11 +27,11 @@ professoresRouter.post(
   }),
 );
 
-// novo codigo, enquanto o professor nao fez o primeiro acesso
+// novo convite (link por e-mail), enquanto o professor nao fez o primeiro acesso; o anterior deixa de valer
 professoresRouter.post(
-  "/:id/reenviar-codigo",
+  "/:id/reenviar-convite",
   asyncHandler(async (req, res) => {
-    res.json(await professoresService.reenviarCodigo(req.params.id, req.usuario!.sub));
+    res.json(await professoresService.reenviarConvite(req.params.id, req.usuario!.sub));
   }),
 );
 

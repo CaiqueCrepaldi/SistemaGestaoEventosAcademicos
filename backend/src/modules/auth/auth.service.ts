@@ -408,8 +408,9 @@ async function aceitarTermos(usuarioId: string) {
 }
 
 // acha usuario pelo email de login (normalizado), usado na recuperacao de senha
-// professor que ainda nao fez o primeiro acesso conta como "sem conta" aqui: ele ativa a conta pela tela
-// Primeiro acesso (onde tambem aceita os Termos), nunca pela recuperacao de senha
+// professor que ainda nao fez o primeiro acesso conta como "sem conta" aqui (nos dois passos, com a mesma
+// resposta de e-mail inexistente): so o link do convite ativa a conta e grava o aceite dos Termos, nunca a
+// recuperacao de senha
 async function buscarUsuarioPorEmail(email: string) {
   const usuario = await prisma.usuario.findUnique({ where: { emailLogin: normalizarEmail(email) } });
   if (usuario?.perfil === "PROFESSOR" && !usuario.consentimentoLgpdEm) return null;

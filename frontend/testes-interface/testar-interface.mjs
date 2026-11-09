@@ -103,6 +103,12 @@ try {
   checar("rótulos com * nos campos obrigatórios", (await page.locator("label[for=emailLogin] .campo-obrigatorio").count()) === 1 && (await page.locator("label[for=senha] .campo-obrigatorio").count()) === 1);
   checar("legenda explicando o *", await temTexto(page, "são obrigatórios"));
   checar("a tela de login não tem mais o link \"Validar certificado\" (a validação fica em Certificados)", !(await temTexto(page, "Validar certificado")));
+  checar(
+    "o login não tem link de primeiro acesso: só \"Criar conta\" e \"Esqueci minha senha\"",
+    (await page.locator(".login-links a").allInnerTexts()).map((t) => t.trim()).join("|") === "Criar conta|Esqueci minha senha" &&
+      (await page.locator("a[href*='primeiro-acesso']").count()) === 0,
+    (await page.locator(".login-links a").allInnerTexts()).join("|"),
+  );
   await page.click("button[type=submit]");
   checar("enviar vazio marca e-mail e senha como inválidos (borda vermelha)", (await invalido(page, "#emailLogin")) && (await invalido(page, "#senha")));
   checar("mensagem embaixo de cada campo", (await temTexto(page, "Informe o e-mail.")) && (await temTexto(page, "Informe a senha.")));
@@ -728,7 +734,43 @@ try {
   const nomeProfessor = `Professor Interface ${tag}`;
   const SENHA_PROFESSOR = "Senha@Prof123";
   const professorCriado = await api("POST", "/professores", tokenSecretaria, { nomeCompleto: nomeProfessor, email: emailProfessor });
-  await api("POST", "/auth/primeiro-acesso", undefined, { email: emailProfessor, codigo: professorCriado.corpo.codigoDemo, novaSenha: SENHA_PROFESSOR, aceiteLgpd: true });
+
+  // o professor ativa a conta pelo link do convite (fora de producao, a API devolve o link: linkConviteDemo)
+  await page.goto(`${APP}/primeiro-acesso`);
+  await page.getByText("Use o link enviado para o seu e-mail.").waitFor({ timeout: 8000 }).catch(() => {});
+  checar(
+    "primeiro acesso sem convite: só a mensagem, sem formulário",
+    (await temTexto(page, "Use o link enviado para o seu e-mail. Se ele venceu, peça um novo convite à secretaria.")) &&
+      (await page.locator("form").count()) === 0 &&
+      (await page.locator("input").count()) === 0,
+  );
+  await page.goto(`${APP}/primeiro-acesso?convite=chave-que-nao-existe`);
+  await page.getByText("Use o link enviado para o seu e-mail.").waitFor({ timeout: 8000 }).catch(() => {});
+  checar("convite inválido: a mesma mensagem, sem formulário", (await temTexto(page, "Se ele venceu, peça um novo convite à secretaria.")) && (await page.locator("form").count()) === 0);
+  const linkConvite = professorCriado.corpo.linkConviteDemo ?? "";
+  checar("o link do convite leva a chave depois do #", /^http:\/\/localhost:5173\/#\/primeiro-acesso\?convite=[A-Za-z0-9_-]{43}$/.test(linkConvite), linkConvite);
+  await page.goto(linkConvite);
+  await page.locator("#email[readonly]").waitFor({ timeout: 10000 }).catch(() => {});
+  checar(
+    "o link abre a tela com o e-mail da conta (só leitura) e pede só a senha e o aceite",
+    (await page.inputValue("#email").catch(() => "")) === emailProfessor &&
+      (await page.locator("#email[readonly]").count()) === 1 &&
+      (await page.locator("#novaSenha").count()) === 1 &&
+      (await page.locator("#confirmarSenha").count()) === 1 &&
+      (await page.locator("input[name=aceiteLgpd]").count()) === 1 &&
+      (await page.locator(".requisitos-senha").count()) === 1 &&
+      (await page.locator("form input").count()) === 4 &&
+      !(await temTexto(page, "código")),
+    await page.locator(".login-card").innerText().catch(() => ""),
+  );
+  checar("a chave some do endereço assim que a tela lê o convite", !page.url().includes("convite") && page.url().endsWith("#/primeiro-acesso"), page.url());
+  await page.fill("#novaSenha", SENHA_PROFESSOR);
+  await page.fill("#confirmarSenha", SENHA_PROFESSOR);
+  await page.check("input[name=aceiteLgpd]");
+  await page.click("button[type=submit]");
+  checar("ativar a conta leva ao login com o aviso", await esperarToast(page, "Conta ativada. Entre com seu e-mail e a nova senha."));
+  await page.waitForFunction(() => location.hash.startsWith("#/login"), null, { timeout: 8000 }).catch(() => {});
+  checar("depois de ativar, a tela é a do login", (await page.evaluate(() => location.hash)).startsWith("#/login"));
   const tokenProfessor = await tokenDe(emailProfessor, SENHA_PROFESSOR);
   const salaProposta = await api("POST", "/salas", tokenSecretaria, { nome: `Sala Proposta UI ${sufixo}`, capacidade: 50 });
   const daquiDezDias = new Date(Math.ceil((Date.now() + 10 * 24 * 3600 * 1000) / 3600000) * 3600000).toISOString();

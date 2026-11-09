@@ -6,7 +6,7 @@
 //
 // como rodar (de dentro de backend/):  npx tsx scripts/testar-requisitos.ts
 import "dotenv/config";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import type { AddressInfo } from "net";
 import bcrypt from "bcryptjs";
 
@@ -14,6 +14,8 @@ if (!process.env.DATABASE_URL?.includes("SGEA_dev")) {
   console.error("[testar-requisitos] recusado: DATABASE_URL não aponta pro SGEA_dev");
   process.exit(1);
 }
+// o convite do professor precisa do endereco do frontend; sem APP_URL no .env, o teste usa o do Vite local
+if (!process.env.APP_URL?.trim()) process.env.APP_URL = "http://localhost:5173";
 
 type Perfil = "ADMINISTRADOR" | "SECRETARIA" | "ALUNO" | "PROFESSOR";
 interface Conta {
@@ -96,6 +98,8 @@ async function main() {
   const { prisma } = await import("../src/db/prisma");
   const { indiceBusca } = await import("../src/utils/criptografia");
   const { expirarCheckins } = await import("../src/utils/checkin");
+  const { env } = await import("../src/config/env");
+  const { emailService, conteudoDoConvite } = await import("../src/modules/email/email.service");
   const { VERSAO_TERMOS_ATUAL } = await import("../src/config/termos");
 
   // o limite de tentativas por IP (bloco 2) conta os logins errados de proposito deste teste, que
@@ -1381,65 +1385,179 @@ async function main() {
     );
 
     // ------------------------------------------------------------------ perfil PROFESSOR
-    requisito("R35 Conta de professor: criada pela equipe, ativada no primeiro acesso");
+    requisito("R35 Conta de professor: criada pela equipe, ativada pelo link do convite");
     const SENHA_PROFESSOR = "Prof@Teste123";
     const emailProfA = `prof.a.${sufixo}@umc.br`;
+    const MENSAGEM_CONVITE_INVALIDO = "Convite inválido ou vencido.";
+    // os convites "enviados" (o e-mail sai simulado): guarda destinatario, nome e link de cada um
+    const convitesEnviados: { destinatario: string; nome: string; link: string }[] = [];
+    const enviarConviteOriginal = emailService.enviarConviteProfessor;
+    emailService.enviarConviteProfessor = async (destinatario: string, nome: string, link: string) => {
+      convitesEnviados.push({ destinatario, nome, link });
+      return enviarConviteOriginal(destinatario, nome, link);
+    };
+    // a chave do convite fica depois do "#": #/primeiro-acesso?convite=...
+    const conviteDo = (link?: string): string => {
+      if (!link) return "";
+      return new URLSearchParams(new URL(link).hash.split("?")[1] ?? "").get("convite") ?? "";
+    };
+    const sha256 = (texto: string) => createHash("sha256").update(texto, "utf8").digest("hex");
+
     r = await chamar("POST", "/professores", { token: secretaria.token, corpo: { nomeCompleto: "Professor Teste A", email: `prof.x.${sufixo}@alunos.umc.br` } });
     checar("e-mail @alunos.umc.br para professor -> 422", r.status === 422, r.corpo);
     r = await chamar("POST", "/professores", { token: aluno.token, corpo: { nomeCompleto: "Professor Teste A", email: emailProfA } });
     checar("aluno não cria professor -> 403", r.status === 403, r.status);
+
+    const emailSemEndereco = `prof.semurl.${sufixo}@umc.br`;
+    const appUrlOriginal = env.appUrl;
+    env.appUrl = null;
+    r = await chamar("POST", "/professores", { token: secretaria.token, corpo: { nomeCompleto: "Professor Sem Endereco", email: emailSemEndereco } });
+    env.appUrl = appUrlOriginal;
+    checar(
+      "sem APP_URL, criar professor é recusado com a mensagem e nenhuma conta é criada",
+      r.status === 503 &&
+        r.corpo.message === "O endereço do sistema não está configurado; não é possível enviar o convite." &&
+        !(await prisma.usuario.findUnique({ where: { emailLogin: emailSemEndereco } })),
+      r.corpo,
+    );
+
     r = await chamar("POST", "/professores", { token: secretaria.token, corpo: { nomeCompleto: "Professor Teste A", email: emailProfA.toUpperCase() } });
     checar(
-      "secretaria cria professor (só nome e e-mail) -> 201, aguardando primeiro acesso, com o código fora de produção",
-      r.status === 201 && r.corpo.professor?.situacao === "AGUARDANDO_PRIMEIRO_ACESSO" && r.corpo.professor.email === emailProfA && /^\d{6}$/.test(r.corpo.codigoDemo ?? ""),
+      "secretaria cria professor (só nome e e-mail) -> 201, aguardando primeiro acesso, com o link do convite fora de produção e sem código",
+      r.status === 201 &&
+        r.corpo.professor?.situacao === "AGUARDANDO_PRIMEIRO_ACESSO" &&
+        r.corpo.professor.email === emailProfA &&
+        typeof r.corpo.linkConviteDemo === "string" &&
+        r.corpo.codigoDemo === undefined,
       r.corpo,
     );
     const professorA: Conta = { id: r.corpo.professor?.id, email: emailProfA, senha: SENHA_PROFESSOR, perfil: "PROFESSOR", participanteId: null };
     contas.push(professorA);
-    const codigoProfA: string = r.corpo.codigoDemo;
+    const linkA: string = r.corpo.linkConviteDemo ?? "";
+    const conviteA = conviteDo(linkA);
+    const urlA = new URL(linkA || "http://x");
+    const emailDoConvite = convitesEnviados[convitesEnviados.length - 1];
+    const htmlDoConvite = emailDoConvite ? conteudoDoConvite(emailDoConvite.nome, emailDoConvite.link).html : "";
+    checar(
+      "o e-mail de convite tem o botão e o link com a chave depois do # (nada no caminho nem na consulta) e não tem código",
+      emailDoConvite?.destinatario === emailProfA &&
+        emailDoConvite.link === linkA &&
+        urlA.origin === process.env.APP_URL?.replace(/\/+$/, "") &&
+        urlA.hash === `#/primeiro-acesso?convite=${conviteA}` &&
+        conviteA.length === 43 &&
+        !urlA.pathname.includes(conviteA) &&
+        !urlA.search.includes(conviteA) &&
+        htmlDoConvite.includes("Criar minha senha") &&
+        htmlDoConvite.includes("O link vale por 24 horas. Se ele vencer, peça um novo convite à secretaria.") &&
+        htmlDoConvite.split(linkA).length >= 3 &&
+        !/\d{6}/.test(htmlDoConvite.split(linkA).join("")),
+      { link: linkA, html: htmlDoConvite.slice(0, 200) },
+    );
     const contaProfA = await prisma.usuario.findUnique({ where: { id: professorA.id }, include: { primeiroAcesso: true } });
     checar(
-      "conta nasce sem senha utilizável e sem aceite dos Termos; código guardado só em hash, válido por 24 h",
+      "conta nasce sem senha utilizável e sem aceite dos Termos; no banco só o SHA-256 da chave, válido por 24 h",
       contaProfA?.senhaHash === "!" &&
         contaProfA.consentimentoLgpdEm === null &&
         !!contaProfA.primeiroAcesso &&
-        contaProfA.primeiroAcesso.codigoHash !== codigoProfA &&
+        contaProfA.primeiroAcesso.codigoHash === sha256(conviteA) &&
+        contaProfA.primeiroAcesso.codigoHash !== conviteA &&
         Math.abs(contaProfA.primeiroAcesso.expiraEm.getTime() - Date.now() - 24 * 3600 * 1000) < 60 * 1000,
     );
     r = await chamar("POST", "/auth/login", { corpo: { emailLogin: emailProfA, senha: SENHA_PROFESSOR } });
-    checar("professor não entra antes do primeiro acesso -> 401 genérico", r.status === 401 && r.corpo.code === "CREDENCIAIS_INVALIDAS", r.corpo);
-    r = await chamar("POST", "/auth/primeiro-acesso", { corpo: { email: emailProfA, codigo: codigoProfA, novaSenha: SENHA_PROFESSOR, aceiteLgpd: false } });
-    checar("primeiro acesso sem aceite dos Termos -> 422", r.status === 422 && r.corpo.erros?.some((e: { campo: string }) => e.campo === "aceiteLgpd"), r.corpo);
-    r = await chamar("POST", "/auth/primeiro-acesso", { corpo: { email: emailProfA, codigo: codigoProfA, novaSenha: "fraca", aceiteLgpd: true } });
-    checar("primeiro acesso com senha fora da regra -> 422", r.status === 422, r.status);
-    const codigoErradoProf = codigoProfA === "000000" ? "111111" : "000000";
-    const codigoErrado = await chamar("POST", "/auth/primeiro-acesso", { corpo: { email: emailProfA, codigo: codigoErradoProf, novaSenha: SENHA_PROFESSOR, aceiteLgpd: true } });
-    const emailInexistenteProf = await chamar("POST", "/auth/primeiro-acesso", {
-      corpo: { email: `ninguem.prof.${sufixo}@umc.br`, codigo: "123456", novaSenha: SENHA_PROFESSOR, aceiteLgpd: true },
-    });
+    checar("professor não entra antes de usar o convite -> 401 genérico", r.status === 401 && r.corpo.code === "CREDENCIAIS_INVALIDAS", r.corpo);
+
+    r = await chamar("POST", "/auth/primeiro-acesso/convite", { corpo: { convite: conviteA } });
+    checar("consultar o convite devolve só o e-mail da conta", r.status === 200 && r.corpo.email === emailProfA && Object.keys(r.corpo).join() === "email", r.corpo);
+    r = await chamar("POST", "/auth/primeiro-acesso/convite", { corpo: { convite: conviteA } });
     checar(
-      "código errado e e-mail inexistente -> o mesmo 422 CODIGO_INVALIDO (não revela quais e-mails existem)",
-      codigoErrado.status === 422 &&
-        emailInexistenteProf.status === 422 &&
-        codigoErrado.corpo.code === "CODIGO_INVALIDO" &&
-        codigoErrado.corpo.message === emailInexistenteProf.corpo.message,
-      [codigoErrado.corpo, emailInexistenteProf.corpo],
+      "consultar a chave não gasta o convite (a segunda consulta vale e o convite continua no banco)",
+      r.status === 200 && !!(await prisma.primeiroAcesso.findUnique({ where: { usuarioId: professorA.id } })),
+      r.corpo,
     );
-    r = await chamar("POST", "/auth/recuperacao-senha", { corpo: { email: emailProfA } });
-    checar("'Esqueci a senha' não gera código para professor sem primeiro acesso (resposta genérica)", r.status === 200 && !r.corpo.codigoDemo, r.corpo);
-    r = await chamar("POST", "/auth/primeiro-acesso", { corpo: { email: emailProfA, codigo: codigoProfA, novaSenha: SENHA_PROFESSOR, aceiteLgpd: true } });
-    checar("primeiro acesso com código, senha e aceite -> 200", r.status === 200, r.corpo);
+    r = await chamar("POST", "/auth/primeiro-acesso", { corpo: { convite: conviteA, novaSenha: SENHA_PROFESSOR, aceiteLgpd: false } });
+    checar("sem o aceite dos Termos -> 422", r.status === 422 && r.corpo.erros?.some((e: { campo: string }) => e.campo === "aceiteLgpd"), r.corpo);
+    r = await chamar("POST", "/auth/primeiro-acesso", { corpo: { convite: conviteA, novaSenha: "fraca", aceiteLgpd: true } });
+    checar("senha fora da regra -> 422", r.status === 422 && r.corpo.erros?.some((e: { campo: string }) => e.campo === "novaSenha"), r.corpo);
+    r = await chamar("POST", "/auth/primeiro-acesso/convite", { corpo: { convite: "A".repeat(43) } });
+    checar("chave inexistente -> 422 CONVITE_INVALIDO com a mensagem genérica", r.status === 422 && r.corpo.code === "CONVITE_INVALIDO" && r.corpo.message === MENSAGEM_CONVITE_INVALIDO, r.corpo);
+
+    // "Esqueci minha senha" de quem ainda espera o convite: nada sai e a resposta e a de e-mail inexistente
+    const emailNinguemProf = `ninguem.prof.${sufixo}@umc.br`;
+    const recuperacaoProf = await chamar("POST", "/auth/recuperacao-senha", { corpo: { email: emailProfA } });
+    const recuperacaoNinguem = await chamar("POST", "/auth/recuperacao-senha", { corpo: { email: emailNinguemProf } });
+    checar(
+      "\"Esqueci minha senha\" de conta que espera o convite não gera código e responde igual a e-mail inexistente",
+      recuperacaoProf.status === recuperacaoNinguem.status &&
+        JSON.stringify(recuperacaoProf.corpo) === JSON.stringify(recuperacaoNinguem.corpo) &&
+        !recuperacaoProf.corpo?.codigoDemo &&
+        !(await prisma.recuperacaoSenha.findFirst({ where: { usuarioId: professorA.id } })),
+      [recuperacaoProf.corpo, recuperacaoNinguem.corpo],
+    );
+    const confirmacaoProf = await chamar("POST", "/auth/recuperacao-senha/confirmar", { corpo: { email: emailProfA, codigo: "123456", novaSenha: SENHA_PROFESSOR } });
+    const confirmacaoNinguem = await chamar("POST", "/auth/recuperacao-senha/confirmar", { corpo: { email: emailNinguemProf, codigo: "123456", novaSenha: SENHA_PROFESSOR } });
+    checar(
+      "a confirmação da recuperação também responde igual e não troca a senha",
+      confirmacaoProf.status === confirmacaoNinguem.status &&
+        // o corpo de erro traz a hora (timestamp), que sempre difere: compara o resto
+        confirmacaoProf.corpo?.code === confirmacaoNinguem.corpo?.code &&
+        confirmacaoProf.corpo?.message === confirmacaoNinguem.corpo?.message &&
+        (await prisma.usuario.findUnique({ where: { id: professorA.id } }))?.senhaHash === "!",
+      [confirmacaoProf.corpo, confirmacaoNinguem.corpo],
+    );
+
+    // convite vencido e reenvio, num professor so pra isso
+    const emailProfV = `prof.v.${sufixo}@umc.br`;
+    r = await chamar("POST", "/professores", { token: secretaria.token, corpo: { nomeCompleto: "Professor Teste Vencido", email: emailProfV } });
+    const professorV: Conta = { id: r.corpo.professor?.id, email: emailProfV, senha: SENHA_PROFESSOR, perfil: "PROFESSOR", participanteId: null };
+    contas.push(professorV);
+    const conviteV = conviteDo(r.corpo.linkConviteDemo);
+    await prisma.primeiroAcesso.update({ where: { usuarioId: professorV.id }, data: { expiraEm: new Date(Date.now() - 1000), ultimoEnvioEm: new Date(Date.now() - 120 * 1000) } });
+    const consultaVencido = await chamar("POST", "/auth/primeiro-acesso/convite", { corpo: { convite: conviteV } });
+    const ativacaoVencido = await chamar("POST", "/auth/primeiro-acesso", { corpo: { convite: conviteV, novaSenha: SENHA_PROFESSOR, aceiteLgpd: true } });
+    checar(
+      "convite vencido é recusado (consulta e ativação) com a mesma resposta de chave inexistente",
+      [consultaVencido, ativacaoVencido].every((x) => x.status === 422 && x.corpo.code === "CONVITE_INVALIDO" && x.corpo.message === MENSAGEM_CONVITE_INVALIDO) &&
+        (await prisma.usuario.findUnique({ where: { id: professorV.id } }))?.consentimentoLgpdEm === null,
+      [consultaVencido.corpo, ativacaoVencido.corpo],
+    );
+    r = await chamar("POST", `/professores/${professorV.id}/reenviar-convite`, { token: secretaria.token });
+    const conviteV2 = conviteDo(r.corpo.linkConviteDemo);
+    const consultaAntigo = await chamar("POST", "/auth/primeiro-acesso/convite", { corpo: { convite: conviteV } });
+    const consultaNovo = await chamar("POST", "/auth/primeiro-acesso/convite", { corpo: { convite: conviteV2 } });
+    checar(
+      "reenviar gera um convite novo (24 h de novo) e o anterior deixa de valer",
+      r.status === 200 &&
+        !!conviteV2 &&
+        conviteV2 !== conviteV &&
+        consultaAntigo.status === 422 &&
+        consultaNovo.status === 200 &&
+        consultaNovo.corpo.email === emailProfV &&
+        !!(await prisma.logAuditoria.findFirst({ where: { acao: "PROFESSOR_CONVITE_REENVIADO", detalhe: { contains: professorV.id } } })),
+      [r.corpo, consultaAntigo.corpo, consultaNovo.corpo],
+    );
+    r = await chamar("POST", `/professores/${professorV.id}/reenviar-convite`, { token: secretaria.token });
+    checar("reenviar de novo antes de 60 s -> 429 AGUARDE_REENVIO", r.status === 429 && r.corpo.code === "AGUARDE_REENVIO", r.corpo);
+
+    r = await chamar("POST", "/auth/primeiro-acesso", { corpo: { convite: conviteA, novaSenha: SENHA_PROFESSOR, aceiteLgpd: true } });
+    checar("convite válido + senha + aceite -> 200", r.status === 200, r.corpo);
     const contaAtivada = await prisma.usuario.findUnique({ where: { id: professorA.id }, include: { primeiroAcesso: true } });
     checar(
-      "grava a senha (hash), o aceite e a versão \"4\" dos Termos; o código sai do banco",
+      "grava a senha (hash), o aceite e a versão \"4\" dos Termos; o convite sai do banco",
       !!contaAtivada?.consentimentoLgpdEm && contaAtivada.versaoTermosAceitos === "4" && contaAtivada.senhaHash.startsWith("$2a$12$") && !contaAtivada.primeiroAcesso,
     );
     checar(
       "aceite do professor registrado na auditoria",
-      !!(await prisma.logAuditoria.findFirst({ where: { usuarioId: professorA.id, acao: "CONSENTIMENTO_LGPD_ACEITO" } })),
+      !!(await prisma.logAuditoria.findFirst({ where: { usuarioId: professorA.id, acao: "CONSENTIMENTO_LGPD_ACEITO" } })) &&
+        !!(await prisma.logAuditoria.findFirst({ where: { usuarioId: professorA.id, acao: "PRIMEIRO_ACESSO_CONCLUIDO" } })),
+    );
+    r = await chamar("POST", "/auth/primeiro-acesso", { corpo: { convite: conviteA, novaSenha: "Outra@Senha123", aceiteLgpd: true } });
+    checar(
+      "usar o mesmo convite de novo -> 422 CONVITE_INVALIDO (a senha não muda)",
+      r.status === 422 && r.corpo.code === "CONVITE_INVALIDO" && (await bcrypt.compare(SENHA_PROFESSOR, (await prisma.usuario.findUnique({ where: { id: professorA.id } }))!.senhaHash)),
+      r.corpo,
     );
     r = await chamar("POST", "/auth/login", { corpo: { emailLogin: emailProfA, senha: SENHA_PROFESSOR } });
-    checar("depois do primeiro acesso o login funciona", r.status === 200 && !!r.corpo.token && r.corpo.usuario?.perfil === "PROFESSOR", r.corpo);
+    checar("depois de usar o convite o login funciona", r.status === 200 && !!r.corpo.token && r.corpo.usuario?.perfil === "PROFESSOR", r.corpo);
     professorA.token = r.corpo.token;
     r = await chamar("GET", "/professores", { token: secretaria.token });
     checar(
@@ -1447,15 +1565,34 @@ async function main() {
       r.status === 200 && r.corpo.some((p: { id: string; situacao: string }) => p.id === professorA.id && p.situacao === "ATIVO"),
       r.corpo,
     );
+    r = await chamar("POST", `/professores/${professorA.id}/reenviar-convite`, { token: secretaria.token });
+    checar("reenviar convite de quem já ativou a conta -> 409", r.status === 409, r.corpo);
     r = await chamar("POST", `/professores/${professorA.id}/reenviar-codigo`, { token: secretaria.token });
-    checar("reenviar código de quem já fez o primeiro acesso -> 409", r.status === 409, r.corpo);
+    checar("a rota antiga do código não existe mais -> 404", r.status === 404, r.status);
+
+    // chave errada repetida: conta no limite por IP (20 em 15 min) e, bloqueado, nem a chave certa passa
+    let tentativasAteBloquear = 0;
+    let respostaErrada = await chamar("POST", "/auth/primeiro-acesso/convite", { corpo: { convite: `errada-${sufixo}` } });
+    while (respostaErrada.status === 422 && tentativasAteBloquear < 30) {
+      tentativasAteBloquear++;
+      respostaErrada = await chamar("POST", "/auth/primeiro-acesso/convite", { corpo: { convite: `errada-${sufixo}-${tentativasAteBloquear}` } });
+    }
+    const certaBloqueada = await chamar("POST", "/auth/primeiro-acesso/convite", { corpo: { convite: conviteV2 } });
+    checar(
+      "chave errada repetida cai no limite por IP (429) e, bloqueado, nem a chave certa passa",
+      respostaErrada.status === 429 && respostaErrada.corpo.code === "MUITAS_TENTATIVAS" && tentativasAteBloquear <= 20 && certaBloqueada.status === 429,
+      { tentativasAteBloquear, status: respostaErrada.status, certa: certaBloqueada.status },
+    );
+    // o resto da rodada sai do mesmo IP: zera o contador local
+    await limparContadorDoIpLocal();
+    emailService.enviarConviteProfessor = enviarConviteOriginal;
 
     // segundo professor, pra conferir que um nao enxerga o do outro
     const emailProfB = `prof.b.${sufixo}@umc.br`;
     r = await chamar("POST", "/professores", { token: admin.token, corpo: { nomeCompleto: "Professor Teste B", email: emailProfB } });
     const professorB: Conta = { id: r.corpo.professor?.id, email: emailProfB, senha: SENHA_PROFESSOR, perfil: "PROFESSOR", participanteId: null };
     contas.push(professorB);
-    await chamar("POST", "/auth/primeiro-acesso", { corpo: { email: emailProfB, codigo: r.corpo.codigoDemo, novaSenha: SENHA_PROFESSOR, aceiteLgpd: true } });
+    await chamar("POST", "/auth/primeiro-acesso", { corpo: { convite: conviteDo(r.corpo.linkConviteDemo), novaSenha: SENHA_PROFESSOR, aceiteLgpd: true } });
     professorB.token = await entrar(professorB);
 
     requisito("R36 Professor: só os próprios eventos; sem Auditoria, Participantes e criação de sala");
@@ -1881,7 +2018,7 @@ async function main() {
     r = await chamar("POST", "/professores", { token: admin.token, corpo: { nomeCompleto: "Professor Teste C", email: emailProfC } });
     const professorC: Conta = { id: r.corpo.professor?.id, email: emailProfC, senha: SENHA_PROFESSOR, perfil: "PROFESSOR", participanteId: null };
     contas.push(professorC);
-    await chamar("POST", "/auth/primeiro-acesso", { corpo: { email: emailProfC, codigo: r.corpo.codigoDemo, novaSenha: SENHA_PROFESSOR, aceiteLgpd: true } });
+    await chamar("POST", "/auth/primeiro-acesso", { corpo: { convite: conviteDo(r.corpo.linkConviteDemo), novaSenha: SENHA_PROFESSOR, aceiteLgpd: true } });
     r = await chamar("POST", `/professores/${professorC.id}/inativar`, { token: admin.token, corpo: { motivo: "Licença" } });
     checar("professor sem eventos em aberto é inativado sem transferência -> 200 INATIVO", r.status === 200 && r.corpo.professor?.situacao === "INATIVO" && r.corpo.eventosTransferidos === 0, r.corpo);
     r = await chamar("POST", `/professores/${professorA.id}/inativar`, { token: secretaria.token, corpo: { motivo: MOTIVO_INATIVACAO, transferirPara: professorC.id } });

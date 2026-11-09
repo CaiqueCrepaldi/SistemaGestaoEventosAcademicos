@@ -53,7 +53,9 @@ export type AcaoAuditoria =
   | "EVENTO_TRANSFERIDO"
   // conta de professor: criada pela equipe, ativada no primeiro acesso
   | "PROFESSOR_CRIADO"
+  // so em registros antigos (quando o primeiro acesso era por codigo de 6 digitos)
   | "PROFESSOR_CODIGO_REENVIADO"
+  | "PROFESSOR_CONVITE_REENVIADO"
   | "PROFESSOR_INATIVADO"
   | "PROFESSOR_REATIVADO"
   | "PRIMEIRO_ACESSO_CONCLUIDO"

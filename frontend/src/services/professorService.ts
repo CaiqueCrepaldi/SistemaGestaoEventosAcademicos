@@ -14,10 +14,10 @@ export interface Professor {
   criadoEm: string;
 }
 
-// resposta de criar/reenviar: se o e-mail com o codigo saiu e, so fora de producao, o proprio codigo
-export interface EnvioCodigoProfessor {
+// resposta de criar/reenviar: se o e-mail com o convite saiu e, so fora de producao, o proprio link
+export interface EnvioConviteProfessor {
   emailEnviado: boolean;
-  codigoDemo?: string;
+  linkConviteDemo?: string;
 }
 
 // evento do professor que precisa de novo responsavel antes da inativacao (nao encerrado, ou encerrado ha
@@ -32,8 +32,8 @@ export interface EventoEmAberto {
 export const professorService = {
   listar: () => api.get<Professor[]>("/professores"),
   criar: (dados: { nomeCompleto: string; email: string }) =>
-    api.post<EnvioCodigoProfessor & { professor: Professor }>("/professores", dados),
-  reenviarCodigo: (id: string) => api.post<EnvioCodigoProfessor>(`/professores/${id}/reenviar-codigo`),
+    api.post<EnvioConviteProfessor & { professor: Professor }>("/professores", dados),
+  reenviarConvite: (id: string) => api.post<EnvioConviteProfessor>(`/professores/${id}/reenviar-convite`),
   eventosEmAberto: (id: string) => api.get<EventoEmAberto[]>(`/professores/${id}/eventos-em-aberto`),
   // transferirPara: "EQUIPE" ou o id de outro professor ativo (obrigatorio quando ha evento em aberto)
   inativar: (id: string, dados: { motivo: string; transferirPara?: string }) =>

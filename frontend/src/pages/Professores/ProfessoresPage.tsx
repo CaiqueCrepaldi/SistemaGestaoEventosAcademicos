@@ -6,24 +6,24 @@ import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { toast } from "../../components/ui/Toast";
 import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
-import { ApiError, professorService, type EnvioCodigoProfessor, type EventoEmAberto, type Professor } from "../../services";
+import { ApiError, professorService, type EnvioConviteProfessor, type EventoEmAberto, type Professor } from "../../services";
 import { validarEmail, validarNome } from "../../utils/validacao";
 
 const DOMINIO_PROFESSOR = "@umc.br";
 const VAZIO = { nomeCompleto: "", email: "" };
 
-// avisa como foi o envio do codigo; fora de producao mostra o codigo de demonstracao (como no cadastro)
-function avisarEnvio(envio: EnvioCodigoProfessor, inicio: string) {
-  const demo = envio.codigoDemo ? ` Modo demonstração — código: ${envio.codigoDemo}` : "";
-  if (envio.emailEnviado) toast.success(`${inicio} O código de primeiro acesso foi enviado por e-mail.${demo}`);
-  else toast.error(`${inicio} O e-mail com o código não saiu: use "Reenviar código" daqui a pouco.${demo}`);
+// avisa como foi o envio do convite; fora de producao mostra o link de demonstracao (como o codigo do cadastro)
+function avisarEnvio(envio: EnvioConviteProfessor, inicio: string) {
+  const demo = envio.linkConviteDemo ? ` Modo demonstração — link: ${envio.linkConviteDemo}` : "";
+  if (envio.emailEnviado) toast.success(`${inicio} O convite para criar a senha foi enviado por e-mail.${demo}`);
+  else toast.error(`${inicio} O e-mail com o convite não saiu: use "Reenviar convite" daqui a pouco.${demo}`);
 }
 
 const ROTULO_SITUACAO_EVENTO = { PENDENTE: "aguardando aprovação", APROVADO: "aprovado", RECUSADO: "recusado" } as const;
 
 // contas de professor (so administrador e secretaria). Pede so nome e e-mail @umc.br (LGPD: nada alem disso).
-// A conta nasce sem senha e sem aceite dos Termos: o professor ativa pela tela "Primeiro acesso" com o
-// codigo enviado por e-mail. Inativar pede o motivo e, se ele tem evento em aberto, para quem transferir
+// A conta nasce sem senha e sem aceite dos Termos: o professor recebe por e-mail um link (convite) para criar a
+// senha e aceitar os Termos. Inativar pede o motivo e, se ele tem evento em aberto, para quem transferir
 // (outro professor ativo ou a equipe); reativar devolve o acesso
 export function ProfessoresPage() {
   const [professores, setProfessores] = useState<Professor[]>([]);
@@ -91,9 +91,9 @@ export function ProfessoresPage() {
   async function reenviar() {
     if (!reenviando) return;
     try {
-      avisarEnvio(await professorService.reenviarCodigo(reenviando.id), "Novo código gerado; o anterior não vale mais.");
+      avisarEnvio(await professorService.reenviarConvite(reenviando.id), "Novo convite gerado; o anterior não vale mais.");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Não foi possível reenviar o código.");
+      toast.error(e instanceof Error ? e.message : "Não foi possível reenviar o convite.");
     } finally {
       setReenviando(null);
     }
@@ -168,7 +168,8 @@ export function ProfessoresPage() {
     <div>
       <PageHeader title="Professores" actions={<button className="btn btn-primary" onClick={abrirNovo}>+ Novo professor</button>} />
       <p className="form-hint" style={{ marginTop: -8, marginBottom: 12 }}>
-        O professor cria e organiza os próprios eventos, que só aparecem para os alunos depois da aprovação da equipe.
+        O professor cria e organiza os próprios eventos, que só aparecem para os alunos depois da aprovação da equipe. Ao ser
+        cadastrado, ele recebe por e-mail um link para criar a senha e aceitar os Termos de Uso.
       </p>
 
       <div className="card table-scroll">
@@ -201,7 +202,7 @@ export function ProfessoresPage() {
                 <td className="table-actions">
                   {professor.situacao === "AGUARDANDO_PRIMEIRO_ACESSO" && (
                     <button className="btn btn-ghost" onClick={() => setReenviando(professor)}>
-                      Reenviar código
+                      Reenviar convite
                     </button>
                   )}
                   {professor.situacao === "INATIVO" ? (
@@ -241,8 +242,8 @@ export function ProfessoresPage() {
           >
             <LegendaObrigatorio />
             <p className="form-hint">
-              Só o nome e o e-mail institucional. O professor recebe por e-mail um código para o primeiro acesso, em que
-              define a senha e aceita os Termos de Uso.
+              Só o nome e o e-mail institucional. O professor recebe por e-mail um link para criar a senha e aceitar os
+              Termos de Uso (o link vale por 24 horas).
             </p>
             <Campo nome="nomeCompleto" rotulo="Nome completo" obrigatorio erro={erros.nomeCompleto}>
               <input value={form.nomeCompleto} onChange={(e) => setForm({ ...form, nomeCompleto: e.target.value })} autoFocus />
@@ -368,8 +369,8 @@ export function ProfessoresPage() {
 
       {reenviando && (
         <ConfirmDialog
-          title="Reenviar código"
-          message={`Enviar um novo código de primeiro acesso para ${reenviando.email}? O código anterior deixa de valer.`}
+          title="Reenviar convite"
+          message={`Enviar um novo convite para ${reenviando.email}? O link anterior deixa de valer.`}
           confirmLabel="Reenviar"
           onConfirm={() => void reenviar()}
           onCancel={() => setReenviando(null)}

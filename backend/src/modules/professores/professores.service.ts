@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { createHash, randomBytes, randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
@@ -6,22 +6,23 @@ import { env } from "../../config/env";
 import { VERSAO_TERMOS_ATUAL } from "../../config/termos";
 import { registrarAuditoria } from "../../utils/auditoria";
 import { chaveConta, chaveIp, estaBloqueado, incrementarTentativa, MAX_TENTATIVAS_POR_IP } from "../../utils/limiteAcesso";
-import { conferirSenha, gerarHashSenha, SENHA_INUTILIZAVEL } from "../../utils/password";
+import { gerarHashSenha, SENHA_INUTILIZAVEL } from "../../utils/password";
 import { normalizarEmail } from "../../utils/validacao";
-import { gerarCodigoNumerico } from "../auth/auth.service";
 import { registrarHistorico } from "../aprovacoes/aprovacoes.service";
 import { eventoEncerrado } from "../../utils/escopo";
 import { emailService } from "../email/email.service";
-import type { PrimeiroAcessoInput } from "../auth/auth.schemas";
+import type { ConsultaConviteInput, PrimeiroAcessoInput } from "../auth/auth.schemas";
 import type { InativacaoProfessorInput, ProfessorInput } from "./professores.schemas";
 
 // conta de PROFESSOR: criada pela equipe (so nome e e-mail @umc.br), nasce SEM senha utilizavel e sem
-// aceite dos Termos — o login recusa ate o primeiro acesso. Ao criar, o professor recebe por e-mail um
-// codigo de 6 digitos (mesmo padrao do cadastro do aluno: so o hash bcrypt, limite de envios, codigoDemo
-// fora de producao), que vale 24 horas e deixa de valer na 5a tentativa errada
-const VALIDADE_CODIGO_MS = 24 * 60 * 60 * 1000;
+// aceite dos Termos — o login recusa ate o primeiro acesso. Ao criar (e a cada reenvio), o professor recebe
+// por e-mail um CONVITE: um link com uma chave aleatoria de 32 bytes (base64url), que vale 24 horas e so
+// pode ser usado uma vez. No banco fica so o SHA-256 da chave (na coluna codigoHash de primeiros_acessos):
+// a chave e longa e aleatoria, entao o hash rapido basta (bcrypt serve pra senha, que e curta e adivinhavel).
+// Chave nova invalida a anterior. Fora de producao, a resposta traz o link (linkConviteDemo)
+const VALIDADE_CONVITE_MS = 24 * 60 * 60 * 1000;
 const INTERVALO_REENVIO_MS = 60 * 1000;
-const MAX_TENTATIVAS_CODIGO = 5;
+const BYTES_DA_CHAVE = 32;
 
 export type SituacaoProfessor = "AGUARDANDO_PRIMEIRO_ACESSO" | "ATIVO" | "INATIVO";
 
@@ -77,38 +78,61 @@ async function professorOuFalhar(id: string) {
   return professor;
 }
 
-// manda o codigo pro e-mail do professor. Falha de envio (ou SendGrid sem configuracao, em producao) nao
-// desfaz a conta: a equipe usa "Reenviar codigo". Devolve se o e-mail saiu
-async function enviarCodigo(usuarioId: string, email: string, nome: string, codigo: string, atorId: string): Promise<boolean> {
+// chave do convite: aleatoria (crypto), 32 bytes em base64url; o banco guarda so o hash
+function gerarConvite(): { chave: string; hash: string } {
+  const chave = randomBytes(BYTES_DA_CHAVE).toString("base64url");
+  return { chave, hash: hashDoConvite(chave) };
+}
+
+function hashDoConvite(chave: string): string {
+  return createHash("sha256").update(chave, "utf8").digest("hex");
+}
+
+// a chave vai depois do "#": essa parte do endereco nunca chega ao servidor (nem a logs de proxy)
+function linkDoConvite(chave: string): string {
+  return `${env.appUrl}/#/primeiro-acesso?convite=${encodeURIComponent(chave)}`;
+}
+
+// sem APP_URL nao ha como montar o link: criar e reenviar sao recusados antes de mexer em qualquer coisa
+function garantirEnderecoConfigurado() {
+  if (!env.appUrl) {
+    throw new AppError(503, "APP_URL_NAO_CONFIGURADA", "O endereço do sistema não está configurado; não é possível enviar o convite.");
+  }
+}
+
+// manda o convite pro e-mail do professor. Falha de envio (ou SendGrid sem configuracao, em producao) nao
+// desfaz a conta: a equipe usa "Reenviar convite". Devolve se o e-mail saiu
+async function enviarConvite(usuarioId: string, email: string, nome: string, link: string, atorId: string): Promise<boolean> {
   try {
-    const resultado = await emailService.enviarCodigoPrimeiroAcesso(email, nome, codigo);
+    const resultado = await emailService.enviarConviteProfessor(email, nome, link);
     if (resultado === "enviado" || !env.isProduction) {
       await registrarAuditoria(
         atorId,
         "EMAIL_ENVIADO",
-        `código de primeiro acesso do professor ${usuarioId}${resultado === "simulado" ? " (simulado: SendGrid não configurado)" : ""}`,
+        `convite de primeiro acesso do professor ${usuarioId}${resultado === "simulado" ? " (simulado: SendGrid não configurado)" : ""}`,
       );
       return true;
     }
   } catch {
     // email.service.ts ja loga o detalhe sanitizado da falha
   }
-  await registrarAuditoria(atorId, "EMAIL_FALHA", `código de primeiro acesso do professor ${usuarioId}: falha no envio`);
+  await registrarAuditoria(atorId, "EMAIL_FALHA", `convite de primeiro acesso do professor ${usuarioId}: falha no envio`);
   return false;
 }
 
-function respostaDoEnvio(codigo: string, emailEnviado: boolean) {
-  // fora de producao o codigo volta na resposta, so pra testar sem e-mail configurado
-  return { emailEnviado, ...(env.isProduction ? {} : { codigoDemo: codigo }) };
+function respostaDoEnvio(link: string, emailEnviado: boolean) {
+  // fora de producao o link volta na resposta, so pra testar sem e-mail configurado
+  return { emailEnviado, ...(env.isProduction ? {} : { linkConviteDemo: link }) };
 }
 
 // a equipe cria a conta do professor
 async function criar(dados: ProfessorInput, atorId: string) {
+  garantirEnderecoConfigurado();
   const emailLogin = normalizarEmail(dados.email);
   if (await prisma.usuario.findUnique({ where: { emailLogin }, select: { id: true } })) {
     throw AppError.conflito("EMAIL_DUPLICADO", "Já existe uma conta com este e-mail.");
   }
-  const codigo = gerarCodigoNumerico();
+  const convite = gerarConvite();
   const usuarioId = randomUUID();
   let professor;
   try {
@@ -117,12 +141,7 @@ async function criar(dados: ProfessorInput, atorId: string) {
         data: { id: usuarioId, nome: dados.nomeCompleto, emailLogin, senhaHash: SENHA_INUTILIZAVEL, perfil: "PROFESSOR" },
       }),
       prisma.primeiroAcesso.create({
-        data: {
-          id: randomUUID(),
-          usuarioId,
-          codigoHash: await gerarHashSenha(codigo),
-          expiraEm: new Date(Date.now() + VALIDADE_CODIGO_MS),
-        },
+        data: { id: randomUUID(), usuarioId, codigoHash: convite.hash, expiraEm: new Date(Date.now() + VALIDADE_CONVITE_MS) },
       }),
     ]);
   } catch (erro) {
@@ -131,97 +150,116 @@ async function criar(dados: ProfessorInput, atorId: string) {
     }
     throw erro;
   }
-  await registrarAuditoria(atorId, "PROFESSOR_CRIADO", `conta de professor ${professor.id}, aguardando o primeiro acesso`);
+  await registrarAuditoria(atorId, "PROFESSOR_CRIADO", `conta de professor ${professor.id}, convite de primeiro acesso enviado`);
   await incrementarTentativa(chaveConta("primeiro-acesso", professor.id));
-  const emailEnviado = await enviarCodigo(professor.id, emailLogin, professor.nome, codigo, atorId);
-  return { professor: paraResposta(professor), ...respostaDoEnvio(codigo, emailEnviado) };
+  const link = linkDoConvite(convite.chave);
+  const emailEnviado = await enviarConvite(professor.id, emailLogin, professor.nome, link, atorId);
+  return { professor: paraResposta(professor), ...respostaDoEnvio(link, emailEnviado) };
 }
 
-// novo codigo (o anterior deixa de valer, tentativas zeram, validade volta a 24 h). So enquanto o
-// professor nao fez o primeiro acesso; minimo de 60 s entre envios e 5 envios por conta em 15 min
-async function reenviarCodigo(id: string, atorId: string) {
+// novo convite (o anterior deixa de valer, validade volta a 24 h). So enquanto o professor nao fez o
+// primeiro acesso; minimo de 60 s entre envios e 5 envios por conta em 15 min
+async function reenviarConvite(id: string, atorId: string) {
   const professor = await prisma.usuario.findFirst({ where: { id, perfil: "PROFESSOR" }, include: { primeiroAcesso: true } });
   if (!professor) throw AppError.naoEncontrado("PROFESSOR_NAO_ENCONTRADO", "Professor não encontrado.");
   if (professor.consentimentoLgpdEm) {
     throw AppError.conflito("PRIMEIRO_ACESSO_FEITO", "Este professor já fez o primeiro acesso.");
   }
   if (!professor.ativo) {
-    throw AppError.conflito("PROFESSOR_INATIVO", "Este professor está inativo. Reative a conta antes de enviar um novo código.");
+    throw AppError.conflito("PROFESSOR_INATIVO", "Este professor está inativo. Reative a conta antes de enviar um novo convite.");
   }
+  garantirEnderecoConfigurado();
   const chave = chaveConta("primeiro-acesso", professor.id);
   if (await estaBloqueado(chave)) {
-    throw new AppError(429, "MUITAS_TENTATIVAS", "Limite de envios de código atingido. Tente novamente em 15 minutos.");
+    throw new AppError(429, "MUITAS_TENTATIVAS", "Limite de envios de convite atingido. Tente novamente em 15 minutos.");
   }
   const ultimoEnvio = professor.primeiroAcesso?.ultimoEnvioEm.getTime() ?? 0;
   const espera = INTERVALO_REENVIO_MS - (Date.now() - ultimoEnvio);
   if (espera > 0) {
-    throw new AppError(429, "AGUARDE_REENVIO", `Aguarde ${Math.ceil(espera / 1000)} segundos para enviar um novo código.`);
+    throw new AppError(429, "AGUARDE_REENVIO", `Aguarde ${Math.ceil(espera / 1000)} segundos para enviar um novo convite.`);
   }
   await incrementarTentativa(chave);
 
-  const codigo = gerarCodigoNumerico();
-  const dados = { codigoHash: await gerarHashSenha(codigo), tentativas: 0, ultimoEnvioEm: new Date(), expiraEm: new Date(Date.now() + VALIDADE_CODIGO_MS) };
+  const convite = gerarConvite();
+  const dados = { codigoHash: convite.hash, tentativas: 0, ultimoEnvioEm: new Date(), expiraEm: new Date(Date.now() + VALIDADE_CONVITE_MS) };
   await prisma.primeiroAcesso.upsert({
     where: { usuarioId: professor.id },
     create: { id: randomUUID(), usuarioId: professor.id, ...dados },
     update: { ...dados, envios: { increment: 1 } },
   });
-  await registrarAuditoria(atorId, "PROFESSOR_CODIGO_REENVIADO", `conta de professor ${professor.id}: novo código de primeiro acesso`);
-  const emailEnviado = await enviarCodigo(professor.id, professor.emailLogin, professor.nome, codigo, atorId);
-  return respostaDoEnvio(codigo, emailEnviado);
+  await registrarAuditoria(atorId, "PROFESSOR_CONVITE_REENVIADO", `conta de professor ${professor.id}: novo convite de primeiro acesso`);
+  const link = linkDoConvite(convite.chave);
+  const emailEnviado = await enviarConvite(professor.id, professor.emailLogin, professor.nome, link, atorId);
+  return respostaDoEnvio(link, emailEnviado);
 }
 
-// resposta UNICA pra qualquer falha (e-mail sem conta, conta ja ativa, codigo errado, expirado ou
-// esgotado): ninguem descobre por aqui quais e-mails tem conta de professor
-function erroCodigo(): AppError {
-  return new AppError(422, "CODIGO_INVALIDO", "Código inválido ou expirado.");
+// resposta UNICA pra qualquer falha (chave inexistente, vencida, ja usada, conta ja ativa ou inativa):
+// ninguem descobre por aqui se a chave chegou a existir
+function erroConvite(): AppError {
+  return new AppError(422, "CONVITE_INVALIDO", "Convite inválido ou vencido.");
 }
 
-// tela publica "Primeiro acesso": codigo + senha nova + aceite dos Termos. Ao confirmar, grava a senha,
-// o instante e a versao do aceite e a conta fica ativa
-async function concluirPrimeiroAcesso(dados: PrimeiroAcessoInput, ip: string) {
+// acha o convite valido pela chave (pelo hash). Chave errada conta no limite de tentativas por IP; com o
+// IP bloqueado, 429 antes de olhar a chave
+async function conviteValidoOuFalhar(chave: string, ip: string) {
   const chaveDoIp = chaveIp("primeiro-acesso", ip);
   if (await estaBloqueado(chaveDoIp)) {
     await registrarAuditoria(null, "PRIMEIRO_ACESSO_FALHA", "bloqueado temporariamente (limite de tentativas)");
     throw new AppError(429, "MUITAS_TENTATIVAS", "Muitas tentativas. Tente novamente em alguns minutos.");
   }
-  const falhar = async (motivo: string, usuarioId: string | null = null): Promise<never> => {
-    await incrementarTentativa(chaveDoIp, MAX_TENTATIVAS_POR_IP);
-    await registrarAuditoria(usuarioId, "PRIMEIRO_ACESSO_FALHA", motivo);
-    throw erroCodigo();
-  };
-
-  const professor = await prisma.usuario.findFirst({
-    where: { emailLogin: normalizarEmail(dados.email), perfil: "PROFESSOR", consentimentoLgpdEm: null, ativo: true },
-    include: { primeiroAcesso: true },
+  const pendente = await prisma.primeiroAcesso.findFirst({
+    where: { codigoHash: hashDoConvite(chave) },
+    include: { usuario: { select: { id: true, emailLogin: true, perfil: true, ativo: true, consentimentoLgpdEm: true } } },
   });
-  const pendente = professor?.primeiroAcesso;
-  if (!professor || !pendente) return falhar("e-mail sem primeiro acesso pendente");
-  if (pendente.expiraEm <= new Date() || pendente.tentativas >= MAX_TENTATIVAS_CODIGO) {
-    return falhar("código expirado ou esgotado", professor.id);
+  const valido =
+    !!pendente &&
+    pendente.expiraEm > new Date() &&
+    pendente.usuario.perfil === "PROFESSOR" &&
+    pendente.usuario.ativo &&
+    !pendente.usuario.consentimentoLgpdEm;
+  if (!valido) {
+    await incrementarTentativa(chaveDoIp, MAX_TENTATIVAS_POR_IP);
+    await registrarAuditoria(
+      pendente?.usuarioId ?? null,
+      "PRIMEIRO_ACESSO_FALHA",
+      pendente ? "convite vencido ou conta indisponível" : "convite inexistente ou já usado",
+    );
+    throw erroConvite();
   }
-  if (!(await conferirSenha(dados.codigo, pendente.codigoHash))) {
-    await prisma.primeiroAcesso.update({ where: { id: pendente.id }, data: { tentativas: { increment: 1 } } });
-    return falhar(`código incorreto (tentativa ${pendente.tentativas + 1} de ${MAX_TENTATIVAS_CODIGO})`, professor.id);
-  }
+  return pendente;
+}
 
+// a tela "Primeiro acesso" abre pelo link e consulta a chave: so diz se vale e o e-mail da conta (pra
+// mostrar). NAO gasta o convite — antivirus de e-mail costumam abrir os links sozinhos
+async function consultarConvite(dados: ConsultaConviteInput, ip: string) {
+  const pendente = await conviteValidoOuFalhar(dados.convite, ip);
+  return { email: pendente.usuario.emailLogin };
+}
+
+// o professor envia a senha nova e o aceite dos Termos com a chave do convite: grava a senha, o instante e a
+// versao do aceite, e o convite e apagado na mesma transacao (uso unico, mesmo com dois envios ao mesmo tempo)
+async function concluirPrimeiroAcesso(dados: PrimeiroAcessoInput, ip: string) {
+  const pendente = await conviteValidoOuFalhar(dados.convite, ip);
+  const professorId = pendente.usuarioId;
+  const senhaHash = await gerarHashSenha(dados.novaSenha);
   // instante unico do aceite: vai igual pra conta e pro log CONSENTIMENTO_LGPD_ACEITO
   const aceiteEm = new Date();
-  await prisma.$transaction([
-    prisma.usuario.update({
-      where: { id: professor.id },
-      data: {
-        senhaHash: await gerarHashSenha(dados.novaSenha),
-        consentimentoLgpdEm: aceiteEm,
-        versaoTermosAceitos: VERSAO_TERMOS_ATUAL,
-        versaoToken: { increment: 1 },
-      },
-    }),
-    prisma.primeiroAcesso.delete({ where: { id: pendente.id } }),
-  ]);
-  await registrarAuditoria(professor.id, "PRIMEIRO_ACESSO_CONCLUIDO", `conta de professor ${professor.id} ativada`);
+  const usado = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.primeiroAcesso.deleteMany({ where: { id: pendente.id, codigoHash: pendente.codigoHash } });
+    if (count === 0) return false;
+    await tx.usuario.update({
+      where: { id: professorId },
+      data: { senhaHash, consentimentoLgpdEm: aceiteEm, versaoTermosAceitos: VERSAO_TERMOS_ATUAL, versaoToken: { increment: 1 } },
+    });
+    return true;
+  });
+  if (!usado) {
+    await registrarAuditoria(professorId, "PRIMEIRO_ACESSO_FALHA", "convite já usado");
+    throw erroConvite();
+  }
+  await registrarAuditoria(professorId, "PRIMEIRO_ACESSO_CONCLUIDO", `conta de professor ${professorId} ativada pelo convite`);
   await registrarAuditoria(
-    professor.id,
+    professorId,
     "CONSENTIMENTO_LGPD_ACEITO",
     `termos de uso e política de privacidade (versão ${VERSAO_TERMOS_ATUAL}) aceitos em ${aceiteEm.toISOString()}`,
     aceiteEm,
@@ -344,4 +382,4 @@ async function reativar(id: string, atorId: string) {
   return paraResposta(await professorOuFalhar(id));
 }
 
-export const professoresService = { listar, criar, reenviarCodigo, concluirPrimeiroAcesso, listarEventosEmAberto, inativar, reativar };
+export const professoresService = { listar, criar, reenviarConvite, consultarConvite, concluirPrimeiroAcesso, listarEventosEmAberto, inativar, reativar };

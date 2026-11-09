@@ -113,11 +113,12 @@ O frontend tem o seu, `frontend/.env.example`, com só a `VITE_API_URL`.
 | `JWT_SECRET` | **Sim** | Assina o token de login. Gere com `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`. Trocar derruba todas as sessões |
 | `ENCRYPTION_KEY` | **Sim** | Chave AES-256 (base64 de exatamente 32 bytes) do segredo do 2FA e dos HMAC. Gere com `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. Nunca trocar depois que houver 2FA ativo |
 | `PORT` | Não (padrão `8080`) | Porta do servidor local; número inteiro |
-| `NODE_ENV` | Não (padrão `development`) | `production` só na Vercel: aí o `codigoDemo` nunca volta na resposta |
+| `NODE_ENV` | Não (padrão `development`) | `production` só na Vercel: aí o `codigoDemo` e o `linkConviteDemo` nunca voltam na resposta |
 | `CORS_ORIGIN` | Não (padrão `http://localhost:5173`) | Endereço do frontend que pode chamar a API |
 | `JWT_EXPIRES_IN` | Não (padrão `8h`) | Duração da sessão: `8h`, `30m`, `1d` ou o número de segundos |
 | `SENDGRID_API_KEY` | Não | Chave do SendGrid (começa com `SG.`). Sem ela, os e-mails ficam simulados |
 | `EMAIL_FROM` | Não | Remetente verificado no SendGrid; vai junto com a chave |
+| `APP_URL` | Não para subir; **sim** para criar professor | Endereço do frontend, sem barra no fim (dev: `http://localhost:5173`; produção: o domínio do site, na Vercel). Vai no link do convite do professor (`APP_URL/#/primeiro-acesso?convite=...`). Sem ela, o servidor avisa na inicialização e criar professor e reenviar convite são recusados |
 | `SEED_ADMIN_SENHA` | Só para o seed | Senha da conta `admin@umc.br` criada pelo seed |
 | `SEED_SECRETARIA_SENHA` | Só para o seed | Senha da conta `secretaria@umc.br` criada pelo seed |
 | `SEED_ALUNO_SENHA` | Não | Senha do aluno de demonstração; sem ela, ele fica sem senha utilizável |
@@ -134,6 +135,12 @@ valor de exemplo ou chave sem `SG.`), o servidor sobe com um aviso e os
 e-mails ficam simulados: o log só diz o tipo do e-mail, sem destinatário nem
 conteúdo. Em produção esse aviso é um erro, porque sem e-mail o cadastro de
 aluno não funciona (o código de confirmação não chega).
+
+**Convite do professor:** sem `APP_URL` válida (vazia, com valor de exemplo,
+formato inválido ou `localhost` em produção), o servidor sobe com um aviso
+(erro no log, em produção) e criar professor e reenviar convite respondem
+"O endereço do sistema não está configurado; não é possível enviar o
+convite."
 
 **Seed:** `SEED_ADMIN_SENHA` e `SEED_SECRETARIA_SENHA` são obrigatórias para
 o `npm run db:seed`, e toda senha precisa seguir a regra de senha do sistema
@@ -226,6 +233,9 @@ e o login não depende dela. Siga a ordem:
      conferir se o código chega (e se não cai no spam), digitar o código e
      ver a conta entrar direto em Eventos. Testar também "Reenviar código"
      (libera depois de 60 segundos) e um código errado.
+   - Professor: cadastrar um professor de teste com um e-mail `@umc.br` real,
+     conferir se o convite chega com o botão "Criar minha senha" e o link
+     abre a tela de primeiro acesso no domínio de produção (`APP_URL`).
    - Entrar com cada perfil (administrador, secretaria e aluno). Os Termos
      de Uso e a Política de Privacidade passaram para a versão 3
      (`VERSAO_TERMOS_ATUAL` = "3"): contas novas já gravam a versão 3.
