@@ -96,7 +96,22 @@ async function enviarCodigoCadastro(destinatario: string, codigo: string): Promi
   return enviar("confirmacao-cadastro", destinatario, assunto, html);
 }
 
+// conta de professor criada pela equipe: o codigo do primeiro acesso (vale 24 horas)
+async function enviarCodigoPrimeiroAcesso(destinatario: string, nome: string, codigo: string): Promise<ResultadoEnvio> {
+  const assunto = "Sua conta de professor no SGEA — código de primeiro acesso";
+  const html = `
+    <p>Olá, ${nome}!</p>
+    <p>A equipe criou a sua conta de professor no Sistema de Gestão de Eventos Acadêmicos.
+    Para ativá-la, abra a tela de login, clique em <strong>Primeiro acesso</strong> e informe este código:</p>
+    <p style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">${codigo}</p>
+    <p>O código vale por 24 horas. Lá você define a sua senha e aceita os Termos de Uso.</p>
+    <p>Se você não esperava este e-mail, ignore: a conta não fica ativa sem o código.</p>
+  `;
+  return enviar("primeiro-acesso", destinatario, assunto, html);
+}
+
 export const emailService = {
+  enviarCodigoPrimeiroAcesso,
   enviarConfirmacaoInscricao,
   enviarCancelamentoInscricao,
   enviarCodigoRecuperacao,

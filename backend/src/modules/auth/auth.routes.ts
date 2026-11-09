@@ -3,10 +3,12 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { autenticar } from "../../middleware/auth";
 import { validarCorpo } from "../../middleware/validate";
 import { authController } from "./auth.controller";
+import { professoresService } from "../professores/professores.service";
 import {
   confirmarCadastroSchema,
   confirmarRecuperacaoSchema,
   loginSchema,
+  primeiroAcessoSchema,
   reenviarCodigoCadastroSchema,
   registroSchema,
   solicitarRecuperacaoSchema,
@@ -23,6 +25,15 @@ authRouter.post(
   "/registro/reenviar-codigo",
   validarCorpo(reenviarCodigoCadastroSchema),
   asyncHandler(authController.reenviarCodigoCadastro),
+);
+// primeiro acesso do professor (publica): codigo do e-mail + senha nova + aceite dos Termos
+authRouter.post(
+  "/primeiro-acesso",
+  validarCorpo(primeiroAcessoSchema),
+  asyncHandler(async (req, res) => {
+    await professoresService.concluirPrimeiroAcesso(req.body, req.ip ?? "desconhecido");
+    res.status(200).json({});
+  }),
 );
 // login
 authRouter.post("/login", validarCorpo(loginSchema), asyncHandler(authController.login));

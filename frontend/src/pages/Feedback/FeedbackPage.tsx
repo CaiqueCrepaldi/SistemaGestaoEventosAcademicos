@@ -8,9 +8,9 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
 import { toast } from "../../components/ui/Toast";
 import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
-import { ApiError, eventoService, feedbackService, MOTIVOS_EXCLUSAO_FEEDBACK, participanteService } from "../../services";
+import { ApiError, eventoService, feedbackService, MOTIVOS_EXCLUSAO_FEEDBACK } from "../../services";
 import type { EventoParaAvaliar, MotivoExclusaoFeedback } from "../../services";
-import type { Evento, Feedback, Participante } from "../../types";
+import type { Evento, Feedback } from "../../types";
 
 const SEM_EVENTO_PARA_AVALIAR = "Você poderá avaliar uma palestra depois de receber o certificado dela.";
 const ROTULOS_NOTA: Record<number, string> = { 1: "1 — Ruim", 2: "2 — Regular", 3: "3 — Boa", 4: "4 — Muito boa", 5: "5 — Excelente" };
@@ -22,8 +22,6 @@ export function FeedbackPage() {
   const { usuario } = useAuth();
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [eventos, setEventos] = useState<Evento[]>([]);
-  // so equipe (a rota de participantes nao eh liberada pro aluno)
-  const [participantes, setParticipantes] = useState<Participante[]>([]);
   // so aluno: palestras que ele pode avaliar agora
   const [paraAvaliar, setParaAvaliar] = useState<EventoParaAvaliar[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -38,22 +36,24 @@ export function FeedbackPage() {
   const novo = useErrosFormulario();
   const exclusao = useErrosFormulario();
 
-  const isEquipe = usuario?.perfil === "ADMINISTRADOR" || usuario?.perfil === "SECRETARIA";
+  // visao de gestao: equipe e professor (o professor so recebe as avaliacoes dos eventos dele e nao exclui)
+  const podeExcluirComoEquipe = usuario?.perfil === "ADMINISTRADOR" || usuario?.perfil === "SECRETARIA";
+  const isEquipe = podeExcluirComoEquipe || usuario?.perfil === "PROFESSOR";
 
   useEffect(() => {
     void carregar();
   }, [usuario?.perfil, usuario?.participanteId]);
 
-  // busca o que cada perfil pode ver: equipe carrega participantes, aluno carrega os eventos avaliaveis
+  // busca o que cada perfil pode ver: equipe/professor as avaliacoes (com o nome do aluno), aluno os eventos avaliaveis
   async function carregar() {
     setCarregando(true);
     setErroCarga(null);
     try {
       if (isEquipe) {
-        const [f, e, p] = await Promise.all([feedbackService.list(), eventoService.list(), participanteService.list()]);
+        // o nome do aluno ja vem em cada avaliacao (equipe e professor)
+        const [f, e] = await Promise.all([feedbackService.list(), eventoService.list()]);
         setFeedbacks(f);
         setEventos(e);
-        setParticipantes(p);
       } else {
         const [f, e, avaliaveis] = await Promise.all([
           feedbackService.list(),
@@ -214,25 +214,26 @@ export function FeedbackPage() {
                 ) : (
                   <>
                     {filtrados.map((f) => {
-                      const participante = participantes.find((p) => p.id === f.participanteId);
                       return (
                         <tr key={f.id}>
                           {isEquipe && (
                             <td>
-                              {participante?.nome ?? "—"} {participante?.ativo === false && <Badge tone="red">Inativo</Badge>}
+                              {f.participanteNome || "—"} {f.participanteAtivo === false && <Badge tone="red">Inativo</Badge>}
                             </td>
                           )}
                           <td>{eventos.find((e) => e.id === f.eventoId)?.titulo ?? "—"}</td>
                           <td>{"★".repeat(f.nota)}</td>
                           <td>{f.comentario}</td>
                           <td className="table-actions">
-                            <button
-                              type="button"
-                              className="btn btn-ghost btn-danger"
-                              onClick={() => (isEquipe ? abrirExclusaoPelaEquipe(f) : setExcluindoMeu(f))}
-                            >
-                              Excluir
-                            </button>
+                            {(podeExcluirComoEquipe || !isEquipe) && (
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-danger"
+                                onClick={() => (podeExcluirComoEquipe ? abrirExclusaoPelaEquipe(f) : setExcluindoMeu(f))}
+                              >
+                                Excluir
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );

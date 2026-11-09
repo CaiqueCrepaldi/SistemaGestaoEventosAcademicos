@@ -56,9 +56,20 @@ export function salaParaDTO(sala: Sala) {
 }
 
 // paraAluno=true tira o e-mail da resposta (aluno nao precisa dele pra nada, ver docs/lgpd)
-export function palestranteParaDTO(palestrante: Palestrante, paraAluno: boolean) {
+// "completo" = equipe, ou o professor que criou o palestrante: ve e-mail, situacao da aprovacao e o
+// motivo da recusa. Os outros (aluno, outro professor) recebem so id e nome — o aluno so recebe
+// palestrante aprovado (minimizacao, guia 4.3)
+export function palestranteParaDTO(palestrante: Palestrante, completo: boolean) {
   const base = { id: palestrante.id, nome: palestrante.nome };
-  return paraAluno ? base : { ...base, email: palestrante.email };
+  return completo
+    ? {
+        ...base,
+        email: palestrante.email,
+        situacao: palestrante.situacao,
+        motivoRecusa: palestrante.motivoRecusa,
+        criadoPorId: palestrante.criadoPorId,
+      }
+    : base;
 }
 
 // participante tal como esta, sem campo de controle
@@ -95,6 +106,9 @@ export function eventoParaDTO(evento: Evento, paraAluno: boolean) {
     tema: evento.tema,
     cargaHoraria: evento.cargaHoraria,
     inscritos: evento.inscritos,
+    // situacao da aprovacao, motivo da ultima recusa e quem criou: so pra equipe e professor (pro aluno
+    // so chega evento aprovado)
+    ...(paraAluno ? {} : { situacao: evento.situacao, motivoRecusa: evento.motivoRecusa, criadoPorId: evento.criadoPorId }),
     questionario: paraAluno
       ? evento.questionario.map((p) => ({
           id: p.id,

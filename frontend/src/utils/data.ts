@@ -26,3 +26,9 @@ export function inputLocalParaIso(valor: string): string {
   if (!valor) return "";
   return new Date(valor).toISOString();
 }
+
+// evento encerrado = horario + carga horaria (em horas) ja passou. Mesma regra do backend: depois disso
+// ninguem edita nem exclui o evento (a API responde 409 EVENTO_ENCERRADO), entao a tela esconde os botoes
+export function eventoEncerrado(evento: { horario: string; cargaHoraria: number }, agora = Date.now()): boolean {
+  return new Date(evento.horario).getTime() + evento.cargaHoraria * 3600 * 1000 <= agora;
+}

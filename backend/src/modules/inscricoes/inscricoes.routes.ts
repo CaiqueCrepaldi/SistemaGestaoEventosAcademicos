@@ -1,4 +1,5 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
+import { eventosVisiveis } from "../../utils/escopo";
 import { z } from "zod";
 import type { StatusPresenca } from "../../types/domain";
 import { buscaSchema, lerConsulta, paginacaoSchema } from "../../utils/paginacao";
@@ -10,6 +11,10 @@ import { inscricoesService } from "./inscricoes.service";
 import { inscricaoCheckinSchema, inscricaoSchema } from "./inscricoes.schemas";
 
 export const inscricoesRouter = Router();
+
+function atorDe(req: Request) {
+  return { id: req.usuario!.sub, perfil: req.usuario!.perfil, participanteId: req.usuario!.participanteId };
+}
 
 // GET /api/inscricoes?eventoId=&participanteId=&status=, serve gestao e aluno junto
 inscricoesRouter.get(
@@ -25,6 +30,8 @@ inscricoesRouter.get(
       eventoId: typeof req.query.eventoId === "string" ? req.query.eventoId : undefined,
       participanteId,
       status: typeof req.query.status === "string" ? (req.query.status as StatusPresenca) : undefined,
+      // o professor so ve as inscricoes dos eventos dele (o aluno ja fica preso ao proprio participante)
+      escopoEvento: eventosVisiveis(atorDe(req)),
     });
     res.json(inscricoes.map(inscricaoParaDTO));
   }),
@@ -40,32 +47,35 @@ const consultaGestaoSchema = paginacaoSchema.extend({
 inscricoesRouter.get(
   "/gestao",
   autenticar,
-  autorizar("ADMINISTRADOR", "SECRETARIA"),
+  autorizar("ADMINISTRADOR", "SECRETARIA", "PROFESSOR"),
   asyncHandler(async (req, res) => {
-    res.json(await inscricoesService.listarParaGestao(lerConsulta(consultaGestaoSchema, req.query)));
+    res.json(
+      await inscricoesService.listarParaGestao({ ...lerConsulta(consultaGestaoSchema, req.query), escopoEvento: eventosVisiveis(atorDe(req)) }),
+    );
   }),
 );
 
-// inscricao manual, admin/secretaria escolhe o participante (aluno usa /eventos/{id}/inscricoes)
+// inscricao manual: equipe (qualquer evento) ou professor (so os dele) escolhe o participante (aluno usa
+// /eventos/{id}/inscricoes)
 inscricoesRouter.post(
   "/",
   autenticar,
-  autorizar("ADMINISTRADOR", "SECRETARIA"),
+  autorizar("ADMINISTRADOR", "SECRETARIA", "PROFESSOR"),
   validarCorpo(inscricaoSchema),
   asyncHandler(async (req, res) => {
-    const inscricao = await inscricoesService.criarManual(req.body, { id: req.usuario!.sub, perfil: req.usuario!.perfil });
+    const inscricao = await inscricoesService.criarManual(req.body, atorDe(req));
     res.status(201).json(inscricaoParaDTO(inscricao));
   }),
 );
 
-// mesma rota generica pra confirmar presenca ou marcar ausente
+// mesma rota generica pra confirmar presenca ou marcar ausente (professor so nos eventos dele)
 inscricoesRouter.put(
   "/:id",
   autenticar,
-  autorizar("ADMINISTRADOR", "SECRETARIA"),
+  autorizar("ADMINISTRADOR", "SECRETARIA", "PROFESSOR"),
   validarCorpo(inscricaoCheckinSchema),
   asyncHandler(async (req, res) => {
-    const inscricao = await inscricoesService.atualizarCheckin(req.params.id, req.body, req.usuario!.sub);
+    const inscricao = await inscricoesService.atualizarCheckin(req.params.id, req.body, atorDe(req));
     res.json(inscricaoParaDTO(inscricao));
   }),
 );
@@ -75,9 +85,9 @@ inscricoesRouter.put(
 inscricoesRouter.delete(
   "/:id",
   autenticar,
-  autorizar("ADMINISTRADOR", "SECRETARIA"),
+  autorizar("ADMINISTRADOR", "SECRETARIA", "PROFESSOR"),
   asyncHandler(async (req, res) => {
-    await inscricoesService.remover(req.params.id, { id: req.usuario!.sub, perfil: req.usuario!.perfil });
+    await inscricoesService.remover(req.params.id, atorDe(req));
     res.status(204).send();
   }),
 );

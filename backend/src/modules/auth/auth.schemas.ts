@@ -43,6 +43,18 @@ export const reenviarCodigoCadastroSchema = z.object({
 });
 export type ReenviarCodigoCadastroInput = z.infer<typeof reenviarCodigoCadastroSchema>;
 
+// primeiro acesso do professor: o codigo recebido por e-mail, a senha nova (mesma regra do cadastro do
+// aluno) e o aceite dos Termos de Uso/Politica de Privacidade (obrigatorio tambem na API)
+export const primeiroAcessoSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Informe um e-mail válido."),
+  codigo: z.string().trim().regex(/^[0-9]{6}$/, "O código tem 6 dígitos."),
+  novaSenha: senhaNovaSchema,
+  aceiteLgpd: z.literal(true, {
+    message: "É necessário aceitar os termos de uso e a política de privacidade.",
+  }),
+});
+export type PrimeiroAcessoInput = z.infer<typeof primeiroAcessoSchema>;
+
 export const loginSchema = z.object({
   emailLogin: z.string().trim().min(1, "E-mail é obrigatório."),
   senha: z.string().min(1, "Senha é obrigatória."),

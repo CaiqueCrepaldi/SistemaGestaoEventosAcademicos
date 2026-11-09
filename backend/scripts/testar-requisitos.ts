@@ -15,7 +15,7 @@ if (!process.env.DATABASE_URL?.includes("SGEA_dev")) {
   process.exit(1);
 }
 
-type Perfil = "ADMINISTRADOR" | "SECRETARIA" | "ALUNO";
+type Perfil = "ADMINISTRADOR" | "SECRETARIA" | "ALUNO" | "PROFESSOR";
 interface Conta {
   id: string;
   email: string;
@@ -138,7 +138,8 @@ async function main() {
   async function ocupacaoEsperadaNoBanco(salaId?: string): Promise<number | null> {
     const agora = Date.now();
     const eventosDb = await prisma.evento.findMany({
-      where: salaId ? { salaId } : undefined,
+      // so eventos aprovados (pendente/recusado nao acontece de verdade)
+      where: { situacao: "APROVADO", ...(salaId ? { salaId } : {}) },
       select: {
         horario: true,
         cargaHoraria: true,
@@ -221,7 +222,7 @@ async function main() {
         pendenteAluno.codigoHash.startsWith("$2a$12$") &&
         pendenteAluno.codigoHash !== codigoCadastro &&
         Math.abs(pendenteAluno.expiraEm.getTime() - pendenteAluno.aceiteEm.getTime() - 15 * 60 * 1000) < 1000 &&
-        pendenteAluno.versaoTermos === "3",
+        pendenteAluno.versaoTermos === "4",
       pendenteAluno && { expira: pendenteAluno.expiraEm, versao: pendenteAluno.versaoTermos },
     );
     r = await chamar("POST", "/auth/registro/confirmar", { corpo: { emailInstitucional: emailAluno, codigo: codigoCadastro === "000000" ? "111111" : "000000" } });
@@ -234,11 +235,11 @@ async function main() {
     contas.push(aluno);
     const contaCriada = await prisma.usuario.findUnique({ where: { id: aluno.id } });
     checar(
-      "a conta recebe a senha do cadastro, o instante do aceite e a versão 3 dos termos; o pendente é apagado",
+      "a conta recebe a senha do cadastro, o instante do aceite e a versão vigente (4) dos termos; o pendente é apagado",
       !!contaCriada &&
         contaCriada.senhaHash === pendenteAluno?.senhaHash &&
         contaCriada.consentimentoLgpdEm?.getTime() === pendenteAluno?.aceiteEm.getTime() &&
-        contaCriada.versaoTermosAceitos === "3" &&
+        contaCriada.versaoTermosAceitos === "4" &&
         !(await prisma.cadastroPendente.findUnique({ where: { emailLogin: emailAluno } })),
     );
     r = await chamar("POST", "/auth/registro/confirmar", { corpo: { emailInstitucional: emailAluno, codigo: codigoCadastro } });
@@ -336,7 +337,7 @@ async function main() {
         senhaHash: "x",
         codigoHash: "x",
         aceiteEm: new Date(),
-        versaoTermos: "3",
+        versaoTermos: "4",
         expiraEm: new Date(Date.now() - 60 * 1000),
       },
     });
@@ -1342,6 +1343,262 @@ async function main() {
       !JSON.stringify(salasDaEquipe).includes("Aluno Ocupacao") && !JSON.stringify(salasDaEquipe).includes("req.ocupacao"),
     );
 
+    // ------------------------------------------------------------------ perfil PROFESSOR
+    requisito("R35 Conta de professor: criada pela equipe, ativada no primeiro acesso");
+    const SENHA_PROFESSOR = "Prof@Teste123";
+    const emailProfA = `prof.a.${sufixo}@umc.br`;
+    r = await chamar("POST", "/professores", { token: secretaria.token, corpo: { nomeCompleto: "Professor Teste A", email: `prof.x.${sufixo}@alunos.umc.br` } });
+    checar("e-mail @alunos.umc.br para professor -> 422", r.status === 422, r.corpo);
+    r = await chamar("POST", "/professores", { token: aluno.token, corpo: { nomeCompleto: "Professor Teste A", email: emailProfA } });
+    checar("aluno não cria professor -> 403", r.status === 403, r.status);
+    r = await chamar("POST", "/professores", { token: secretaria.token, corpo: { nomeCompleto: "Professor Teste A", email: emailProfA.toUpperCase() } });
+    checar(
+      "secretaria cria professor (só nome e e-mail) -> 201, aguardando primeiro acesso, com o código fora de produção",
+      r.status === 201 && r.corpo.professor?.situacao === "AGUARDANDO_PRIMEIRO_ACESSO" && r.corpo.professor.email === emailProfA && /^\d{6}$/.test(r.corpo.codigoDemo ?? ""),
+      r.corpo,
+    );
+    const professorA: Conta = { id: r.corpo.professor?.id, email: emailProfA, senha: SENHA_PROFESSOR, perfil: "PROFESSOR", participanteId: null };
+    contas.push(professorA);
+    const codigoProfA: string = r.corpo.codigoDemo;
+    const contaProfA = await prisma.usuario.findUnique({ where: { id: professorA.id }, include: { primeiroAcesso: true } });
+    checar(
+      "conta nasce sem senha utilizável e sem aceite dos Termos; código guardado só em hash, válido por 24 h",
+      contaProfA?.senhaHash === "!" &&
+        contaProfA.consentimentoLgpdEm === null &&
+        !!contaProfA.primeiroAcesso &&
+        contaProfA.primeiroAcesso.codigoHash !== codigoProfA &&
+        Math.abs(contaProfA.primeiroAcesso.expiraEm.getTime() - Date.now() - 24 * 3600 * 1000) < 60 * 1000,
+    );
+    r = await chamar("POST", "/auth/login", { corpo: { emailLogin: emailProfA, senha: SENHA_PROFESSOR } });
+    checar("professor não entra antes do primeiro acesso -> 401 genérico", r.status === 401 && r.corpo.code === "CREDENCIAIS_INVALIDAS", r.corpo);
+    r = await chamar("POST", "/auth/primeiro-acesso", { corpo: { email: emailProfA, codigo: codigoProfA, novaSenha: SENHA_PROFESSOR, aceiteLgpd: false } });
+    checar("primeiro acesso sem aceite dos Termos -> 422", r.status === 422 && r.corpo.erros?.some((e: { campo: string }) => e.campo === "aceiteLgpd"), r.corpo);
+    r = await chamar("POST", "/auth/primeiro-acesso", { corpo: { email: emailProfA, codigo: codigoProfA, novaSenha: "fraca", aceiteLgpd: true } });
+    checar("primeiro acesso com senha fora da regra -> 422", r.status === 422, r.status);
+    const codigoErradoProf = codigoProfA === "000000" ? "111111" : "000000";
+    const codigoErrado = await chamar("POST", "/auth/primeiro-acesso", { corpo: { email: emailProfA, codigo: codigoErradoProf, novaSenha: SENHA_PROFESSOR, aceiteLgpd: true } });
+    const emailInexistenteProf = await chamar("POST", "/auth/primeiro-acesso", {
+      corpo: { email: `ninguem.prof.${sufixo}@umc.br`, codigo: "123456", novaSenha: SENHA_PROFESSOR, aceiteLgpd: true },
+    });
+    checar(
+      "código errado e e-mail inexistente -> o mesmo 422 CODIGO_INVALIDO (não revela quais e-mails existem)",
+      codigoErrado.status === 422 &&
+        emailInexistenteProf.status === 422 &&
+        codigoErrado.corpo.code === "CODIGO_INVALIDO" &&
+        codigoErrado.corpo.message === emailInexistenteProf.corpo.message,
+      [codigoErrado.corpo, emailInexistenteProf.corpo],
+    );
+    r = await chamar("POST", "/auth/recuperacao-senha", { corpo: { email: emailProfA } });
+    checar("'Esqueci a senha' não gera código para professor sem primeiro acesso (resposta genérica)", r.status === 200 && !r.corpo.codigoDemo, r.corpo);
+    r = await chamar("POST", "/auth/primeiro-acesso", { corpo: { email: emailProfA, codigo: codigoProfA, novaSenha: SENHA_PROFESSOR, aceiteLgpd: true } });
+    checar("primeiro acesso com código, senha e aceite -> 200", r.status === 200, r.corpo);
+    const contaAtivada = await prisma.usuario.findUnique({ where: { id: professorA.id }, include: { primeiroAcesso: true } });
+    checar(
+      "grava a senha (hash), o aceite e a versão \"4\" dos Termos; o código sai do banco",
+      !!contaAtivada?.consentimentoLgpdEm && contaAtivada.versaoTermosAceitos === "4" && contaAtivada.senhaHash.startsWith("$2a$12$") && !contaAtivada.primeiroAcesso,
+    );
+    checar(
+      "aceite do professor registrado na auditoria",
+      !!(await prisma.logAuditoria.findFirst({ where: { usuarioId: professorA.id, acao: "CONSENTIMENTO_LGPD_ACEITO" } })),
+    );
+    r = await chamar("POST", "/auth/login", { corpo: { emailLogin: emailProfA, senha: SENHA_PROFESSOR } });
+    checar("depois do primeiro acesso o login funciona", r.status === 200 && !!r.corpo.token && r.corpo.usuario?.perfil === "PROFESSOR", r.corpo);
+    professorA.token = r.corpo.token;
+    r = await chamar("GET", "/professores", { token: secretaria.token });
+    checar(
+      "tela Professores lista o professor como ativo",
+      r.status === 200 && r.corpo.some((p: { id: string; situacao: string }) => p.id === professorA.id && p.situacao === "ATIVO"),
+      r.corpo,
+    );
+    r = await chamar("POST", `/professores/${professorA.id}/reenviar-codigo`, { token: secretaria.token });
+    checar("reenviar código de quem já fez o primeiro acesso -> 409", r.status === 409, r.corpo);
+
+    // segundo professor, pra conferir que um nao enxerga o do outro
+    const emailProfB = `prof.b.${sufixo}@umc.br`;
+    r = await chamar("POST", "/professores", { token: admin.token, corpo: { nomeCompleto: "Professor Teste B", email: emailProfB } });
+    const professorB: Conta = { id: r.corpo.professor?.id, email: emailProfB, senha: SENHA_PROFESSOR, perfil: "PROFESSOR", participanteId: null };
+    contas.push(professorB);
+    await chamar("POST", "/auth/primeiro-acesso", { corpo: { email: emailProfB, codigo: r.corpo.codigoDemo, novaSenha: SENHA_PROFESSOR, aceiteLgpd: true } });
+    professorB.token = await entrar(professorB);
+
+    requisito("R36 Professor: só os próprios eventos; sem Auditoria, Participantes e criação de sala");
+    r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: `Sala Professor ${sufixo}`, capacidade: 10 } });
+    const salaProfessorId: string = r.corpo.id;
+    salas.push(salaProfessorId);
+    r = await chamar("POST", "/palestrantes", { token: professorA.token, corpo: { nome: "Palestrante do Professor", email: `pal.prof.${sufixo}@teste.invalido` } });
+    checar("palestrante criado pelo professor nasce PENDENTE", r.status === 201 && r.corpo.situacao === "PENDENTE", r.corpo);
+    const palestranteProfId: string = r.corpo.id;
+    palestrantes.push(palestranteProfId);
+    // um horario cheio daqui a 12 dias, so desta sala nova
+    const inicioProf = new Date(Math.ceil((Date.now() + 12 * 24 * 3600 * 1000) / 3600000) * 3600000);
+    const corpoEventoProf = {
+      titulo: `Evento do Professor ${sufixo}`,
+      horario: inicioProf.toISOString(),
+      salaId: salaProfessorId,
+      palestranteId: palestranteProfId,
+      tema: "Tema do professor",
+      cargaHoraria: 2,
+      questionario: questionario(),
+    };
+    r = await chamar("POST", "/eventos", { token: professorA.token, corpo: corpoEventoProf });
+    checar(
+      "evento do professor nasce PENDENTE, com o palestrante dele ainda pendente, e guarda quem criou",
+      r.status === 201 && r.corpo.situacao === "PENDENTE" && r.corpo.criadoPorId === professorA.id,
+      r.corpo,
+    );
+    const eventoProfId: string = r.corpo.id;
+    eventos.push(eventoProfId);
+    r = await chamar("GET", "/eventos", { token: professorA.token });
+    checar(
+      "professor lista só os eventos que criou (nem os da equipe)",
+      r.status === 200 && r.corpo.length >= 1 && r.corpo.every((e: { criadoPorId: string }) => e.criadoPorId === professorA.id),
+      r.corpo?.length,
+    );
+    r = await chamar("GET", `/eventos/${eventoId}`, { token: professorA.token });
+    checar("professor não vê evento da equipe -> 404", r.status === 404, r.status);
+    r = await chamar("PUT", `/eventos/${eventoId}`, { token: professorA.token, corpo: { titulo: "Invadido" } });
+    checar("professor não edita evento da equipe -> 404", r.status === 404, r.status);
+    r = await chamar("GET", `/eventos/${eventoProfId}`, { token: professorB.token });
+    checar("outro professor não vê o evento -> 404", r.status === 404, r.status);
+    r = await chamar("PUT", `/eventos/${eventoProfId}`, { token: professorB.token, corpo: { titulo: "Invadido" } });
+    checar("outro professor não edita o evento -> 404", r.status === 404, r.status);
+    r = await chamar("DELETE", `/eventos/${eventoProfId}`, { token: professorB.token });
+    checar("outro professor não exclui o evento -> 404", r.status === 404, r.status);
+    r = await chamar("POST", "/inscricoes", { token: professorA.token, corpo: { participanteId: aluno.participanteId, eventoId } });
+    checar("professor não inscreve aluno em evento da equipe -> 422 (evento não encontrado para ele)", r.status === 422, r.corpo);
+    r = await chamar("GET", "/inscricoes/gestao", { token: professorA.token });
+    checar("Inscrições do professor: só as dos eventos dele (nenhuma ainda)", r.status === 200 && r.corpo.total === 0, r.corpo?.total);
+    r = await chamar("GET", "/inscricoes", { token: professorA.token });
+    checar("listagem genérica de inscrições também filtrada para o professor", r.status === 200 && r.corpo.length === 0, r.corpo?.length);
+    r = await chamar("GET", "/certificados/situacao", { token: professorA.token });
+    checar("Certificados e notas do professor: só os eventos dele", r.status === 200 && r.corpo.total === 0, r.corpo?.total);
+    r = await chamar("GET", "/feedbacks", { token: professorA.token });
+    checar("Avaliações do professor: só as dos eventos dele", r.status === 200 && Array.isArray(r.corpo) && r.corpo.length === 0, r.corpo?.length);
+    r = await chamar("DELETE", `/feedbacks/${randomUUID()}`, { token: professorA.token, corpo: { motivo: "conteudo-ofensivo" } });
+    checar("professor não exclui avaliação -> 403", r.status === 403, r.status);
+    for (const [caminho, nome] of [
+      ["/logs-auditoria", "Auditoria"],
+      ["/participantes", "Participantes"],
+      ["/professores", "Professores"],
+      ["/meus-dados", "Meus dados"],
+    ] as const) {
+      r = await chamar("GET", caminho, { token: professorA.token });
+      checar(`professor não acessa ${nome} -> 403`, r.status === 403, r.status);
+    }
+    r = await chamar("POST", "/salas", { token: professorA.token, corpo: { nome: `Sala do Prof ${sufixo}`, capacidade: 5 } });
+    checar("professor não cria sala -> 403", r.status === 403, r.status);
+    r = await chamar("GET", "/salas", { token: professorA.token });
+    checar("professor consulta as salas (sem os números de ocupação da equipe)", r.status === 200 && r.corpo.every((s: Record<string, unknown>) => !("ocupacaoMedia" in s)), r.status);
+    r = await chamar("GET", "/participantes/alunos?limite=50", { token: professorA.token });
+    checar("busca de alunos liberada para o professor, limitada a 20", r.status === 200 && r.corpo.length <= 20, r.corpo?.length);
+    r = await chamar("GET", "/dashboard", { token: professorA.token });
+    checar("dashboard do professor: só eventos dele e aprovados (nenhum ainda)", r.status === 200 && r.corpo.totais.eventos === 0 && r.corpo.eventos.length === 0, r.corpo?.totais);
+
+    requisito("R37 Aprovação de eventos e palestrantes pela equipe");
+    r = await chamar("GET", "/eventos", { token: aluno.token });
+    checar("aluno não vê evento PENDENTE na programação", r.status === 200 && !r.corpo.some((e: { id: string }) => e.id === eventoProfId), r.status);
+    r = await chamar("GET", `/eventos/${eventoProfId}`, { token: aluno.token });
+    checar("aluno não abre evento PENDENTE -> 404", r.status === 404, r.status);
+    r = await chamar("POST", `/eventos/${eventoProfId}/inscricoes`, { token: aluno.token });
+    checar("aluno não se inscreve em evento PENDENTE -> 404", r.status === 404, r.status);
+    r = await chamar("GET", `/eventos/${eventoProfId}/questionario`, { token: aluno.token });
+    checar("aluno não vê o questionário de evento PENDENTE -> 404", r.status === 404, r.status);
+    r = await chamar("GET", "/palestrantes", { token: aluno.token });
+    checar("aluno não vê palestrante PENDENTE", r.status === 200 && !r.corpo.some((p: { id: string }) => p.id === palestranteProfId), r.status);
+    r = await chamar("GET", "/aprovacoes/contadores", { token: secretaria.token });
+    checar("contador da equipe mostra os pendentes", r.status === 200 && r.corpo.eventosPendentes >= 1 && r.corpo.palestrantesPendentes >= 1, r.corpo);
+    const corpoMesmoHorario = { ...corpoEventoProf, titulo: `Evento Mesmo Horário ${sufixo}`, palestranteId };
+    r = await chamar("POST", "/eventos", { token: secretaria.token, corpo: corpoMesmoHorario });
+    checar("evento PENDENTE já reserva a sala: outro evento no mesmo horário -> 409", r.status === 409 && r.corpo.code === "CONFLITO_DE_SALA", r.corpo);
+    r = await chamar("POST", "/eventos", { token: secretaria.token, corpo: { ...corpoMesmoHorario, palestranteId: palestranteProfId, horario: new Date(inicioProf.getTime() + 5 * 3600000).toISOString() } });
+    checar("equipe não usa palestrante PENDENTE num evento dela -> 422 no campo palestrante", r.status === 422 && r.corpo.erros?.some((e: { campo: string }) => e.campo === "palestranteId"), r.corpo);
+    r = await chamar("POST", `/eventos/${eventoProfId}/recusar`, { token: secretaria.token, corpo: {} });
+    checar("recusar sem motivo -> 422", r.status === 422, r.status);
+    r = await chamar("POST", `/eventos/${eventoProfId}/recusar`, { token: secretaria.token, corpo: { motivo: "curto" } });
+    checar("recusar com motivo de menos de 10 caracteres -> 422", r.status === 422, r.status);
+    r = await chamar("POST", `/eventos/${eventoProfId}/aprovar`, { token: professorA.token });
+    checar("professor não aprova o próprio evento -> 403", r.status === 403, r.status);
+    r = await chamar("POST", `/eventos/${eventoProfId}/aprovar`, { token: secretaria.token });
+    checar("não aprova evento com palestrante PENDENTE -> 409 com mensagem clara", r.status === 409 && r.corpo.code === "PALESTRANTE_NAO_APROVADO", r.corpo);
+    const MOTIVO_RECUSA = "Ajuste o tema e o questionário da palestra.";
+    r = await chamar("POST", `/eventos/${eventoProfId}/recusar`, { token: secretaria.token, corpo: { motivo: MOTIVO_RECUSA } });
+    checar("recusar com motivo -> 200 RECUSADO, com o motivo para o professor", r.status === 200 && r.corpo.situacao === "RECUSADO" && r.corpo.motivoRecusa === MOTIVO_RECUSA, r.corpo);
+    r = await chamar("GET", "/aprovacoes/contadores", { token: professorA.token });
+    checar("contador do professor mostra o recusado", r.status === 200 && r.corpo.eventosRecusados === 1, r.corpo);
+    r = await chamar("POST", "/eventos", { token: secretaria.token, corpo: corpoMesmoHorario });
+    checar("recusar libera a sala na hora: evento no mesmo horário -> 201", r.status === 201, r.corpo);
+    const eventoQueOcupaId: string = r.corpo.id;
+    eventos.push(eventoQueOcupaId);
+    r = await chamar("POST", `/eventos/${eventoProfId}/reenviar`, { token: professorA.token, corpo: { resposta: "Tema e questionário ajustados." } });
+    checar("reenvio confere a sala de novo: ocupada -> 409", r.status === 409 && r.corpo.code === "CONFLITO_DE_SALA", r.corpo);
+    await chamar("DELETE", `/eventos/${eventoQueOcupaId}`, { token: secretaria.token });
+    eventos.splice(eventos.indexOf(eventoQueOcupaId), 1);
+    r = await chamar("POST", `/eventos/${eventoProfId}/reenviar`, { token: professorB.token, corpo: {} });
+    checar("outro professor não reenvia -> 404", r.status === 404, r.status);
+    r = await chamar("POST", `/eventos/${eventoProfId}/reenviar`, { token: professorA.token, corpo: { resposta: "Tema e questionário ajustados." } });
+    checar("reenvio volta para PENDENTE e apaga o motivo", r.status === 200 && r.corpo.situacao === "PENDENTE" && r.corpo.motivoRecusa === null, r.corpo);
+    r = await chamar("POST", `/palestrantes/${palestranteProfId}/aprovar`, { token: secretaria.token });
+    checar("equipe aprova o palestrante -> 200 APROVADO", r.status === 200 && r.corpo.situacao === "APROVADO", r.corpo);
+    r = await chamar("POST", `/eventos/${eventoProfId}/aprovar`, { token: secretaria.token });
+    checar("com o palestrante aprovado, o evento é aprovado -> 200", r.status === 200 && r.corpo.situacao === "APROVADO", r.corpo);
+    r = await chamar("GET", `/eventos/${eventoProfId}/historico`, { token: professorA.token });
+    const passos: { acao: string; mensagem: string | null; autorNome: string | null; criadoEm: string }[] = r.corpo ?? [];
+    checar(
+      "histórico registra envio, recusa (com motivo), reenvio (com resposta) e aprovação, com data e autor",
+      r.status === 200 &&
+        passos.map((p) => p.acao).join(",") === "ENVIADO,RECUSADO,REENVIADO,APROVADO" &&
+        passos[1].mensagem === MOTIVO_RECUSA &&
+        passos[2].mensagem === "Tema e questionário ajustados." &&
+        passos.every((p) => !!p.autorNome && !!p.criadoEm),
+      passos,
+    );
+    r = await chamar("GET", `/eventos/${eventoProfId}/historico`, { token: professorB.token });
+    checar("outro professor não vê o histórico -> 404", r.status === 404, r.status);
+    const logsAprovacao = await prisma.logAuditoria.findMany({
+      where: { acao: { in: ["EVENTO_ENVIADO_PARA_APROVACAO", "EVENTO_RECUSADO", "EVENTO_REENVIADO", "EVENTO_APROVADO"] }, detalhe: { contains: eventoProfId } },
+    });
+    checar(
+      "auditoria registra envio, recusa, reenvio e aprovação, sem o motivo nem a resposta",
+      logsAprovacao.length === 4 && logsAprovacao.every((l) => !(l.detalhe ?? "").includes(MOTIVO_RECUSA) && !(l.detalhe ?? "").includes("ajustados")),
+      logsAprovacao.map((l) => l.acao),
+    );
+    r = await chamar("GET", "/eventos", { token: aluno.token });
+    checar("depois de aprovado, o evento aparece para o aluno", r.corpo.some((e: { id: string }) => e.id === eventoProfId), r.status);
+    r = await chamar("PUT", `/eventos/${eventoProfId}`, { token: professorA.token, corpo: { horario: new Date(inicioProf.getTime() + 3600000).toISOString() } });
+    checar(
+      "professor não muda horário de evento já aprovado -> 409 \"vai precisar de aprovação\"",
+      r.status === 409 && r.corpo.message === "Esta alteração vai precisar de aprovação (em breve).",
+      r.corpo,
+    );
+    r = await chamar("PUT", `/eventos/${eventoProfId}`, { token: professorA.token, corpo: { titulo: `Evento do Professor Revisado ${sufixo}`, horario: inicioProf.toISOString() } });
+    checar("professor edita o título do evento aprovado (mesmo horário) -> 200", r.status === 200 && r.corpo.titulo.startsWith("Evento do Professor Revisado"), r.corpo);
+    r = await chamar("POST", "/inscricoes", { token: professorA.token, corpo: { participanteId: aluno.participanteId, eventoId: eventoProfId } });
+    checar("professor inscreve aluno no evento dele -> 201", r.status === 201, r.corpo);
+    r = await chamar("GET", "/dashboard", { token: professorA.token });
+    checar(
+      "dashboard do professor conta só o evento dele (1 evento, 1 inscrição)",
+      r.status === 200 && r.corpo.totais.eventos === 1 && r.corpo.totais.inscricoes === 1 && r.corpo.eventos.every((e: { id: string }) => e.id === eventoProfId),
+      r.corpo?.totais,
+    );
+    r = await chamar("GET", "/dashboard", { token: professorB.token });
+    checar("dashboard de outro professor não conta esse evento", r.status === 200 && r.corpo.totais.eventos === 0, r.corpo?.totais);
+
+    requisito("R38 Evento encerrado não é editado nem excluído");
+    r = await chamar("POST", "/eventos", {
+      token: admin.token,
+      corpo: { ...corpoEventoProf, titulo: `Evento Encerrado Trava ${sufixo}`, palestranteId, horario: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString() },
+    });
+    const eventoTravadoId: string = r.corpo.id;
+    eventos.push(eventoTravadoId);
+    r = await chamar("PUT", `/eventos/${eventoTravadoId}`, { token: admin.token, corpo: { titulo: "Mudou" } });
+    checar("editar evento encerrado -> 409 EVENTO_ENCERRADO", r.status === 409 && r.corpo.code === "EVENTO_ENCERRADO", r.corpo);
+    r = await chamar("DELETE", `/eventos/${eventoTravadoId}`, { token: admin.token });
+    checar("excluir evento encerrado -> 409 EVENTO_ENCERRADO", r.status === 409 && r.corpo.code === "EVENTO_ENCERRADO", r.corpo);
+    r = await chamar("POST", "/inscricoes", { token: secretaria.token, corpo: { participanteId: aluno.participanteId, eventoId: eventoTravadoId } });
+    checar("inscrição manual retroativa no evento encerrado continua funcionando -> 201", r.status === 201, r.corpo);
+    r = await chamar("PUT", `/inscricoes/${r.corpo.id}`, { token: secretaria.token, corpo: { statusPresenca: "PRESENTE" } });
+    checar("registro de presença no evento encerrado continua funcionando -> 200", r.status === 200 && r.corpo.statusPresenca === "PRESENTE", r.corpo);
+
     // ------------------------------------------------------------------ RF009/RNF010: exclusao bloqueada
     requisito("R19 Exclusão de evento bloqueada com inscrições (RF009/RNF010)");
     r = await chamar("DELETE", `/eventos/${eventoId}`, { token: admin.token });
@@ -1373,6 +1630,8 @@ async function main() {
     await prisma.certificado.deleteMany({
       where: { inscricao: { OR: [{ eventoId: { in: eventos } }, { participanteId: { in: participantesDoTeste } }] } },
     });
+    // historico da aprovacao dos eventos e palestrantes do teste (nao tem chave estrangeira pro item)
+    await prisma.historicoAprovacao.deleteMany({ where: { itemId: { in: [...eventos, ...palestrantes] } } });
     for (const id of eventos) await prisma.evento.deleteMany({ where: { id } });
     for (const conta of contas) {
       if (conta.participanteId) {
@@ -1381,7 +1640,16 @@ async function main() {
         await prisma.inscricao.deleteMany({ where: { participanteId: conta.participanteId } });
       }
       await prisma.limiteAcesso.deleteMany({
-        where: { chave: { in: [`login:conta:${indiceBusca(conta.email)}`, `recuperacao:conta:${indiceBusca(conta.email)}`, `mfa:conta:${conta.id}`] } },
+        where: {
+          chave: {
+            in: [
+              `login:conta:${indiceBusca(conta.email)}`,
+              `recuperacao:conta:${indiceBusca(conta.email)}`,
+              `mfa:conta:${conta.id}`,
+              `primeiro-acesso:conta:${conta.id}`,
+            ],
+          },
+        },
       });
       await prisma.usuario.deleteMany({ where: { id: conta.id } });
       if (conta.participanteId) await prisma.participante.deleteMany({ where: { id: conta.participanteId } });

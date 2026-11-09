@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { DialogoAprovacao, type AcaoAprovacao } from "../../components/aprovacao/DialogoAprovacao";
+import { SituacaoAprovacao } from "../../components/aprovacao/SituacaoAprovacao";
 import { Campo, LegendaObrigatorio, MarcaObrigatorio } from "../../components/ui/Campo";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Modal } from "../../components/ui/Modal";
@@ -6,9 +8,9 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
 import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
-import { ApiError, eventoService, palestranteService, salaService } from "../../services";
-import type { Evento, Palestrante, PerguntaQuestionario, Sala } from "../../types";
-import { inputLocalParaIso, isoParaInputLocal } from "../../utils/data";
+import { ApiError, avisarAprovacoesAlteradas, eventoService, palestranteService, salaService } from "../../services";
+import type { Evento, Palestrante, PerguntaQuestionario, Sala, SituacaoAprovacao as Situacao } from "../../types";
+import { eventoEncerrado, inputLocalParaIso, isoParaInputLocal } from "../../utils/data";
 import { ALTERNATIVAS_POR_PERGUNTA, questionarioVazio } from "../../utils/questionario";
 import { EventosAluno } from "./EventosAluno";
 
@@ -53,14 +55,21 @@ function validarEvento(form: FormEvento): ErrosFormulario {
   return erros;
 }
 
-// aluno ve a programacao com inscrever/cancelar (EventosAluno.tsx); equipe ve a gestao (crud) abaixo
+// aluno ve a programacao com inscrever/cancelar (EventosAluno.tsx); equipe e professor veem a gestao abaixo
 export function EventosPage() {
   const { usuario } = useAuth();
   return usuario?.perfil === "ALUNO" ? <EventosAluno /> : <EventosEquipe />;
 }
 
-// crud de eventos da equipe, com a ocupacao (inscritos/capacidade) de cada evento
+// crud de eventos com a ocupacao (inscritos/capacidade) de cada evento. A equipe ve todos e aprova ou recusa
+// os enviados por professor; o professor ve so os dele (a API ja filtra), com a situacao da aprovacao, e
+// reenvia o que foi recusado. Evento encerrado nao tem mais Editar nem Excluir (a API tambem recusa)
 function EventosEquipe() {
+  const { usuario } = useAuth();
+  const ehProfessor = usuario?.perfil === "PROFESSOR";
+  const ehEquipe = usuario?.perfil === "ADMINISTRADOR" || usuario?.perfil === "SECRETARIA";
+  const [filtroSituacao, setFiltroSituacao] = useState<"" | Situacao>("");
+  const [acaoAprovacao, setAcaoAprovacao] = useState<{ acao: AcaoAprovacao; evento: Evento } | null>(null);
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [salas, setSalas] = useState<Sala[]>([]);
   const [palestrantes, setPalestrantes] = useState<Palestrante[]>([]);
@@ -94,11 +103,16 @@ function EventosEquipe() {
   const nomeDoPalestrante = (evento: Evento) => palestrantes.find((p) => p.id === evento.palestranteId)?.nome ?? "—";
   // a busca filtra a lista ja carregada: titulo, tema, palestrante ou sala
   const termo = busca.trim().toLowerCase();
-  const eventosVisiveis = termo
-    ? eventos.filter((e) =>
-        `${e.titulo} ${e.tema ?? ""} ${nomeDoPalestrante(e)} ${nomeDaSala(e)}`.toLowerCase().includes(termo),
-      )
-    : eventos;
+  const eventosVisiveis = eventos
+    .filter((e) => !filtroSituacao || e.situacao === filtroSituacao)
+    .filter((e) => !termo || `${e.titulo} ${e.tema ?? ""} ${nomeDoPalestrante(e)} ${nomeDaSala(e)}`.toLowerCase().includes(termo));
+  // professor editando evento ja aprovado: sala, horario, carga horaria e palestrante ficam travados (a
+  // mudanca vai precisar de nova aprovacao, proxima etapa); titulo, tema e questionario ele muda
+  const travarAgenda = ehProfessor && editando?.situacao === "APROVADO";
+  // a equipe so usa palestrante aprovado (o evento dela ja nasce aprovado); o professor ve os aprovados e os dele
+  const palestrantesDoFormulario = palestrantes.filter(
+    (p) => !ehEquipe || p.situacao === undefined || p.situacao === "APROVADO" || p.id === editando?.palestranteId,
+  );
 
   // abre o modal em branco (sala e palestrante escolhidos de proposito, nao pre-selecionados)
   function abrirNovo() {
@@ -173,7 +187,8 @@ function EventosEquipe() {
         toast.success("Evento atualizado.");
       } else {
         await eventoService.create(dados);
-        toast.success("Evento cadastrado.");
+        toast.success(ehProfessor ? "Evento enviado para aprovação da equipe." : "Evento cadastrado.");
+        if (ehProfessor) avisarAprovacoesAlteradas();
       }
       setConfirmandoSalvar(false);
       setModalAberto(false);
@@ -184,6 +199,11 @@ function EventosEquipe() {
       // evento) aparece embaixo do campo de data/horario
       if (e instanceof ApiError && e.code === "CONFLITO_DE_SALA") {
         mostrar({ horario: e.message });
+        return;
+      }
+      // palestrante ainda nao aprovado, escolhido pela equipe: o aviso vai no campo do palestrante
+      if (e instanceof ApiError && e.errors?.some((item) => item.campo === "palestranteId")) {
+        mostrarErroDaApi(e);
         return;
       }
       // a regra de "exatamente 1 correta" o backend devolve em questionario.N.alternativas
@@ -221,27 +241,40 @@ function EventosEquipe() {
   return (
     <div>
       <PageHeader
-        title="Eventos"
+        title={ehProfessor ? "Meus eventos" : "Eventos"}
         actions={
           <button className="btn btn-primary" onClick={abrirNovo} disabled={salas.length === 0 || palestrantes.length === 0}>
             + Novo evento
           </button>
         }
       />
+      {ehProfessor && (
+        <p className="form-hint" style={{ marginTop: -8, marginBottom: 12 }}>
+          Seus eventos ficam aguardando a aprovação da equipe antes de aparecer para os alunos.
+        </p>
+      )}
 
-      <div className="card">
-        <input
-          className="search-input"
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          placeholder="Buscar por título, tema, palestrante ou sala"
-          aria-label="Buscar eventos"
-          style={{ marginBottom: 12 }}
-        />
+      <div className="card table-scroll">
+        <div className="filtros-linha">
+          <input
+            className="search-input"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por título, tema, palestrante ou sala"
+            aria-label="Buscar eventos"
+          />
+          <select value={filtroSituacao} onChange={(e) => setFiltroSituacao(e.target.value as "" | Situacao)} aria-label="Filtrar por situação">
+            <option value="">Todas as situações</option>
+            <option value="PENDENTE">Aguardando aprovação</option>
+            <option value="RECUSADO">Recusados</option>
+            <option value="APROVADO">Aprovados</option>
+          </select>
+        </div>
         <table className="table">
           <thead>
             <tr>
               <th>Título</th>
+              <th>Situação</th>
               <th>Sala</th>
               <th>Data/Horário</th>
               <th>Palestrante</th>
@@ -252,37 +285,90 @@ function EventosEquipe() {
             </tr>
           </thead>
           <tbody>
-            {eventosVisiveis.map((evento) => (
-              <tr key={evento.id}>
-                <td>{evento.titulo}</td>
-                <td>{nomeDaSala(evento)}</td>
-                <td>{evento.horario ? new Date(evento.horario).toLocaleString("pt-BR") : "—"}</td>
-                <td>{nomeDoPalestrante(evento)}</td>
-                <td className="truncate">{evento.tema || "—"}</td>
-                <td>{evento.cargaHoraria ? `${evento.cargaHoraria}h` : "—"}</td>
-                <td>
-                  {evento.inscritos ?? 0}/{salas.find((s) => s.id === evento.salaId)?.capacidade ?? "—"}
-                </td>
-                <td className="table-actions">
-                  <button className="btn btn-ghost" onClick={() => abrirEdicao(evento)}>
-                    Editar
-                  </button>
-                  <button className="btn btn-ghost btn-danger" onClick={() => pedirExclusao(evento)}>
-                    Excluir
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {eventosVisiveis.map((evento) => {
+              const encerrado = eventoEncerrado(evento);
+              return (
+                <tr key={evento.id}>
+                  <td>{evento.titulo}</td>
+                  <td>
+                    <SituacaoAprovacao situacao={evento.situacao} motivoRecusa={evento.motivoRecusa} />
+                  </td>
+                  <td>{nomeDaSala(evento)}</td>
+                  <td>{evento.horario ? new Date(evento.horario).toLocaleString("pt-BR") : "—"}</td>
+                  <td>{nomeDoPalestrante(evento)}</td>
+                  <td className="truncate">{evento.tema || "—"}</td>
+                  <td>{evento.cargaHoraria ? `${evento.cargaHoraria}h` : "—"}</td>
+                  <td>
+                    {evento.inscritos ?? 0}/{salas.find((s) => s.id === evento.salaId)?.capacidade ?? "—"}
+                  </td>
+                  <td className="table-actions">
+                    {ehEquipe && evento.situacao === "PENDENTE" && (
+                      <>
+                        <button className="btn btn-primary" onClick={() => setAcaoAprovacao({ acao: "aprovar", evento })}>
+                          Aprovar
+                        </button>
+                        <button className="btn btn-ghost btn-danger" onClick={() => setAcaoAprovacao({ acao: "recusar", evento })}>
+                          Recusar
+                        </button>
+                      </>
+                    )}
+                    {ehProfessor && evento.situacao === "RECUSADO" && !encerrado && (
+                      <button className="btn btn-primary" onClick={() => setAcaoAprovacao({ acao: "reenviar", evento })}>
+                        Reenviar
+                      </button>
+                    )}
+                    {evento.criadoPorId && (
+                      <button className="btn btn-ghost" onClick={() => setAcaoAprovacao({ acao: "historico", evento })}>
+                        Histórico
+                      </button>
+                    )}
+                    {encerrado ? (
+                      <span className="form-hint" title="Evento encerrado: não pode mais ser editado nem excluído">
+                        Encerrado
+                      </span>
+                    ) : (
+                      <>
+                        <button className="btn btn-ghost" onClick={() => abrirEdicao(evento)}>
+                          Editar
+                        </button>
+                        <button className="btn btn-ghost btn-danger" onClick={() => pedirExclusao(evento)}>
+                          Excluir
+                        </button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
             {eventosVisiveis.length === 0 && (
               <tr>
-                <td colSpan={8} className="empty-cell">
-                  {carregando ? "Carregando…" : eventos.length === 0 ? "Nenhum evento cadastrado." : "Nenhum evento encontrado para a busca."}
+                <td colSpan={9} className="empty-cell">
+                  {carregando
+                    ? "Carregando…"
+                    : eventos.length === 0
+                      ? ehProfessor
+                        ? "Você ainda não criou nenhum evento."
+                        : "Nenhum evento cadastrado."
+                      : "Nenhum evento encontrado para a busca."}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {acaoAprovacao && (
+        <DialogoAprovacao
+          acao={acaoAprovacao.acao}
+          tipo="EVENTO"
+          item={{ id: acaoAprovacao.evento.id, nome: acaoAprovacao.evento.titulo }}
+          onFechar={() => setAcaoAprovacao(null)}
+          onConcluido={() => {
+            setAcaoAprovacao(null);
+            void carregar();
+          }}
+        />
+      )}
 
       {modalAberto && (
         <Modal title={editando ? "Editar evento" : "Novo evento"} onClose={() => setModalAberto(false)} wide>
@@ -297,12 +383,18 @@ function EventosEquipe() {
             }}
           >
             <LegendaObrigatorio />
+            {travarAgenda && (
+              <p className="form-hint">
+                Evento já aprovado: sala, data/horário, carga horária e palestrante não podem ser alterados por aqui (a mudança
+                vai precisar de nova aprovação — em breve). Título, tema e questionário você pode editar.
+              </p>
+            )}
             <Campo nome="titulo" rotulo="Título" obrigatorio erro={erros.titulo}>
               <input value={form.titulo} onChange={(e) => setForm({ ...form, titulo: e.target.value })} autoFocus />
             </Campo>
             <div className="field-row">
               <Campo nome="salaId" rotulo="Sala" obrigatorio erro={erros.salaId}>
-                <select value={form.salaId} onChange={(e) => setForm({ ...form, salaId: e.target.value })}>
+                <select value={form.salaId} onChange={(e) => setForm({ ...form, salaId: e.target.value })} disabled={travarAgenda}>
                   <option value="">Selecione…</option>
                   {salas.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -312,16 +404,26 @@ function EventosEquipe() {
                 </select>
               </Campo>
               <Campo nome="horario" rotulo="Data/Horário" obrigatorio erro={erros.horario}>
-                <input type="datetime-local" value={form.horario} onChange={(e) => setForm({ ...form, horario: e.target.value })} />
+                <input
+                  type="datetime-local"
+                  value={form.horario}
+                  onChange={(e) => setForm({ ...form, horario: e.target.value })}
+                  disabled={travarAgenda}
+                />
               </Campo>
             </div>
             <div className="field-row">
               <Campo nome="palestranteId" rotulo="Palestrante" obrigatorio erro={erros.palestranteId}>
-                <select value={form.palestranteId} onChange={(e) => setForm({ ...form, palestranteId: e.target.value })}>
+                <select
+                  value={form.palestranteId}
+                  onChange={(e) => setForm({ ...form, palestranteId: e.target.value })}
+                  disabled={travarAgenda}
+                >
                   <option value="">Selecione…</option>
-                  {palestrantes.map((p) => (
+                  {palestrantesDoFormulario.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.nome}
+                      {p.situacao === "PENDENTE" ? " (aguardando aprovação)" : p.situacao === "RECUSADO" ? " (recusado)" : ""}
                     </option>
                   ))}
                 </select>
@@ -337,6 +439,7 @@ function EventosEquipe() {
                 step={0.5}
                 value={form.cargaHoraria}
                 onChange={(e) => setForm({ ...form, cargaHoraria: e.target.value })}
+                disabled={travarAgenda}
               />
             </Campo>
 

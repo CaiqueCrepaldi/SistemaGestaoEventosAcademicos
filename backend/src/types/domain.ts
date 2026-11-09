@@ -1,6 +1,7 @@
 // tipos das entidades, espelha as interfaces do frontend (frontend/src/types/index.ts)
 
-export type Perfil = "ADMINISTRADOR" | "SECRETARIA" | "ALUNO";
+export type Perfil = "ADMINISTRADOR" | "SECRETARIA" | "ALUNO" | "PROFESSOR";
+export type SituacaoAprovacao = "PENDENTE" | "APROVADO" | "RECUSADO";
 export type StatusPresenca = "PENDENTE" | "PRESENTE" | "AUSENTE";
 
 export interface Usuario {
@@ -67,6 +68,10 @@ export interface Palestrante {
   id: string;
   nome: string;
   email: string;
+  situacao: SituacaoAprovacao;
+  motivoRecusa: string | null;
+  // professor que criou; null = criado pela equipe
+  criadoPorId: string | null;
 }
 
 export interface AlternativaQuestionario {
@@ -90,6 +95,10 @@ export interface Evento {
   cargaHoraria: number;
   questionario: PerguntaQuestionario[]; // sempre 10 perguntas, minimo 60% pra liberar certificado
   inscritos?: number; // contagem de inscricoes, preenchida nas consultas de leitura
+  situacao: SituacaoAprovacao;
+  motivoRecusa: string | null;
+  // professor que criou; null = criado pela equipe
+  criadoPorId: string | null;
   criadoEm: string;
 }
 

@@ -1,5 +1,6 @@
 import type { StatusPresenca } from "@prisma/client";
 import { prisma } from "../../db/prisma";
+import { eventosDoDashboard, type Ator } from "../../utils/escopo";
 import { resumoDeOcupacao } from "../../utils/ocupacao";
 import { MAX_TENTATIVAS_QUESTIONARIO, PERCENTUAL_APROVACAO } from "../../utils/questionario";
 
@@ -32,25 +33,29 @@ function situacaoNoQuestionario(tentativa: { melhorPercentual: number; tentativa
   return tentativa.tentativas >= MAX_TENTATIVAS_QUESTIONARIO ? "reprovados" : "podemResponder";
 }
 
-// tudo que o Dashboard da equipe mostra, numa chamada so. So numeros agregados, titulo do evento e
-// nome da sala — nenhum dado pessoal (nome, e-mail, RGM, quem se inscreveu ou quem avaliou)
-async function resumo() {
+// tudo que o Dashboard mostra, numa chamada so. So numeros agregados, titulo do evento e nome da sala —
+// nenhum dado pessoal (nome, e-mail, RGM, quem se inscreveu ou quem avaliou). So eventos APROVADOS entram
+// na conta; para o professor, so os dele (utils/escopo.ts: eventosDoDashboard)
+async function resumo(ator: Ator) {
   const agora = new Date();
+  const escopo = eventosDoDashboard(ator);
 
   const [eventos, porEventoEStatus, presencas, tentativasPorAluno, feedbacks] = await Promise.all([
     prisma.evento.findMany({
+      where: escopo,
       orderBy: { horario: "asc" },
       select: { id: true, titulo: true, horario: true, cargaHoraria: true, sala: { select: { nome: true, capacidade: true } } },
     }),
-    prisma.inscricao.groupBy({ by: ["eventoId", "statusPresenca"], _count: { _all: true } }),
-    prisma.inscricao.findMany({ where: { statusPresenca: "PRESENTE" }, select: { participanteId: true, eventoId: true } }),
+    prisma.inscricao.groupBy({ by: ["eventoId", "statusPresenca"], where: { evento: escopo }, _count: { _all: true } }),
+    prisma.inscricao.findMany({ where: { statusPresenca: "PRESENTE", evento: escopo }, select: { participanteId: true, eventoId: true } }),
     // melhor nota e numero de tentativas de cada aluno em cada evento: uma linha por par, sem respostas
     prisma.tentativaQuestionario.groupBy({
       by: ["participanteId", "eventoId"],
+      where: { evento: escopo },
       _max: { percentual: true },
       _count: { _all: true },
     }),
-    prisma.feedback.aggregate({ _avg: { nota: true }, _count: { _all: true } }),
+    prisma.feedback.aggregate({ where: { evento: escopo }, _avg: { nota: true }, _count: { _all: true } }),
   ]);
 
   // presentes/ausentes/pendentes de cada evento

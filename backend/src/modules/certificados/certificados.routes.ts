@@ -5,6 +5,7 @@ import { autenticar, autorizar } from "../../middleware/auth";
 import { buscaSchema, lerConsulta, paginacaoSchema } from "../../utils/paginacao";
 import { AppError } from "../../errors/AppError";
 import { certificadoParaDTO, certificadoPublicoParaDTO } from "../../utils/dto";
+import { eventosVisiveis } from "../../utils/escopo";
 import { certificadosService } from "./certificados.service";
 
 export const certificadosRouter = Router();
@@ -20,7 +21,7 @@ certificadosRouter.get(
   }),
 );
 
-// GET /api/certificados?eventoId= — a equipe lista todos; o aluno so os proprios (sempre o
+// GET /api/certificados?eventoId= — a equipe lista todos; o professor os dos eventos dele; o aluno so os proprios (sempre o
 // participante do token, mesmo que mande outro filtro)
 certificadosRouter.get(
   "/",
@@ -34,7 +35,11 @@ certificadosRouter.get(
       }
       participanteId = req.usuario!.participanteId;
     }
-    const certificados = await certificadosService.listar({ eventoId, participanteId });
+    const certificados = await certificadosService.listar({
+      eventoId,
+      participanteId,
+      escopoEvento: eventosVisiveis({ id: req.usuario!.sub, perfil: req.usuario!.perfil }),
+    });
     res.json(certificados.map(certificadoParaDTO));
   }),
 );
@@ -48,9 +53,14 @@ const consultaSituacaoSchema = paginacaoSchema.extend({
 certificadosRouter.get(
   "/situacao",
   autenticar,
-  autorizar("ADMINISTRADOR", "SECRETARIA"),
+  autorizar("ADMINISTRADOR", "SECRETARIA", "PROFESSOR"),
   asyncHandler(async (req, res) => {
-    res.json(await certificadosService.situacaoParaGestao(lerConsulta(consultaSituacaoSchema, req.query)));
+    res.json(
+      await certificadosService.situacaoParaGestao({
+        ...lerConsulta(consultaSituacaoSchema, req.query),
+        escopoEvento: eventosVisiveis({ id: req.usuario!.sub, perfil: req.usuario!.perfil }),
+      }),
+    );
   }),
 );
 

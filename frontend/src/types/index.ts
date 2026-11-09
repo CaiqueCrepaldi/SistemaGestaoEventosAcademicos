@@ -1,5 +1,24 @@
 // perfil de acesso do usuario logado, checado no ProtectedRoute/Layout/paginas
-export type Perfil = "ADMINISTRADOR" | "SECRETARIA" | "ALUNO";
+export type Perfil = "ADMINISTRADOR" | "SECRETARIA" | "ALUNO" | "PROFESSOR";
+
+// aprovacao de evento/palestrante criado por professor (o que a equipe cria ja nasce APROVADO)
+export type SituacaoAprovacao = "PENDENTE" | "APROVADO" | "RECUSADO";
+
+// os campos da aprovacao so vem pra equipe e pro professor dono (pro aluno so chega item aprovado)
+export interface CamposAprovacao {
+  situacao?: SituacaoAprovacao;
+  motivoRecusa?: string | null;
+  // professor que criou; null = criado pela equipe
+  criadoPorId?: string | null;
+}
+
+// um passo do historico da aprovacao (envio, aprovacao, recusa com motivo, reenvio com resposta)
+export interface PassoAprovacao {
+  acao: "ENVIADO" | "APROVADO" | "RECUSADO" | "REENVIADO";
+  mensagem: string | null;
+  autorNome: string | null;
+  criadoEm: string;
+}
 
 export interface Sala {
   id: string;
@@ -14,7 +33,7 @@ export interface Sala {
 // pessoa convidada pra ministrar um evento
 // email so vem preenchido pra ADMINISTRADOR/SECRETARIA — pro ALUNO a chave nem aparece
 // na resposta da API (minimizacao, ver docs/lgpd)
-export interface Palestrante {
+export interface Palestrante extends CamposAprovacao {
   id: string;
   nome: string;
   email?: string;
@@ -47,6 +66,10 @@ export interface Evento {
   questionario: PerguntaQuestionario[];
   // quantas inscricoes o evento tem (so vem nas consultas; o aluno nao enxerga as inscricoes dos outros)
   inscritos?: number;
+  situacao?: SituacaoAprovacao;
+  motivoRecusa?: string | null;
+  // professor que criou; null = criado pela equipe
+  criadoPorId?: string | null;
 }
 
 // pessoa que participa de eventos, pode ou nao ter login
@@ -91,6 +114,9 @@ export interface Feedback {
   participanteId: string;
   nota: number;
   comentario: string;
+  // so na listagem da equipe e do professor: nome do aluno e se ele esta ativo
+  participanteNome?: string;
+  participanteAtivo?: boolean;
 }
 
 // respostas[i] = indice da alternativa escolhida na pergunta i (mesma ordem do questionario)

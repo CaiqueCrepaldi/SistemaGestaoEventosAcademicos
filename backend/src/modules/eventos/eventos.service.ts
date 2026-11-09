@@ -1,14 +1,16 @@
 import { randomUUID } from "crypto";
-import type { Evento as EventoDb, Prisma } from "@prisma/client";
+import type { Evento as EventoDb, Prisma, SituacaoAprovacao } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { enviarConfirmacaoPorEmail, paraDominio as paraDominioInscricao } from "../inscricoes/inscricoes.service";
+import { listarHistorico, registrarHistorico } from "../aprovacoes/aprovacoes.service";
 import { camposInformados, registrarAuditoria } from "../../utils/auditoria";
+import { ehEquipe, eventoDoAtorOuFalhar, eventoEncerrado, eventosVisiveis, palestrantesVisiveis, type Ator } from "../../utils/escopo";
 import type { Evento, PerguntaQuestionario } from "../../types/domain";
 import type { EventoInput, EventoUpdateInput } from "./eventos.schemas";
 
 // prisma devolve horario/criadoEm como Date e questionario como Json — converte pro formato que o resto do app espera.
-// "inscritos" e so a contagem (numero agregado, nao identifica ninguem): a Agenda do aluno precisa
+// "inscritos" e so a contagem (numero agregado, nao identifica ninguem): a tela Eventos do aluno precisa
 // dela e ele nao enxerga as inscricoes dos outros pra contar sozinho
 function paraDominio(evento: EventoDb & { _count?: { inscricoes: number } }): Evento {
   return {
@@ -21,34 +23,54 @@ function paraDominio(evento: EventoDb & { _count?: { inscricoes: number } }): Ev
     cargaHoraria: evento.cargaHoraria,
     questionario: evento.questionario as unknown as PerguntaQuestionario[],
     inscritos: evento._count?.inscricoes,
+    situacao: evento.situacao,
+    motivoRecusa: evento.motivoRecusa,
+    criadoPorId: evento.criadoPorId,
     criadoEm: evento.criadoEm.toISOString(),
   };
 }
 
 const COM_CONTAGEM = { _count: { select: { inscricoes: true } } } as const;
 
-// lista todos os eventos ordenados por horario
-async function listar() {
-  const eventos = await prisma.evento.findMany({ orderBy: { horario: "asc" }, include: COM_CONTAGEM });
+function erroEncerrado(): AppError {
+  return AppError.conflito("EVENTO_ENCERRADO", "Este evento já foi encerrado e não pode mais ser editado nem excluído.");
+}
+
+// lista os eventos que quem chama pode ver (ver utils/escopo.ts), ordenados por horario. "situacao"
+// filtra, por exemplo, os que aguardam aprovacao
+async function listar(ator: Ator, situacao?: SituacaoAprovacao) {
+  const eventos = await prisma.evento.findMany({
+    where: { ...eventosVisiveis(ator), ...(situacao ? { situacao } : {}) },
+    orderBy: { horario: "asc" },
+    include: COM_CONTAGEM,
+  });
   return eventos.map(paraDominio);
 }
 
-// busca um evento pelo id, 404 se nao existir
-async function buscarOuFalhar(id: string) {
-  const evento = await prisma.evento.findUnique({ where: { id }, include: COM_CONTAGEM });
+// busca um evento visivel pra quem chama; 404 se nao existir ou nao for dele (professor) / nao estiver
+// aprovado (aluno)
+async function buscarOuFalhar(id: string, ator: Ator) {
+  const evento = await prisma.evento.findFirst({ where: { id, ...eventosVisiveis(ator) }, include: COM_CONTAGEM });
   if (!evento) throw AppError.naoEncontrado("EVENTO_NAO_ENCONTRADO", "Evento não encontrado.");
   return paraDominio(evento);
 }
 
-// confere se sala/palestrante informados existem de verdade
-async function validarReferencias(dados: Partial<Pick<EventoInput, "salaId" | "palestranteId">>) {
+// confere se sala/palestrante informados existem. O palestrante tambem precisa estar disponivel pra quem
+// cria: a equipe so usa palestrante APROVADO (o evento dela ja nasce aprovado e o aluno nunca ve palestrante
+// que nao esta aprovado); o professor pode escolher um aprovado ou um dele mesmo, ainda pendente
+async function validarReferencias(dados: Partial<Pick<EventoInput, "salaId" | "palestranteId">>, ator: Ator) {
   const erros: { campo: string; mensagem: string }[] = [];
 
   if (dados.salaId && !(await prisma.sala.findUnique({ where: { id: dados.salaId } }))) {
     erros.push({ campo: "salaId", mensagem: "Sala informada não existe." });
   }
-  if (dados.palestranteId && !(await prisma.palestrante.findUnique({ where: { id: dados.palestranteId } }))) {
-    erros.push({ campo: "palestranteId", mensagem: "Palestrante informado não existe." });
+  if (dados.palestranteId) {
+    const palestrante = await prisma.palestrante.findFirst({ where: { id: dados.palestranteId, ...palestrantesVisiveis(ator) } });
+    if (!palestrante) {
+      erros.push({ campo: "palestranteId", mensagem: "Palestrante informado não existe." });
+    } else if (ehEquipe(ator.perfil) && palestrante.situacao !== "APROVADO") {
+      erros.push({ campo: "palestranteId", mensagem: "Este palestrante ainda não foi aprovado. Aprove-o antes de usá-lo num evento." });
+    }
   }
 
   if (erros.length > 0) {
@@ -59,13 +81,18 @@ async function validarReferencias(dados: Partial<Pick<EventoInput, "salaId" | "p
 const HORA_MS = 60 * 60 * 1000;
 
 // RF024: um evento ocupa a sala no intervalo [horario, horario + cargaHoraria horas). Intervalo
-// semiaberto: evento que termina exatamente quando o outro comeca NAO e conflito. Na edicao,
-// "ignorarEventoId" tira o proprio evento da comparacao
+// semiaberto: evento que termina exatamente quando o outro comeca NAO e conflito. Evento PENDENTE ja
+// reserva a sala; RECUSADO nao (recusar libera a sala na hora). "ignorarEventoId" tira o proprio evento
 async function validarConflitoDeSala(salaId: string, inicio: Date, cargaHoraria: number, ignorarEventoId?: string) {
   const fim = new Date(inicio.getTime() + cargaHoraria * HORA_MS);
   // so os que comecam antes do fim deste podem cruzar; o fim de cada um e conferido abaixo
   const candidatos = await prisma.evento.findMany({
-    where: { salaId, horario: { lt: fim }, ...(ignorarEventoId ? { id: { not: ignorarEventoId } } : {}) },
+    where: {
+      salaId,
+      horario: { lt: fim },
+      situacao: { in: ["PENDENTE", "APROVADO"] },
+      ...(ignorarEventoId ? { id: { not: ignorarEventoId } } : {}),
+    },
     select: { titulo: true, horario: true, cargaHoraria: true },
     orderBy: { horario: "asc" },
   });
@@ -75,10 +102,11 @@ async function validarConflitoDeSala(salaId: string, inicio: Date, cargaHoraria:
   }
 }
 
-// cadastra um evento novo
-async function criar(dados: EventoInput, atorId: string) {
-  await validarReferencias(dados);
+// cadastra um evento novo. Da equipe ja nasce APROVADO; do professor nasce PENDENTE (aguarda a equipe)
+async function criar(dados: EventoInput, ator: Ator) {
+  await validarReferencias(dados, ator);
   await validarConflitoDeSala(dados.salaId, new Date(dados.horario), dados.cargaHoraria);
+  const doProfessor = ator.perfil === "PROFESSOR";
   const evento = await prisma.evento.create({
     data: {
       id: randomUUID(),
@@ -89,21 +117,46 @@ async function criar(dados: EventoInput, atorId: string) {
       tema: dados.tema,
       cargaHoraria: dados.cargaHoraria,
       questionario: dados.questionario as unknown as Prisma.InputJsonValue,
+      situacao: doProfessor ? "PENDENTE" : "APROVADO",
+      criadoPorId: doProfessor ? ator.id : null,
     },
   });
-  await registrarAuditoria(atorId, "EVENTO_CRIADO", `evento ${evento.id}`);
+  await registrarAuditoria(ator.id, "EVENTO_CRIADO", `evento ${evento.id}`);
+  if (doProfessor) {
+    await registrarHistorico("EVENTO", evento.id, "ENVIADO", ator.id);
+    await registrarAuditoria(ator.id, "EVENTO_ENVIADO_PARA_APROVACAO", `evento ${evento.id}`);
+  }
   return paraDominio(evento);
 }
 
-// edita um evento existente. Se sala, horario ou carga horaria vierem no patch, confere o conflito
-// de sala com os valores finais (o que veio + o que ja estava gravado), ignorando o proprio evento
-async function atualizar(id: string, dados: EventoUpdateInput, atorId: string) {
-  const atual = await buscarOuFalhar(id);
-  await validarReferencias(dados);
+// sala, horario, carga horaria e palestrante de um evento ja APROVADO: o professor nao muda sozinho
+// (a proposta de mudanca com nova aprovacao fica para a proxima etapa). Titulo, tema e questionario sim
+function mudancasQuePrecisamDeAprovacao(atual: EventoDb, dados: EventoUpdateInput): string[] {
+  const mudou: string[] = [];
+  if (dados.salaId !== undefined && dados.salaId !== atual.salaId) mudou.push("salaId");
+  if (dados.horario !== undefined && new Date(dados.horario).getTime() !== atual.horario.getTime()) mudou.push("horario");
+  if (dados.cargaHoraria !== undefined && dados.cargaHoraria !== atual.cargaHoraria) mudou.push("cargaHoraria");
+  if (dados.palestranteId !== undefined && dados.palestranteId !== atual.palestranteId) mudou.push("palestranteId");
+  return mudou;
+}
+
+// edita um evento. Ninguem edita evento encerrado. Se sala, horario ou carga horaria vierem no patch,
+// confere o conflito de sala com os valores finais, ignorando o proprio evento
+async function atualizar(id: string, dados: EventoUpdateInput, ator: Ator) {
+  const atual = await eventoDoAtorOuFalhar(ator, id);
+  if (eventoEncerrado(atual)) throw erroEncerrado();
+  if (ator.perfil === "PROFESSOR" && atual.situacao === "APROVADO" && mudancasQuePrecisamDeAprovacao(atual, dados).length > 0) {
+    throw AppError.conflito("ALTERACAO_PRECISA_APROVACAO", "Esta alteração vai precisar de aprovação (em breve).");
+  }
+
+  await validarReferencias(
+    { salaId: dados.salaId, palestranteId: dados.palestranteId !== atual.palestranteId ? dados.palestranteId : undefined },
+    ator,
+  );
   if (dados.salaId !== undefined || dados.horario !== undefined || dados.cargaHoraria !== undefined) {
     await validarConflitoDeSala(
       dados.salaId ?? atual.salaId,
-      new Date(dados.horario ?? atual.horario),
+      dados.horario ? new Date(dados.horario) : atual.horario,
       dados.cargaHoraria ?? atual.cargaHoraria,
       id,
     );
@@ -120,26 +173,87 @@ async function atualizar(id: string, dados: EventoUpdateInput, atorId: string) {
       questionario: dados.questionario as unknown as Prisma.InputJsonValue | undefined,
     },
   });
-  await registrarAuditoria(atorId, "EVENTO_ATUALIZADO", `evento ${id} (campos: ${camposInformados(dados)})`);
+  await registrarAuditoria(ator.id, "EVENTO_ATUALIZADO", `evento ${id} (campos: ${camposInformados(dados)})`);
   return paraDominio(evento);
 }
 
 // RF009/RNF010: evento com qualquer inscricao NAO e excluido — nada mais some em cascata pela API.
-// A equipe cancela as inscricoes antes (so as pendentes de evento futuro podem ser canceladas, ver
-// inscricoes.service.ts), entao evento que ja teve presenca/certificado fica preservado
-async function remover(id: string, atorId: string) {
-  await buscarOuFalhar(id);
+// Evento encerrado tambem nao (para todos os perfis)
+async function remover(id: string, ator: Ator) {
+  const evento = await eventoDoAtorOuFalhar(ator, id);
+  if (eventoEncerrado(evento)) throw erroEncerrado();
   const inscricoes = await prisma.inscricao.count({ where: { eventoId: id } });
   if (inscricoes > 0) {
     throw AppError.conflito("EVENTO_COM_INSCRICOES", "Cancele as inscrições antes de excluir o evento.");
   }
-  await prisma.evento.delete({ where: { id } });
-  await registrarAuditoria(atorId, "EVENTO_REMOVIDO", `evento ${id}`);
+  await prisma.$transaction([
+    prisma.historicoAprovacao.deleteMany({ where: { tipo: "EVENTO", itemId: id } }),
+    prisma.evento.delete({ where: { id } }),
+  ]);
+  await registrarAuditoria(ator.id, "EVENTO_REMOVIDO", `evento ${id}`);
 }
 
-// autoinscricao do aluno logado: checa conta ativa, evento que ainda nao comecou, duplicidade e vaga antes de criar
+// ---------------------------------------------------------------- aprovacao (so a equipe aprova/recusa)
+async function eventoPendenteOuFalhar(id: string) {
+  const evento = await prisma.evento.findUnique({ where: { id }, include: { palestrante: { select: { nome: true, situacao: true } } } });
+  if (!evento) throw AppError.naoEncontrado("EVENTO_NAO_ENCONTRADO", "Evento não encontrado.");
+  if (evento.situacao !== "PENDENTE") {
+    throw AppError.conflito("EVENTO_NAO_PENDENTE", "Só é possível aprovar ou recusar um evento que está aguardando aprovação.");
+  }
+  return evento;
+}
+
+// aprova: confere de novo o conflito de sala e se o palestrante ja esta APROVADO
+async function aprovar(id: string, ator: Ator) {
+  const evento = await eventoPendenteOuFalhar(id);
+  if (evento.palestrante.situacao !== "APROVADO") {
+    throw AppError.conflito(
+      "PALESTRANTE_NAO_APROVADO",
+      `O palestrante "${evento.palestrante.nome}" ainda não foi aprovado. Aprove o palestrante antes de aprovar o evento.`,
+    );
+  }
+  await validarConflitoDeSala(evento.salaId, evento.horario, evento.cargaHoraria, id);
+  const aprovado = await prisma.evento.update({ where: { id }, data: { situacao: "APROVADO", motivoRecusa: null } });
+  await registrarHistorico("EVENTO", id, "APROVADO", ator.id);
+  await registrarAuditoria(ator.id, "EVENTO_APROVADO", `evento ${id}`);
+  return paraDominio(aprovado);
+}
+
+// recusa com motivo (o professor ve o motivo no sistema); a sala fica livre na hora
+async function recusar(id: string, motivo: string, ator: Ator) {
+  await eventoPendenteOuFalhar(id);
+  const recusado = await prisma.evento.update({ where: { id }, data: { situacao: "RECUSADO", motivoRecusa: motivo } });
+  await registrarHistorico("EVENTO", id, "RECUSADO", ator.id, motivo);
+  // o motivo e texto livre: fica so no historico, nunca na auditoria
+  await registrarAuditoria(ator.id, "EVENTO_RECUSADO", `evento ${id}`);
+  return paraDominio(recusado);
+}
+
+// o professor reenvia o evento recusado (depois de corrigir), com uma resposta opcional. Volta para
+// PENDENTE e confere a sala de novo (enquanto estava recusado, a sala ficou livre)
+async function reenviar(id: string, resposta: string | undefined, ator: Ator) {
+  const evento = await eventoDoAtorOuFalhar(ator, id);
+  if (evento.situacao !== "RECUSADO") {
+    throw AppError.conflito("EVENTO_NAO_RECUSADO", "Só é possível reenviar um evento que foi recusado.");
+  }
+  if (eventoEncerrado(evento)) throw erroEncerrado();
+  await validarConflitoDeSala(evento.salaId, evento.horario, evento.cargaHoraria, id);
+  const reenviado = await prisma.evento.update({ where: { id }, data: { situacao: "PENDENTE", motivoRecusa: null } });
+  await registrarHistorico("EVENTO", id, "REENVIADO", ator.id, resposta);
+  await registrarAuditoria(ator.id, "EVENTO_REENVIADO", `evento ${id}`);
+  return paraDominio(reenviado);
+}
+
+// historico da aprovacao (equipe e o professor dono do evento)
+async function historico(id: string, ator: Ator) {
+  await eventoDoAtorOuFalhar(ator, id);
+  return listarHistorico("EVENTO", id);
+}
+
+// autoinscricao do aluno logado: checa evento aprovado, conta ativa, evento que ainda nao comecou,
+// duplicidade e vaga antes de criar
 async function autoinscrever(eventoId: string, participanteId: string, atorId: string) {
-  const evento = await prisma.evento.findUnique({ where: { id: eventoId }, include: { sala: true } });
+  const evento = await prisma.evento.findFirst({ where: { id: eventoId, situacao: "APROVADO" }, include: { sala: true } });
   if (!evento) throw AppError.naoEncontrado("EVENTO_NAO_ENCONTRADO", "Evento não encontrado.");
 
   // o aluno inativado ja nao tem sessao (a inativacao derruba as sessoes), isto e so a segunda barreira
@@ -177,4 +291,15 @@ async function autoinscrever(eventoId: string, participanteId: string, atorId: s
   return { inscricao: paraDominioInscricao(inscricao), emailConfirmacaoEnviado };
 }
 
-export const eventosService = { listar, buscarOuFalhar, criar, atualizar, remover, autoinscrever };
+export const eventosService = {
+  listar,
+  buscarOuFalhar,
+  criar,
+  atualizar,
+  remover,
+  aprovar,
+  recusar,
+  reenviar,
+  historico,
+  autoinscrever,
+};

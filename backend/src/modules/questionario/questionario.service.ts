@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import type { TentativaQuestionario as TentativaDb } from "@prisma/client";
+import type { Prisma, TentativaQuestionario as TentativaDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { registrarAuditoria } from "../../utils/auditoria";
@@ -16,9 +16,10 @@ function paraDominio(tentativa: TentativaDb): TentativaQuestionario {
   };
 }
 
-// busca o evento pelo id, 404 se nao existir
+// busca o evento pelo id, 404 se nao existir ou nao estiver aprovado (evento pendente/recusado nao
+// existe pro aluno, nem o questionario dele)
 async function buscarEventoOuFalhar(eventoId: string) {
-  const evento = await prisma.evento.findUnique({ where: { id: eventoId } });
+  const evento = await prisma.evento.findFirst({ where: { id: eventoId, situacao: "APROVADO" } });
   if (!evento) throw AppError.naoEncontrado("EVENTO_NAO_ENCONTRADO", "Evento não encontrado.");
   return evento;
 }
@@ -98,8 +99,11 @@ async function listarTentativas(eventoId: string, participanteId: string) {
 
 // lista as tentativas de todo mundo (tela de certificados da equipe) ou so as de um aluno (tela de
 // check-in, que trava a presenca de quem ja respondeu o questionario do evento)
-async function listarTodas(participanteId?: string) {
-  const tentativas = await prisma.tentativaQuestionario.findMany({ where: { participanteId }, orderBy: { criadoEm: "asc" } });
+async function listarTodas(participanteId?: string, escopoEvento?: Prisma.EventoWhereInput) {
+  const tentativas = await prisma.tentativaQuestionario.findMany({
+    where: { participanteId, ...(escopoEvento ? { evento: escopoEvento } : {}) },
+    orderBy: { criadoEm: "asc" },
+  });
   return tentativas.map(paraDominio);
 }
 

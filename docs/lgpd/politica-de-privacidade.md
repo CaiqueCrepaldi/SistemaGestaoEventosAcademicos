@@ -1,6 +1,6 @@
 # Política de Privacidade
 
-**Versão 3 — 06/11/2026.** Substitui a Versão 2. Este é o mesmo texto
+**Versão 4 — 09/11/2026.** Substitui a Versão 3 (06/11/2026). Este é o mesmo texto
 publicado na página `/politica-de-privacidade` do sistema
 (`frontend/src/pages/Legal/PoliticaDePrivacidadePage.tsx`): ao mudar um,
 mude o outro. A versão vigente fica em `VERSAO_TERMOS_ATUAL`
@@ -53,9 +53,25 @@ dados tratados).
 - **Situação da conta:** se a secretaria inativar sua conta, fica
   registrado o motivo, visível só para a equipe.
 - **Identificação e contato (palestrante):** nome e e-mail, informados pela
-  secretaria ao cadastrar o evento. O nome aparece na agenda para quem está
-  conectado; o e-mail é visto só pela equipe. O canal de privacidade vale
-  também para palestrantes.
+  equipe ou pelo professor ao cadastrar o evento. O nome aparece na agenda
+  para quem está conectado (só depois de o palestrante ser aprovado pela
+  equipe); o e-mail é visto só pela equipe e pelo professor que o cadastrou.
+  O canal de privacidade vale também para palestrantes.
+- **Identificação e contato (professor):** nome completo e e-mail
+  institucional (`@umc.br`), informados pela administração ou pela
+  secretaria ao criar a conta. Nada além disso. A conta só fica ativa depois
+  do primeiro acesso, em que o professor informa o código de 6 dígitos
+  enviado ao e-mail (guardado só como hash, vale 24 horas), define a senha
+  e aceita os Termos de Uso.
+- **Aprovação de eventos e palestrantes:** o que o professor cadastra passa
+  pela aprovação da equipe. O histórico guarda cada envio, aprovação e
+  recusa, com a data, o nome de quem agiu, o motivo da recusa e a resposta
+  do professor.
+
+**O que o professor vê dos alunos:** só nos eventos que ele criou, o nome,
+o RGM, a presença, as notas do questionário e as avaliações enviadas pelos
+alunos inscritos. Ele usa esses dados só para organizar o evento e registrar
+a presença; não vê alunos de outros eventos nem a lista geral de alunos.
 
 Não coletamos CPF, endereço, data de nascimento, foto ou dados de saúde.
 
@@ -64,6 +80,9 @@ Não coletamos CPF, endereço, data de nascimento, foto ou dados de saúde.
 | Dado | Finalidade | Base legal |
 |---|---|---|
 | Nome, RGM, e-mail, senha | Criar e autenticar a conta | Execução de contrato a pedido do titular (art. 7º, V da LGPD) |
+| Nome e e-mail do professor, código do primeiro acesso | Criar a conta do professor e permitir que ele crie e organize os próprios eventos e registre a presença | Execução de contrato (art. 7º, V) |
+| Dados dos alunos vistos pelo professor (nome, RGM, presença, notas e avaliações, só dos eventos dele) | Organizar o evento, registrar a presença e acompanhar o resultado | Execução de contrato (art. 7º, V) |
+| Histórico da aprovação (quem enviou, aprovou ou recusou, motivo e resposta) | Registrar as decisões da equipe sobre o que o professor cadastra | Legítimo interesse da instituição na organização dos eventos (art. 7º, IX) |
 | Cadastro aguardando confirmação (nome, e-mail, RGM e hash da senha, por até 15 minutos) | Garantir que a conta e os certificados pertencem ao dono do e-mail | Procedimentos preliminares a pedido do titular (art. 7º, V) |
 | Inscrição e presença | Controlar as vagas e liberar o questionário e o certificado | Execução de contrato (art. 7º, V) |
 | Respostas do questionário | Calcular o aproveitamento e liberar o certificado | Execução de contrato (art. 7º, V) |
@@ -78,8 +97,9 @@ Não coletamos CPF, endereço, data de nascimento, foto ou dados de saúde.
 
 - **TiDB Cloud** (banco de dados): armazena os dados descritos acima.
 - **SendGrid** (Twilio, envio de e-mail): envia o código de confirmação do
-  cadastro, o código de recuperação de senha e os avisos de confirmação e
-  de cancelamento de inscrição. Recebe o e-mail do destinatário e o conteúdo
+  cadastro, o código do primeiro acesso do professor, o código de
+  recuperação de senha e os avisos de confirmação e de cancelamento de
+  inscrição. Recebe o e-mail do destinatário e o conteúdo
   da mensagem (nos avisos de inscrição, também o nome do aluno), só o
   necessário para entregar aquela mensagem.
 - **Vercel** (hospedagem): processa toda requisição feita ao SGEA, o que
@@ -185,6 +205,6 @@ afetados e, quando exigido, a Autoridade Nacional de Proteção de Dados
 
 ---
 
-*Versão 3 — 06/11/2026. Quando este texto mudar, a nova versão é publicada
+*Versão 4 — 09/11/2026. Quando este texto mudar, a nova versão é publicada
 nesta página com a data, e a versão que você aceitou fica registrada na sua
 conta.*

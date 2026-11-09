@@ -17,7 +17,8 @@ const FILTROS_VAZIOS = { eventoId: "", busca: "" };
 // que voltou
 export function CertificadosPage() {
   const { usuario } = useAuth();
-  const isEquipe = usuario?.perfil === "ADMINISTRADOR" || usuario?.perfil === "SECRETARIA";
+  // visao de gestao: equipe e professor (o professor so recebe os eventos dele — a API filtra)
+  const isEquipe = usuario?.perfil === "ADMINISTRADOR" || usuario?.perfil === "SECRETARIA" || usuario?.perfil === "PROFESSOR";
 
   // aluno: a lista dele inteira (poucos itens)
   const [certificados, setCertificados] = useState<CertificadoDisponivel[]>([]);

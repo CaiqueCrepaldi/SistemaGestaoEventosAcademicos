@@ -1,9 +1,11 @@
 import { prisma } from "../db/prisma";
+import { eventoEncerrado } from "./escopo";
 
 // RF021: ocupacao REAL das salas — quem de fato esteve no evento (check-in PRESENTE) dividido pela
 // capacidade da sala, em %. Regra unica, usada pelo Dashboard e pela listagem de salas:
 // - so eventos ENCERRADOS (horario + carga horaria ja passou): evento futuro ou em andamento ainda nao
 //   teve o check-in completo e puxaria a media pra baixo;
+// - so eventos APROVADOS (pendente ou recusado nao acontece de verdade);
 // - sala com capacidade 0 fica fora da media;
 // - media simples entre os eventos (cada evento pesa igual); null sem nenhum evento que entre na conta.
 // So numeros: nenhum dado de aluno entra ou sai daqui
@@ -23,9 +25,6 @@ export interface ResumoOcupacao {
   ocupacaoMedia: number | null;
 }
 
-export function eventoEncerrado(evento: { horario: Date; cargaHoraria: number }, agora: Date): boolean {
-  return evento.horario.getTime() + evento.cargaHoraria * 3600 * 1000 <= agora.getTime();
-}
 
 // a formula, num lugar so
 export function resumoDeOcupacao(eventos: EventoParaOcupacao[], agora: Date): ResumoOcupacao {
@@ -42,7 +41,8 @@ export function resumoDeOcupacao(eventos: EventoParaOcupacao[], agora: Date): Re
 // e a contagem de PRESENTE agrupada por evento no banco — nunca uma consulta por sala ou por evento
 export async function ocupacaoPorSala(agora = new Date()): Promise<Map<string, ResumoOcupacao>> {
   const eventos = await prisma.evento.findMany({
-    where: { horario: { lte: agora } },
+    // so evento APROVADO: pendente/recusado nao tem inscricao e puxaria a media pra baixo
+    where: { horario: { lte: agora }, situacao: "APROVADO" },
     select: { id: true, horario: true, cargaHoraria: true, salaId: true, sala: { select: { capacidade: true } } },
   });
   const encerrados = eventos.filter((evento) => eventoEncerrado(evento, agora));

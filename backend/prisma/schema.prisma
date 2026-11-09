@@ -16,6 +16,16 @@ enum Perfil {
   ADMINISTRADOR
   SECRETARIA
   ALUNO
+  // conta criada pela equipe (nome + e-mail @umc.br); cria e organiza os proprios eventos
+  PROFESSOR
+}
+
+// aprovacao de evento e palestrante criados por professor: nasce PENDENTE, a equipe aprova ou recusa
+// (com motivo). O que a equipe cria ja nasce APROVADO; o que existia antes desse controle ficou APROVADO
+enum SituacaoAprovacao {
+  PENDENTE
+  APROVADO
+  RECUSADO
 }
 
 enum StatusPresenca {
@@ -63,6 +73,10 @@ model Usuario {
   logsAuditoria         LogAuditoria[]
   solicitacoesAtendidas SolicitacaoTitular[]
   codigosRecuperacaoMfa CodigoRecuperacaoMfa[]
+  eventosCriados        Evento[]               @relation("EventoCriadoPor")
+  palestrantesCriados   Palestrante[]          @relation("PalestranteCriadoPor")
+  primeiroAcesso        PrimeiroAcesso?
+  historicoAprovacoes   HistoricoAprovacao[]
 
   @@map("usuarios")
 }
@@ -98,10 +112,16 @@ model Sala {
 // nome/email em texto puro por decisao (nao sao sensiveis, edicao restrita a
 // equipe, nome ja e publico na agenda) — ver docs/lgpd/07-medidas-tecnicas-de-seguranca.md
 model Palestrante {
-  id      String   @id
-  nome    String
-  email   String   @unique
-  eventos Evento[]
+  id           String            @id
+  nome         String
+  email        String            @unique
+  eventos      Evento[]
+  // aprovacao (ver SituacaoAprovacao). motivoRecusa = o da ultima recusa, apagado ao reenviar/aprovar;
+  // o historico completo fica em historico_aprovacoes. criadoPorId null = criado pela equipe
+  situacao     SituacaoAprovacao @default(APROVADO)
+  motivoRecusa String?           @db.Text
+  criadoPorId  String?
+  criadoPor    Usuario?          @relation("PalestranteCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
 
   @@map("palestrantes")
 }
@@ -109,17 +129,23 @@ model Palestrante {
 // questionario fica como json (10 perguntas com 4 alternativas cada) em vez de tabela
 // separada — nunca e consultado pergunta a pergunta, so lido/gravado inteiro
 model Evento {
-  id            String      @id
+  id            String            @id
   titulo        String
   horario       DateTime
   salaId        String
-  sala          Sala        @relation(fields: [salaId], references: [id], onDelete: Restrict)
+  sala          Sala              @relation(fields: [salaId], references: [id], onDelete: Restrict)
   palestranteId String
-  palestrante   Palestrante @relation(fields: [palestranteId], references: [id], onDelete: Restrict)
+  palestrante   Palestrante       @relation(fields: [palestranteId], references: [id], onDelete: Restrict)
   tema          String
   cargaHoraria  Float
   questionario  Json
-  criadoEm      DateTime    @default(now())
+  criadoEm      DateTime          @default(now())
+  // aprovacao (ver SituacaoAprovacao): so APROVADO aparece pro aluno e conta no Dashboard; PENDENTE ja
+  // reserva a sala, RECUSADO libera. criadoPorId = o professor que criou; null = criado pela equipe
+  situacao      SituacaoAprovacao @default(APROVADO)
+  motivoRecusa  String?           @db.Text
+  criadoPorId   String?
+  criadoPor     Usuario?          @relation("EventoCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
 
   inscricoes Inscricao[]
   feedbacks  Feedback[]
@@ -307,4 +333,42 @@ model CodigoRecuperacaoMfa {
 
   @@index([usuarioId])
   @@map("codigos_recuperacao_mfa")
+}
+
+// codigo do primeiro acesso do professor (a conta nasce sem senha utilizavel e sem aceite dos Termos).
+// So o hash bcrypt do codigo; vale 24 horas e deixa de valer na 5a tentativa errada. A linha sai quando o
+// professor conclui o primeiro acesso
+model PrimeiroAcesso {
+  id            String   @id
+  usuarioId     String   @unique
+  usuario       Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  codigoHash    String
+  tentativas    Int      @default(0)
+  envios        Int      @default(1)
+  ultimoEnvioEm DateTime @default(now())
+  expiraEm      DateTime
+  criadoEm      DateTime @default(now())
+
+  @@map("primeiros_acessos")
+}
+
+// historico da aprovacao de cada evento/palestrante: envio, aprovacao, recusa (com o motivo) e reenvio
+// (com a resposta opcional do professor), com data e autor. autorNome e a copia do nome de quem agiu,
+// como no log de auditoria (o registro continua dizendo quem foi mesmo se a conta sair)
+model HistoricoAprovacao {
+  id        String   @id
+  // EVENTO ou PALESTRANTE
+  tipo      String   @db.VarChar(20)
+  itemId    String   @db.VarChar(191)
+  // ENVIADO, APROVADO, RECUSADO ou REENVIADO
+  acao      String   @db.VarChar(20)
+  // motivo da recusa ou resposta do professor no reenvio
+  mensagem  String?  @db.Text
+  autorId   String?
+  autor     Usuario? @relation(fields: [autorId], references: [id], onDelete: SetNull)
+  autorNome String?  @db.Text
+  criadoEm  DateTime @default(now())
+
+  @@index([tipo, itemId])
+  @@map("historico_aprovacoes")
 }

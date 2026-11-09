@@ -116,6 +116,10 @@ export const authService = {
   reenviarCodigoCadastro(emailInstitucional: string) {
     return api.post<EnvioCodigoCadastro>("/auth/registro/reenviar-codigo", { emailInstitucional });
   },
+  // primeiro acesso do professor: codigo do e-mail + senha nova + aceite dos Termos
+  primeiroAcesso(dados: { email: string; codigo: string; novaSenha: string; aceiteLgpd: boolean }) {
+    return api.post<void>("/auth/primeiro-acesso", dados);
+  },
   solicitarRecuperacaoSenha(email: string) {
     return api.post<SolicitarRecuperacaoResult>("/auth/recuperacao-senha", { email });
   },

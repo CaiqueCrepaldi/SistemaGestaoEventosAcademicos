@@ -1,4 +1,5 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
+import { eventoDoAtorOuFalhar, eventosVisiveis } from "../../utils/escopo";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { autenticar, autorizar } from "../../middleware/auth";
 import { validarCorpo } from "../../middleware/validate";
@@ -9,9 +10,14 @@ import { exclusaoPelaEquipeSchema, feedbackSchema } from "./feedbacks.schemas";
 
 export const feedbacksRouter = Router();
 
-// admin/secretaria veem tudo, aluno so o proprio
+// admin/secretaria veem tudo; o professor so as avaliacoes dos eventos dele (e nao exclui nenhuma); o
+// aluno so a propria
 function ehEquipe(perfil: string) {
   return perfil === "ADMINISTRADOR" || perfil === "SECRETARIA";
+}
+
+function atorDe(req: Request) {
+  return { id: req.usuario!.sub, perfil: req.usuario!.perfil };
 }
 
 // lista feedbacks, filtrado por evento/participante (aluno so ve o dele)
@@ -22,11 +28,20 @@ feedbacksRouter.get(
     const eventoId = typeof req.query.eventoId === "string" ? req.query.eventoId : undefined;
     const participanteIdQuery = typeof req.query.participanteId === "string" ? req.query.participanteId : undefined;
 
-    // aluno nunca ve feedback de outra pessoa mesmo pedindo por query param
-    const participanteId = ehEquipe(req.usuario!.perfil) ? participanteIdQuery : req.usuario!.participanteId ?? undefined;
+    // aluno nunca ve feedback de outra pessoa mesmo pedindo por query param; o professor ve todos os
+    // dos eventos dele
+    const perfil = req.usuario!.perfil;
+    const participanteId = ehEquipe(perfil) || perfil === "PROFESSOR" ? participanteIdQuery : req.usuario!.participanteId ?? undefined;
+    if (perfil === "ALUNO" && !participanteId) throw AppError.acessoNegado("Esta conta não está vinculada a um participante.");
 
-    const feedbacks = await feedbacksService.listar({ eventoId, participanteId });
-    res.json(feedbacks.map(feedbackParaDTO));
+    const filtros = { eventoId, participanteId, escopoEvento: eventosVisiveis(atorDe(req)) };
+    if (perfil === "ALUNO") {
+      res.json((await feedbacksService.listar(filtros)).map(feedbackParaDTO));
+      return;
+    }
+    // equipe e professor: ja com o nome do aluno e se ele esta ativo
+    const feedbacks = await feedbacksService.listarParaGestao(filtros);
+    res.json(feedbacks.map((f) => ({ ...feedbackParaDTO(f), participanteNome: f.participanteNome, participanteAtivo: f.participanteAtivo })));
   }),
 );
 
@@ -51,7 +66,10 @@ feedbacksRouter.get(
   autenticar,
   asyncHandler(async (req, res) => {
     const feedback = await feedbacksService.buscarOuFalhar(req.params.id);
-    if (!ehEquipe(req.usuario!.perfil) && feedback.participanteId !== req.usuario!.participanteId) {
+    if (req.usuario!.perfil === "PROFESSOR") {
+      // so avaliacao de evento dele (404 nos outros)
+      await eventoDoAtorOuFalhar(atorDe(req), feedback.eventoId);
+    } else if (!ehEquipe(req.usuario!.perfil) && feedback.participanteId !== req.usuario!.participanteId) {
       throw AppError.acessoNegado();
     }
     res.json(feedbackParaDTO(feedback));
@@ -104,6 +122,8 @@ feedbacksRouter.delete(
   autenticar,
   asyncHandler(async (req, res, next) => {
     if (ehEquipe(req.usuario!.perfil)) return next();
+    // o professor ve as avaliacoes dos eventos dele, mas nao exclui nenhuma
+    if (req.usuario!.perfil === "PROFESSOR") throw AppError.acessoNegado("O professor não exclui avaliações.");
     const participanteId = req.usuario!.participanteId;
     if (!participanteId) throw AppError.acessoNegado("Esta conta não está vinculada a um participante.");
     await feedbacksService.excluirPeloAluno(req.params.id, participanteId, req.usuario!.sub);

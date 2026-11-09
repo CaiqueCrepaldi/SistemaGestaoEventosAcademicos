@@ -18,6 +18,8 @@ import { LoginPage } from "./pages/Login/LoginPage";
 import { MeusDadosPage } from "./pages/MeusDados/MeusDadosPage";
 import { MinhaContaPage } from "./pages/MinhaConta/MinhaContaPage";
 import { PalestrantesPage } from "./pages/Palestrantes/PalestrantesPage";
+import { PrimeiroAcessoPage } from "./pages/PrimeiroAcesso/PrimeiroAcessoPage";
+import { ProfessoresPage } from "./pages/Professores/ProfessoresPage";
 import { ParticipantesPage } from "./pages/Participantes/ParticipantesPage";
 import { QuestionarioPage } from "./pages/Questionario/QuestionarioPage";
 import { SalasPage } from "./pages/Salas/SalasPage";
@@ -33,14 +35,16 @@ export function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/cadastro" element={<CadastroPage />} />
           <Route path="/esqueci-senha" element={<EsqueciSenhaPage />} />
+          {/* publica: o professor ativa a conta criada pela equipe (codigo + senha + aceite dos Termos) */}
+          <Route path="/primeiro-acesso" element={<PrimeiroAcessoPage />} />
           <Route path="/termos-de-uso" element={<TermosDeUsoPage />} />
           <Route path="/politica-de-privacidade" element={<PoliticaDePrivacidadePage />} />
           {/* publica: qualquer pessoa confere um certificado pelo codigo impresso no PDF */}
           <Route path="/validar-certificado" element={<ValidarCertificadoPage />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
-              {/* rotas que ADMINISTRADOR, SECRETARIA e ALUNO acessam */}
-              <Route element={<ProtectedRoute perfis={["ADMINISTRADOR", "SECRETARIA", "ALUNO"]} />}>
+              {/* rotas que todos os perfis acessam (cada tela mostra o que o perfil pode; a API filtra) */}
+              <Route element={<ProtectedRoute perfis={["ADMINISTRADOR", "SECRETARIA", "ALUNO", "PROFESSOR"]} />}>
                 <Route path="/eventos" element={<EventosPage />} />
                 <Route path="/eventos/:eventoId/questionario" element={<QuestionarioPage />} />
                 <Route path="/palestrantes" element={<PalestrantesPage />} />
@@ -54,13 +58,17 @@ export function App() {
               <Route element={<ProtectedRoute perfis={["ALUNO"]} />}>
                 <Route path="/meus-dados" element={<MeusDadosPage />} />
               </Route>
-              {/* rotas exclusivas de ADMINISTRADOR/SECRETARIA */}
-              <Route element={<ProtectedRoute perfis={["ADMINISTRADOR", "SECRETARIA"]} />}>
+              {/* gestao: equipe e professor (o professor so com os eventos dele — a API filtra) */}
+              <Route element={<ProtectedRoute perfis={["ADMINISTRADOR", "SECRETARIA", "PROFESSOR"]} />}>
                 <Route path="/" element={<DashboardPage />} />
-                <Route path="/salas" element={<SalasPage />} />
-                <Route path="/participantes" element={<ParticipantesPage />} />
                 <Route path="/inscricoes" element={<InscricoesPage />} />
                 <Route path="/checkin" element={<CheckinPage />} />
+              </Route>
+              {/* rotas exclusivas de ADMINISTRADOR/SECRETARIA */}
+              <Route element={<ProtectedRoute perfis={["ADMINISTRADOR", "SECRETARIA"]} />}>
+                <Route path="/salas" element={<SalasPage />} />
+                <Route path="/participantes" element={<ParticipantesPage />} />
+                <Route path="/professores" element={<ProfessoresPage />} />
                 <Route path="/auditoria" element={<AuditoriaPage />} />
               </Route>
             </Route>

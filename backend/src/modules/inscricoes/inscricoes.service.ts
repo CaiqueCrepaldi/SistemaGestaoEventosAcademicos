@@ -6,6 +6,7 @@ import { AppError } from "../../errors/AppError";
 import { emailService } from "../email/email.service";
 import { COM_CONTA_DO_ALUNO, paraDominio as participanteParaDominio } from "../participantes/participantes.service";
 import { registrarAuditoria } from "../../utils/auditoria";
+import { eventosVisiveis, inscricaoDoAtorOuFalhar, type Ator } from "../../utils/escopo";
 import type { Inscricao, Perfil, StatusPresenca } from "../../types/domain";
 import type { InscricaoCheckinInput, InscricaoInput } from "./inscricoes.schemas";
 
@@ -13,6 +14,8 @@ interface FiltrosListagem {
   eventoId?: string;
   participanteId?: string;
   status?: StatusPresenca;
+  // so inscricoes de eventos visiveis pra quem chama (utils/escopo.ts): o professor so as dos eventos dele
+  escopoEvento?: Prisma.EventoWhereInput;
 }
 
 // prisma devolve as datas como Date, resto do app espera string (ISO) ou null
@@ -46,6 +49,7 @@ export const COM_ALUNO_DA_INSCRICAO = {
 } satisfies Prisma.ParticipanteSelect;
 
 export interface FiltrosGestao {
+  escopoEvento?: Prisma.EventoWhereInput;
   eventoId?: string;
   status?: StatusPresenca;
   busca?: string;
@@ -60,6 +64,7 @@ async function listarParaGestao(filtros: FiltrosGestao) {
   const where: Prisma.InscricaoWhereInput = {
     eventoId: filtros.eventoId,
     statusPresenca: filtros.status,
+    ...(filtros.escopoEvento ? { evento: filtros.escopoEvento } : {}),
     ...filtroDoAluno(filtros.busca),
   };
   const [total, inscricoes] = await prisma.$transaction([
@@ -90,6 +95,7 @@ async function listar(filtros: FiltrosListagem) {
       eventoId: filtros.eventoId,
       participanteId: filtros.participanteId,
       statusPresenca: filtros.status,
+      ...(filtros.escopoEvento ? { evento: filtros.escopoEvento } : {}),
     },
     orderBy: { dataInscricao: "desc" },
   });
@@ -103,17 +109,21 @@ async function buscarOuFalhar(id: string) {
   return paraDominio(inscricao);
 }
 
-// inscricao manual feita por admin/secretaria, checa duplicidade e vaga
-async function criarManual(dados: InscricaoInput, ator: { id: string; perfil: Perfil }) {
+// inscricao manual feita pela equipe ou pelo professor (so nos eventos dele), checa duplicidade e vaga.
+// Evento que nao esta APROVADO nao aceita inscricao
+async function criarManual(dados: InscricaoInput, ator: Ator) {
   const [participante, evento] = await Promise.all([
     prisma.participante.findUnique({ where: { id: dados.participanteId } }),
-    prisma.evento.findUnique({ where: { id: dados.eventoId }, include: { sala: true } }),
+    prisma.evento.findFirst({ where: { id: dados.eventoId, ...eventosVisiveis(ator) }, include: { sala: true } }),
   ]);
 
   const erros: { campo: string; mensagem: string }[] = [];
   if (!participante) erros.push({ campo: "participanteId", mensagem: "Participante não encontrado." });
   if (!evento) erros.push({ campo: "eventoId", mensagem: "Evento não encontrado." });
   if (erros.length > 0) throw AppError.validacao("Dados inválidos.", erros);
+  if (evento!.situacao !== "APROVADO") {
+    throw AppError.conflito("EVENTO_NAO_APROVADO", "Este evento ainda não foi aprovado e não aceita inscrições.");
+  }
   // aluno inativado nao se inscreve em nada, nem pela secretaria
   if (!participante!.ativo) {
     throw AppError.conflito("PARTICIPANTE_INATIVO", "Aluno inativo: não é possível inscrevê-lo em eventos.");
@@ -132,7 +142,7 @@ async function criarManual(dados: InscricaoInput, ator: { id: string; perfil: Pe
   const inscricao = await prisma.inscricao.create({
     data: { id: randomUUID(), participanteId: dados.participanteId, eventoId: dados.eventoId, statusPresenca: "PENDENTE" },
   });
-  const quem = ator.perfil === "SECRETARIA" ? "pela secretaria" : "pelo administrador";
+  const quem = descreverQuem(ator.perfil);
   await registrarAuditoria(
     ator.id,
     "INSCRICAO_CRIADA",
@@ -167,9 +177,11 @@ async function garantirCheckinAberto(eventoId: string) {
   }
 }
 
-// muda o status de presenca (confirma, marca ausente ou reverte pra pendente)
-async function atualizarCheckin(id: string, dados: InscricaoCheckinInput, usuarioIdDoToken: string) {
-  const existente = await buscarOuFalhar(id);
+// muda o status de presenca (confirma, marca ausente ou reverte pra pendente). O professor so nos
+// eventos dele (404 nos outros)
+async function atualizarCheckin(id: string, dados: InscricaoCheckinInput, ator: Ator) {
+  const usuarioIdDoToken = ator.id;
+  const existente = paraDominio(await inscricaoDoAtorOuFalhar(ator, id));
   await garantirPresencaDestravada(existente.participanteId, existente.eventoId);
   // voltar pra pendente nao registra presenca nenhuma, entao nao depende da janela do check-in
   if (dados.statusPresenca === "PRESENTE" || dados.statusPresenca === "AUSENTE") {
@@ -212,10 +224,13 @@ async function atualizarCheckin(id: string, dados: InscricaoCheckinInput, usuari
   return paraDominio(inscricao);
 }
 
-// quem cancela: o proprio aluno ou alguem da equipe (administrador/secretaria)
-interface QuemCancela {
-  id: string;
-  perfil: Perfil;
+// quem cancela: o proprio aluno, alguem da equipe ou o professor dono do evento
+type QuemCancela = Ator;
+
+function descreverQuem(perfil: Perfil): string {
+  if (perfil === "ALUNO") return "pelo próprio aluno";
+  if (perfil === "PROFESSOR") return "pelo professor do evento";
+  return perfil === "SECRETARIA" ? "pela secretaria" : "pelo administrador";
 }
 
 // aviso por e-mail quando a EQUIPE cancela. Falha de envio nao desfaz o cancelamento (que ja foi
@@ -274,7 +289,7 @@ async function cancelar(id: string, ator: QuemCancela) {
   await prisma.inscricao.delete({ where: { id } });
 
   const pelaEquipe = ator.perfil !== "ALUNO";
-  const quem = !pelaEquipe ? "pelo próprio aluno" : ator.perfil === "SECRETARIA" ? "pela secretaria" : "pelo administrador";
+  const quem = descreverQuem(ator.perfil);
   await registrarAuditoria(
     ator.id,
     "INSCRICAO_CANCELADA",
@@ -283,8 +298,10 @@ async function cancelar(id: string, ator: QuemCancela) {
   if (pelaEquipe) await avisarCancelamentoPorEmail(inscricao, ator.id);
 }
 
-// DELETE /inscricoes/:id — a equipe cancela a inscricao de qualquer aluno (mesma regra do aluno)
+// DELETE /inscricoes/:id — a equipe cancela a inscricao de qualquer aluno; o professor, so nos eventos
+// dele (mesma regra do aluno)
 async function remover(id: string, ator: QuemCancela) {
+  await inscricaoDoAtorOuFalhar(ator, id);
   await cancelar(id, ator);
 }
 

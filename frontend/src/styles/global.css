@@ -1512,3 +1512,72 @@ h1, h2, h3 {
     overflow: visible;
   }
 }
+
+/* ---------- aprovacao de eventos e palestrantes (professor x equipe) ---------- */
+/* busca + filtro de situacao na mesma linha, quebrando no celular */
+.filtros-linha {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.filtros-linha .search-input {
+  flex: 1 1 240px;
+}
+
+.situacao-aprovacao {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.motivo-recusa {
+  margin: 0;
+  max-width: 260px;
+  white-space: normal;
+}
+
+.historico-aprovacao {
+  margin: 0 0 8px;
+  padding-left: 20px;
+  display: grid;
+  gap: 10px;
+}
+
+.historico-mensagem {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+}
+
+/* contador no item do menu (pendentes para a equipe) */
+.nav-contador {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 5px;
+  margin-left: 4px;
+  border-radius: 999px;
+  background: var(--red-600);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* aviso no topo para o professor com itens recusados */
+.aviso-recusados {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--red-600);
+  border-radius: var(--radius);
+  background: var(--red-50);
+  color: var(--red-600);
+  font-size: 14px;
+}
+
+.aviso-recusados a {
+  color: inherit;
+  font-weight: 700;
+}

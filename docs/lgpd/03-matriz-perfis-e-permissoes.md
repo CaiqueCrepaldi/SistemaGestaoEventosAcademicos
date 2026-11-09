@@ -1,6 +1,8 @@
 # Matriz de perfis e permissões — SGEA
 
-**Data:** 29/09/2026 · **Versão:** 3 (2FA opcional para todos os perfis,
+**Data:** 09/11/2026 · **Versão:** 4 (perfil PROFESSOR e aprovação de eventos
+e palestrantes pela equipe — seção "Perfil PROFESSOR" no fim. A versão 3, de
+29/09/2026, trouxe o 2FA opcional para todos os perfis,
 regras novas de feedback e de inativação; a versão 2, de 28/09/2026,
 incluiu as rotas do 2FA, do limite de tentativas e do aceite versionado)
 
@@ -22,6 +24,7 @@ invalidada depois de emitida (versão de token).
 | `/api/auth/registro` | POST | Qualquer pessoa | Cria `Participante` + `Usuario` (perfil `ALUNO`); exige `aceiteLgpd: true`; grava data/hora e versão dos Termos/Política aceitos |
 | `/api/auth/login` | POST | Qualquer pessoa | Sem 2FA: devolve a sessão (JWT). Com 2FA ativo (qualquer perfil que tenha ativado): devolve só o token temporário "2FA pendente" (5 min). Aluno inativado: `403 CONTA_INATIVA` "Sua conta está inativa. Procure a secretaria.", sem o motivo. Limite de 5 tentativas por conta e por IP |
 | `/api/auth/recuperacao-senha` | POST | Qualquer pessoa | Limite de 5 pedidos por conta e por IP. **Responde `404` quando o e-mail não está cadastrado** — limitação registrada em `07-medidas-tecnicas-de-seguranca.md` |
+| `/api/auth/primeiro-acesso` | POST | Qualquer pessoa | Ativa a conta de professor: código de 6 dígitos (vale 24 h, 5 tentativas), senha nova e `aceiteLgpd: true`. E-mail sem conta e código errado recebem o mesmo `422 CODIGO_INVALIDO`; limite por IP |
 | `/api/auth/recuperacao-senha/confirmar` | POST | Qualquer pessoa | Exige código válido, não vencido, dentro do limite de tentativas; encerra as sessões abertas da conta |
 
 ## Rota da etapa do 2FA (só com o token temporário)
@@ -104,3 +107,44 @@ invalidada depois de emitida (versão de token).
   próprio; a equipe só exclui, com motivo.
 - **Rotas de log/auditoria** não têm nenhum verbo de escrita (nem
   `PUT`/`PATCH`/`DELETE`) — a trilha é somente leitura por desenho.
+
+## Perfil PROFESSOR (09/11/2026)
+
+Conta criada pela administração ou pela secretaria (só nome e e-mail
+`@umc.br`), ativada no primeiro acesso. A regra de quais eventos cada perfil
+enxerga fica num lugar só (`backend/src/utils/escopo.ts`): equipe todos,
+professor **só os que ele criou** (`eventos.criadoPorId`), aluno só os
+**aprovados**. Evento de outro professor ou da equipe responde `404` para o
+professor (ele não descobre que existe).
+
+| Rota | Método | PROFESSOR | Regra |
+|---|---|:---:|---|
+| `/api/professores` (listar, criar) e `/:id/reenviar-codigo` | GET/POST | ❌ | Só ADMINISTRADOR e SECRETARIA |
+| `/api/dashboard` | GET | ✅ | Mesmo service; os números contam só os eventos dele, e só aprovados |
+| `/api/eventos` e `/api/eventos/:id` | GET | ✅ | Só os dele, em qualquer situação |
+| `/api/eventos` | POST | ✅ | Nasce `PENDENTE` (a equipe cria `APROVADO`); pode usar palestrante aprovado ou um dele ainda pendente; já reserva a sala |
+| `/api/eventos/:id` | PUT/DELETE | ✅ | Só os dele. Evento encerrado: `409 EVENTO_ENCERRADO` para todos os perfis. Evento já aprovado: sala, horário, carga horária e palestrante `409` ("vai precisar de aprovação"); título, tema e questionário pode |
+| `/api/eventos/:id/aprovar` e `/recusar` | POST | ❌ | Só a equipe. Recusa exige motivo (mín. 10 caracteres); aprovar confere a sala e se o palestrante já está aprovado |
+| `/api/eventos/:id/reenviar` | POST | ✅ | Só o dono, só evento `RECUSADO`; volta para `PENDENTE` e confere a sala de novo |
+| `/api/eventos/:id/historico` | GET | ✅ | Equipe e o professor dono |
+| `/api/palestrantes` | GET | ✅ | Aprovados + os dele; e-mail e situação só dos dele |
+| `/api/palestrantes` | POST | ✅ | Nasce `PENDENTE` |
+| `/api/palestrantes/:id` | PUT | ✅ | Só os dele e enquanto não aprovados |
+| `/api/palestrantes/:id` | DELETE | ❌ | Só a equipe |
+| `/api/palestrantes/:id/reenviar` e `/historico` | POST/GET | ✅ | Só os dele |
+| `/api/inscricoes`, `/inscricoes/gestao`, `POST /inscricoes`, `PUT` e `DELETE /inscricoes/:id` | todos | ✅ | Só nos eventos dele (inscrição manual, check-in e cancelamento). Evento não aprovado não aceita inscrição |
+| `/api/participantes/alunos` | GET | ✅ | Busca para a inscrição manual, limitada a 20 resultados |
+| `/api/participantes` (resto) | todos | ❌ | Inativar, remover, bloqueio e 2FA continuam só da equipe |
+| `/api/certificados`, `/situacao`, `/emitir/:inscricaoId` | GET/POST | ✅ | Só nos eventos dele |
+| `/api/questionario-tentativas` | GET | ✅ | Só as notas dos eventos dele |
+| `/api/feedbacks` | GET | ✅ | Só as avaliações dos eventos dele, com o nome do aluno |
+| `/api/feedbacks/:id` | DELETE | ❌ | O professor não exclui avaliação (`403`) |
+| `/api/salas` | GET | ✅ | Só consulta (nome e capacidade, sem os números de ocupação da equipe) |
+| `/api/salas` | POST/PUT/DELETE | ❌ | Só a equipe |
+| `/api/logs-auditoria` | GET | ❌ | Só a equipe |
+| `/api/meus-dados` | GET | ❌ | Só o aluno |
+| `/api/aprovacoes/contadores` | GET | ✅ | Equipe recebe os pendentes; professor, os recusados dele |
+
+**Aluno e evento não aprovado:** evento `PENDENTE` ou `RECUSADO` não aparece
+para o aluno em lugar nenhum (programação, detalhe, questionário, inscrição),
+e palestrante não aprovado também não. A API recusa a inscrição com `404`.

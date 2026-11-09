@@ -1,14 +1,11 @@
 import type { Inscricao, Participante } from "../types";
 import { api } from "./api";
-import { eventoService, inscricaoService, participanteService } from "./entityServices";
+import { eventoService, inscricaoService } from "./entityServices";
 import { questionarioService } from "./questionarioService";
 
 // formato "achatado" usado so na tela de checkin
 export interface InscricaoDetalhada {
   inscricao: Inscricao;
-  participanteNome: string;
-  participanteEmail: string;
-  participanteRgm: string;
   eventoTitulo: string;
   eventoHorario: string;
   // o aluno ja respondeu o questionario desse evento: a presenca nao muda mais (o backend responde 409)
@@ -38,10 +35,11 @@ function listarAlunos(busca = ""): Promise<Participante[]> {
 // as inscricoes de UM participante (so as dele, filtradas no servidor), com o titulo do evento ja
 // junto e a marca de presenca travada (eventos em que o aluno ja respondeu o questionario)
 async function listarInscricoesDoParticipante(participanteId: string): Promise<InscricaoDetalhada[]> {
-  const [inscricoes, eventos, participante, tentativas] = await Promise.all([
+  // nome/RGM do aluno a tela ja tem (veio da busca); aqui so as inscricoes. O professor recebe so as dos
+  // eventos dele (a API filtra) e nao acessa GET /participantes/:id
+  const [inscricoes, eventos, tentativas] = await Promise.all([
     api.get<Inscricao[]>(`/inscricoes?participanteId=${encodeURIComponent(participanteId)}`),
     eventoService.list(),
-    participanteService.get(participanteId),
     questionarioService.listarTentativasDoParticipante(participanteId),
   ]);
   const eventosRespondidos = new Set(tentativas.map((t) => t.eventoId));
@@ -52,9 +50,6 @@ async function listarInscricoesDoParticipante(participanteId: string): Promise<I
       const evento = eventos.find((e) => e.id === inscricao.eventoId);
       return {
         inscricao,
-        participanteNome: participante?.nome ?? "",
-        participanteEmail: participante?.email ?? "",
-        participanteRgm: participante?.rgm ?? "",
         eventoTitulo: evento?.titulo ?? "Evento removido",
         eventoHorario: evento?.horario ?? "",
         presencaTravada: eventosRespondidos.has(inscricao.eventoId),

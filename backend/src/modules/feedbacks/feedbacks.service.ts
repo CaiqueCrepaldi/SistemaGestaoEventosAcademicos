@@ -5,11 +5,14 @@ import { AppError } from "../../errors/AppError";
 import { registrarAuditoria } from "../../utils/auditoria";
 import { eventosComCertificado, temCertificado } from "../../utils/certificado";
 import type { Feedback } from "../../types/domain";
+import { COM_ALUNO_DA_INSCRICAO } from "../inscricoes/inscricoes.service";
 import { MOTIVOS_EXCLUSAO_FEEDBACK, type MotivoExclusaoFeedback } from "./feedbacks.schemas";
 
 interface FiltrosListagem {
   eventoId?: string;
   participanteId?: string;
+  // so avaliacoes de eventos visiveis pra quem chama (o professor, so as dos eventos dele)
+  escopoEvento?: Prisma.EventoWhereInput;
 }
 
 // prisma devolve criadoEm como Date, resto do app espera string (ISO)
@@ -20,10 +23,33 @@ function paraDominio(feedback: FeedbackDb): Feedback {
 // lista feedbacks filtrados, mais recente primeiro
 async function listar(filtros: FiltrosListagem) {
   const feedbacks = await prisma.feedback.findMany({
-    where: { eventoId: filtros.eventoId, participanteId: filtros.participanteId },
+    where: {
+      eventoId: filtros.eventoId,
+      participanteId: filtros.participanteId,
+      ...(filtros.escopoEvento ? { evento: filtros.escopoEvento } : {}),
+    },
     orderBy: { criadoEm: "desc" },
   });
   return feedbacks.map(paraDominio);
+}
+
+// tela Avaliacoes da equipe e do professor: as mesmas avaliacoes ja com o nome do aluno (da conta dele)
+// e se ele esta ativo — a tela nao precisa mais baixar a lista inteira de participantes pra cruzar
+async function listarParaGestao(filtros: FiltrosListagem) {
+  const feedbacks = await prisma.feedback.findMany({
+    where: {
+      eventoId: filtros.eventoId,
+      participanteId: filtros.participanteId,
+      ...(filtros.escopoEvento ? { evento: filtros.escopoEvento } : {}),
+    },
+    orderBy: { criadoEm: "desc" },
+    include: { participante: { select: COM_ALUNO_DA_INSCRICAO } },
+  });
+  return feedbacks.map(({ participante, ...feedback }) => ({
+    ...paraDominio(feedback),
+    participanteNome: participante.usuarios[0]?.nome ?? "",
+    participanteAtivo: participante.ativo,
+  }));
 }
 
 // busca um feedback pelo id, 404 se nao existir
@@ -107,6 +133,7 @@ async function excluirPelaEquipe(id: string, motivo: MotivoExclusaoFeedback, ato
 }
 
 export const feedbacksService = {
+  listarParaGestao,
   listar,
   buscarOuFalhar,
   validarDireitoAoCertificado,

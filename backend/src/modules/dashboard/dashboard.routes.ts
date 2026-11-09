@@ -5,13 +5,14 @@ import { dashboardService } from "./dashboard.service";
 
 export const dashboardRouter = Router();
 
-// so a equipe: o aluno nao tem tela de dashboard
-dashboardRouter.use(autenticar, autorizar("ADMINISTRADOR", "SECRETARIA"));
+// equipe e professor (o mesmo service; para o professor, os numeros contam so os eventos dele). O aluno
+// nao tem tela de dashboard
+dashboardRouter.use(autenticar, autorizar("ADMINISTRADOR", "SECRETARIA", "PROFESSOR"));
 
 // indicadores, proximos eventos com ocupacao e presenca por evento, tudo agregado numa chamada so
 dashboardRouter.get(
   "/",
-  asyncHandler(async (_req, res) => {
-    res.json(await dashboardService.resumo());
+  asyncHandler(async (req, res) => {
+    res.json(await dashboardService.resumo({ id: req.usuario!.sub, perfil: req.usuario!.perfil }));
   }),
 );

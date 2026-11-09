@@ -8,7 +8,7 @@ export function PoliticaDePrivacidadePage() {
     <div className="login-screen">
       <div className="login-card legal-card">
         <h1>Política de Privacidade</h1>
-        <p className="legal-versao">Versão 3 — 06/11/2026.</p>
+        <p className="legal-versao">Versão 4 — 09/11/2026.</p>
 
         <h2>1. Quem trata os dados</h2>
         <p>
@@ -75,11 +75,28 @@ export function PoliticaDePrivacidadePage() {
             para a equipe.
           </li>
           <li>
-            <strong>Identificação e contato (palestrante):</strong> nome e e-mail, informados pela secretaria ao cadastrar
-            o evento. O nome aparece na agenda para quem está conectado; o e-mail é visto só pela equipe. O canal de
-            privacidade vale também para palestrantes.
+            <strong>Identificação e contato (palestrante):</strong> nome e e-mail, informados pela equipe ou pelo professor
+            ao cadastrar o evento. O nome aparece na agenda para quem está conectado (só depois de o palestrante ser
+            aprovado pela equipe); o e-mail é visto só pela equipe e pelo professor que o cadastrou. O canal de privacidade
+            vale também para palestrantes.
+          </li>
+          <li>
+            <strong>Identificação e contato (professor):</strong> nome completo e e-mail institucional (<code>@umc.br</code>),
+            informados pela administração ou pela secretaria ao criar a conta. Nada além disso. A conta só fica ativa depois
+            do primeiro acesso, em que o professor informa o código de 6 dígitos enviado ao e-mail (guardado só como hash,
+            vale 24 horas), define a senha e aceita os Termos de Uso.
+          </li>
+          <li>
+            <strong>Aprovação de eventos e palestrantes:</strong> o que o professor cadastra passa pela aprovação da equipe.
+            O histórico guarda cada envio, aprovação e recusa, com a data, o nome de quem agiu, o motivo da recusa e a
+            resposta do professor.
           </li>
         </ul>
+        <p>
+          <strong>O que o professor vê dos alunos:</strong> só nos eventos que ele criou, o nome, o RGM, a presença, as notas
+          do questionário e as avaliações enviadas pelos alunos inscritos. Ele usa esses dados só para organizar o evento e
+          registrar a presença; não vê alunos de outros eventos nem a lista geral de alunos.
+        </p>
         <p>Não coletamos CPF, endereço, data de nascimento, foto ou dados de saúde.</p>
 
         <h2>3. Para que usamos cada dado</h2>
@@ -96,6 +113,21 @@ export function PoliticaDePrivacidadePage() {
               <td>Nome, RGM, e-mail, senha</td>
               <td>Criar e autenticar a conta</td>
               <td>Execução de contrato a pedido do titular (art. 7º, V da LGPD)</td>
+            </tr>
+            <tr>
+              <td>Nome e e-mail do professor, código do primeiro acesso</td>
+              <td>Criar a conta do professor e permitir que ele crie e organize os próprios eventos e registre a presença</td>
+              <td>Execução de contrato (art. 7º, V)</td>
+            </tr>
+            <tr>
+              <td>Dados dos alunos vistos pelo professor (nome, RGM, presença, notas e avaliações, só dos eventos dele)</td>
+              <td>Organizar o evento, registrar a presença e acompanhar o resultado</td>
+              <td>Execução de contrato (art. 7º, V)</td>
+            </tr>
+            <tr>
+              <td>Histórico da aprovação (quem enviou, aprovou ou recusou, motivo e resposta)</td>
+              <td>Registrar as decisões da equipe sobre o que o professor cadastra</td>
+              <td>Legítimo interesse da instituição na organização dos eventos (art. 7º, IX)</td>
             </tr>
             <tr>
               <td>Cadastro aguardando confirmação (nome, e-mail, RGM e hash da senha, por até 15 minutos)</td>
@@ -154,8 +186,9 @@ export function PoliticaDePrivacidadePage() {
             <strong>TiDB Cloud</strong> (banco de dados): armazena os dados descritos acima.
           </li>
           <li>
-            <strong>SendGrid</strong> (Twilio, envio de e-mail): envia o código de confirmação do cadastro, o código de
-            recuperação de senha e os avisos de confirmação e de cancelamento de inscrição. Recebe o e-mail do destinatário
+            <strong>SendGrid</strong> (Twilio, envio de e-mail): envia o código de confirmação do cadastro, o código do
+            primeiro acesso do professor, o código de recuperação de senha e os avisos de confirmação e de cancelamento de
+            inscrição. Recebe o e-mail do destinatário
             e o conteúdo da mensagem (nos avisos de inscrição, também o nome do aluno), só o necessário para entregar
             aquela mensagem.
           </li>
@@ -283,7 +316,7 @@ export function PoliticaDePrivacidadePage() {
         </p>
 
         <p className="legal-versao">
-          Versão 3 — 06/11/2026. Quando este texto mudar, a nova versão é publicada nesta página com a data, e a versão
+          Versão 4 — 09/11/2026. Quando este texto mudar, a nova versão é publicada nesta página com a data, e a versão
           que você aceitou fica registrada na sua conta.
         </p>
 

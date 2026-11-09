@@ -1,6 +1,6 @@
 # Termos de Uso
 
-**Versão 3 — 06/11/2026.** Substitui a Versão 2. Este é o mesmo texto
+**Versão 4 — 09/11/2026.** Substitui a Versão 3 (06/11/2026). Este é o mesmo texto
 publicado na página `/termos-de-uso` do sistema
 (`frontend/src/pages/Legal/TermosDeUsoPage.tsx`): ao mudar um, mude o
 outro. A versão vigente fica em `VERSAO_TERMOS_ATUAL`
@@ -26,6 +26,12 @@ apagados.
 
 Contas de administrador e secretaria são criadas diretamente pela
 instituição, sem cadastro público.
+
+Contas de **professor** são criadas pela administração ou pela secretaria,
+só com o nome completo e o e-mail institucional (`@umc.br`). O professor
+recebe por e-mail um código de 6 dígitos, válido por 24 horas, e ativa a
+conta na tela "Primeiro acesso": informa o código, define a senha e aceita
+estes Termos. Antes disso a conta não entra no sistema.
 
 ## 3. Sua conta
 
@@ -79,13 +85,32 @@ equipe. Você pode excluir o seu a qualquer momento e enviar outro. A equipe
 só pode excluir um feedback informando o motivo, e toda exclusão fica
 registrada na auditoria.
 
-## 7. Disponibilidade
+## 7. Eventos do professor e aprovação
+
+- O professor cria e organiza os próprios eventos e palestrantes. Tudo o que
+  ele cadastra fica **aguardando a aprovação da equipe** e só aparece para
+  os alunos depois de aprovado. Um evento aguardando aprovação já reserva a
+  sala no horário.
+- A equipe aprova ou recusa. A recusa traz um motivo, que o professor vê no
+  sistema; ele corrige e reenvia, com uma resposta opcional. Cada passo fica
+  registrado num histórico, com data e autor.
+- O professor só vê e só altera os eventos que ele criou: inscrições,
+  presença, certificados e notas, e avaliações. Dos alunos inscritos nesses
+  eventos, ele vê o nome, o RGM, a presença, as notas do questionário e as
+  avaliações, e deve usar esses dados só para organizar o evento e
+  registrar a presença. Ele não exclui avaliações e não acessa a lista geral
+  de alunos.
+- Depois que um evento termina (horário + carga horária), ninguém mais o
+  edita nem o exclui; a presença e a inscrição retroativa continuam
+  possíveis pela equipe e pelo professor do evento.
+
+## 8. Disponibilidade
 
 Por ser um sistema acadêmico, o SGEA pode passar por manutenções ou
 instabilidades sem aviso prévio. Não há garantia de disponibilidade
 contínua.
 
-## 8. Encerramento da conta
+## 9. Encerramento da conta
 
 Você pode pedir a qualquer momento, pelo canal de privacidade ou à
 secretaria, a inativação e, em seguida, a exclusão definitiva da sua conta.
@@ -94,14 +119,14 @@ tentativas de questionário vinculados a ela. Quem já tem certificado
 emitido tem a conta inativada em vez de excluída, para o certificado
 continuar válido.
 
-## 9. Limitação de responsabilidade
+## 10. Limitação de responsabilidade
 
 Estes Termos não transferem a você a responsabilidade pela segurança do
 sistema, nem autorizam o SGEA a usar seus dados para outra finalidade além
 das descritas na Política de Privacidade. Direitos previstos em lei não são
 reduzidos por nenhuma cláusula destes Termos.
 
-## 10. Legislação aplicável
+## 11. Legislação aplicável
 
 Estes Termos são regidos pela legislação brasileira, em especial a Lei
 Geral de Proteção de Dados Pessoais (Lei nº 13.709/2018) e o Código de
@@ -110,6 +135,6 @@ Defesa do Consumidor. Para saber como seus dados são tratados, veja a
 
 ---
 
-*Versão 3 — 06/11/2026. Quando este texto mudar, a nova versão é publicada
+*Versão 4 — 09/11/2026. Quando este texto mudar, a nova versão é publicada
 nesta página com a data, e a versão que você aceitou fica registrada na sua
 conta.*

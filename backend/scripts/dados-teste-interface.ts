@@ -60,6 +60,11 @@ async function main() {
       await prisma.certificado.deleteMany({
         where: { inscricao: { OR: [{ eventoId: { in: eventos.map((e) => e.id) } }, { participanteId: { in: participantes } }] } },
       });
+      // historico da aprovacao dos eventos e palestrantes do teste (nao tem chave estrangeira pro item)
+      const palestrantesDoTeste = await prisma.palestrante.findMany({ where: { email: { contains: sufixo } }, select: { id: true } });
+      await prisma.historicoAprovacao.deleteMany({
+        where: { itemId: { in: [...eventos.map((e) => e.id), ...palestrantesDoTeste.map((p) => p.id)] } },
+      });
       await prisma.evento.deleteMany({ where: { id: { in: eventos.map((e) => e.id) } } });
       for (const u of usuarios) {
         if (u.participanteId) {

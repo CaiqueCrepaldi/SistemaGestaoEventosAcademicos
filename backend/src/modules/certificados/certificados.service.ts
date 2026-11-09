@@ -21,6 +21,8 @@ const MAX_SORTEIOS_CODIGO = 3;
 interface FiltrosListagem {
   eventoId?: string;
   participanteId?: string;
+  // so certificados de eventos visiveis pra quem chama (o professor, so os dos eventos dele)
+  escopoEvento?: Prisma.EventoWhereInput;
 }
 
 // quem pede a emissao: aluno so a propria inscricao, equipe qualquer uma
@@ -54,13 +56,20 @@ function gerarCodigoValidacao(): string {
 
 function descreverSolicitante(perfil: Perfil): string {
   if (perfil === "ALUNO") return "pelo próprio aluno";
+  if (perfil === "PROFESSOR") return "pelo professor do evento";
   return perfil === "SECRETARIA" ? "pela secretaria" : "pelo administrador";
 }
 
 // certificados ja emitidos, mais recentes primeiro (filtro por evento e/ou aluno)
 async function listar(filtros: FiltrosListagem) {
   const certificados = await prisma.certificado.findMany({
-    where: { inscricao: { eventoId: filtros.eventoId, participanteId: filtros.participanteId } },
+    where: {
+      inscricao: {
+        eventoId: filtros.eventoId,
+        participanteId: filtros.participanteId,
+        ...(filtros.escopoEvento ? { evento: filtros.escopoEvento } : {}),
+      },
+    },
     include: COM_INSCRICAO,
     orderBy: { emitidoEm: "desc" },
   });
@@ -82,6 +91,10 @@ async function emitir(inscricaoId: string, solicitante: Solicitante): Promise<{ 
   if (!inscricao) throw AppError.naoEncontrado("INSCRICAO_NAO_ENCONTRADA", "Inscrição não encontrada.");
   if (solicitante.perfil === "ALUNO" && inscricao.participanteId !== solicitante.participanteId) {
     throw AppError.acessoNegado("Você só pode emitir o certificado das suas próprias inscrições.");
+  }
+  // o professor so emite nos eventos que ele criou (404 nos outros, sem revelar que existem)
+  if (solicitante.perfil === "PROFESSOR" && inscricao.evento.criadoPorId !== solicitante.id) {
+    throw AppError.naoEncontrado("INSCRICAO_NAO_ENCONTRADA", "Inscrição não encontrada.");
   }
 
   const referencia = `inscrição ${inscricaoId}, evento ${inscricao.eventoId}, participante ${inscricao.participanteId}`;
@@ -155,6 +168,7 @@ async function validar(codigoDigitado: string, ip: string): Promise<Certificado>
 }
 
 interface FiltrosSituacao {
+  escopoEvento?: Prisma.EventoWhereInput;
   eventoId?: string;
   busca?: string;
   page: number;
@@ -169,6 +183,7 @@ async function situacaoParaGestao(filtros: FiltrosSituacao) {
   const where: Prisma.InscricaoWhereInput = {
     statusPresenca: "PRESENTE",
     eventoId: filtros.eventoId,
+    ...(filtros.escopoEvento ? { evento: filtros.escopoEvento } : {}),
     ...filtroDoAluno(filtros.busca),
   };
   const [total, inscricoes] = await prisma.$transaction([

@@ -15,11 +15,11 @@ const BLOQUEIO_MS = 15 * 60 * 1000;
 // prefixo da chave identifica o fluxo e o alvo: login/recuperacao/cadastro usam o HMAC do e-mail
 // (idDoEmail, nunca e-mail em texto puro), o codigo do 2FA usa o id do usuario — ou o IP.
 // "cadastro" conta os envios do codigo de confirmacao do e-mail (cadastro + reenvios)
-export function chaveConta(fluxo: "login" | "recuperacao" | "mfa" | "cadastro", identificador: string): string {
+export function chaveConta(fluxo: "login" | "recuperacao" | "mfa" | "cadastro" | "primeiro-acesso", identificador: string): string {
   return `${fluxo}:conta:${identificador}`;
 }
 // "validacao" = consulta publica de certificado (sem login), limitada so por IP
-export function chaveIp(fluxo: "login" | "recuperacao" | "validacao" | "cadastro", ip: string): string {
+export function chaveIp(fluxo: "login" | "recuperacao" | "validacao" | "cadastro" | "primeiro-acesso", ip: string): string {
   return `${fluxo}:ip:${ip}`;
 }
 

@@ -7,6 +7,7 @@ const HOME_POR_PERFIL: Record<Perfil, string> = {
   ALUNO: "/eventos",
   ADMINISTRADOR: "/",
   SECRETARIA: "/",
+  PROFESSOR: "/",
 };
 
 interface ProtectedRouteProps {

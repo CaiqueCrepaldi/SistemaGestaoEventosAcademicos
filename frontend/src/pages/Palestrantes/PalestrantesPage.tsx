@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { DialogoAprovacao, type AcaoAprovacao } from "../../components/aprovacao/DialogoAprovacao";
+import { SituacaoAprovacao } from "../../components/aprovacao/SituacaoAprovacao";
 import { Campo, LegendaObrigatorio } from "../../components/ui/Campo";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Modal } from "../../components/ui/Modal";
@@ -6,8 +8,8 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
 import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
-import { ApiError, eventoService, palestranteService } from "../../services";
-import type { Evento, Palestrante } from "../../types";
+import { ApiError, avisarAprovacoesAlteradas, eventoService, palestranteService } from "../../services";
+import type { Evento, Palestrante, SituacaoAprovacao as Situacao } from "../../types";
 import { validarEmail, validarNome } from "../../utils/validacao";
 
 const VAZIO = { nome: "", email: "" };
@@ -35,6 +37,10 @@ function formatarDataHora(iso: string): string {
 export function PalestrantesPage() {
   const { usuario } = useAuth();
   const ehAluno = usuario?.perfil === "ALUNO";
+  const ehProfessor = usuario?.perfil === "PROFESSOR";
+  const ehEquipe = usuario?.perfil === "ADMINISTRADOR" || usuario?.perfil === "SECRETARIA";
+  const [filtroSituacao, setFiltroSituacao] = useState<"" | Situacao>("");
+  const [acaoAprovacao, setAcaoAprovacao] = useState<{ acao: AcaoAprovacao; palestrante: Palestrante } | null>(null);
   const [palestrantes, setPalestrantes] = useState<Palestrante[]>([]);
   // enquanto carrega a lista diz "Carregando" (e nao "Nenhum palestrante cadastrado")
   const [carregando, setCarregando] = useState(true);
@@ -97,7 +103,8 @@ export function PalestrantesPage() {
         toast.success("Palestrante atualizado.");
       } else {
         await palestranteService.create(form);
-        toast.success("Palestrante cadastrado.");
+        toast.success(ehProfessor ? "Palestrante enviado para aprovação da equipe." : "Palestrante cadastrado.");
+        if (ehProfessor) avisarAprovacoesAlteradas();
       }
       setConfirmandoSalvar(false);
       setModalAberto(false);
@@ -178,40 +185,100 @@ export function PalestrantesPage() {
     );
   }
 
+  // o professor so edita os palestrantes dele enquanto nao estao aprovados; a equipe edita e exclui qualquer um
+  const ehDoProfessor = (p: Palestrante) => ehProfessor && p.criadoPorId === usuario?.id;
+  const podeEditar = (p: Palestrante) => ehEquipe || (ehDoProfessor(p) && p.situacao !== "APROVADO");
+  const visiveis = palestrantes.filter((p) => !filtroSituacao || p.situacao === filtroSituacao);
+
   return (
     <div>
       <PageHeader title="Palestrantes" actions={<button className="btn btn-primary" onClick={abrirNovo}>+ Novo palestrante</button>} />
+      {ehProfessor && (
+        <p className="form-hint" style={{ marginTop: -8, marginBottom: 12 }}>
+          O palestrante que você cadastrar fica aguardando a aprovação da equipe; enquanto isso, você já pode usá-lo nos seus
+          eventos.
+        </p>
+      )}
 
-      <div className="card">
+      <div className="card table-scroll">
+        <div className="filtros-linha">
+          <select value={filtroSituacao} onChange={(e) => setFiltroSituacao(e.target.value as "" | Situacao)} aria-label="Filtrar por situação">
+            <option value="">Todas as situações</option>
+            <option value="PENDENTE">Aguardando aprovação</option>
+            <option value="RECUSADO">Recusados</option>
+            <option value="APROVADO">Aprovados</option>
+          </select>
+        </div>
         <table className="table">
           <thead>
             <tr>
               <th>Nome</th>
               <th>E-mail</th>
+              <th>Situação</th>
               <th />
             </tr>
           </thead>
           <tbody>
-            {palestrantes.map((palestrante) => (
+            {visiveis.map((palestrante) => (
               <tr key={palestrante.id}>
                 <td>{palestrante.nome}</td>
-                <td>{palestrante.email}</td>
+                <td>{palestrante.email ?? "—"}</td>
+                <td>
+                  <SituacaoAprovacao situacao={palestrante.situacao} motivoRecusa={palestrante.motivoRecusa} />
+                </td>
                 <td className="table-actions">
-                  <button className="btn btn-ghost" onClick={() => abrirEdicao(palestrante)}>Editar</button>
-                  <button className="btn btn-ghost btn-danger" onClick={() => setExcluindo(palestrante)}>Excluir</button>
+                  {ehEquipe && palestrante.situacao === "PENDENTE" && (
+                    <>
+                      <button className="btn btn-primary" onClick={() => setAcaoAprovacao({ acao: "aprovar", palestrante })}>
+                        Aprovar
+                      </button>
+                      <button className="btn btn-ghost btn-danger" onClick={() => setAcaoAprovacao({ acao: "recusar", palestrante })}>
+                        Recusar
+                      </button>
+                    </>
+                  )}
+                  {ehDoProfessor(palestrante) && palestrante.situacao === "RECUSADO" && (
+                    <button className="btn btn-primary" onClick={() => setAcaoAprovacao({ acao: "reenviar", palestrante })}>
+                      Reenviar
+                    </button>
+                  )}
+                  {palestrante.criadoPorId && (ehEquipe || ehDoProfessor(palestrante)) && (
+                    <button className="btn btn-ghost" onClick={() => setAcaoAprovacao({ acao: "historico", palestrante })}>
+                      Histórico
+                    </button>
+                  )}
+                  {podeEditar(palestrante) && (
+                    <button className="btn btn-ghost" onClick={() => abrirEdicao(palestrante)}>Editar</button>
+                  )}
+                  {ehEquipe && (
+                    <button className="btn btn-ghost btn-danger" onClick={() => setExcluindo(palestrante)}>Excluir</button>
+                  )}
                 </td>
               </tr>
             ))}
-            {palestrantes.length === 0 && (
+            {visiveis.length === 0 && (
               <tr>
-                <td colSpan={3} className="empty-cell">
-                  {carregando ? "Carregando…" : "Nenhum palestrante cadastrado."}
+                <td colSpan={4} className="empty-cell">
+                  {carregando ? "Carregando…" : palestrantes.length === 0 ? "Nenhum palestrante cadastrado." : "Nenhum palestrante nesta situação."}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {acaoAprovacao && (
+        <DialogoAprovacao
+          acao={acaoAprovacao.acao}
+          tipo="PALESTRANTE"
+          item={{ id: acaoAprovacao.palestrante.id, nome: acaoAprovacao.palestrante.nome }}
+          onFechar={() => setAcaoAprovacao(null)}
+          onConcluido={() => {
+            setAcaoAprovacao(null);
+            void carregar();
+          }}
+        />
+      )}
 
       {modalAberto && (
         <Modal title={editando ? "Editar palestrante" : "Novo palestrante"} onClose={() => setModalAberto(false)}>

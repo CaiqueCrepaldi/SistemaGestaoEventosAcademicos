@@ -334,7 +334,11 @@ async function login(dados: LoginInput, ip: string) {
   });
   // mensagem generica pra nao dar dica se foi email ou senha que errou
   const senhaOk = usuario ? await conferirSenha(dados.senha, usuario.senhaHash) : false;
-  if (!usuario || !senhaOk) {
+  // professor que ainda nao fez o primeiro acesso (sem senha propria e sem aceite dos Termos) nao entra.
+  // A conta nasce com senha inutilizavel, entao a senha ja nao confere; a checagem explicita e garantia extra,
+  // com a mesma resposta generica de senha errada
+  const primeiroAcessoPendente = usuario?.perfil === "PROFESSOR" && !usuario.consentimentoLgpdEm;
+  if (!usuario || !senhaOk || primeiroAcessoPendente) {
     // nunca grava o e-mail tentado (PII) no log — so se o usuario existe ou nao
     await registrarAuditoria(usuario?.id ?? null, "LOGIN_FALHA", usuario ? "senha incorreta" : "e-mail nao encontrado");
     await incrementarTentativa(chaveDaConta);
@@ -403,13 +407,17 @@ async function aceitarTermos(usuarioId: string) {
 }
 
 // acha usuario pelo email de login (normalizado), usado na recuperacao de senha
-function buscarUsuarioPorEmail(email: string) {
-  return prisma.usuario.findUnique({ where: { emailLogin: normalizarEmail(email) } });
+// professor que ainda nao fez o primeiro acesso conta como "sem conta" aqui: ele ativa a conta pela tela
+// Primeiro acesso (onde tambem aceita os Termos), nunca pela recuperacao de senha
+async function buscarUsuarioPorEmail(email: string) {
+  const usuario = await prisma.usuario.findUnique({ where: { emailLogin: normalizarEmail(email) } });
+  if (usuario?.perfil === "PROFESSOR" && !usuario.consentimentoLgpdEm) return null;
+  return usuario;
 }
 
 // gera um codigo numerico de 6 digitos com gerador criptografico (Math.random e previsivel, nao
 // serve pra segredo): randomInt sorteia de 100000 a 999999 sem vies
-function gerarCodigoNumerico(): string {
+export function gerarCodigoNumerico(): string {
   return String(randomInt(100000, 1000000));
 }
 

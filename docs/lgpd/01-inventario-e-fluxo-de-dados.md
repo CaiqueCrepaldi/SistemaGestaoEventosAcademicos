@@ -1,6 +1,6 @@
 # Inventário de dados pessoais e fluxo de dados — SGEA
 
-**Data:** 06/11/2026 · **Versão:** 4 (confirmação do e-mail no cadastro:
+**Data:** 09/11/2026 · **Versão:** 5 (conta de professor e histórico da aprovação, seções 13 e 14. A versão 4, de 06/11/2026, trouxe a confirmação do e-mail no cadastro:
 tabela `cadastros_pendentes`, seção 11; tabela `certificados`, seção 12;
 e-mail do aluno não editável; IP também no limite de envio do código do
 cadastro. A versão 3, de 29/09/2026,
@@ -247,6 +247,43 @@ detalhadas em `02-matriz-dados-finalidade-base-legal.md`; aqui o foco é
   emissão — **nunca o RGM** (limite de 30 consultas por IP).
 - **Compartilhado:** não. O PDF é montado no navegador de quem baixa
   (jsPDF), com os dados que a API devolve.
+
+## 13. Conta de professor (`usuarios` com perfil PROFESSOR e `primeiros_acessos`)
+
+- **De quem é:** do professor, cuja conta a administração ou a secretaria cria
+  na tela Professores.
+- **Onde é coletado:** `POST /api/professores`: só o **nome completo** e o
+  **e-mail institucional** (`@umc.br`). Nada além disso.
+- **Onde fica:** `usuarios` (`nome`, `emailLogin`, perfil `PROFESSOR`), com
+  senha inutilizável e sem aceite dos Termos até o primeiro acesso. O código
+  de 6 dígitos do primeiro acesso fica em `primeiros_acessos` só como hash
+  bcrypt, com validade de 24 horas, limite de 5 tentativas e contagem de
+  envios. No primeiro acesso (`POST /api/auth/primeiro-acesso`) o professor
+  define a senha e aceita os Termos (`consentimentoLgpdEm` e
+  `versaoTermosAceitos`), e a linha de `primeiros_acessos` é apagada.
+- **Para que serve:** criar e organizar os próprios eventos e palestrantes e
+  registrar a presença dos alunos inscritos neles.
+- **O que o professor vê dos alunos:** só nos eventos que ele criou, o nome, o
+  RGM, a presença, as notas do questionário e as avaliações. Ele não acessa a
+  tela Participantes nem a lista geral de alunos (a busca para inscrição
+  manual devolve no máximo 20 resultados).
+- **Compartilhado:** o código vai por e-mail, via SendGrid, só no corpo da
+  mensagem ao próprio professor; nunca em log ou auditoria.
+
+## 14. Histórico da aprovação (`historico_aprovacoes`) e situação de eventos e palestrantes
+
+- **Onde fica:** `eventos` e `palestrantes` ganharam `situacao` (PENDENTE,
+  APROVADO ou RECUSADO), `motivoRecusa` (o da última recusa) e `criadoPorId`
+  (o professor que criou; nulo = equipe). Cada envio, aprovação, recusa (com
+  o motivo) e reenvio (com a resposta opcional do professor) fica em
+  `historico_aprovacoes`, com data, o id e uma cópia do nome de quem agiu.
+- **Quem consulta:** a equipe e o professor dono do item.
+- **Auditoria:** registra só que houve o passo
+  (`EVENTO_ENVIADO_PARA_APROVACAO`, `EVENTO_APROVADO`, `EVENTO_RECUSADO`,
+  `EVENTO_REENVIADO` e os mesmos para palestrante), nunca o motivo nem a
+  resposta (texto livre).
+- **Por quanto tempo:** enquanto o evento/palestrante existir; sai junto
+  quando ele é excluído.
 
 ## Diagrama do fluxo de dados
 
