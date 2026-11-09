@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { DialogoAprovacao, type AcaoAprovacao } from "../../components/aprovacao/DialogoAprovacao";
+import { ListaMudancas, ResumoProposta } from "../../components/aprovacao/ResumoProposta";
 import { SituacaoAprovacao } from "../../components/aprovacao/SituacaoAprovacao";
 import { Campo, LegendaObrigatorio, MarcaObrigatorio } from "../../components/ui/Campo";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
@@ -8,11 +9,12 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
 import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
-import { ApiError, avisarAprovacoesAlteradas, eventoService, palestranteService, salaService } from "../../services";
+import { ApiError, aprovacaoService, avisarAprovacoesAlteradas, eventoService, palestranteService, salaService, type AlvoAprovacao } from "../../services";
 import type { Evento, Palestrante, PerguntaQuestionario, Sala, SituacaoAprovacao as Situacao } from "../../types";
 import { eventoEncerrado, inputLocalParaIso, isoParaInputLocal } from "../../utils/data";
 import { ALTERNATIVAS_POR_PERGUNTA, questionarioVazio } from "../../utils/questionario";
 import { EventosAluno } from "./EventosAluno";
+import { ModalPropostaEvento, mudancasDoEvento } from "./PropostaEvento";
 
 interface FormEvento {
   titulo: string;
@@ -62,14 +64,18 @@ export function EventosPage() {
 }
 
 // crud de eventos com a ocupacao (inscritos/capacidade) de cada evento. A equipe ve todos e aprova ou recusa
-// os enviados por professor; o professor ve so os dele (a API ja filtra), com a situacao da aprovacao, e
-// reenvia o que foi recusado. Evento encerrado nao tem mais Editar nem Excluir (a API tambem recusa)
+// os enviados por professor e as propostas de alteracao; o professor ve so os dele (a API ja filtra), com a
+// situacao da aprovacao, reenvia o que foi recusado e acompanha a proposta de alteracao dentro do evento.
+// Evento encerrado nao tem mais Editar nem Excluir (a API tambem recusa)
 function EventosEquipe() {
   const { usuario } = useAuth();
   const ehProfessor = usuario?.perfil === "PROFESSOR";
   const ehEquipe = usuario?.perfil === "ADMINISTRADOR" || usuario?.perfil === "SECRETARIA";
   const [filtroSituacao, setFiltroSituacao] = useState<"" | Situacao>("");
-  const [acaoAprovacao, setAcaoAprovacao] = useState<{ acao: AcaoAprovacao; evento: Evento } | null>(null);
+  const [acaoAprovacao, setAcaoAprovacao] = useState<{ acao: AcaoAprovacao; evento: Evento; alvo?: AlvoAprovacao } | null>(null);
+  // proposta de alteracao: corrigir/reenviar (modal proprio) e cancelar (confirmacao)
+  const [corrigindoProposta, setCorrigindoProposta] = useState<Evento | null>(null);
+  const [cancelandoProposta, setCancelandoProposta] = useState<Evento | null>(null);
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [salas, setSalas] = useState<Sala[]>([]);
   const [palestrantes, setPalestrantes] = useState<Palestrante[]>([]);
@@ -103,12 +109,29 @@ function EventosEquipe() {
   const nomeDoPalestrante = (evento: Evento) => palestrantes.find((p) => p.id === evento.palestranteId)?.nome ?? "—";
   // a busca filtra a lista ja carregada: titulo, tema, palestrante ou sala
   const termo = busca.trim().toLowerCase();
+  // "Aguardando aprovação" e "Recusados" incluem os eventos aprovados com proposta de alteracao nessa situacao
   const eventosVisiveis = eventos
-    .filter((e) => !filtroSituacao || e.situacao === filtroSituacao)
+    .filter((e) => !filtroSituacao || e.situacao === filtroSituacao || (filtroSituacao !== "APROVADO" && e.proposta?.situacao === filtroSituacao))
     .filter((e) => !termo || `${e.titulo} ${e.tema ?? ""} ${nomeDoPalestrante(e)} ${nomeDaSala(e)}`.toLowerCase().includes(termo));
-  // professor editando evento ja aprovado: sala, horario, carga horaria e palestrante ficam travados (a
-  // mudanca vai precisar de nova aprovacao, proxima etapa); titulo, tema e questionario ele muda
-  const travarAgenda = ehProfessor && editando?.situacao === "APROVADO";
+  // professor editando evento ja aprovado: titulo, tema e questionario mudam na hora; sala, horario, carga
+  // horaria e palestrante viram uma proposta de alteracao (a API decide). Com uma proposta ja aguardando, ou
+  // com o evento ja comecado, esses campos ficam travados aqui
+  const aprovadoDoProfessor = ehProfessor && editando?.situacao === "APROVADO";
+  const jaComecou = !!editando && new Date(editando.horario).getTime() <= Date.now();
+  const comPropostaPendente = editando?.proposta?.situacao === "PENDENTE";
+  const travarAgenda = aprovadoDoProfessor && (comPropostaPendente || jaComecou);
+  const agendaViraProposta = aprovadoDoProfessor && !travarAgenda;
+  // ja ha resposta de aluno: o questionario fica so para leitura (a API tambem recusa a mudanca)
+  const questionarioTravado = !!editando?.questionarioTravado;
+  // quem cuida da proposta do lado do evento: o professor dono (ou a equipe, num evento que ficou com ela)
+  const podeCuidarDaProposta = (evento: Evento) => ehProfessor || (ehEquipe && !evento.criadoPorId);
+  // a agenda do formulario mudou em relacao ao evento salvo (pro texto da confirmacao)
+  const agendaMudou =
+    !!editando &&
+    (form.salaId !== editando.salaId ||
+      form.palestranteId !== editando.palestranteId ||
+      Number(form.cargaHoraria) !== editando.cargaHoraria ||
+      (!!form.horario && new Date(inputLocalParaIso(form.horario)).getTime() !== new Date(editando.horario).getTime()));
   // a equipe so usa palestrante aprovado (o evento dela ja nasce aprovado); o professor ve os aprovados e os dele
   const palestrantesDoFormulario = palestrantes.filter(
     (p) => !ehEquipe || p.situacao === undefined || p.situacao === "APROVADO" || p.id === editando?.palestranteId,
@@ -183,8 +206,21 @@ function EventosEquipe() {
     const dados = { ...form, cargaHoraria: Number(form.cargaHoraria), horario: inputLocalParaIso(form.horario) };
     try {
       if (editando) {
-        await eventoService.update(editando.id, dados);
-        toast.success("Evento atualizado.");
+        // questionario travado nao vai no pedido (o resto do evento continua editavel)
+        const { questionario, ...semQuestionario } = dados;
+        const resposta = await eventoService.update(editando.id, questionarioTravado ? semQuestionario : { ...semQuestionario, questionario });
+        if (resposta.propostaEnviada) {
+          toast.success(
+            "Alteração enviada para aprovação da equipe. Até lá o evento continua como está (título, tema e questionário já foram salvos).",
+          );
+          avisarAprovacoesAlteradas();
+        } else if (resposta.avisoInscritos && resposta.avisoInscritos.inscritos > 0) {
+          toast.success(
+            `Evento atualizado. ${resposta.avisoInscritos.avisados} de ${resposta.avisoInscritos.inscritos} inscrito(s) avisado(s) por e-mail.`,
+          );
+        } else {
+          toast.success("Evento atualizado.");
+        }
       } else {
         await eventoService.create(dados);
         toast.success(ehProfessor ? "Evento enviado para aprovação da equipe." : "Evento cadastrado.");
@@ -201,6 +237,11 @@ function EventosEquipe() {
         mostrar({ horario: e.message });
         return;
       }
+      // a sala nova nao comporta os inscritos: o aviso vai no campo da sala
+      if (e instanceof ApiError && e.code === "SALA_SEM_CAPACIDADE") {
+        mostrar({ salaId: e.message });
+        return;
+      }
       // palestrante ainda nao aprovado, escolhido pela equipe: o aviso vai no campo do palestrante
       if (e instanceof ApiError && e.errors?.some((item) => item.campo === "palestranteId")) {
         mostrarErroDaApi(e);
@@ -209,6 +250,22 @@ function EventosEquipe() {
       // a regra de "exatamente 1 correta" o backend devolve em questionario.N.alternativas
       const tratou = mostrarErroDaApi(e, (campo) => campo.replace(/^(questionario\.\d+)\.alternativas$/, "$1.correta"));
       if (!tratou) toast.error(e instanceof ApiError ? e.message : "Não foi possível salvar o evento.");
+    }
+  }
+
+  // o professor desiste da proposta de alteracao (pendente ou recusada)
+  async function cancelarProposta() {
+    if (!cancelandoProposta) return;
+    try {
+      await aprovacaoService.cancelarProposta("EVENTO", cancelandoProposta.id);
+      toast.success("Proposta de alteração cancelada.");
+      avisarAprovacoesAlteradas();
+      setCancelandoProposta(null);
+      setModalAberto(false);
+      await carregar();
+    } catch (e) {
+      setCancelandoProposta(null);
+      toast.error(e instanceof Error ? e.message : "Não foi possível cancelar a proposta.");
     }
   }
 
@@ -292,6 +349,13 @@ function EventosEquipe() {
                   <td>{evento.titulo}</td>
                   <td>
                     <SituacaoAprovacao situacao={evento.situacao} motivoRecusa={evento.motivoRecusa} />
+                    {evento.proposta && (
+                      <ResumoProposta
+                        situacao={evento.proposta.situacao}
+                        motivoRecusa={evento.proposta.motivoRecusa}
+                        mudancas={mudancasDoEvento(evento, salas, palestrantes)}
+                      />
+                    )}
                   </td>
                   <td>{nomeDaSala(evento)}</td>
                   <td>{evento.horario ? new Date(evento.horario).toLocaleString("pt-BR") : "—"}</td>
@@ -312,12 +376,25 @@ function EventosEquipe() {
                         </button>
                       </>
                     )}
-                    {ehProfessor && evento.situacao === "RECUSADO" && !encerrado && (
+                    {ehEquipe && evento.proposta?.situacao === "PENDENTE" && (
+                      <>
+                        <button className="btn btn-primary" onClick={() => setAcaoAprovacao({ acao: "aprovar", evento, alvo: "proposta" })}>
+                          Aprovar alteração
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-danger"
+                          onClick={() => setAcaoAprovacao({ acao: "recusar", evento, alvo: "proposta" })}
+                        >
+                          Recusar alteração
+                        </button>
+                      </>
+                    )}
+                    {podeCuidarDaProposta(evento) && evento.situacao === "RECUSADO" && !encerrado && (
                       <button className="btn btn-primary" onClick={() => setAcaoAprovacao({ acao: "reenviar", evento })}>
                         Reenviar
                       </button>
                     )}
-                    {evento.criadoPorId && (
+                    {(evento.criadoPorId || evento.proposta) && (
                       <button className="btn btn-ghost" onClick={() => setAcaoAprovacao({ acao: "historico", evento })}>
                         Histórico
                       </button>
@@ -362,6 +439,10 @@ function EventosEquipe() {
           acao={acaoAprovacao.acao}
           tipo="EVENTO"
           item={{ id: acaoAprovacao.evento.id, nome: acaoAprovacao.evento.titulo }}
+          alvo={acaoAprovacao.alvo}
+          detalhe={
+            acaoAprovacao.alvo === "proposta" ? <ListaMudancas mudancas={mudancasDoEvento(acaoAprovacao.evento, salas, palestrantes)} /> : undefined
+          }
           onFechar={() => setAcaoAprovacao(null)}
           onConcluido={() => {
             setAcaoAprovacao(null);
@@ -383,10 +464,42 @@ function EventosEquipe() {
             }}
           >
             <LegendaObrigatorio />
+            {editando?.proposta && (
+              <div className="proposta-no-evento">
+                <ResumoProposta
+                  situacao={editando.proposta.situacao}
+                  motivoRecusa={editando.proposta.motivoRecusa}
+                  mudancas={mudancasDoEvento(editando, salas, palestrantes)}
+                />
+                {ehProfessor ? (
+                  <div className="proposta-acoes">
+                    <button type="button" className="btn btn-ghost" onClick={() => setCorrigindoProposta(editando)}>
+                      {editando.proposta.situacao === "RECUSADO" ? "Corrigir e reenviar" : "Corrigir a proposta"}
+                    </button>
+                    <button type="button" className="btn btn-ghost btn-danger" onClick={() => setCancelandoProposta(editando)}>
+                      Cancelar a proposta
+                    </button>
+                  </div>
+                ) : (
+                  <p className="form-hint">
+                    {editando.proposta.situacao === "PENDENTE"
+                      ? "Aprove ou recuse a alteração pela lista de eventos."
+                      : "O professor vê o motivo e pode corrigir e reenviar."}
+                  </p>
+                )}
+              </div>
+            )}
+            {agendaViraProposta && (
+              <p className="form-hint">
+                Evento já aprovado: título, tema e questionário mudam na hora. Mudanças em sala, data/horário, carga horária ou
+                palestrante vão para a aprovação da equipe, e o evento continua como está até lá.
+              </p>
+            )}
             {travarAgenda && (
               <p className="form-hint">
-                Evento já aprovado: sala, data/horário, carga horária e palestrante não podem ser alterados por aqui (a mudança
-                vai precisar de nova aprovação — em breve). Título, tema e questionário você pode editar.
+                {jaComecou
+                  ? "O evento já começou: sala, data/horário, carga horária e palestrante não mudam mais."
+                  : "Já há uma alteração aguardando aprovação: corrija ou cancele a proposta acima para mudar sala, data/horário, carga horária ou palestrante."}
               </p>
             )}
             <Campo nome="titulo" rotulo="Título" obrigatorio erro={erros.titulo}>
@@ -449,9 +562,11 @@ function EventosEquipe() {
                 <MarcaObrigatorio />
               </span>
               <p className="form-hint" style={{ margin: 0 }}>
-                Em cada pergunta, preencha o enunciado e as 4 alternativas e marque a correta.
+                {questionarioTravado
+                  ? "Questionário travado: já há respostas de alunos."
+                  : "Em cada pergunta, preencha o enunciado e as 4 alternativas e marque a correta."}
               </p>
-              <div className="questionario-builder">
+              <fieldset className="questionario-builder" disabled={questionarioTravado}>
                 {form.questionario.map((pergunta, indicePergunta) => {
                   const erroEnunciado = erros[chaveEnunciado(indicePergunta)];
                   const alternativasComErro = pergunta.alternativas
@@ -507,7 +622,7 @@ function EventosEquipe() {
                     </div>
                   );
                 })}
-              </div>
+              </fieldset>
             </div>
 
             <div className="modal-footer">
@@ -525,9 +640,41 @@ function EventosEquipe() {
       {confirmandoSalvar && (
         <ConfirmDialog
           title="Confirmar alteração"
-          message={`Salvar as alterações do evento "${form.titulo}"?`}
+          message={
+            agendaViraProposta && agendaMudou
+              ? `Salvar as alterações do evento "${form.titulo}"? A mudança de sala, data/horário, carga horária ou palestrante vai para aprovação da equipe.`
+              : !ehProfessor && editando?.situacao === "APROVADO" && agendaMudou && (editando.inscritos ?? 0) > 0
+                ? `Salvar as alterações do evento "${form.titulo}"? Os ${editando.inscritos} inscrito(s) serão avisados por e-mail da mudança.`
+                : `Salvar as alterações do evento "${form.titulo}"?`
+          }
           onConfirm={() => void salvar()}
           onCancel={() => setConfirmandoSalvar(false)}
+        />
+      )}
+
+      {corrigindoProposta && (
+        <ModalPropostaEvento
+          evento={corrigindoProposta}
+          salas={salas}
+          palestrantes={palestrantesDoFormulario}
+          onFechar={() => setCorrigindoProposta(null)}
+          onConcluido={() => {
+            setCorrigindoProposta(null);
+            setModalAberto(false);
+            void carregar();
+          }}
+        />
+      )}
+
+      {cancelandoProposta && (
+        <ConfirmDialog
+          title="Cancelar a proposta de alteração"
+          message={`Tem certeza que deseja cancelar a proposta de alteração de "${cancelandoProposta.titulo}"? O evento continua como está.`}
+          confirmLabel="Cancelar a proposta"
+          cancelLabel="Voltar"
+          tone="danger"
+          onConfirm={() => void cancelarProposta()}
+          onCancel={() => setCancelandoProposta(null)}
         />
       )}
 

@@ -1,6 +1,6 @@
 # Inventário de dados pessoais e fluxo de dados — SGEA
 
-**Data:** 09/11/2026 · **Versão:** 5 (conta de professor e histórico da aprovação, seções 13 e 14. A versão 4, de 06/11/2026, trouxe a confirmação do e-mail no cadastro:
+**Data:** 09/11/2026 · **Versão:** 6 (propostas de alteração, aviso aos inscritos e inativação do professor, seção 15. A versão 5, do mesmo dia, trouxe a conta de professor e o histórico da aprovação, seções 13 e 14. A versão 4, de 06/11/2026, trouxe a confirmação do e-mail no cadastro:
 tabela `cadastros_pendentes`, seção 11; tabela `certificados`, seção 12;
 e-mail do aluno não editável; IP também no limite de envio do código do
 cadastro. A versão 3, de 29/09/2026,
@@ -284,6 +284,36 @@ detalhadas em `02-matriz-dados-finalidade-base-legal.md`; aqui o foco é
   resposta (texto livre).
 - **Por quanto tempo:** enquanto o evento/palestrante existir; sai junto
   quando ele é excluído.
+
+## 15. Propostas de alteração (`propostas_alteracao`), aviso aos inscritos e inativação do professor
+
+- **Proposta de alteração:** num evento ou palestrante já aprovado, a mudança
+  de sala, horário, carga horária e palestrante (evento) ou de nome e e-mail
+  (palestrante) feita pelo professor fica em `propostas_alteracao` até a
+  equipe aprovar ou recusar. Guarda só os valores propostos, a situação, o
+  motivo da recusa e quem enviou. O nome e o e-mail propostos de um
+  palestrante só a equipe e o professor dono veem. O passo a passo (envio,
+  correção, recusa com motivo, reenvio com resposta, aprovação, cancelamento)
+  fica em `historico_aprovacoes`; a auditoria registra só que houve o passo
+  (`EVENTO_PROPOSTA_*`, `PALESTRANTE_PROPOSTA_*`), nunca o motivo nem a
+  resposta. A proposta sai junto quando o evento/palestrante é excluído.
+- **Aviso aos inscritos:** quando a sala, o horário, a carga horária ou o
+  palestrante de um evento aprovado mudam (proposta aprovada ou edição da
+  equipe), cada inscrito recebe um e-mail com o que mudou (antes → depois),
+  pelo SendGrid. Usa o nome e o e-mail que já estão na conta do aluno, para a
+  mesma finalidade da inscrição. A auditoria registra quantos avisos saíram
+  e, em caso de falha, só o id da inscrição.
+- **Inativação do professor:** `usuarios.ativo` e
+  `usuarios.motivoInativacao` (texto de até 500 caracteres, visível só para a
+  equipe, apagado na reativação, nunca copiado para a auditoria). O login
+  recusa a conta inativa e as sessões abertas caem. Os eventos em aberto do
+  professor passam para outro professor ou para a equipe, com registro no
+  histórico (`TRANSFERIDO`, com o nome de quem saiu e de quem recebeu) e na
+  auditoria (`EVENTO_TRANSFERIDO`, só com ids). Os eventos encerrados há
+  mais de 24 horas continuam ligados a ele.
+- **Questionário travado:** depois da primeira tentativa de um aluno,
+  ninguém muda o questionário do evento (nenhum dado novo; só protege as
+  notas já dadas).
 
 ## Diagrama do fluxo de dados
 

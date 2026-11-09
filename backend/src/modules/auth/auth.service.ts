@@ -346,9 +346,10 @@ async function login(dados: LoginInput, ip: string) {
     throw new AppError(401, "CREDENCIAIS_INVALIDAS", "E-mail ou senha inválidos.");
   }
 
-  // aluno inativado pela equipe: a mensagem nao expoe o motivo interno (fica so no cadastro).
+  // aluno ou professor inativado pela equipe: a mensagem nao expoe o motivo interno (fica so no cadastro).
   // So quem acertou a senha chega aqui, entao isso nao revela a situacao da conta pra quem chuta senha
-  if (usuario.perfil === "ALUNO" && usuario.participante && !usuario.participante.ativo) {
+  const alunoInativo = usuario.perfil === "ALUNO" && usuario.participante && !usuario.participante.ativo;
+  if (alunoInativo || !usuario.ativo) {
     await registrarAuditoria(usuario.id, "LOGIN_FALHA", "conta inativa");
     throw AppError.contaInativa();
   }

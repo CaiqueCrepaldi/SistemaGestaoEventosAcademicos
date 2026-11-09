@@ -13,8 +13,21 @@ export interface CamposAprovacao {
 }
 
 // um passo do historico da aprovacao (envio, aprovacao, recusa com motivo, reenvio com resposta)
+// os PROPOSTA_* sao da proposta de alteracao de um item ja aprovado; TRANSFERIDO, o evento passado para outro
+// responsavel na inativacao do professor
 export interface PassoAprovacao {
-  acao: "ENVIADO" | "APROVADO" | "RECUSADO" | "REENVIADO";
+  acao:
+    | "ENVIADO"
+    | "APROVADO"
+    | "RECUSADO"
+    | "REENVIADO"
+    | "PROPOSTA_ENVIADA"
+    | "PROPOSTA_EDITADA"
+    | "PROPOSTA_APROVADA"
+    | "PROPOSTA_RECUSADA"
+    | "PROPOSTA_REENVIADA"
+    | "PROPOSTA_CANCELADA"
+    | "TRANSFERIDO";
   mensagem: string | null;
   autorNome: string | null;
   criadoEm: string;
@@ -37,6 +50,29 @@ export interface Palestrante extends CamposAprovacao {
   id: string;
   nome: string;
   email?: string;
+  // proposta de alteracao aberta (pendente ou recusada) de nome/e-mail — so pra equipe e pro professor dono
+  proposta?: PropostaPalestrante | null;
+}
+
+// proposta de alteracao de um item ja aprovado: os valores PROPOSTOS (os atuais estao no proprio item)
+export interface PropostaPalestrante {
+  id: string;
+  situacao: SituacaoAprovacao;
+  nome: string;
+  email: string;
+  motivoRecusa: string | null;
+  criadoEm: string;
+}
+
+export interface PropostaEvento {
+  id: string;
+  situacao: SituacaoAprovacao;
+  salaId: string;
+  horario: string;
+  cargaHoraria: number;
+  palestranteId: string;
+  motivoRecusa: string | null;
+  criadoEm: string;
 }
 
 // alternativa de resposta de uma pergunta do questionario, so uma por pergunta tem correta: true
@@ -70,6 +106,13 @@ export interface Evento {
   motivoRecusa?: string | null;
   // professor que criou; null = criado pela equipe
   criadoPorId?: string | null;
+  // ja ha tentativa de aluno: ninguem muda mais o questionario
+  questionarioTravado?: boolean;
+  // proposta de alteracao aberta (pendente ou recusada) de sala/horario/carga/palestrante
+  proposta?: PropostaEvento | null;
+  // so na resposta da edicao/aprovacao: a mudanca do professor virou proposta; quantos inscritos foram avisados
+  propostaEnviada?: boolean;
+  avisoInscritos?: { inscritos: number; avisados: number } | null;
 }
 
 // pessoa que participa de eventos, pode ou nao ter login

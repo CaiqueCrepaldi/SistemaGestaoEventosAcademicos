@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Modal } from "./Modal";
 
 interface ConfirmDialogProps {
@@ -10,6 +11,8 @@ interface ConfirmDialogProps {
   tone?: "default" | "danger";
   onConfirm: () => void;
   onCancel: () => void;
+  // conteudo extra abaixo da mensagem (ex.: o "antes -> depois" de uma proposta de alteracao)
+  children?: ReactNode;
 }
 
 // confirmacao usando o Modal padrao, no lugar do confirm() nativo
@@ -21,10 +24,12 @@ export function ConfirmDialog({
   tone = "default",
   onConfirm,
   onCancel,
+  children,
 }: ConfirmDialogProps) {
   return (
     <Modal title={title} onClose={onCancel}>
       <p style={{ margin: "0 0 4px" }}>{message}</p>
+      {children}
       <div className="modal-footer">
         <button type="button" className="btn btn-ghost" onClick={onCancel}>
           {cancelLabel}

@@ -72,6 +72,29 @@ export interface Palestrante {
   motivoRecusa: string | null;
   // professor que criou; null = criado pela equipe
   criadoPorId: string | null;
+  // proposta de alteracao aberta (pendente ou recusada) de nome/e-mail, quando o palestrante ja esta aprovado
+  proposta?: PropostaPalestrante | null;
+}
+
+// proposta de alteracao (palestrante ou evento ja aprovado): os valores PROPOSTOS; os atuais estao no item
+export interface PropostaPalestrante {
+  id: string;
+  situacao: SituacaoAprovacao;
+  nome: string;
+  email: string;
+  motivoRecusa: string | null;
+  criadoEm: string;
+}
+
+export interface PropostaEvento {
+  id: string;
+  situacao: SituacaoAprovacao;
+  salaId: string;
+  horario: string; // ISO-8601
+  cargaHoraria: number;
+  palestranteId: string;
+  motivoRecusa: string | null;
+  criadoEm: string;
 }
 
 export interface AlternativaQuestionario {
@@ -100,6 +123,10 @@ export interface Evento {
   // professor que criou; null = criado pela equipe
   criadoPorId: string | null;
   criadoEm: string;
+  // ja existe tentativa de aluno: o questionario nao muda mais (QUESTIONARIO_TRAVADO)
+  questionarioTravado?: boolean;
+  // proposta de alteracao aberta (pendente ou recusada) de sala/horario/carga/palestrante
+  proposta?: PropostaEvento | null;
 }
 
 export interface Inscricao {

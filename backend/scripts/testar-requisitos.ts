@@ -1566,10 +1566,12 @@ async function main() {
     checar("depois de aprovado, o evento aparece para o aluno", r.corpo.some((e: { id: string }) => e.id === eventoProfId), r.status);
     r = await chamar("PUT", `/eventos/${eventoProfId}`, { token: professorA.token, corpo: { horario: new Date(inicioProf.getTime() + 3600000).toISOString() } });
     checar(
-      "professor não muda horário de evento já aprovado -> 409 \"vai precisar de aprovação\"",
-      r.status === 409 && r.corpo.message === "Esta alteração vai precisar de aprovação (em breve).",
+      "professor muda o horário de evento já aprovado -> vira proposta de alteração; o evento continua no horário antigo",
+      r.status === 200 && r.corpo.propostaEnviada === true && r.corpo.horario === inicioProf.toISOString() && r.corpo.proposta?.situacao === "PENDENTE",
       r.corpo,
     );
+    r = await chamar("DELETE", `/eventos/${eventoProfId}/proposta`, { token: professorA.token });
+    checar("professor cancela a proposta -> 200, sem proposta aberta", r.status === 200 && r.corpo.proposta === null, r.corpo);
     r = await chamar("PUT", `/eventos/${eventoProfId}`, { token: professorA.token, corpo: { titulo: `Evento do Professor Revisado ${sufixo}`, horario: inicioProf.toISOString() } });
     checar("professor edita o título do evento aprovado (mesmo horário) -> 200", r.status === 200 && r.corpo.titulo.startsWith("Evento do Professor Revisado"), r.corpo);
     r = await chamar("POST", "/inscricoes", { token: professorA.token, corpo: { participanteId: aluno.participanteId, eventoId: eventoProfId } });
@@ -1598,6 +1600,306 @@ async function main() {
     checar("inscrição manual retroativa no evento encerrado continua funcionando -> 201", r.status === 201, r.corpo);
     r = await chamar("PUT", `/inscricoes/${r.corpo.id}`, { token: secretaria.token, corpo: { statusPresenca: "PRESENTE" } });
     checar("registro de presença no evento encerrado continua funcionando -> 200", r.status === 200 && r.corpo.statusPresenca === "PRESENTE", r.corpo);
+
+    // ------------------------------------------------------------------ etapa 3B
+    requisito("R39 Proposta de alteração em evento aprovado");
+    r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: `Sala Proposta ${sufixo}`, capacidade: 30 } });
+    const salaPropostaId: string = r.corpo.id;
+    salas.push(salaPropostaId);
+    r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: `Sala Minúscula ${sufixo}`, capacidade: 1 } });
+    const salaMinusculaId: string = r.corpo.id;
+    salas.push(salaMinusculaId);
+    // segundo inscrito gravado direto no banco (o aluno2 ja foi inativado acima): o evento fica com 2 inscritos
+    await prisma.inscricao.create({ data: { id: randomUUID(), participanteId: aluno2.participanteId!, eventoId: eventoProfId } });
+
+    r = await chamar("PUT", `/eventos/${eventoProfId}`, { token: professorA.token, corpo: { salaId: salaPropostaId } });
+    checar(
+      "professor troca a sala do evento aprovado -> vira proposta PENDENTE; o evento continua na sala antiga",
+      r.status === 200 &&
+        r.corpo.propostaEnviada === true &&
+        r.corpo.salaId === salaProfessorId &&
+        r.corpo.proposta?.situacao === "PENDENTE" &&
+        r.corpo.proposta.salaId === salaPropostaId,
+      r.corpo,
+    );
+    r = await chamar("GET", `/eventos/${eventoProfId}`, { token: aluno.token });
+    checar("o aluno continua vendo a sala antiga (e nada da proposta)", r.status === 200 && r.corpo.salaId === salaProfessorId && !("proposta" in r.corpo), r.corpo);
+    r = await chamar("PUT", `/eventos/${eventoProfId}`, { token: professorA.token, corpo: { cargaHoraria: 3 } });
+    checar("segunda proposta com uma pendente -> 409 PROPOSTA_JA_PENDENTE", r.status === 409 && r.corpo.code === "PROPOSTA_JA_PENDENTE", r.corpo);
+    const corpoNaSalaProposta = { ...corpoEventoProf, titulo: `Evento Na Sala Proposta ${sufixo}`, salaId: salaPropostaId, palestranteId };
+    r = await chamar("POST", "/eventos", { token: secretaria.token, corpo: corpoNaSalaProposta });
+    checar(
+      "a proposta reserva a sala nova: outro evento no mesmo horário -> 409 CONFLITO_DE_SALA",
+      r.status === 409 && r.corpo.code === "CONFLITO_DE_SALA" && String(r.corpo.message).includes("proposta"),
+      r.corpo,
+    );
+    r = await chamar("POST", "/eventos", { token: secretaria.token, corpo: { ...corpoNaSalaProposta, salaId: salaProfessorId } });
+    checar("a sala atual continua do evento até a aprovação -> 409", r.status === 409 && r.corpo.code === "CONFLITO_DE_SALA", r.corpo);
+    r = await chamar("PUT", `/eventos/${eventoProfId}/proposta`, { token: professorA.token, corpo: { salaId: salaMinusculaId } });
+    checar(
+      "sala menor que os inscritos -> 409 SALA_SEM_CAPACIDADE com mensagem clara",
+      r.status === 409 && r.corpo.code === "SALA_SEM_CAPACIDADE" && String(r.corpo.message).includes("2 inscrito"),
+      r.corpo,
+    );
+    r = await chamar("PUT", `/eventos/${eventoProfId}/proposta`, { token: professorA.token, corpo: { horario: new Date(Date.now() - 3600000).toISOString() } });
+    checar("horário proposto no passado -> 422 no campo horário", r.status === 422 && r.corpo.erros?.some((e: { campo: string }) => e.campo === "horario"), r.corpo);
+    r = await chamar("GET", "/aprovacoes/contadores", { token: secretaria.token });
+    checar("contador da equipe conta a proposta pendente", r.status === 200 && r.corpo.eventosPendentes >= 1, r.corpo);
+    r = await chamar("GET", "/eventos?situacao=PENDENTE", { token: secretaria.token });
+    checar(
+      "filtro Aguardando aprovação traz o evento aprovado com a proposta",
+      r.status === 200 &&
+        r.corpo.some((e: { id: string; situacao: string; proposta?: { situacao: string } }) => e.id === eventoProfId && e.situacao === "APROVADO" && e.proposta?.situacao === "PENDENTE"),
+      r.status,
+    );
+    r = await chamar("POST", "/palestrantes", { token: professorA.token, corpo: { nome: "Palestrante Novo do Professor", email: `pal.novo.${sufixo}@teste.invalido` } });
+    const palestranteNovoId: string = r.corpo.id;
+    palestrantes.push(palestranteNovoId);
+    r = await chamar("PUT", `/eventos/${eventoProfId}/proposta`, { token: professorA.token, corpo: { palestranteId: palestranteNovoId } });
+    checar(
+      "a proposta pode usar um palestrante do professor ainda pendente -> 200",
+      r.status === 200 && r.corpo.proposta?.palestranteId === palestranteNovoId && r.corpo.proposta.salaId === salaPropostaId,
+      r.corpo,
+    );
+    r = await chamar("POST", `/eventos/${eventoProfId}/proposta/aprovar`, { token: professorA.token });
+    checar("professor não aprova a própria proposta -> 403", r.status === 403, r.status);
+    r = await chamar("POST", `/eventos/${eventoProfId}/proposta/aprovar`, { token: secretaria.token });
+    checar("não aprova proposta com palestrante PENDENTE -> 409 PALESTRANTE_NAO_APROVADO", r.status === 409 && r.corpo.code === "PALESTRANTE_NAO_APROVADO", r.corpo);
+    r = await chamar("POST", `/eventos/${eventoProfId}/proposta/recusar`, { token: secretaria.token, corpo: {} });
+    checar("recusar proposta sem motivo -> 422", r.status === 422, r.status);
+    const MOTIVO_PROPOSTA = "Mantenha o palestrante já aprovado.";
+    r = await chamar("POST", `/eventos/${eventoProfId}/proposta/recusar`, { token: secretaria.token, corpo: { motivo: MOTIVO_PROPOSTA } });
+    checar(
+      "recusar com motivo -> o evento fica como estava e o professor vê o motivo",
+      r.status === 200 && r.corpo.salaId === salaProfessorId && r.corpo.proposta?.situacao === "RECUSADO" && r.corpo.proposta.motivoRecusa === MOTIVO_PROPOSTA,
+      r.corpo,
+    );
+    r = await chamar("POST", "/eventos", { token: secretaria.token, corpo: corpoNaSalaProposta });
+    checar("recusar libera a sala proposta: evento no mesmo horário -> 201", r.status === 201, r.corpo);
+    await chamar("DELETE", `/eventos/${r.corpo.id}`, { token: secretaria.token });
+    r = await chamar("GET", "/aprovacoes/contadores", { token: professorA.token });
+    checar("proposta recusada entra no contador de recusados do professor", r.status === 200 && r.corpo.eventosRecusados >= 1, r.corpo);
+    r = await chamar("GET", "/eventos?situacao=RECUSADO", { token: professorA.token });
+    checar("filtro Recusados do professor traz o evento com a proposta recusada", r.status === 200 && r.corpo.some((e: { id: string }) => e.id === eventoProfId), r.status);
+    r = await chamar("PUT", `/eventos/${eventoProfId}/proposta`, {
+      token: professorA.token,
+      corpo: { palestranteId: palestranteProfId, resposta: "Voltei para o palestrante aprovado." },
+    });
+    checar("professor corrige e reenvia a proposta, com resposta -> PENDENTE", r.status === 200 && r.corpo.proposta?.situacao === "PENDENTE" && r.corpo.proposta.motivoRecusa === null, r.corpo);
+    r = await chamar("POST", `/eventos/${eventoProfId}/proposta/aprovar`, { token: secretaria.token });
+    checar(
+      "aprovar aplica a sala nova e avisa os inscritos por e-mail (simulado em dev)",
+      r.status === 200 && r.corpo.salaId === salaPropostaId && r.corpo.proposta === null && r.corpo.avisoInscritos?.inscritos === 2 && r.corpo.avisoInscritos.avisados === 2,
+      r.corpo,
+    );
+    checar(
+      "envio do aviso registrado na auditoria (sem dado do aluno)",
+      !!(await prisma.logAuditoria.findFirst({ where: { acao: "EMAIL_ENVIADO", detalhe: { contains: `aviso de alteração do evento ${eventoProfId}` } } })),
+    );
+    r = await chamar("GET", `/eventos/${eventoProfId}`, { token: aluno.token });
+    checar("depois da aprovação o aluno vê a sala nova", r.status === 200 && r.corpo.salaId === salaPropostaId, r.corpo);
+    r = await chamar("GET", `/eventos/${eventoProfId}/historico`, { token: professorA.token });
+    const passosProposta: { acao: string; mensagem: string | null }[] = (r.corpo ?? []).filter((p: { acao: string }) => p.acao.startsWith("PROPOSTA_"));
+    checar(
+      "histórico registra envio, edição, recusa (motivo), reenvio (resposta) e aprovação da proposta",
+      passosProposta.map((p) => p.acao).join(",") ===
+        "PROPOSTA_ENVIADA,PROPOSTA_CANCELADA,PROPOSTA_ENVIADA,PROPOSTA_EDITADA,PROPOSTA_RECUSADA,PROPOSTA_REENVIADA,PROPOSTA_APROVADA" &&
+        passosProposta[4].mensagem === MOTIVO_PROPOSTA &&
+        (passosProposta[5].mensagem ?? "").includes("Voltei para o palestrante aprovado.") &&
+        (passosProposta[6].mensagem ?? "").includes("Sala:"),
+      passosProposta,
+    );
+    const logsProposta = await prisma.logAuditoria.findMany({ where: { acao: { startsWith: "EVENTO_PROPOSTA_" }, detalhe: { contains: eventoProfId } } });
+    checar(
+      "auditoria registra os passos da proposta, sem o motivo nem a resposta",
+      logsProposta.length >= 6 && logsProposta.every((l) => !(l.detalhe ?? "").includes(MOTIVO_PROPOSTA) && !(l.detalhe ?? "").includes("Voltei")),
+      logsProposta.map((l) => l.acao),
+    );
+    r = await chamar("PUT", `/eventos/${eventoProfId}`, { token: professorA.token, corpo: { titulo: `Evento do Professor Final ${sufixo}` } });
+    checar(
+      "título do evento aprovado o professor continua editando direto",
+      r.status === 200 && r.corpo.titulo === `Evento do Professor Final ${sufixo}` && r.corpo.propostaEnviada === false && r.corpo.proposta === null,
+      r.corpo,
+    );
+    r = await chamar("PUT", `/eventos/${eventoProfId}`, { token: secretaria.token, corpo: { cargaHoraria: 3 } });
+    checar(
+      "a equipe muda a carga horária direto, sem proposta, e os inscritos são avisados",
+      r.status === 200 && r.corpo.cargaHoraria === 3 && r.corpo.propostaEnviada === false && r.corpo.avisoInscritos?.avisados === 2,
+      r.corpo,
+    );
+    // evento do professor que ja comecou (comecou ha 1 h, dura 3 h)
+    r = await chamar("POST", "/eventos", {
+      token: professorA.token,
+      corpo: {
+        ...corpoEventoProf,
+        titulo: `Evento Em Andamento ${sufixo}`,
+        salaId: salaMinusculaId,
+        palestranteId: palestranteProfId,
+        horario: new Date(Date.now() - 3600000).toISOString(),
+        cargaHoraria: 3,
+      },
+    });
+    const eventoEmAndamentoId: string = r.corpo.id;
+    eventos.push(eventoEmAndamentoId);
+    await chamar("POST", `/eventos/${eventoEmAndamentoId}/aprovar`, { token: secretaria.token });
+    r = await chamar("PUT", `/eventos/${eventoEmAndamentoId}`, { token: professorA.token, corpo: { cargaHoraria: 4 } });
+    checar("proposta em evento que já começou -> 409 EVENTO_JA_INICIADO", r.status === 409 && r.corpo.code === "EVENTO_JA_INICIADO", r.corpo);
+
+    requisito("R40 Proposta de alteração em palestrante aprovado");
+    const emailPalAntigo = `pal.prof.${sufixo}@teste.invalido`;
+    const emailPalNovo = `pal.prof.novo.${sufixo}@teste.invalido`;
+    r = await chamar("PUT", `/palestrantes/${palestranteProfId}`, { token: professorA.token, corpo: { email: emailPalNovo } });
+    checar(
+      "professor troca o e-mail do palestrante aprovado -> vira proposta; o palestrante continua com o e-mail antigo",
+      r.status === 200 && r.corpo.email === emailPalAntigo && r.corpo.proposta?.situacao === "PENDENTE" && r.corpo.proposta.email === emailPalNovo,
+      r.corpo,
+    );
+    r = await chamar("PUT", `/palestrantes/${palestranteProfId}`, { token: professorA.token, corpo: { nome: "Outro Nome" } });
+    checar("segunda proposta no palestrante -> 409 PROPOSTA_JA_PENDENTE", r.status === 409 && r.corpo.code === "PROPOSTA_JA_PENDENTE", r.corpo);
+    r = await chamar("GET", `/palestrantes/${palestranteId}`, { token: secretaria.token });
+    r = await chamar("PUT", `/palestrantes/${palestranteProfId}/proposta`, { token: professorA.token, corpo: { email: r.corpo.email } });
+    checar("proposta com e-mail de outro palestrante -> 409 EMAIL_DUPLICADO", r.status === 409 && r.corpo.code === "EMAIL_DUPLICADO", r.corpo);
+    r = await chamar("GET", "/palestrantes?situacao=PENDENTE", { token: secretaria.token });
+    checar("filtro Aguardando aprovação traz o palestrante com proposta", r.status === 200 && r.corpo.some((p: { id: string }) => p.id === palestranteProfId), r.status);
+    r = await chamar("POST", `/palestrantes/${palestranteProfId}/proposta/aprovar`, { token: secretaria.token });
+    checar("equipe aprova -> o e-mail novo vale", r.status === 200 && r.corpo.email === emailPalNovo && r.corpo.proposta === null, r.corpo);
+    r = await chamar("GET", `/palestrantes/${palestranteProfId}/historico`, { token: professorA.token });
+    checar(
+      "histórico do palestrante registra envio e aprovação da proposta",
+      r.status === 200 && r.corpo.map((p: { acao: string }) => p.acao).join(",").endsWith("PROPOSTA_ENVIADA,PROPOSTA_APROVADA"),
+      r.corpo,
+    );
+    r = await chamar("PUT", `/palestrantes/${palestranteProfId}`, { token: secretaria.token, corpo: { nome: "Palestrante do Professor Editado" } });
+    checar("a equipe edita o palestrante direto, sem proposta", r.status === 200 && r.corpo.nome === "Palestrante do Professor Editado" && r.corpo.proposta === null, r.corpo);
+
+    requisito("R41 Questionário travado depois da primeira tentativa");
+    const questionarioMudado = questionario().map((p, i) => (i === 0 ? { ...p, enunciado: "Pergunta reescrita" } : p));
+    for (const [conta, nome] of [
+      [secretaria, "secretaria"],
+      [admin, "administrador"],
+    ] as const) {
+      r = await chamar("PUT", `/eventos/${eventoId}`, { token: conta.token, corpo: { questionario: questionarioMudado } });
+      checar(
+        `${nome} não muda o questionário de evento já respondido -> 409 QUESTIONARIO_TRAVADO`,
+        r.status === 409 && r.corpo.code === "QUESTIONARIO_TRAVADO" && r.corpo.message === "Questionário travado: já há respostas de alunos.",
+        r.corpo,
+      );
+    }
+    // tentativa gravada direto no banco (o check-in do evento do professor so abre 1 hora antes)
+    await prisma.tentativaQuestionario.create({
+      data: { id: randomUUID(), participanteId: aluno.participanteId!, eventoId: eventoProfId, respostas: Array(10).fill(0), acertos: 10, totalPerguntas: 10, percentual: 100 },
+    });
+    r = await chamar("PUT", `/eventos/${eventoProfId}`, { token: professorA.token, corpo: { questionario: questionarioMudado } });
+    checar("professor não muda o questionário depois da primeira tentativa -> 409 QUESTIONARIO_TRAVADO", r.status === 409 && r.corpo.code === "QUESTIONARIO_TRAVADO", r.corpo);
+    r = await chamar("GET", `/eventos/${eventoProfId}`, { token: professorA.token });
+    checar("o evento avisa a tela que o questionário está travado", r.status === 200 && r.corpo.questionarioTravado === true, r.corpo?.questionarioTravado);
+    r = await chamar("PUT", `/eventos/${eventoProfId}`, { token: professorA.token, corpo: { tema: "Tema revisado", questionario: r.corpo.questionario } });
+    checar("o mesmo questionário de volta (sem mudança) não bloqueia a edição do resto -> 200", r.status === 200 && r.corpo.tema === "Tema revisado", r.corpo);
+
+    requisito("R42 Inativação do professor com transferência dos eventos");
+    r = await chamar("POST", "/eventos", {
+      token: professorA.token,
+      corpo: {
+        ...corpoEventoProf,
+        titulo: `Evento Antigo do Professor ${sufixo}`,
+        salaId: salaMinusculaId,
+        palestranteId: palestranteProfId,
+        horario: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(),
+      },
+    });
+    const eventoAntigoId: string = r.corpo.id;
+    eventos.push(eventoAntigoId);
+    // proposta pendente: vai junto com o evento na transferencia
+    r = await chamar("PUT", `/eventos/${eventoProfId}`, { token: professorA.token, corpo: { cargaHoraria: 2 } });
+    const propostaQueVaiJuntoId: string = r.corpo.proposta?.id;
+    r = await chamar("GET", `/professores/${professorA.id}/eventos-em-aberto`, { token: secretaria.token });
+    const abertos: string[] = (r.corpo ?? []).map((e: { id: string }) => e.id);
+    checar(
+      "eventos em aberto: os não encerrados (inclusive o em andamento); o encerrado há mais de 24 h fica de fora",
+      r.status === 200 && abertos.includes(eventoProfId) && abertos.includes(eventoEmAndamentoId) && !abertos.includes(eventoAntigoId),
+      r.corpo,
+    );
+    const MOTIVO_INATIVACAO = "Professor desligado da instituição.";
+    r = await chamar("POST", `/professores/${professorA.id}/inativar`, { token: secretaria.token, corpo: { motivo: MOTIVO_INATIVACAO } });
+    checar(
+      "inativar sem escolher para quem vão os eventos futuros -> 409 TRANSFERENCIA_OBRIGATORIA, nada muda",
+      r.status === 409 && r.corpo.code === "TRANSFERENCIA_OBRIGATORIA" && (await prisma.usuario.findUnique({ where: { id: professorA.id } }))?.ativo === true,
+      r.corpo,
+    );
+    r = await chamar("POST", `/professores/${professorA.id}/inativar`, { token: secretaria.token, corpo: {} });
+    checar("inativar sem motivo -> 422", r.status === 422, r.status);
+    r = await chamar("POST", `/professores/${professorA.id}/inativar`, { token: professorB.token, corpo: { motivo: MOTIVO_INATIVACAO, transferirPara: "EQUIPE" } });
+    checar("professor não inativa professor -> 403", r.status === 403, r.status);
+    // terceiro professor, inativado: nao serve de destino
+    const emailProfC = `prof.c.${sufixo}@umc.br`;
+    r = await chamar("POST", "/professores", { token: admin.token, corpo: { nomeCompleto: "Professor Teste C", email: emailProfC } });
+    const professorC: Conta = { id: r.corpo.professor?.id, email: emailProfC, senha: SENHA_PROFESSOR, perfil: "PROFESSOR", participanteId: null };
+    contas.push(professorC);
+    await chamar("POST", "/auth/primeiro-acesso", { corpo: { email: emailProfC, codigo: r.corpo.codigoDemo, novaSenha: SENHA_PROFESSOR, aceiteLgpd: true } });
+    r = await chamar("POST", `/professores/${professorC.id}/inativar`, { token: admin.token, corpo: { motivo: "Licença" } });
+    checar("professor sem eventos em aberto é inativado sem transferência -> 200 INATIVO", r.status === 200 && r.corpo.professor?.situacao === "INATIVO" && r.corpo.eventosTransferidos === 0, r.corpo);
+    r = await chamar("POST", `/professores/${professorA.id}/inativar`, { token: secretaria.token, corpo: { motivo: MOTIVO_INATIVACAO, transferirPara: professorC.id } });
+    checar("professor inativo não é destino de transferência -> 422", r.status === 422 && r.corpo.erros?.some((e: { campo: string }) => e.campo === "transferirPara"), r.corpo);
+    r = await chamar("POST", `/professores/${professorA.id}/inativar`, { token: secretaria.token, corpo: { motivo: MOTIVO_INATIVACAO, transferirPara: professorA.id } });
+    checar("transferir para o próprio professor -> 422", r.status === 422, r.status);
+    const tokenAntigoProfA = professorA.token;
+    r = await chamar("POST", `/professores/${professorA.id}/inativar`, { token: secretaria.token, corpo: { motivo: MOTIVO_INATIVACAO, transferirPara: professorB.id } });
+    checar(
+      "com a transferência, o professor é inativado -> 200 INATIVO",
+      r.status === 200 && r.corpo.professor?.situacao === "INATIVO" && r.corpo.eventosTransferidos === abertos.length,
+      r.corpo,
+    );
+    const [eventoTransferido, eventoAntigo, propostaTransferida, palestranteNovo] = await Promise.all([
+      prisma.evento.findUnique({ where: { id: eventoProfId } }),
+      prisma.evento.findUnique({ where: { id: eventoAntigoId } }),
+      prisma.propostaAlteracao.findUnique({ where: { id: propostaQueVaiJuntoId ?? "" } }),
+      prisma.palestrante.findUnique({ where: { id: palestranteNovoId } }),
+    ]);
+    checar("o evento em aberto passa para o outro professor, com a proposta pendente", eventoTransferido?.criadoPorId === professorB.id && propostaTransferida?.criadoPorId === professorB.id && propostaTransferida.situacao === "PENDENTE");
+    checar("o evento encerrado há mais de 24 h continua com o nome do professor inativado", eventoAntigo?.criadoPorId === professorA.id);
+    checar("o palestrante pendente do professor continua pendente", palestranteNovo?.situacao === "PENDENTE");
+    r = await chamar("GET", `/eventos/${eventoProfId}`, { token: professorB.token });
+    checar("o novo responsável vê o evento e a proposta", r.status === 200 && r.corpo.proposta?.situacao === "PENDENTE", r.corpo);
+    r = await chamar("GET", `/eventos/${eventoProfId}/historico`, { token: secretaria.token });
+    checar(
+      "histórico do evento registra a transferência",
+      r.status === 200 && r.corpo.some((p: { acao: string; mensagem: string | null }) => p.acao === "TRANSFERIDO" && (p.mensagem ?? "").includes("Professor Teste B")),
+      r.corpo,
+    );
+    const logsInativacao = await prisma.logAuditoria.findMany({
+      where: { OR: [{ acao: "PROFESSOR_INATIVADO", detalhe: { contains: professorA.id } }, { acao: "EVENTO_TRANSFERIDO", detalhe: { contains: eventoProfId } }] },
+    });
+    checar(
+      "auditoria registra a inativação e a transferência, sem o motivo",
+      logsInativacao.some((l) => l.acao === "PROFESSOR_INATIVADO") &&
+        logsInativacao.some((l) => l.acao === "EVENTO_TRANSFERIDO") &&
+        logsInativacao.every((l) => !(l.detalhe ?? "").includes("desligado")),
+      logsInativacao.map((l) => l.acao),
+    );
+    r = await chamar("GET", "/usuarios/me", { token: tokenAntigoProfA });
+    checar("a sessão aberta do professor inativado cai -> 401", r.status === 401, r.status);
+    r = await chamar("POST", "/auth/login", { corpo: { emailLogin: professorA.email, senha: SENHA_PROFESSOR } });
+    checar(
+      "professor inativo não entra -> 403 com a mesma mensagem do aluno inativo",
+      r.status === 403 && r.corpo.code === "CONTA_INATIVA" && r.corpo.message === "Sua conta está inativa. Procure a secretaria.",
+      r.corpo,
+    );
+    r = await chamar("GET", "/professores", { token: secretaria.token });
+    checar(
+      "tela Professores mostra o professor inativo com o motivo",
+      r.status === 200 && r.corpo.some((p: { id: string; situacao: string; motivoInativacao: string }) => p.id === professorA.id && p.situacao === "INATIVO" && p.motivoInativacao === MOTIVO_INATIVACAO),
+      r.status,
+    );
+    r = await chamar("POST", `/professores/${professorB.id}/inativar`, { token: secretaria.token, corpo: { motivo: "Teste da equipe", transferirPara: "EQUIPE" } });
+    const comAEquipe = await prisma.evento.findUnique({ where: { id: eventoProfId } });
+    checar("transferir para a equipe deixa o evento sem professor", r.status === 200 && comAEquipe?.criadoPorId === null, r.corpo);
+    r = await chamar("POST", `/professores/${professorA.id}/reativar`, { token: secretaria.token });
+    checar("reativar -> 200 ATIVO", r.status === 200 && r.corpo.situacao === "ATIVO", r.corpo);
+    r = await chamar("POST", `/professores/${professorA.id}/reativar`, { token: secretaria.token });
+    checar("reativar quem já está ativo -> 409", r.status === 409, r.status);
+    r = await chamar("POST", "/auth/login", { corpo: { emailLogin: professorA.email, senha: SENHA_PROFESSOR } });
+    checar("depois de reativado o professor entra de novo", r.status === 200 && !!r.corpo.token, r.corpo);
+    await chamar("POST", `/professores/${professorB.id}/reativar`, { token: secretaria.token });
 
     // ------------------------------------------------------------------ RF009/RNF010: exclusao bloqueada
     requisito("R19 Exclusão de evento bloqueada com inscrições (RF009/RNF010)");

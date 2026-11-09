@@ -35,9 +35,27 @@ export type AcaoAuditoria =
   | "PALESTRANTE_APROVADO"
   | "PALESTRANTE_RECUSADO"
   | "PALESTRANTE_REENVIADO"
+  // proposta de alteracao de evento/palestrante ja aprovado (valores, motivo e resposta ficam so em
+  // propostas_alteracao e historico_aprovacoes)
+  | "EVENTO_PROPOSTA_ENVIADA"
+  | "EVENTO_PROPOSTA_EDITADA"
+  | "EVENTO_PROPOSTA_APROVADA"
+  | "EVENTO_PROPOSTA_RECUSADA"
+  | "EVENTO_PROPOSTA_REENVIADA"
+  | "EVENTO_PROPOSTA_CANCELADA"
+  | "PALESTRANTE_PROPOSTA_ENVIADA"
+  | "PALESTRANTE_PROPOSTA_EDITADA"
+  | "PALESTRANTE_PROPOSTA_APROVADA"
+  | "PALESTRANTE_PROPOSTA_RECUSADA"
+  | "PALESTRANTE_PROPOSTA_REENVIADA"
+  | "PALESTRANTE_PROPOSTA_CANCELADA"
+  // evento em aberto passado para outro professor (ou para a equipe) na inativacao do professor
+  | "EVENTO_TRANSFERIDO"
   // conta de professor: criada pela equipe, ativada no primeiro acesso
   | "PROFESSOR_CRIADO"
   | "PROFESSOR_CODIGO_REENVIADO"
+  | "PROFESSOR_INATIVADO"
+  | "PROFESSOR_REATIVADO"
   | "PRIMEIRO_ACESSO_CONCLUIDO"
   | "PRIMEIRO_ACESSO_FALHA"
   | "PARTICIPANTE_ATUALIZADO"

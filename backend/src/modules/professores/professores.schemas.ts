@@ -17,3 +17,11 @@ export const professorSchema = z.object({
     }),
 });
 export type ProfessorInput = z.infer<typeof professorSchema>;
+
+// inativacao: motivo obrigatorio (visivel so pra equipe). "transferirPara" e obrigatorio quando o professor tem
+// evento em aberto: "EQUIPE" (o evento fica sem professor, com a equipe) ou o id de outro professor ativo
+export const inativacaoProfessorSchema = z.object({
+  motivo: z.string().trim().min(3, "Informe o motivo da inativação.").max(500, "O motivo pode ter no máximo 500 caracteres."),
+  transferirPara: z.union([z.literal("EQUIPE"), z.string().uuid("Professor de destino inválido.")]).optional(),
+});
+export type InativacaoProfessorInput = z.infer<typeof inativacaoProfessorSchema>;

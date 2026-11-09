@@ -32,3 +32,11 @@ export type EventoInput = z.infer<typeof eventoSchema>;
 
 export const eventoUpdateSchema = eventoSchema.partial();
 export type EventoUpdateInput = z.infer<typeof eventoUpdateSchema>;
+
+// o professor corrige a proposta de alteracao (pendente) ou a reenvia depois de recusada, com uma resposta
+// opcional. Campo que nao vier fica como estava na proposta
+export const propostaEventoSchema = eventoSchema
+  .pick({ salaId: true, horario: true, cargaHoraria: true, palestranteId: true })
+  .partial()
+  .extend({ resposta: z.string().trim().max(1000, "A resposta pode ter no máximo 1000 caracteres.").optional() });
+export type PropostaEventoInput = z.infer<typeof propostaEventoSchema>;

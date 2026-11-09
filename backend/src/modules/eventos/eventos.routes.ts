@@ -9,7 +9,7 @@ import { questionarioService } from "../questionario/questionario.service";
 import { respostasQuestionarioSchema } from "../questionario/questionario.schemas";
 import { recusaSchema, reenvioSchema } from "../aprovacoes/aprovacoes.schemas";
 import { eventosService } from "./eventos.service";
-import { eventoSchema, eventoUpdateSchema } from "./eventos.schemas";
+import { eventoSchema, eventoUpdateSchema, propostaEventoSchema } from "./eventos.schemas";
 
 export const eventosRouter = Router();
 
@@ -55,15 +55,55 @@ eventosRouter.post(
   }),
 );
 
-// edita um evento: equipe qualquer um, professor so os dele. Evento encerrado ninguem edita (409)
+// edita um evento: equipe qualquer um, professor so os dele. Evento encerrado ninguem edita (409).
+// propostaEnviada: a mudanca de sala/horario/carga/palestrante do professor virou proposta (aguarda a
+// equipe); avisoInscritos: quantos inscritos foram avisados por e-mail da mudanca
 eventosRouter.put(
   "/:id",
   autenticar,
   autorizar("ADMINISTRADOR", "SECRETARIA", "PROFESSOR"),
   validarCorpo(eventoUpdateSchema),
   asyncHandler(async (req, res) => {
-    const evento = await eventosService.atualizar(req.params.id, req.body, atorDe(req));
-    res.json(eventoParaDTO(evento, false));
+    const { evento, propostaEnviada, avisoInscritos } = await eventosService.atualizar(req.params.id, req.body, atorDe(req));
+    res.json({ ...eventoParaDTO(evento, false), propostaEnviada, avisoInscritos });
+  }),
+);
+
+// proposta de alteracao de evento aprovado: o professor corrige a pendente ou reenvia a recusada (resposta
+// opcional) e pode cancelar; a equipe aprova (sem motivo) ou recusa (motivo obrigatorio)
+eventosRouter.put(
+  "/:id/proposta",
+  autenticar,
+  autorizar("PROFESSOR"),
+  validarCorpo(propostaEventoSchema),
+  asyncHandler(async (req, res) => {
+    res.json(eventoParaDTO(await eventosService.editarProposta(req.params.id, req.body, atorDe(req)), false));
+  }),
+);
+eventosRouter.delete(
+  "/:id/proposta",
+  autenticar,
+  autorizar("ADMINISTRADOR", "SECRETARIA", "PROFESSOR"),
+  asyncHandler(async (req, res) => {
+    res.json(eventoParaDTO(await eventosService.cancelarProposta(req.params.id, atorDe(req)), false));
+  }),
+);
+eventosRouter.post(
+  "/:id/proposta/aprovar",
+  autenticar,
+  autorizar("ADMINISTRADOR", "SECRETARIA"),
+  asyncHandler(async (req, res) => {
+    const { evento, avisoInscritos } = await eventosService.aprovarProposta(req.params.id, atorDe(req));
+    res.json({ ...eventoParaDTO(evento, false), avisoInscritos });
+  }),
+);
+eventosRouter.post(
+  "/:id/proposta/recusar",
+  autenticar,
+  autorizar("ADMINISTRADOR", "SECRETARIA"),
+  validarCorpo(recusaSchema),
+  asyncHandler(async (req, res) => {
+    res.json(eventoParaDTO(await eventosService.recusarProposta(req.params.id, req.body.motivo, atorDe(req)), false));
   }),
 );
 
@@ -97,11 +137,12 @@ eventosRouter.post(
     res.json(eventoParaDTO(await eventosService.recusar(req.params.id, req.body.motivo, atorDe(req)), false));
   }),
 );
-// o professor reenvia o proprio evento recusado, com uma resposta opcional (volta para pendente)
+// o professor reenvia o proprio evento recusado, com uma resposta opcional (volta para pendente). A equipe
+// so reenvia evento recusado que ficou com ela (transferido na inativacao do professor)
 eventosRouter.post(
   "/:id/reenviar",
   autenticar,
-  autorizar("PROFESSOR"),
+  autorizar("ADMINISTRADOR", "SECRETARIA", "PROFESSOR"),
   validarCorpo(reenvioSchema),
   asyncHandler(async (req, res) => {
     res.json(eventoParaDTO(await eventosService.reenviar(req.params.id, req.body.resposta, atorDe(req)), false));

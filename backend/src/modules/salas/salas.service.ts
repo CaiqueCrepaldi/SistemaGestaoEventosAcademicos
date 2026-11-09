@@ -35,7 +35,10 @@ async function atualizar(id: string, dados: SalaUpdateInput, atorId: string) {
 // remove uma sala, bloqueia se tiver evento vinculado (o banco tambem tem essa trava, isso so da uma mensagem melhor)
 async function remover(id: string, atorId: string) {
   await buscarOuFalhar(id);
-  const temEventoVinculado = (await prisma.evento.count({ where: { salaId: id } })) > 0;
+  // proposta de alteracao aberta que usa a sala tambem segura (a pendente reserva a sala)
+  const temEventoVinculado =
+    (await prisma.evento.count({ where: { salaId: id } })) > 0 ||
+    (await prisma.propostaAlteracao.count({ where: { novaSalaId: id, situacao: { in: ["PENDENTE", "RECUSADO"] } } })) > 0;
   if (temEventoVinculado) {
     throw AppError.conflito("CONFLITO_DEPENDENCIA", "Não é possível remover: existem eventos vinculados a esta sala.");
   }

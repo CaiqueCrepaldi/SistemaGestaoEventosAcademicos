@@ -7,7 +7,7 @@ import { ehEquipe } from "../../utils/escopo";
 import type { Palestrante } from "../../types/domain";
 import { recusaSchema, reenvioSchema } from "../aprovacoes/aprovacoes.schemas";
 import { palestrantesService } from "./palestrantes.service";
-import { palestranteSchema, palestranteUpdateSchema } from "./palestrantes.schemas";
+import { palestranteSchema, palestranteUpdateSchema, propostaPalestranteSchema } from "./palestrantes.schemas";
 
 export const palestrantesRouter = Router();
 
@@ -66,7 +66,8 @@ palestrantesRouter.post(
   }),
 );
 
-// edicao: equipe qualquer um; professor so os dele, enquanto nao estao aprovados
+// edicao: equipe qualquer um, direto; professor so os dele — num palestrante ja aprovado, a mudanca de
+// nome/e-mail vira proposta de alteracao (aguarda a equipe)
 palestrantesRouter.put(
   "/:id",
   autenticar,
@@ -88,8 +89,42 @@ palestrantesRouter.post(
   }),
 );
 
-// daqui pra baixo so a equipe: excluir, aprovar e recusar
+// proposta de alteracao: o professor corrige a pendente ou reenvia a recusada (resposta opcional) e pode cancelar
+palestrantesRouter.put(
+  "/:id/proposta",
+  autenticar,
+  autorizar("PROFESSOR"),
+  validarCorpo(propostaPalestranteSchema),
+  asyncHandler(async (req, res) => {
+    res.json(paraResposta(req, await palestrantesService.editarProposta(req.params.id, req.body, atorDe(req))));
+  }),
+);
+palestrantesRouter.delete(
+  "/:id/proposta",
+  autenticar,
+  autorizar("PROFESSOR"),
+  asyncHandler(async (req, res) => {
+    res.json(paraResposta(req, await palestrantesService.cancelarProposta(req.params.id, atorDe(req))));
+  }),
+);
+
+// daqui pra baixo so a equipe: excluir, aprovar e recusar (o palestrante e a proposta de alteracao dele)
 palestrantesRouter.use(autenticar, autorizar("ADMINISTRADOR", "SECRETARIA"));
+
+palestrantesRouter.post(
+  "/:id/proposta/aprovar",
+  asyncHandler(async (req, res) => {
+    res.json(paraResposta(req, await palestrantesService.aprovarProposta(req.params.id, atorDe(req))));
+  }),
+);
+
+palestrantesRouter.post(
+  "/:id/proposta/recusar",
+  validarCorpo(recusaSchema),
+  asyncHandler(async (req, res) => {
+    res.json(paraResposta(req, await palestrantesService.recusarProposta(req.params.id, req.body.motivo, atorDe(req))));
+  }),
+);
 
 palestrantesRouter.post(
   "/:id/aprovar",

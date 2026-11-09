@@ -794,6 +794,15 @@ h1, h2, h3 {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  /* e um fieldset (desabilitado quando o questionario esta travado): sem a moldura padrao */
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.questionario-builder:disabled {
+  opacity: 0.75;
 }
 
 .questionario-pergunta {
@@ -1580,4 +1589,46 @@ h1, h2, h3 {
 .aviso-recusados a {
   color: inherit;
   font-weight: 700;
+}
+
+/* proposta de alteracao de evento/palestrante ja aprovado (antes -> depois) */
+.proposta-resumo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.proposta-mudancas {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  white-space: normal;
+  max-width: 320px;
+}
+
+.proposta-no-evento {
+  padding: 10px 12px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 8px;
+}
+
+.proposta-no-evento .proposta-mudancas {
+  max-width: none;
+}
+
+.proposta-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* eventos em aberto na inativacao do professor */
+.lista-eventos-em-aberto {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
 }

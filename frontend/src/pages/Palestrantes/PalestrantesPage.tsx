@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { DialogoAprovacao, type AcaoAprovacao } from "../../components/aprovacao/DialogoAprovacao";
+import { ListaMudancas, ResumoProposta, type Mudanca } from "../../components/aprovacao/ResumoProposta";
 import { SituacaoAprovacao } from "../../components/aprovacao/SituacaoAprovacao";
 import { Campo, LegendaObrigatorio } from "../../components/ui/Campo";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
@@ -8,7 +9,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
 import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
-import { ApiError, avisarAprovacoesAlteradas, eventoService, palestranteService } from "../../services";
+import { ApiError, aprovacaoService, avisarAprovacoesAlteradas, eventoService, palestranteService, type AlvoAprovacao } from "../../services";
 import type { Evento, Palestrante, SituacaoAprovacao as Situacao } from "../../types";
 import { validarEmail, validarNome } from "../../utils/validacao";
 
@@ -30,6 +31,15 @@ function iniciais(nome: string): string {
   return (primeira + ultima).toUpperCase();
 }
 
+// o que a proposta muda no palestrante (nome e/ou e-mail)
+function mudancasDoPalestrante(p: Palestrante): Mudanca[] {
+  if (!p.proposta) return [];
+  const mudancas: Mudanca[] = [];
+  if (p.proposta.nome !== p.nome) mudancas.push({ rotulo: "Nome", antes: p.nome, depois: p.proposta.nome });
+  if (p.proposta.email !== p.email) mudancas.push({ rotulo: "E-mail", antes: p.email ?? "—", depois: p.proposta.email });
+  return mudancas;
+}
+
 function formatarDataHora(iso: string): string {
   return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
@@ -40,7 +50,10 @@ export function PalestrantesPage() {
   const ehProfessor = usuario?.perfil === "PROFESSOR";
   const ehEquipe = usuario?.perfil === "ADMINISTRADOR" || usuario?.perfil === "SECRETARIA";
   const [filtroSituacao, setFiltroSituacao] = useState<"" | Situacao>("");
-  const [acaoAprovacao, setAcaoAprovacao] = useState<{ acao: AcaoAprovacao; palestrante: Palestrante } | null>(null);
+  const [acaoAprovacao, setAcaoAprovacao] = useState<{ acao: AcaoAprovacao; palestrante: Palestrante; alvo?: AlvoAprovacao } | null>(null);
+  // resposta opcional ao reenviar uma proposta recusada; cancelar a proposta pede confirmacao
+  const [respostaProposta, setRespostaProposta] = useState("");
+  const [cancelandoProposta, setCancelandoProposta] = useState<Palestrante | null>(null);
   const [palestrantes, setPalestrantes] = useState<Palestrante[]>([]);
   // enquanto carrega a lista diz "Carregando" (e nao "Nenhum palestrante cadastrado")
   const [carregando, setCarregando] = useState(true);
@@ -74,9 +87,13 @@ export function PalestrantesPage() {
     setModalAberto(true);
   }
 
+  // professor num palestrante aprovado com proposta aberta: o formulario mostra os valores propostos (corrigir
+  // a proposta ou reenviar a recusada); sem proposta, os atuais
   function abrirEdicao(palestrante: Palestrante) {
     setEditando(palestrante);
-    setForm({ nome: palestrante.nome, email: palestrante.email ?? "" });
+    const proposta = ehProfessor && palestrante.proposta;
+    setForm(proposta ? { nome: proposta.nome, email: proposta.email } : { nome: palestrante.nome, email: palestrante.email ?? "" });
+    setRespostaProposta("");
     limpar();
     setModalAberto(true);
   }
@@ -98,9 +115,21 @@ export function PalestrantesPage() {
 
   async function salvar() {
     try {
-      if (editando) {
-        await palestranteService.update(editando.id, form);
-        toast.success("Palestrante atualizado.");
+      if (editando && editandoProposta) {
+        await aprovacaoService.editarPropostaPalestrante(editando.id, {
+          ...form,
+          ...(editando.proposta?.situacao === "RECUSADO" && respostaProposta.trim() ? { resposta: respostaProposta.trim() } : {}),
+        });
+        toast.success(editando.proposta?.situacao === "RECUSADO" ? "Alteração reenviada para aprovação." : "Proposta de alteração corrigida.");
+        avisarAprovacoesAlteradas();
+      } else if (editando) {
+        const atualizado = await palestranteService.update(editando.id, form);
+        if (atualizado.proposta && !editando.proposta) {
+          toast.success("Alteração enviada para aprovação da equipe. Até lá o palestrante continua como está.");
+          avisarAprovacoesAlteradas();
+        } else {
+          toast.success("Palestrante atualizado.");
+        }
       } else {
         await palestranteService.create(form);
         toast.success(ehProfessor ? "Palestrante enviado para aprovação da equipe." : "Palestrante cadastrado.");
@@ -113,6 +142,21 @@ export function PalestrantesPage() {
       setConfirmandoSalvar(false);
       if (erro instanceof ApiError && erro.code === "EMAIL_DUPLICADO") mostrar({ email: erro.message });
       else if (!mostrarErroDaApi(erro)) toast.error(erro instanceof Error ? erro.message : "Não foi possível salvar o palestrante.");
+    }
+  }
+
+  async function cancelarProposta() {
+    if (!cancelandoProposta) return;
+    try {
+      await aprovacaoService.cancelarProposta("PALESTRANTE", cancelandoProposta.id);
+      toast.success("Proposta de alteração cancelada.");
+      avisarAprovacoesAlteradas();
+      setModalAberto(false);
+      await carregar();
+    } catch (erro) {
+      toast.error(erro instanceof Error ? erro.message : "Não foi possível cancelar a proposta.");
+    } finally {
+      setCancelandoProposta(null);
     }
   }
 
@@ -185,10 +229,16 @@ export function PalestrantesPage() {
     );
   }
 
-  // o professor so edita os palestrantes dele enquanto nao estao aprovados; a equipe edita e exclui qualquer um
+  // o professor edita os palestrantes dele (no aprovado, nome/e-mail viram proposta de alteracao para a equipe);
+  // a equipe edita direto e exclui qualquer um
   const ehDoProfessor = (p: Palestrante) => ehProfessor && p.criadoPorId === usuario?.id;
-  const podeEditar = (p: Palestrante) => ehEquipe || (ehDoProfessor(p) && p.situacao !== "APROVADO");
-  const visiveis = palestrantes.filter((p) => !filtroSituacao || p.situacao === filtroSituacao);
+  const podeEditar = (p: Palestrante) => ehEquipe || ehDoProfessor(p);
+  // o formulario aberto corrige a proposta aberta (pendente ou recusada) do professor
+  const editandoProposta = ehProfessor && !!editando?.proposta;
+  // "Aguardando aprovação" e "Recusados" incluem os aprovados com proposta nessa situacao
+  const visiveis = palestrantes.filter(
+    (p) => !filtroSituacao || p.situacao === filtroSituacao || (filtroSituacao !== "APROVADO" && p.proposta?.situacao === filtroSituacao),
+  );
 
   return (
     <div>
@@ -225,6 +275,13 @@ export function PalestrantesPage() {
                 <td>{palestrante.email ?? "—"}</td>
                 <td>
                   <SituacaoAprovacao situacao={palestrante.situacao} motivoRecusa={palestrante.motivoRecusa} />
+                  {palestrante.proposta && (
+                    <ResumoProposta
+                      situacao={palestrante.proposta.situacao}
+                      motivoRecusa={palestrante.proposta.motivoRecusa}
+                      mudancas={mudancasDoPalestrante(palestrante)}
+                    />
+                  )}
                 </td>
                 <td className="table-actions">
                   {ehEquipe && palestrante.situacao === "PENDENTE" && (
@@ -237,12 +294,25 @@ export function PalestrantesPage() {
                       </button>
                     </>
                   )}
+                  {ehEquipe && palestrante.proposta?.situacao === "PENDENTE" && (
+                    <>
+                      <button className="btn btn-primary" onClick={() => setAcaoAprovacao({ acao: "aprovar", palestrante, alvo: "proposta" })}>
+                        Aprovar alteração
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-danger"
+                        onClick={() => setAcaoAprovacao({ acao: "recusar", palestrante, alvo: "proposta" })}
+                      >
+                        Recusar alteração
+                      </button>
+                    </>
+                  )}
                   {ehDoProfessor(palestrante) && palestrante.situacao === "RECUSADO" && (
                     <button className="btn btn-primary" onClick={() => setAcaoAprovacao({ acao: "reenviar", palestrante })}>
                       Reenviar
                     </button>
                   )}
-                  {palestrante.criadoPorId && (ehEquipe || ehDoProfessor(palestrante)) && (
+                  {(palestrante.criadoPorId || palestrante.proposta) && (ehEquipe || ehDoProfessor(palestrante)) && (
                     <button className="btn btn-ghost" onClick={() => setAcaoAprovacao({ acao: "historico", palestrante })}>
                       Histórico
                     </button>
@@ -272,6 +342,10 @@ export function PalestrantesPage() {
           acao={acaoAprovacao.acao}
           tipo="PALESTRANTE"
           item={{ id: acaoAprovacao.palestrante.id, nome: acaoAprovacao.palestrante.nome }}
+          alvo={acaoAprovacao.alvo}
+          detalhe={
+            acaoAprovacao.alvo === "proposta" ? <ListaMudancas mudancas={mudancasDoPalestrante(acaoAprovacao.palestrante)} /> : undefined
+          }
           onFechar={() => setAcaoAprovacao(null)}
           onConcluido={() => {
             setAcaoAprovacao(null);
@@ -281,7 +355,10 @@ export function PalestrantesPage() {
       )}
 
       {modalAberto && (
-        <Modal title={editando ? "Editar palestrante" : "Novo palestrante"} onClose={() => setModalAberto(false)}>
+        <Modal
+          title={editandoProposta ? "Proposta de alteração do palestrante" : editando ? "Editar palestrante" : "Novo palestrante"}
+          onClose={() => setModalAberto(false)}
+        >
           <form
             className="form"
             ref={formRef}
@@ -293,12 +370,46 @@ export function PalestrantesPage() {
             }}
           >
             <LegendaObrigatorio />
+            {editando?.proposta && (
+              <div className="proposta-no-evento">
+                <ResumoProposta
+                  situacao={editando.proposta.situacao}
+                  motivoRecusa={editando.proposta.motivoRecusa}
+                  mudancas={mudancasDoPalestrante(editando)}
+                />
+                {ehProfessor ? (
+                  <div className="proposta-acoes">
+                    <button type="button" className="btn btn-ghost btn-danger" onClick={() => setCancelandoProposta(editando)}>
+                      Cancelar a proposta
+                    </button>
+                  </div>
+                ) : (
+                  <p className="form-hint">
+                    {editando.proposta.situacao === "PENDENTE"
+                      ? "Aprove ou recuse a alteração pela lista. Se você editar aqui, a mudança vale na hora."
+                      : "O professor vê o motivo e pode corrigir e reenviar."}
+                  </p>
+                )}
+              </div>
+            )}
+            {ehProfessor && editando?.situacao === "APROVADO" && (
+              <p className="form-hint">
+                {editandoProposta
+                  ? "Os campos abaixo são os valores propostos: corrija e salve. O palestrante continua como está até a equipe aprovar."
+                  : "Palestrante já aprovado: a mudança de nome ou e-mail vai para a aprovação da equipe, e ele continua como está até lá."}
+              </p>
+            )}
             <Campo nome="nome" rotulo="Nome" obrigatorio erro={erros.nome}>
               <input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} autoFocus />
             </Campo>
             <Campo nome="email" rotulo="E-mail" obrigatorio erro={erros.email}>
               <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </Campo>
+            {editandoProposta && editando?.proposta?.situacao === "RECUSADO" && (
+              <Campo nome="respostaProposta" rotulo="Resposta para a equipe (opcional)">
+                <textarea rows={3} maxLength={1000} value={respostaProposta} onChange={(e) => setRespostaProposta(e.target.value)} />
+              </Campo>
+            )}
             <div className="modal-footer">
               <button type="button" className="btn btn-ghost" onClick={() => setModalAberto(false)}>Cancelar</button>
               <button type="submit" className="btn btn-primary">Salvar</button>
@@ -313,6 +424,18 @@ export function PalestrantesPage() {
           message={`Salvar as alterações de "${form.nome}"?`}
           onConfirm={() => void salvar()}
           onCancel={() => setConfirmandoSalvar(false)}
+        />
+      )}
+
+      {cancelandoProposta && (
+        <ConfirmDialog
+          title="Cancelar a proposta de alteração"
+          message={`Tem certeza que deseja cancelar a proposta de alteração de "${cancelandoProposta.nome}"? O palestrante continua como está.`}
+          confirmLabel="Cancelar a proposta"
+          cancelLabel="Voltar"
+          tone="danger"
+          onConfirm={() => void cancelarProposta()}
+          onCancel={() => setCancelandoProposta(null)}
         />
       )}
 

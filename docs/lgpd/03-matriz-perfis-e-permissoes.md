@@ -1,7 +1,9 @@
 # Matriz de perfis e permissões — SGEA
 
-**Data:** 09/11/2026 · **Versão:** 4 (perfil PROFESSOR e aprovação de eventos
-e palestrantes pela equipe — seção "Perfil PROFESSOR" no fim. A versão 3, de
+**Data:** 09/11/2026 · **Versão:** 5 (propostas de alteração, questionário
+travado e inativação do professor, na seção "Perfil PROFESSOR". A versão 4, do
+mesmo dia, trouxe o perfil PROFESSOR e a aprovação de eventos e palestrantes
+pela equipe. A versão 3, de
 29/09/2026, trouxe o 2FA opcional para todos os perfis,
 regras novas de feedback e de inativação; a versão 2, de 28/09/2026,
 incluiu as rotas do 2FA, do limite de tentativas e do aceite versionado)
@@ -119,17 +121,21 @@ professor (ele não descobre que existe).
 
 | Rota | Método | PROFESSOR | Regra |
 |---|---|:---:|---|
-| `/api/professores` (listar, criar) e `/:id/reenviar-codigo` | GET/POST | ❌ | Só ADMINISTRADOR e SECRETARIA |
+| `/api/professores` (listar, criar), `/:id/reenviar-codigo`, `/:id/eventos-em-aberto`, `/:id/inativar` e `/:id/reativar` | GET/POST | ❌ | Só ADMINISTRADOR e SECRETARIA. Inativar exige motivo e, se houver evento em aberto, para quem transferir (professor ativo ou equipe) |
 | `/api/dashboard` | GET | ✅ | Mesmo service; os números contam só os eventos dele, e só aprovados |
 | `/api/eventos` e `/api/eventos/:id` | GET | ✅ | Só os dele, em qualquer situação |
 | `/api/eventos` | POST | ✅ | Nasce `PENDENTE` (a equipe cria `APROVADO`); pode usar palestrante aprovado ou um dele ainda pendente; já reserva a sala |
-| `/api/eventos/:id` | PUT/DELETE | ✅ | Só os dele. Evento encerrado: `409 EVENTO_ENCERRADO` para todos os perfis. Evento já aprovado: sala, horário, carga horária e palestrante `409` ("vai precisar de aprovação"); título, tema e questionário pode |
+| `/api/eventos/:id` | PUT/DELETE | ✅ | Só os dele. Evento encerrado: `409 EVENTO_ENCERRADO` para todos os perfis. Evento já aprovado: título, tema e questionário mudam na hora; sala, horário, carga horária e palestrante viram **proposta de alteração** (uma pendente por evento, só antes de o evento começar). Questionário com tentativa de aluno: `409 QUESTIONARIO_TRAVADO` para todos os perfis |
+| `/api/eventos/:id/proposta` | PUT/DELETE | ✅ | Só o dono: corrige a proposta pendente, reenvia a recusada (resposta opcional) ou cancela |
+| `/api/eventos/:id/proposta/aprovar` e `/recusar` | POST | ❌ | Só a equipe. Aprovar confere de novo sala, capacidade, conflito e palestrante aprovado, aplica e avisa os inscritos por e-mail; recusar exige motivo |
 | `/api/eventos/:id/aprovar` e `/recusar` | POST | ❌ | Só a equipe. Recusa exige motivo (mín. 10 caracteres); aprovar confere a sala e se o palestrante já está aprovado |
 | `/api/eventos/:id/reenviar` | POST | ✅ | Só o dono, só evento `RECUSADO`; volta para `PENDENTE` e confere a sala de novo |
 | `/api/eventos/:id/historico` | GET | ✅ | Equipe e o professor dono |
 | `/api/palestrantes` | GET | ✅ | Aprovados + os dele; e-mail e situação só dos dele |
 | `/api/palestrantes` | POST | ✅ | Nasce `PENDENTE` |
-| `/api/palestrantes/:id` | PUT | ✅ | Só os dele e enquanto não aprovados |
+| `/api/palestrantes/:id` | PUT | ✅ | Só os dele. Já aprovado: nome e e-mail viram proposta de alteração |
+| `/api/palestrantes/:id/proposta` | PUT/DELETE | ✅ | Só o dono: corrige, reenvia ou cancela a proposta |
+| `/api/palestrantes/:id/proposta/aprovar` e `/recusar` | POST | ❌ | Só a equipe |
 | `/api/palestrantes/:id` | DELETE | ❌ | Só a equipe |
 | `/api/palestrantes/:id/reenviar` e `/historico` | POST/GET | ✅ | Só os dele |
 | `/api/inscricoes`, `/inscricoes/gestao`, `POST /inscricoes`, `PUT` e `DELETE /inscricoes/:id` | todos | ✅ | Só nos eventos dele (inscrição manual, check-in e cancelamento). Evento não aprovado não aceita inscrição |
@@ -143,7 +149,13 @@ professor (ele não descobre que existe).
 | `/api/salas` | POST/PUT/DELETE | ❌ | Só a equipe |
 | `/api/logs-auditoria` | GET | ❌ | Só a equipe |
 | `/api/meus-dados` | GET | ❌ | Só o aluno |
-| `/api/aprovacoes/contadores` | GET | ✅ | Equipe recebe os pendentes; professor, os recusados dele |
+| `/api/aprovacoes/contadores` | GET | ✅ | Equipe recebe os pendentes; professor, os recusados dele (propostas incluídas) |
+
+**Professor inativado:** o login responde `403` com a mesma mensagem do aluno
+inativo, as sessões abertas caem e ele deixa de ser destino de transferência.
+Os eventos em aberto (não encerrados, ou encerrados há menos de 24 horas)
+passam antes para outro professor ativo ou para a equipe; os encerrados há
+mais tempo continuam com o nome dele.
 
 **Aluno e evento não aprovado:** evento `PENDENTE` ou `RECUSADO` não aparece
 para o aluno em lugar nenhum (programação, detalhe, questionário, inscrição),

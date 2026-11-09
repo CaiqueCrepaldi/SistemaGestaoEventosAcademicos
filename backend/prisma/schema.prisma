@@ -66,6 +66,10 @@ model Usuario {
   // ultimo passo de tempo TOTP aceito (floor(unix/30)): codigo do mesmo passo ou anterior e recusado
   mfaUltimoPasso      Int?
   mfaAtivadoEm        DateTime?
+  // conta de PROFESSOR inativada pela equipe (o login recusa; os eventos em aberto sao transferidos antes).
+  // O aluno continua usando Participante.ativo. motivoInativacao: texto livre, visivel so pra equipe
+  ativo               Boolean       @default(true)
+  motivoInativacao    String?       @db.VarChar(500)
   criadoEm            DateTime      @default(now())
 
   checkinsFeitos        Inscricao[]            @relation("CheckinFeitoPor")
@@ -77,6 +81,7 @@ model Usuario {
   palestrantesCriados   Palestrante[]          @relation("PalestranteCriadoPor")
   primeiroAcesso        PrimeiroAcesso?
   historicoAprovacoes   HistoricoAprovacao[]
+  propostasCriadas      PropostaAlteracao[]
 
   @@map("usuarios")
 }
@@ -112,16 +117,17 @@ model Sala {
 // nome/email em texto puro por decisao (nao sao sensiveis, edicao restrita a
 // equipe, nome ja e publico na agenda) — ver docs/lgpd/07-medidas-tecnicas-de-seguranca.md
 model Palestrante {
-  id           String            @id
+  id           String              @id
   nome         String
-  email        String            @unique
+  email        String              @unique
   eventos      Evento[]
   // aprovacao (ver SituacaoAprovacao). motivoRecusa = o da ultima recusa, apagado ao reenviar/aprovar;
   // o historico completo fica em historico_aprovacoes. criadoPorId null = criado pela equipe
-  situacao     SituacaoAprovacao @default(APROVADO)
-  motivoRecusa String?           @db.Text
+  situacao     SituacaoAprovacao   @default(APROVADO)
+  motivoRecusa String?             @db.Text
   criadoPorId  String?
-  criadoPor    Usuario?          @relation("PalestranteCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  criadoPor    Usuario?            @relation("PalestranteCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  propostas    PropostaAlteracao[]
 
   @@map("palestrantes")
 }
@@ -150,6 +156,7 @@ model Evento {
   inscricoes Inscricao[]
   feedbacks  Feedback[]
   tentativas TentativaQuestionario[]
+  propostas  PropostaAlteracao[]
 
   @@map("eventos")
 }
@@ -360,7 +367,8 @@ model HistoricoAprovacao {
   // EVENTO ou PALESTRANTE
   tipo      String   @db.VarChar(20)
   itemId    String   @db.VarChar(191)
-  // ENVIADO, APROVADO, RECUSADO ou REENVIADO
+  // ENVIADO, APROVADO, RECUSADO, REENVIADO; da proposta de alteracao: PROPOSTA_ENVIADA, PROPOSTA_EDITADA,
+  // PROPOSTA_APROVADA, PROPOSTA_RECUSADA, PROPOSTA_REENVIADA, PROPOSTA_CANCELADA; e TRANSFERIDO (evento)
   acao      String   @db.VarChar(20)
   // motivo da recusa ou resposta do professor no reenvio
   mensagem  String?  @db.Text
@@ -371,4 +379,40 @@ model HistoricoAprovacao {
 
   @@index([tipo, itemId])
   @@map("historico_aprovacoes")
+}
+
+// proposta de alteracao de um evento ou palestrante JA APROVADO, feita pelo professor: sala, horario,
+// carga horaria e palestrante (evento) ou nome e e-mail (palestrante) so mudam depois que a equipe aprova;
+// ate la o item continua valendo com os dados antigos. Guarda os valores PROPOSTOS completos (os atuais
+// estao no proprio item). Uma proposta "aberta" por item (PENDENTE ou RECUSADO): a recusada pode ser
+// corrigida e reenviada; aprovada, fica como registro. A PENDENTE de evento ja reserva a sala proposta.
+// O passo a passo (envio, recusa com motivo, reenvio com resposta) fica em historico_aprovacoes
+model PropostaAlteracao {
+  id                String            @id
+  // EVENTO ou PALESTRANTE (preenche eventoId ou palestranteId)
+  tipo              String            @db.VarChar(20)
+  eventoId          String?
+  evento            Evento?           @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  palestranteId     String?
+  palestrante       Palestrante?      @relation(fields: [palestranteId], references: [id], onDelete: Cascade)
+  situacao          SituacaoAprovacao @default(PENDENTE)
+  // valores propostos para o evento (sem chave estrangeira: sala e palestrante sao conferidos de novo na aprovacao)
+  novaSalaId        String?           @db.VarChar(191)
+  novoHorario       DateTime?
+  novaCargaHoraria  Float?
+  novoPalestranteId String?           @db.VarChar(191)
+  // valores propostos para o palestrante
+  novoNome          String?           @db.VarChar(191)
+  novoEmail         String?           @db.VarChar(191)
+  motivoRecusa      String?           @db.Text
+  criadoPorId       String?
+  criadoPor         Usuario?          @relation(fields: [criadoPorId], references: [id], onDelete: SetNull)
+  criadoEm          DateTime          @default(now())
+  atualizadoEm      DateTime          @updatedAt
+  decididoEm        DateTime?
+
+  @@index([eventoId, situacao])
+  @@index([palestranteId, situacao])
+  @@index([novaSalaId, situacao])
+  @@map("propostas_alteracao")
 }

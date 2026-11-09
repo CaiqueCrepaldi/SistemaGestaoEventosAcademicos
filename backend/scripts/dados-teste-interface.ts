@@ -16,6 +16,9 @@ if (!process.env.DATABASE_URL?.includes("SGEA_dev")) {
   process.exit(1);
 }
 
+// chaves de limite de tentativas do IP local (IPv4 e IPv6)
+const IP_LOCAL = { OR: [{ chave: { contains: "127.0.0.1" } }, { chave: { endsWith: ":ip:::1" } }] };
+
 const ARQUIVO = join(__dirname, "..", "..", "frontend", "testes-interface", "dados-ui.json");
 
 async function main() {
@@ -42,8 +45,9 @@ async function main() {
         });
         contas[perfil] = { id: usuario.id, email, senha };
       }
-      // o teste de interface sai do 127.0.0.1: zera o contador de tentativas desse IP
-      await prisma.limiteAcesso.deleteMany({ where: { chave: { contains: "127.0.0.1" } } });
+      // o teste de interface sai da propria maquina: zera o contador de tentativas desse IP (127.0.0.1, ou ::1
+      // quando o navegador chama "localhost" por IPv6)
+      await prisma.limiteAcesso.deleteMany({ where: IP_LOCAL });
       writeFileSync(ARQUIVO, JSON.stringify({ sufixo, contas }, null, 2));
       console.log(`[dados-teste-interface] preparado (sufixo ${sufixo})`);
       return;
@@ -60,7 +64,8 @@ async function main() {
       await prisma.certificado.deleteMany({
         where: { inscricao: { OR: [{ eventoId: { in: eventos.map((e) => e.id) } }, { participanteId: { in: participantes } }] } },
       });
-      // historico da aprovacao dos eventos e palestrantes do teste (nao tem chave estrangeira pro item)
+      // historico da aprovacao dos eventos e palestrantes do teste (nao tem chave estrangeira pro item). A
+      // proposta de alteracao sai junto com o evento/palestrante (cascata)
       const palestrantesDoTeste = await prisma.palestrante.findMany({ where: { email: { contains: sufixo } }, select: { id: true } });
       await prisma.historicoAprovacao.deleteMany({
         where: { itemId: { in: [...eventos.map((e) => e.id), ...palestrantesDoTeste.map((p) => p.id)] } },
@@ -80,9 +85,17 @@ async function main() {
       // cadastros que ficaram sem confirmar e o contador de envios do codigo dos e-mails do teste
       await prisma.cadastroPendente.deleteMany({ where: { emailLogin: { contains: sufixo } } });
       await prisma.limiteAcesso.deleteMany({
-        where: { chave: { in: usuarios.map((u) => `cadastro:conta:${indiceBusca(u.emailLogin)}`) } },
+        where: {
+          chave: {
+            in: [
+              ...usuarios.map((u) => `cadastro:conta:${indiceBusca(u.emailLogin)}`),
+              // contador de envios do codigo do professor criado pelo teste
+              ...usuarios.map((u) => `primeiro-acesso:conta:${u.id}`),
+            ],
+          },
+        },
       });
-      await prisma.limiteAcesso.deleteMany({ where: { chave: { contains: "127.0.0.1" } } });
+      await prisma.limiteAcesso.deleteMany({ where: IP_LOCAL });
       console.log(`[dados-teste-interface] limpo: ${usuarios.length} conta(s), ${eventos.length} evento(s)`);
       return;
     }

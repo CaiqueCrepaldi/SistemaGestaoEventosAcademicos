@@ -110,7 +110,41 @@ async function enviarCodigoPrimeiroAcesso(destinatario: string, nome: string, co
   return enviar("primeiro-acesso", destinatario, assunto, html);
 }
 
+// texto que vem do cadastro (titulo do evento, nome da sala/palestrante) entra no html escapado
+function escaparHtml(texto: string): string {
+  return texto.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+export interface MudancaEvento {
+  rotulo: string;
+  antes: string;
+  depois: string;
+}
+
+interface DadosAlteracaoEvento {
+  participanteNome: string;
+  eventoTitulo: string;
+  mudancas: MudancaEvento[];
+}
+
+// aviso pro aluno inscrito quando sala, horario, carga horaria ou palestrante de um evento aprovado mudam
+// (proposta do professor aprovada pela equipe, ou edicao direta da equipe): so o que mudou, antes -> depois
+async function enviarAlteracaoEvento(destinatario: string, dados: DadosAlteracaoEvento): Promise<ResultadoEnvio> {
+  const assunto = `Evento alterado — ${dados.eventoTitulo}`;
+  const linhas = dados.mudancas
+    .map((m) => `<li><strong>${escaparHtml(m.rotulo)}:</strong> ${escaparHtml(m.antes)} → <strong>${escaparHtml(m.depois)}</strong></li>`)
+    .join("");
+  const html = `
+    <p>Olá, ${escaparHtml(dados.participanteNome)}!</p>
+    <p>O evento <strong>${escaparHtml(dados.eventoTitulo)}</strong>, em que você está inscrito, foi alterado:</p>
+    <ul>${linhas}</ul>
+    <p>Sua inscrição continua valendo. Se não puder comparecer no novo horário, você pode cancelá-la pelo sistema.</p>
+  `;
+  return enviar("alteracao-evento", destinatario, assunto, html);
+}
+
 export const emailService = {
+  enviarAlteracaoEvento,
   enviarCodigoPrimeiroAcesso,
   enviarConfirmacaoInscricao,
   enviarCancelamentoInscricao,

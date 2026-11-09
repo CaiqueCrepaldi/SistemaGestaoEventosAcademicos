@@ -684,6 +684,93 @@ try {
   checar("equipe não tem \"Meus dados\" no menu", (await page.locator("a.nav-link", { hasText: "Meus dados" }).count()) === 0);
   await sair(page);
 
+  // ---------------------------------------------------------------- etapa 3B
+  titulo("Proposta de alteração, questionário travado e inativação do professor");
+  const emailProfessor = `ui-professor-${sufixo}@umc.br`;
+  const nomeProfessor = `Professor Interface ${tag}`;
+  const SENHA_PROFESSOR = "Senha@Prof123";
+  const professorCriado = await api("POST", "/professores", tokenSecretaria, { nomeCompleto: nomeProfessor, email: emailProfessor });
+  await api("POST", "/auth/primeiro-acesso", undefined, { email: emailProfessor, codigo: professorCriado.corpo.codigoDemo, novaSenha: SENHA_PROFESSOR, aceiteLgpd: true });
+  const tokenProfessor = await tokenDe(emailProfessor, SENHA_PROFESSOR);
+  const salaProposta = await api("POST", "/salas", tokenSecretaria, { nome: `Sala Proposta UI ${sufixo}`, capacidade: 50 });
+  const daquiDezDias = new Date(Math.ceil((Date.now() + 10 * 24 * 3600 * 1000) / 3600000) * 3600000).toISOString();
+  const tituloDoProfessor = `Evento do Professor UI ${sufixo}`;
+  const eventoProfessor = await api("POST", "/eventos", tokenProfessor, {
+    titulo: tituloDoProfessor, horario: daquiDezDias, salaId: sala.corpo.id, palestranteId: palestrante.corpo.id, tema: "Tema", cargaHoraria: 2, questionario: questionario(),
+  });
+  await api("POST", `/eventos/${eventoProfessor.corpo.id}/aprovar`, tokenSecretaria);
+  const propostaApi = await api("PUT", `/eventos/${eventoProfessor.corpo.id}`, tokenProfessor, { salaId: salaProposta.corpo.id });
+  checar("a troca de sala do professor num evento aprovado vira proposta (API)", propostaApi.corpo?.proposta?.situacao === "PENDENTE", JSON.stringify(propostaApi.corpo));
+
+  await entrar(page, secretaria.email, secretaria.senha);
+  await page.goto(`${APP}/eventos`);
+  await page.locator("select[aria-label='Filtrar por situação']").selectOption("PENDENTE");
+  const linhaProposta = page.locator("tr", { hasText: tituloDoProfessor });
+  await linhaProposta.waitFor();
+  checar(
+    "\"Aguardando aprovação\" mostra a proposta do evento aprovado, com antes → depois",
+    (await linhaProposta.locator(".badge", { hasText: "Alteração aguardando aprovação" }).count()) === 1 &&
+      (await linhaProposta.locator(".proposta-mudancas").innerText()).includes(`Sala Proposta UI ${sufixo}`),
+  );
+  await linhaProposta.locator("button", { hasText: "Aprovar alteração" }).click();
+  const confirmaAprovacao = page.locator(".modal", { hasText: "Tem certeza que deseja aprovar a alteração" });
+  await confirmaAprovacao.waitFor();
+  checar("a confirmação da aprovação mostra o que muda", (await confirmaAprovacao.locator(".proposta-mudancas").count()) === 1);
+  await confirmaAprovacao.locator("button", { hasText: "Aprovar" }).click();
+  checar("aprovar avisa que a alteração foi aprovada", await esperarToast(page, "Alteração aprovada"));
+  await page.locator("select[aria-label='Filtrar por situação']").selectOption("");
+  const linhaAprovada = page.locator("tr", { hasText: tituloDoProfessor });
+  await linhaAprovada.locator(".proposta-resumo").waitFor({ state: "detached", timeout: 8000 }).catch(() => {});
+  checar(
+    "depois de aprovada, o evento aparece na sala nova e sem proposta",
+    (await linhaAprovada.innerText()).includes(`Sala Proposta UI ${sufixo}`) && (await linhaAprovada.locator(".proposta-resumo").count()) === 0,
+  );
+
+  // o "Evento UI" ja foi respondido pela aluna na secao do questionario
+  const linhaEventoRespondido = page.locator("tr").filter({ has: page.locator("td", { hasText: new RegExp(`^Evento UI ${sufixo}$`) }) });
+  await linhaEventoRespondido.locator("button", { hasText: "Editar" }).click();
+  const construtor = page.locator("fieldset.questionario-builder");
+  await construtor.waitFor();
+  checar(
+    "evento com respostas: questionário travado, só para leitura",
+    // o Playwright nao trata o fieldset como controle: confere os campos de dentro (desabilitados por ele)
+    (await temTexto(page, "Questionário travado: já há respostas de alunos.")) &&
+      (await construtor.locator("input").first().isDisabled()) &&
+      (await construtor.locator("input").last().isDisabled()),
+  );
+  await page.locator(".modal .modal-footer button", { hasText: "Cancelar" }).click();
+
+  await page.goto(`${APP}/professores`);
+  const linhaProfessor = page.locator("tr", { hasText: nomeProfessor });
+  await linhaProfessor.waitFor();
+  await linhaProfessor.locator("button", { hasText: "Inativar" }).click();
+  const modalInativar = page.locator(".modal", { hasText: "Motivo da inativação" });
+  await modalInativar.locator(".lista-eventos-em-aberto li").first().waitFor();
+  checar("inativar lista os eventos em aberto do professor", (await modalInativar.locator(".lista-eventos-em-aberto li", { hasText: tituloDoProfessor }).count()) === 1);
+  await modalInativar.locator("button[type=submit]").click();
+  checar(
+    "sem motivo e sem destino: os dois campos avisam",
+    (await temTexto(page, "Informe o motivo da inativação.")) && (await temTexto(page, "Escolha para quem vão os eventos em aberto.")),
+  );
+  await modalInativar.locator("#motivo").fill("Teste de interface");
+  await modalInativar.locator("#transferirPara").selectOption("EQUIPE");
+  await modalInativar.locator("button[type=submit]").click();
+  await page.locator(".modal", { hasText: "Tem certeza que deseja inativar" }).locator("button", { hasText: "Inativar" }).click();
+  checar("inativar transfere o evento para a equipe e avisa", await esperarToast(page, "1 evento(s) transferido(s) para a equipe"));
+  await linhaProfessor.locator(".badge", { hasText: "Inativo" }).waitFor({ timeout: 8000 }).catch(() => {});
+  checar(
+    "a lista mostra o professor inativo, com o motivo e o botão Reativar",
+    (await linhaProfessor.locator(".badge", { hasText: "Inativo" }).count()) === 1 &&
+      (await linhaProfessor.innerText()).includes("Teste de interface") &&
+      (await linhaProfessor.locator("button", { hasText: "Reativar" }).count()) === 1,
+  );
+  const loginDoInativo = await api("POST", "/auth/login", undefined, { emailLogin: emailProfessor, senha: SENHA_PROFESSOR });
+  checar("o professor inativo não entra (API: 403)", loginDoInativo.status === 403, loginDoInativo.status);
+  await linhaProfessor.locator("button", { hasText: "Reativar" }).click();
+  await page.locator(".modal", { hasText: "Reativar a conta" }).locator("button", { hasText: "Reativar" }).click();
+  checar("reativar devolve o acesso", await esperarToast(page, "Professor reativado"));
+  await sair(page);
+
   titulo("E / Esqueci a senha");
   await page.goto(`${APP}/esqueci-senha`);
   await page.click("button[type=submit]");

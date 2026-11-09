@@ -19,6 +19,6 @@ export type { PerguntaSemGabarito } from "./questionarioService";
 export { titularService } from "./titularService";
 export type { MeusDados } from "./titularService";
 export { aprovacaoService, avisarAprovacoesAlteradas, APROVACOES_ALTERADAS_EVENT } from "./aprovacaoService";
-export type { ContadoresAprovacao, TipoAprovacao } from "./aprovacaoService";
+export type { AlvoAprovacao, ContadoresAprovacao, DadosPropostaEvento, DadosPropostaPalestrante, TipoAprovacao } from "./aprovacaoService";
 export { professorService } from "./professorService";
-export type { EnvioCodigoProfessor, Professor, SituacaoProfessor } from "./professorService";
+export type { EnvioCodigoProfessor, EventoEmAberto, Professor, SituacaoProfessor } from "./professorService";

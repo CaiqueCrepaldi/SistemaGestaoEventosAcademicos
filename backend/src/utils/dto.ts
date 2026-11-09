@@ -68,6 +68,7 @@ export function palestranteParaDTO(palestrante: Palestrante, completo: boolean) 
         situacao: palestrante.situacao,
         motivoRecusa: palestrante.motivoRecusa,
         criadoPorId: palestrante.criadoPorId,
+        proposta: palestrante.proposta ?? null,
       }
     : base;
 }
@@ -108,7 +109,16 @@ export function eventoParaDTO(evento: Evento, paraAluno: boolean) {
     inscritos: evento.inscritos,
     // situacao da aprovacao, motivo da ultima recusa e quem criou: so pra equipe e professor (pro aluno
     // so chega evento aprovado)
-    ...(paraAluno ? {} : { situacao: evento.situacao, motivoRecusa: evento.motivoRecusa, criadoPorId: evento.criadoPorId }),
+    // A proposta de alteracao aberta e a trava do questionario tambem (o aluno ve o evento como esta valendo)
+    ...(paraAluno
+      ? {}
+      : {
+          situacao: evento.situacao,
+          motivoRecusa: evento.motivoRecusa,
+          criadoPorId: evento.criadoPorId,
+          questionarioTravado: evento.questionarioTravado ?? false,
+          proposta: evento.proposta ?? null,
+        }),
     questionario: paraAluno
       ? evento.questionario.map((p) => ({
           id: p.id,
