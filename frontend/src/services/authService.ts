@@ -102,6 +102,18 @@ export const authService = {
     return paraSessao(await api.post<LoginResponseDTO>("/auth/2fa/desativar", { senha, codigo }));
   },
 
+  // troca de senha pela Minha Conta (qualquer perfil). Com o 2FA ativo vai junto o codigo do aplicativo ou um
+  // codigo de recuperacao. Devolve a sessao reemitida: as outras sessoes da conta sao encerradas no servidor
+  async alterarSenha(dados: {
+    senhaAtual: string;
+    novaSenha: string;
+    confirmacaoSenha: string;
+    codigo?: string;
+    codigoRecuperacao?: string;
+  }): Promise<SessaoUsuario> {
+    return paraSessao(await api.post<LoginResponseDTO>("/auth/alterar-senha", dados));
+  },
+
   obterMe() {
     return api.get<UsuarioPerfil>("/usuarios/me");
   },

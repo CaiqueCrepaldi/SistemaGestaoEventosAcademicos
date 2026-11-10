@@ -20,6 +20,8 @@ const ACAO_LABEL: Record<string, string> = {
   RECUPERACAO_SENHA_SOLICITADA: "Recuperação de senha solicitada",
   RECUPERACAO_SENHA_FALHA: "Falha na recuperação de senha",
   SENHA_REDEFINIDA: "Senha redefinida",
+  SENHA_ALTERADA: "Senha alterada pelo próprio titular",
+  SENHA_ALTERACAO_FALHA: "Falha na troca de senha",
   SENHA_HASH_ATUALIZADO: "Hash da senha atualizado",
   MFA_ATIVADO: "2FA ativado",
   MFA_DESATIVADO: "2FA desativado",

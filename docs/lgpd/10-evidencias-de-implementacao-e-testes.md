@@ -10,11 +10,11 @@ verificação de todos os requisitos funcionais está em
 
 ## Testes automatizados (banco de desenvolvimento `SGEA_dev`)
 
-| Teste | Comando | Resultado em 09/11/2026 |
+| Teste | Comando | Resultado em 10/11/2026 |
 |---|---|---|
-| Requisitos pela API | `cd backend && npx tsx scripts/testar-requisitos.ts` | **460/460** verificações |
+| Requisitos pela API | `cd backend && npx tsx scripts/testar-requisitos.ts` | **492/492** verificações |
 | 2FA pela API | `cd backend && npx tsx scripts/testar-2fa.ts` | **55/55** |
-| Interface com navegador de verdade | passo a passo no topo de `frontend/testes-interface/testar-interface.mjs` (rodado no Microsoft Edge, numa cópia com `channel: "msedge"`) | **157/157** |
+| Interface com navegador de verdade | passo a passo no topo de `frontend/testes-interface/testar-interface.mjs` (rodado no Microsoft Edge, numa cópia com `channel: "msedge"`) | **168/168** |
 | Demonstração do hash de senha | `cd backend && npx tsx scripts/demonstrar-hash-senha.ts` | ver `07`, "Formato do hash de senha" |
 | Carga de demonstração | `cd backend && npx tsx scripts/carga-demonstracao.ts --aplicar` | 46 s; conferência no banco abaixo |
 
@@ -32,6 +32,7 @@ Os scripts de teste se recusam a rodar se o `DATABASE_URL` não for o
 | Criptografia só do que é credencial | `utils/criptografia.ts`, `mfa.service.ts` | `testar-2fa.ts`: segredo do 2FA gravado cifrado | Confirmado |
 | Conta do aluno só depois de confirmar o e-mail | `auth.service.ts`, `cadastros_pendentes` | R01 e R32: nenhuma conta antes do código; código e senha só em hash; 5 tentativas; reenvio com 60 s; expiração; limites por e-mail e IP | Confirmado |
 | Regra da senha nova | `utils/validacao.ts` (backend e frontend) | R33 e R17: senha fora da regra → `422`; interface com a lista de requisitos | Confirmado |
+| Troca de senha pela Minha Conta | `troca-senha.service.ts`, `auth.schemas.ts`, `AlterarSenha.tsx` | R46: os quatro perfis trocam; a senha antiga deixa de entrar; o token antigo cai e a sessão devolvida vale; senha atual errada conta no limite e 5 erros bloqueiam; regra, igual à atual e confirmação recusadas; com 2FA, sem código recusado e com código (ou de recuperação) aceito; código de "Esqueci minha senha" pendente invalidado; auditoria sem senha nem e-mail. Interface: trocar, sair e entrar com a nova | Confirmado |
 | E-mail do aluno não editável | `participantes.routes.ts` | R15: `PUT` com e-mail → `422` | Confirmado |
 | Professor ativado só pelo convite | `professores.service.ts`, `auth.routes.ts`, `PrimeiroAcessoPage.tsx` | R35: link com a chave depois do `#`, sem código; só o SHA-256 no banco; consultar não gasta; sem aceite → `422`; uso único; vencido recusado; reenvio invalida o anterior; chave errada cai no limite por IP; "Esqueci a senha" de quem espera o convite responde igual a e-mail inexistente; sem `APP_URL`, criar professor é recusado. Interface: login sem link de primeiro acesso; a chave some do endereço | Confirmado |
 | Check-in pedido pelo aluno e decidido pelo professor do evento ou pela equipe | `modules/checkin/`, `utils/checkin.ts` | R12 e R43: fora da janela recusado; professor de outro evento → `403`; grava quem decidiu e quando; recusa impede novo pedido; reversão dentro do prazo; depois do questionário → `PRESENCA_TRAVADA`; expiração idempotente; dashboard pela regra nova | Confirmado |

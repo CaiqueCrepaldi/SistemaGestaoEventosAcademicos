@@ -14,8 +14,12 @@ const BLOQUEIO_MS = 15 * 60 * 1000;
 
 // prefixo da chave identifica o fluxo e o alvo: login/recuperacao/cadastro usam o HMAC do e-mail
 // (idDoEmail, nunca e-mail em texto puro), o codigo do 2FA usa o id do usuario — ou o IP.
-// "cadastro" conta os envios do codigo de confirmacao do e-mail (cadastro + reenvios)
-export function chaveConta(fluxo: "login" | "recuperacao" | "mfa" | "cadastro" | "primeiro-acesso", identificador: string): string {
+// "cadastro" conta os envios do codigo de confirmacao do e-mail (cadastro + reenvios); "troca-senha" conta
+// os erros de senha atual/codigo na troca de senha pela Minha Conta (pelo id do usuario)
+export function chaveConta(
+  fluxo: "login" | "recuperacao" | "mfa" | "cadastro" | "primeiro-acesso" | "troca-senha",
+  identificador: string,
+): string {
   return `${fluxo}:conta:${identificador}`;
 }
 // "validacao" = consulta publica de certificado (sem login), limitada so por IP
@@ -60,12 +64,13 @@ export function idDoEmail(email: string): string {
 }
 
 // chaves POR CONTA (nao por IP) que travam o acesso de um usuario: login e recuperacao de senha
-// pelo HMAC do e-mail, codigo do 2FA pelo id. Fonte unica pra listar e pra desbloquear
+// pelo HMAC do e-mail, codigo do 2FA e troca de senha pelo id. Fonte unica pra listar e pra desbloquear
 export function chavesDaConta(usuario: { id: string; emailLogin: string }): string[] {
   return [
     chaveConta("login", idDoEmail(usuario.emailLogin)),
     chaveConta("recuperacao", idDoEmail(usuario.emailLogin)),
     chaveConta("mfa", usuario.id),
+    chaveConta("troca-senha", usuario.id),
   ];
 }
 

@@ -13,6 +13,9 @@ export type AcaoAuditoria =
   | "RECUPERACAO_SENHA_SOLICITADA"
   | "RECUPERACAO_SENHA_FALHA"
   | "SENHA_REDEFINIDA"
+  // troca de senha pelo proprio titular na Minha Conta (com a sessao aberta)
+  | "SENHA_ALTERADA"
+  | "SENHA_ALTERACAO_FALHA"
   | "EMAIL_ENVIADO"
   | "EMAIL_FALHA"
   | "ACESSO_NEGADO"

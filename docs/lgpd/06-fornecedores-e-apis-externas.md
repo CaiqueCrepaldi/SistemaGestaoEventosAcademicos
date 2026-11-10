@@ -35,9 +35,12 @@ completo revisado — backend, frontend e deploy). Os três são os
   1. código de confirmação do e-mail no cadastro do aluno;
   2. convite do professor (link para criar a senha e aceitar os Termos);
   3. código de recuperação de senha;
-  4. confirmação de inscrição;
-  5. aviso de inscrição cancelada pela equipe;
-  6. aviso de mudança de sala, horário, carga horária ou palestrante num
+  4. aviso de senha alterada pela Minha Conta (só a data e a hora da troca e
+     a orientação de usar "Esqueci minha senha" e avisar
+     privacidade@sgeacademicos.com.br se não foi a pessoa);
+  5. confirmação de inscrição;
+  6. aviso de inscrição cancelada pela equipe;
+  7. aviso de mudança de sala, horário, carga horária ou palestrante num
      evento em que o aluno está inscrito.
 - **Dados enviados:** e-mail do destinatário e o conteúdo da mensagem (nos
   avisos, também o nome da pessoa e os dados do evento; nos e-mails de
@@ -49,7 +52,8 @@ completo revisado — backend, frontend e deploy). Os três são os
   ignore este e-mail: nenhuma conta será criada."
 - **Se o envio falhar:** no cadastro, em produção, a API responde `503` e
   mantém o cadastro pendente para o aluno usar "Reenviar código"; a falha
-  fica na auditoria (`EMAIL_FALHA`), sem o endereço.
+  fica na auditoria (`EMAIL_FALHA`), sem o endereço. No aviso de senha
+  alterada, a troca continua valendo e a falha também vai para a auditoria.
 - **País:** Estados Unidos (Twilio Inc.).
 - **Salvaguardas:** chamada via API autenticada por chave
   (`SENDGRID_API_KEY`, fora do código); o e-mail só é disparado pelo

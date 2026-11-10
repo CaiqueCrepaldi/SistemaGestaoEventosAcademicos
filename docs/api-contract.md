@@ -289,6 +289,30 @@ errado, expirado, não existir nenhum pendente ou o e-mail não tiver conta
 O pedido de código também tem limite: 5 por conta e 20 por IP em 15
 minutos (`429`).
 
+### `POST /api/auth/alterar-senha` — troca de senha pela Minha Conta (desde 10/11/2026)
+
+Sessão de qualquer perfil; a conta é sempre a do token (nenhum id no
+pedido). Request:
+`{ "senhaAtual": "...", "novaSenha": "...", "confirmacaoSenha": "..." }`,
+com o 2FA ativo também `"codigo": "123456"` **ou**
+`"codigoRecuperacao": "ABCDE-FGH23"` (o código de recuperação aceito fica
+gasto).
+
+- `422 VALIDACAO` no campo `novaSenha` (fora da regra da senha nova ou
+  igual à atual), `confirmacaoSenha` (diferente da nova) ou `codigo` (2FA
+  ativo sem código). Erro de preenchimento não conta tentativa.
+- `422 SENHA_ATUAL_OU_CODIGO_INVALIDOS` ("Senha atual ou código
+  incorretos.") se a senha atual ou o código estiverem errados — a mesma
+  resposta nos dois casos. Conta no limite da conta: 5 erros, `429
+  MUITAS_TENTATIVAS` por 15 min (o "Desbloquear" do administrador também
+  libera).
+- `200` com o mesmo formato do login com sessão: grava só o novo hash,
+  encerra as outras sessões (`versaoToken`), invalida códigos de "Esqueci
+  minha senha" pendentes, registra `SENHA_ALTERADA` na auditoria e manda o
+  aviso "A senha da sua conta no SGEA foi alterada em ..." por e-mail (sem
+  a senha; conta fictícia não recebe; se o envio falhar, a troca continua
+  valendo e a falha vai para a auditoria).
+
 ### Autenticação em dois fatores (TOTP)
 
 Opcional para todos os perfis (administrador, secretaria e aluno). Código de

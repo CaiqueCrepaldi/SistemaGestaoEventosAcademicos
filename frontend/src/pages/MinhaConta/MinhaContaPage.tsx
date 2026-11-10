@@ -9,8 +9,10 @@ import { toast } from "../../components/ui/Toast";
 import { useAuth } from "../../context/AuthContext";
 import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
 import { authService, type UsuarioPerfil } from "../../services/authService";
+import { AlterarSenha } from "./AlterarSenha";
 
-// seguranca da conta: o 2FA e opcional pra qualquer perfil — cada um ativa ou desativa o proprio aqui
+// seguranca da conta, pra qualquer perfil: o 2FA (opcional, cada um ativa ou desativa o proprio) e a troca
+// da propria senha
 export function MinhaContaPage() {
   const { definirSessao } = useAuth();
   const [perfil, setPerfil] = useState<UsuarioPerfil | null>(null);
@@ -104,6 +106,8 @@ export function MinhaContaPage() {
           </div>
         )}
       </div>
+
+      <AlterarSenha mfaAtivo={perfil.mfaAtivo} onSessao={definirSessao} />
 
       {desativando && (
         <Modal title="Desativar autenticação em dois fatores" onClose={fecharDesativar}>

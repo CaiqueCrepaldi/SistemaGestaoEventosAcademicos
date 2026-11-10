@@ -504,6 +504,78 @@ try {
   checar("confirmar sem o código: campo marcado com mensagem", (await invalido(page, "#codigo")) && (await temTexto(page, "Digite os 6 dígitos")));
   await page.click("button:has-text('Cancelar')");
 
+  titulo("Alterar senha na Minha conta (aluna)");
+  const SENHA_TROCADA_UI = "Trocada@Aluna456";
+  const formSenha = page.locator("form.alterar-senha-form");
+  checar(
+    "seção \"Alterar senha\" com senha atual, nova, confirmação e o botão de mostrar/ocultar em cada uma",
+    (await temTexto(page, "Alterar senha")) &&
+      (await page.locator("#senhaAtual").count()) === 1 &&
+      (await page.locator("#novaSenha").count()) === 1 &&
+      (await page.locator("#confirmacaoSenha").count()) === 1 &&
+      (await formSenha.locator(".password-toggle").count()) === 3 &&
+      (await page.locator("#codigoTroca").count()) === 0,
+  );
+  await formSenha.locator("button[type=submit]").click();
+  checar(
+    "enviar vazio marca os três campos e foca a senha atual",
+    (await invalido(page, "#senhaAtual")) && (await invalido(page, "#novaSenha")) && (await invalido(page, "#confirmacaoSenha")) && (await idAtivo(page)) === "senhaAtual",
+    await idAtivo(page),
+  );
+  await page.fill("#novaSenha", "abc");
+  const okParcial = await formSenha.locator(".requisitos-senha li.requisito-ok").count();
+  await page.fill("#novaSenha", SENHA_TROCADA_UI);
+  const okTotal = await formSenha.locator(".requisitos-senha li.requisito-ok").count();
+  checar("lista de requisitos marca conforme digita", okParcial === 0 && okTotal === 4, `${okParcial} -> ${okTotal}`);
+  await page.fill("#senhaAtual", "Errada@Senha000");
+  await page.fill("#confirmacaoSenha", SENHA_TROCADA_UI);
+  await formSenha.locator("button[type=submit]").click();
+  checar(
+    "pede confirmação antes de trocar",
+    await temTexto(page, "Tem certeza que deseja alterar sua senha? As outras sessões abertas serão encerradas."),
+  );
+  await page.locator(".modal button:has-text('Alterar senha')").click();
+  await page.getByText("Senha atual ou código incorretos.").first().waitFor({ timeout: 8000 }).catch(() => {});
+  checar("senha atual errada: mensagem genérica embaixo do campo", (await temTexto(page, "Senha atual ou código incorretos.")) && (await invalido(page, "#senhaAtual")));
+  await page.fill("#senhaAtual", SENHA_ALUNA);
+  await formSenha.locator("button[type=submit]").click();
+  await page.locator(".modal button:has-text('Alterar senha')").click();
+  checar("troca confirmada: aviso de sucesso", await esperarToast(page, "Senha alterada."));
+  checar(
+    "campos limpos e a aluna continua logada na Minha conta",
+    (await page.inputValue("#senhaAtual")) === "" &&
+      (await page.inputValue("#novaSenha")) === "" &&
+      (await page.inputValue("#confirmacaoSenha")) === "" &&
+      (await page.evaluate(() => location.hash)) === "#/minha-conta",
+  );
+  // recarregar leva ao inicio (comportamento de sempre do app); com a sessao nova valendo, nao volta pro login
+  await page.reload();
+  await page.waitForFunction(() => location.hash === "#/", null, { timeout: 8000 }).catch(() => {});
+  await page.waitForTimeout(1500);
+  checar(
+    "a sessão devolvida continua valendo depois de recarregar a página",
+    !(await page.evaluate(() => location.hash)).startsWith("#/login") && (await page.locator(".topbar button:has-text('Sair')").count()) === 1,
+    await page.evaluate(() => location.hash),
+  );
+  await sair(page);
+  await page.goto(`${APP}/login`);
+  await page.fill("#emailLogin", emailAluno);
+  await page.fill("#senha", SENHA_ALUNA);
+  await page.click("button[type=submit]");
+  await page.getByText("E-mail ou senha inválidos.").first().waitFor({ timeout: 8000 }).catch(() => {});
+  checar("a senha antiga não entra mais", await temTexto(page, "E-mail ou senha inválidos."));
+  await entrar(page, emailAluno, SENHA_TROCADA_UI);
+  checar("sair e entrar com a senha nova funciona", !(await page.evaluate(() => location.hash)).startsWith("#/login"));
+  // volta a senha original pela API (o resto do teste usa SENHA_ALUNA) e entra de novo: a troca encerra a sessão da tela
+  await sair(page);
+  const voltaSenha = await api("POST", "/auth/alterar-senha", await tokenDe(emailAluno, SENHA_TROCADA_UI), {
+    senhaAtual: SENHA_TROCADA_UI,
+    novaSenha: SENHA_ALUNA,
+    confirmacaoSenha: SENHA_ALUNA,
+  });
+  checar("senha original de volta pela API", voltaSenha.status === 200, JSON.stringify(voltaSenha.corpo));
+  await entrar(page, emailAluno, SENHA_ALUNA);
+
   // ---------------------------------------------------------------- RF026: direitos do titular
   titulo("Meus dados do aluno e reprovação no questionário (RF026)");
   // evento em que a aluna fica abaixo de 60% nas duas tentativas (sala propria, sem conflito de horario):

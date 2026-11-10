@@ -78,3 +78,35 @@ export const confirmarRecuperacaoSchema = z.object({
   novaSenha: senhaNovaSchema,
 });
 export type ConfirmarRecuperacaoInput = z.infer<typeof confirmarRecuperacaoSchema>;
+
+// troca de senha pelo proprio titular (Minha Conta), com a sessao aberta: senha atual + nova (mesma regra do
+// cadastro) + confirmacao. Com o 2FA ativo vai junto o codigo do aplicativo OU um codigo de recuperacao (o
+// service exige; aqui so o formato). Nova senha igual a atual e confirmacao diferente param aqui mesmo
+export const alterarSenhaSchema = z
+  .object({
+    senhaAtual: z.string().min(1, "Informe a senha atual.").max(200, "Senha atual ou código incorretos."),
+    novaSenha: senhaNovaSchema,
+    confirmacaoSenha: z.string().min(1, "Repita a nova senha."),
+    codigo: z
+      .string()
+      .trim()
+      .regex(/^\d{6}$/, "Informe os 6 dígitos do aplicativo autenticador.")
+      .optional(),
+    codigoRecuperacao: z.string().trim().min(1).max(20).optional(),
+  })
+  .superRefine((dados, ctx) => {
+    if (dados.novaSenha !== dados.confirmacaoSenha) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["confirmacaoSenha"], message: "As senhas não coincidem." });
+    }
+    if (dados.senhaAtual && dados.novaSenha === dados.senhaAtual) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["novaSenha"], message: "A nova senha precisa ser diferente da atual." });
+    }
+    if (dados.codigo && dados.codigoRecuperacao) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["codigo"],
+        message: "Informe o código do aplicativo ou um código de recuperação, não os dois.",
+      });
+    }
+  });
+export type AlterarSenhaInput = z.infer<typeof alterarSenhaSchema>;

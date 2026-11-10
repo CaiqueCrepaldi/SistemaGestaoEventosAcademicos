@@ -4,7 +4,9 @@ import { autenticar } from "../../middleware/auth";
 import { validarCorpo } from "../../middleware/validate";
 import { authController } from "./auth.controller";
 import { professoresService } from "../professores/professores.service";
+import { trocaSenhaService } from "./troca-senha.service";
 import {
+  alterarSenhaSchema,
   confirmarCadastroSchema,
   confirmarRecuperacaoSchema,
   loginSchema,
@@ -61,3 +63,13 @@ authRouter.post(
 );
 // registra o aceite da versao vigente dos termos/politica (reaceite quando a versao muda)
 authRouter.post("/aceitar-termos", autenticar, asyncHandler(authController.aceitarTermos));
+// troca de senha pelo proprio titular (Minha Conta, qualquer perfil): o usuario vem do token. Encerra as
+// outras sessoes e devolve a sessao nova de quem trocou
+authRouter.post(
+  "/alterar-senha",
+  autenticar,
+  validarCorpo(alterarSenhaSchema),
+  asyncHandler(async (req, res) => {
+    res.status(200).json(await trocaSenhaService.alterarSenha(req.usuario!.sub, req.body));
+  }),
+);

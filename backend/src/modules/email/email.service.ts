@@ -117,6 +117,17 @@ async function enviarCodigoCadastro(destinatario: string, codigo: string): Promi
   return enviar("confirmacao-cadastro", destinatario, assunto, html);
 }
 
+// aviso de que a senha foi trocada pela Minha Conta: so a data e a hora (horario de Brasilia), nunca a senha
+async function enviarAvisoSenhaAlterada(destinatario: string, alteradaEm: Date): Promise<ResultadoEnvio> {
+  const quando = alteradaEm.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" });
+  const assunto = "Sua senha no SGEA foi alterada";
+  const html = `
+    <p>A senha da sua conta no SGEA foi alterada em ${quando}.</p>
+    <p>Se não foi você, use <strong>Esqueci minha senha</strong> e avise privacidade@sgeacademicos.com.br.</p>
+  `;
+  return enviar("senha-alterada", destinatario, assunto, html);
+}
+
 // texto que vem do cadastro (titulo do evento, nome da sala/palestrante) entra no html escapado
 function escaparHtml(texto: string): string {
   return texto.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -182,4 +193,5 @@ export const emailService = {
   enviarCancelamentoInscricao,
   enviarCodigoRecuperacao,
   enviarCodigoCadastro,
+  enviarAvisoSenhaAlterada,
 };

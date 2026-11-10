@@ -241,6 +241,27 @@ async function desativar(usuarioId: string, dados: DesativarMfaInput) {
   return emitirSessao(atualizado);
 }
 
+// confirma uma acao sensivel de quem ja esta logado com 2FA ativo (ex.: troca de senha pela Minha Conta):
+// codigo do aplicativo OU um codigo de recuperacao, como no login. O codigo de recuperacao aceito e gasto.
+// Nao conta tentativa nem audita falha: quem chama decide em qual limite a falha entra
+async function conferirSegundoFator(
+  usuario: { id: string; mfaSegredoCifrado: string | null; mfaUltimoPasso: number | null },
+  dados: { codigo?: string; codigoRecuperacao?: string },
+): Promise<{ ok: true; usouRecuperacao: boolean } | { ok: false; motivo: string }> {
+  if (dados.codigoRecuperacao) {
+    const { count } = await prisma.codigoRecuperacaoMfa.updateMany({
+      where: { usuarioId: usuario.id, codigoHash: hashCodigoRecuperacao(dados.codigoRecuperacao), usadoEm: null },
+      data: { usadoEm: new Date() },
+    });
+    if (count !== 1) return { ok: false, motivo: "código de recuperação inválido ou já utilizado" };
+    const restantes = await prisma.codigoRecuperacaoMfa.count({ where: { usuarioId: usuario.id, usadoEm: null } });
+    await registrarAuditoria(usuario.id, "CODIGO_RECUPERACAO_USADO", `restam ${restantes} código(s)`);
+    return { ok: true, usouRecuperacao: true };
+  }
+  const resultado = await conferirCodigoTotp(usuario, dados.codigo ?? "");
+  return resultado === "ok" ? { ok: true, usouRecuperacao: false } : { ok: false, motivo: descreverFalha(resultado) };
+}
+
 // zera o 2FA de outro usuario (perdeu o celular): encerra as sessoes dele, que volta a entrar so
 // com a senha e pode ativar o 2FA de novo em "Minha conta". atorId null = script de emergencia
 // pela linha de comando, sem usuario do sistema por tras
@@ -262,5 +283,6 @@ export const mfaService = {
   confirmarConfiguracao,
   verificarLogin,
   desativar,
+  conferirSegundoFator,
   resetar,
 };

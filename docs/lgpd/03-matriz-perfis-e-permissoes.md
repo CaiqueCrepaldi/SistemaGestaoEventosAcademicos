@@ -51,6 +51,7 @@ id vindo da tela.
 | `/api/usuarios/:id/2fa` | DELETE | ✅ | ❌ | ❌ | ❌ | Reset do 2FA de quem perdeu o celular; encerra as sessões; auditoria `MFA_RESETADO` |
 | `/api/auth/aceitar-termos` | POST | ✅ | ✅ | ✅ | ✅ | Aceite da versão vigente para a própria conta |
 | `/api/auth/2fa/configuracao`, `/configuracao/confirmar`, `/desativar` | POST | ✅ | ✅ | ✅ | ✅ | Sempre a própria conta; desativar exige senha e código |
+| `/api/auth/alterar-senha` | POST | ✅ | ✅ | ✅ | ✅ | Sempre a própria conta (a do token). Exige a senha atual e, com 2FA ativo, o código; erros contam no limite da conta; encerra as outras sessões; auditoria `SENHA_ALTERADA` |
 | `/api/eventos` | GET | ✅ | ✅ | só os dele | só aprovados | Para o aluno, o questionário vem sem o gabarito |
 | `/api/eventos?de=&ate=` (calendário) | GET | ✅ | ✅ | ✅ | — | Equipe: tudo completo. Professor: os dele completos; os dos outros que ocupam sala (aprovados, pendentes e propostas pendentes) só como sala, início e fim — sem título, palestrante, inscritos nem id. O aluno recebe a programação de sempre |
 | `/api/eventos/busca` | GET | ✅ | ✅ | só os dele | ❌ | Título, tema, palestrante ou sala, com limite (máx. 50) |

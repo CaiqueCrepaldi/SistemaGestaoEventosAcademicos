@@ -204,6 +204,10 @@ export function PoliticaDePrivacidadePage() {
               <li>o código de confirmação do cadastro do aluno;</li>
               <li>o convite do professor (link para criar a senha);</li>
               <li>o código de recuperação de senha;</li>
+              <li>
+                o aviso de senha alterada pela página &ldquo;Minha conta&rdquo; (só a data e a hora da troca, nunca a
+                senha);
+              </li>
               <li>a confirmação de inscrição;</li>
               <li>o aviso de inscrição cancelada pela equipe;</li>
               <li>
@@ -260,6 +264,12 @@ export function PoliticaDePrivacidadePage() {
           <li>
             Autenticação em dois fatores por aplicativo autenticador, opcional para todos (página &ldquo;Minha
             conta&rdquo;).
+          </li>
+          <li>
+            Você pode trocar a sua senha a qualquer momento na página &ldquo;Minha conta&rdquo;, informando a senha
+            atual (e, com o 2FA ativo, o código do aplicativo ou um código de recuperação). Erros repetidos bloqueiam a
+            troca por 15 minutos. Ao trocar, as outras sessões abertas da conta são encerradas, um código de recuperação
+            de senha pedido antes deixa de valer e você recebe um aviso por e-mail, sem a senha.
           </li>
           <li>
             Tentativas de login em excesso bloqueiam o acesso por alguns minutos. Trocar a senha, inativar a conta ou

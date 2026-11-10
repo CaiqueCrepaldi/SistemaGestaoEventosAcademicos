@@ -1035,6 +1035,12 @@ h1, h2, h3 {
   max-width: 640px;
 }
 
+/* "Alterar senha" da Minha Conta: mesma largura do formulario de configuracao do 2FA */
+.alterar-senha-form {
+  width: 100%;
+  max-width: 420px;
+}
+
 .mfa-conta-cabecalho {
   display: flex;
   align-items: center;

@@ -20,9 +20,9 @@ apaga no final (os registros de auditoria ficam, como em qualquer operação).
 
 | Teste | O que faz | Comando | Resultado |
 |---|---|---|---|
-| Requisitos pela API | Sobe o backend numa porta local e faz as chamadas HTTP de verdade, requisito por requisito | `cd backend && npx tsx scripts/testar-requisitos.ts` | **460/460** verificações (09/11/2026, banco `SGEA_dev`, com as contas fictícias sem e-mail) |
-| 2FA pela API | Ativação, login em duas etapas, reuso de código, bloqueio, recuperação, reset, desativação | `cd backend && npx tsx scripts/testar-2fa.ts` | **55/55** (09/11/2026, banco `SGEA_dev`) |
-| Interface | Navegador de verdade (Google Chrome, sem janela) usando as telas no frontend local ligado ao backend local | ver `frontend/testes-interface/testar-interface.mjs` (passo a passo no topo do arquivo) | **157/157** (09/11/2026, no Microsoft Edge — ver a atualização de 04/11) |
+| Requisitos pela API | Sobe o backend numa porta local e faz as chamadas HTTP de verdade, requisito por requisito | `cd backend && npx tsx scripts/testar-requisitos.ts` | **492/492** verificações (10/11/2026, banco `SGEA_dev`, com a troca de senha pela Minha Conta) |
+| 2FA pela API | Ativação, login em duas etapas, reuso de código, bloqueio, recuperação, reset, desativação | `cd backend && npx tsx scripts/testar-2fa.ts` | **55/55** (10/11/2026, banco `SGEA_dev`) |
+| Interface | Navegador de verdade (Google Chrome, sem janela) usando as telas no frontend local ligado ao backend local | ver `frontend/testes-interface/testar-interface.mjs` (passo a passo no topo do arquivo) | **168/168** (10/11/2026, no Microsoft Edge — ver a atualização de 04/11) |
 | Hash de senha | Mostra o formato do hash bcrypt gravado no banco de dev e prova que a mesma senha gera hashes diferentes | `cd backend && npx tsx scripts/demonstrar-hash-senha.ts` | ver `docs/lgpd/07` |
 | Conversão dos dados pessoais | Simulação, aplicação e segunda aplicação (idempotência) no dev | `cd backend && npx tsx scripts/converter-dados-pessoais.ts [--aplicar]` (o script saiu do código em 03/11/2026, junto com as colunas que ele convertia; está no histórico do git, commit `8c2e7df`) | 3 usuários, 3 participantes e 98 logs convertidos; a 2ª rodada não achou nada |
 
@@ -168,6 +168,12 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
 > novo; as três suítes rodaram no `SGEA_dev` antes da carga: **requisitos
 > 460/460**, **2FA 55/55** e **Interface 157/157** (no Microsoft Edge).
 
+> **Atualização de 10/11/2026:** troca de senha pela Minha Conta para todos
+> os perfis (item 50), sem migration. Testes: API **R46** novo e a seção de
+> interface "Alterar senha na Minha conta (aluna)"; as três suítes rodaram
+> no `SGEA_dev`: **requisitos 492/492**, **2FA 55/55** e **Interface 168/168**
+> (no Microsoft Edge).
+
 ## Requisitos
 
 | # | Requisito | Como foi testado | Resultado | O que foi corrigido |
@@ -227,6 +233,7 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
 
 | 48 | Contas fictícias nunca recebem e-mail: `usuarios.ficticio` (padrão false, não aparece em tela nem na API); o módulo de e-mail confere o destinatário antes de enviar e, se for conta fictícia, não envia (log "envio suprimido (conta fictícia)", sem o endereço; auditoria com "suprimido: conta fictícia"). No aviso de mudança do evento, os inscritos fictícios saem da lista e os reais continuam recebendo. Inscrição, cancelamento e mudança de horário funcionam normalmente. O sistema não manda e-mail para palestrante | API R45 | OK (09/11/2026) | Implementado em 09/11/2026 (migration `20261109230000_conta_ficticia`) |
 | 49 | Carga de demonstração (`backend/scripts/carga-demonstracao.ts`): simula por padrão; com `--aplicar`, salva cópia de todas as tabelas em `backend/backups/` (fora do git) antes de apagar e não apaga se a cópia falhar; apaga tudo na ordem das chaves estrangeiras e carrega 12 salas, 40 palestrantes, 150 professores e 1.000 alunos fictícios, 200 eventos (140 passados, 10 nos próximos 7 dias, 50 de 8 a 30 dias) com aprovação, histórico, inscrições, check-in, questionário, certificados e avaliações, as três contas de demonstração e um único registro de auditoria; confere conflito de sala, capacidade, duplicidade e palavras proibidas antes de gravar | Rodada no `SGEA_dev` em 46 s; conferência no banco (sem conflito, sem excesso de capacidade, e-mails e RGMs únicos, sem palavras proibidas, evento de 13/11 21:00 com 12 pedidos, login das três contas sem 2FA, Dashboard com ocupação, presença e certificados) — ver `docs/lgpd/10` | OK (09/11/2026) | Implementado em 09/11/2026 |
+| 50 | Troca de senha pela Minha Conta, para aluno, professor, secretaria e administrador: `POST /api/auth/alterar-senha` (conta sempre a do token) com senha atual, nova senha (mesma regra do cadastro, diferente da atual) e confirmação; com 2FA ativo, também o código do aplicativo ou um código de recuperação (gasto ao usar). Senha atual ou código errados → `422` "Senha atual ou código incorretos.", contando no limite da conta (5 erros → `429` por 15 min; o "Desbloquear" do administrador também libera). Ao trocar: só o hash novo, `versaoToken` + 1 (as outras sessões caem, a de quem trocou é devolvida), códigos de "Esqueci minha senha" pendentes invalidados, auditoria `SENHA_ALTERADA` sem senha nem dado pessoal e aviso por e-mail com data e hora (conta fictícia não recebe; falha no envio vai para a auditoria e não desfaz a troca). Tela: seção "Alterar senha" com os três campos (mostrar/ocultar), lista de requisitos, campo do código quando o 2FA está ativo, confirmação "Tem certeza que deseja alterar sua senha? As outras sessões abertas serão encerradas.", aviso de sucesso e campos limpos, continuando logado | API R46 (os quatro perfis, senha antiga recusada, token antigo `401` e sessão nova `200`, auditoria sem senha, aviso por e-mail, código de recuperação de senha invalidado, senha atual errada e bloqueio, regra/igual/confirmação, sem login `401`, desbloqueio, 2FA sem código, com código errado, com o do aplicativo e com o de recuperação, reuso recusado); Interface "Alterar senha na Minha conta (aluna)" | OK (10/11/2026) | Implementado em 10/11/2026, sem migration. Política de Privacidade (página e markdown) e `docs/lgpd/03`, `06`, `07` e `10` atualizados, mantendo a versão 1 |
 
 ## Outras correções encontradas na verificação
 

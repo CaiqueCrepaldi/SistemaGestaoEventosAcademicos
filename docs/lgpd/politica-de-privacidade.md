@@ -107,6 +107,8 @@ Não coletamos CPF, endereço, data de nascimento, foto ou dados de saúde.
   - o código de confirmação do cadastro do aluno;
   - o convite do professor (link para criar a senha);
   - o código de recuperação de senha;
+  - o aviso de senha alterada pela página "Minha conta" (só a data e a hora
+    da troca, nunca a senha);
   - a confirmação de inscrição;
   - o aviso de inscrição cancelada pela equipe;
   - o aviso de mudança de sala, horário, carga horária ou palestrante num
@@ -155,6 +157,12 @@ ao sair ou quando a sessão expira.
   na tela.
 - Autenticação em dois fatores por aplicativo autenticador, opcional para
   todos (página "Minha conta").
+- Você pode trocar a sua senha a qualquer momento na página "Minha conta",
+  informando a senha atual (e, com o 2FA ativo, o código do aplicativo ou um
+  código de recuperação). Erros repetidos bloqueiam a troca por 15 minutos.
+  Ao trocar, as outras sessões abertas da conta são encerradas, um código de
+  recuperação de senha pedido antes deixa de valer e você recebe um aviso
+  por e-mail, sem a senha.
 - Tentativas de login em excesso bloqueiam o acesso por alguns minutos.
   Trocar a senha, inativar a conta ou mexer no 2FA encerra as sessões já
   abertas.

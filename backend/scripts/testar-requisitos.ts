@@ -9,6 +9,7 @@ import "dotenv/config";
 import { createHash, randomUUID } from "crypto";
 import type { AddressInfo } from "net";
 import bcrypt from "bcryptjs";
+import { generate } from "otplib";
 
 if (!process.env.DATABASE_URL?.includes("SGEA_dev")) {
   console.error("[testar-requisitos] recusado: DATABASE_URL não aponta pro SGEA_dev");
@@ -2523,6 +2524,211 @@ async function main() {
     );
     await prisma.inscricao.deleteMany({ where: { eventoId: eventoFicticioId } });
 
+    // ------------------------------------------------------------------ troca de senha pela Minha Conta
+    requisito("R46 Troca de senha pela Minha Conta (qualquer perfil), com 2FA e limite de tentativas");
+    const SENHA_TROCA = "Troca@Senha123";
+    const SENHA_TROCADA = "Trocada#Senha456";
+    // conta nova por perfil, direto no banco (aceite dos Termos registrado, professor ja ativado)
+    async function contaParaTroca(perfil: Perfil): Promise<Conta> {
+      const participante = perfil === "ALUNO" ? await prisma.participante.create({ data: { id: randomUUID(), rgm: rgmAleatorio() } }) : null;
+      const email = `troca-${perfil.toLowerCase()}-${sufixo}@teste.invalido`;
+      const usuario = await prisma.usuario.create({
+        data: {
+          id: randomUUID(),
+          nome: `Troca de Senha ${perfil}`,
+          emailLogin: email,
+          senhaHash: await bcrypt.hash(SENHA_TROCA, 12),
+          perfil,
+          participanteId: participante?.id ?? null,
+          consentimentoLgpdEm: new Date(),
+          versaoTermosAceitos: VERSAO_TERMOS_ATUAL,
+        },
+      });
+      const conta: Conta = { id: usuario.id, email, senha: SENHA_TROCA, perfil, participanteId: participante?.id ?? null };
+      contas.push(conta);
+      return conta;
+    }
+    const corpoTroca = (extra: Record<string, unknown> = {}) => ({
+      senhaAtual: SENHA_TROCA,
+      novaSenha: SENHA_TROCADA,
+      confirmacaoSenha: SENHA_TROCADA,
+      ...extra,
+    });
+    const login = (email: string, senha: string) => chamar("POST", "/auth/login", { corpo: { emailLogin: email, senha } });
+    const tentativasDaTroca = async (contaId: string) =>
+      (await prisma.limiteAcesso.findUnique({ where: { chave: `troca-senha:conta:${contaId}` } }))?.tentativas ?? 0;
+    const sessoesNovas: Record<string, string> = {};
+    const contasDaTroca: Record<string, Conta> = {};
+
+    for (const perfil of ["ALUNO", "PROFESSOR", "SECRETARIA", "ADMINISTRADOR"] as const) {
+      const conta = await contaParaTroca(perfil);
+      contasDaTroca[perfil] = conta;
+      const tokenAntigo = await entrar(conta);
+      // um codigo de "Esqueci minha senha" pedido antes da troca (so na conta do aluno: o pedido conta no limite por IP)
+      const recuperacao = perfil === "ALUNO" ? await chamar("POST", "/auth/recuperacao-senha", { corpo: { email: conta.email } }) : null;
+
+      r = await chamar("POST", "/auth/alterar-senha", { token: tokenAntigo, corpo: corpoTroca() });
+      const trocou = r.status === 200 && typeof r.corpo.token === "string" && r.corpo.usuario?.perfil === perfil && r.corpo.usuario?.id === conta.id;
+      sessoesNovas[perfil] = r.corpo?.token;
+      const novaEntra = await login(conta.email, SENHA_TROCADA);
+      const antigaEntra = await login(conta.email, SENHA_TROCA);
+      const tokenAntigoMe = await chamar("GET", "/usuarios/me", { token: tokenAntigo });
+      const sessaoNovaMe = await chamar("GET", "/usuarios/me", { token: sessoesNovas[perfil] });
+      checar(
+        `${perfil}: troca com a senha atual certa -> 200 com sessão nova; login com a nova funciona e com a antiga não`,
+        trocou && novaEntra.status === 200 && antigaEntra.status === 401,
+        { troca: r.status, nova: novaEntra.status, antiga: antigaEntra.status },
+      );
+      checar(
+        `${perfil}: o token antigo deixa de valer (401) e a sessão devolvida continua valendo`,
+        tokenAntigoMe.status === 401 && sessaoNovaMe.status === 200 && sessaoNovaMe.corpo.id === conta.id,
+        { antigo: tokenAntigoMe.status, nova: sessaoNovaMe.status },
+      );
+      const logsDaConta = await prisma.logAuditoria.findMany({ where: { usuarioId: conta.id, criadoEm: { gte: inicioDoTeste } } });
+      const logTroca = logsDaConta.find((log) => log.acao === "SENHA_ALTERADA");
+      checar(
+        `${perfil}: auditoria "senha alterada pelo próprio titular", sem senha nem e-mail em nenhum log da conta`,
+        !!logTroca?.detalhe?.startsWith("senha alterada pelo próprio titular") &&
+          logsDaConta.every((log) => ![SENHA_TROCA, SENHA_TROCADA, conta.email].some((dado) => (log.detalhe ?? "").includes(dado))),
+        logTroca?.detalhe,
+      );
+      checar(
+        `${perfil}: aviso de senha alterada por e-mail registrado (simulado sem SendGrid)`,
+        logsDaConta.some((log) => log.acao === "EMAIL_ENVIADO" && (log.detalhe ?? "").startsWith(`aviso de senha alterada, usuário ${conta.id}`)),
+      );
+      if (recuperacao) {
+        const confirmacao = await chamar("POST", "/auth/recuperacao-senha/confirmar", {
+          corpo: { email: conta.email, codigo: recuperacao.corpo.codigoDemo, novaSenha: "Outra@Senha789" },
+        });
+        checar(
+          "código de recuperação de senha pedido antes da troca deixa de valer",
+          recuperacao.status === 200 &&
+            confirmacao.status === 422 &&
+            confirmacao.corpo.code === "CODIGO_INVALIDO" &&
+            (await prisma.recuperacaoSenha.count({ where: { usuarioId: conta.id, usadoEm: null } })) === 0,
+          { pedido: recuperacao.status, confirmacao: confirmacao.status },
+        );
+      }
+      conta.senha = SENHA_TROCADA;
+    }
+
+    // recusas, na conta do aluno (senha atual agora e SENHA_TROCADA)
+    const alunoTroca = contasDaTroca.ALUNO;
+    const sessaoAluno = sessoesNovas.ALUNO;
+    const corpoAluno = (extra: Record<string, unknown> = {}) => ({
+      senhaAtual: SENHA_TROCADA,
+      novaSenha: SENHA_TROCA,
+      confirmacaoSenha: SENHA_TROCA,
+      ...extra,
+    });
+    r = await chamar("POST", "/auth/alterar-senha", { token: sessaoAluno, corpo: corpoAluno({ senhaAtual: "Errada@Senha000" }) });
+    checar(
+      "senha atual errada -> 422 \"Senha atual ou código incorretos.\" e conta 1 tentativa no limite da conta",
+      r.status === 422 && r.corpo.message === "Senha atual ou código incorretos." && (await tentativasDaTroca(alunoTroca.id)) === 1,
+      r.corpo,
+    );
+    checar(
+      "falha registrada na auditoria (SENHA_ALTERACAO_FALHA), sem a senha digitada",
+      !!(await prisma.logAuditoria.findFirst({ where: { usuarioId: alunoTroca.id, acao: "SENHA_ALTERACAO_FALHA", detalhe: "senha atual incorreta" } })) &&
+        !(await prisma.logAuditoria.findFirst({ where: { usuarioId: alunoTroca.id, detalhe: { contains: "Errada@Senha000" } } })),
+    );
+    const campoDoErro = (resposta: Resposta) => (resposta.corpo?.erros ?? []).map((e: { campo: string }) => e.campo);
+    r = await chamar("POST", "/auth/alterar-senha", { token: sessaoAluno, corpo: corpoAluno({ novaSenha: "fraca", confirmacaoSenha: "fraca" }) });
+    checar("nova senha fora da regra -> 422 no campo novaSenha", r.status === 422 && campoDoErro(r).includes("novaSenha"), r.corpo);
+    r = await chamar("POST", "/auth/alterar-senha", {
+      token: sessaoAluno,
+      corpo: corpoAluno({ novaSenha: SENHA_TROCADA, confirmacaoSenha: SENHA_TROCADA }),
+    });
+    checar(
+      "nova senha igual à atual -> 422 no campo novaSenha",
+      r.status === 422 && campoDoErro(r).includes("novaSenha") && JSON.stringify(r.corpo).includes("diferente da atual"),
+      r.corpo,
+    );
+    r = await chamar("POST", "/auth/alterar-senha", { token: sessaoAluno, corpo: corpoAluno({ confirmacaoSenha: "Outra@Senha789" }) });
+    checar("confirmação diferente da nova senha -> 422 no campo confirmacaoSenha", r.status === 422 && campoDoErro(r).includes("confirmacaoSenha"), r.corpo);
+    checar("erro de preenchimento não conta no limite de tentativas", (await tentativasDaTroca(alunoTroca.id)) === 1);
+    r = await chamar("POST", "/auth/alterar-senha", { corpo: corpoAluno() });
+    checar("sem login -> 401", r.status === 401, r.status);
+
+    for (let i = 0; i < 4; i++) {
+      await chamar("POST", "/auth/alterar-senha", { token: sessaoAluno, corpo: corpoAluno({ senhaAtual: "Errada@Senha000" }) });
+    }
+    r = await chamar("POST", "/auth/alterar-senha", { token: sessaoAluno, corpo: corpoAluno() });
+    const loginAindaComTrocada = await login(alunoTroca.email, SENHA_TROCADA);
+    checar(
+      "5 erros bloqueiam a troca por 15 minutos: até a senha certa recebe 429 e a senha não muda",
+      r.status === 429 && r.corpo.code === "MUITAS_TENTATIVAS" && loginAindaComTrocada.status === 200,
+      { troca: r.status, login: loginAindaComTrocada.status },
+    );
+    const sessaoAlunoAtual: string = loginAindaComTrocada.corpo.token;
+    const desbloqueio = await chamar("DELETE", `/usuarios/${alunoTroca.id}/bloqueio`, { token: admin.token });
+    r = await chamar("POST", "/auth/alterar-senha", { token: sessaoAlunoAtual, corpo: corpoAluno() });
+    checar(
+      "o desbloqueio da conta pelo administrador também libera a troca de senha",
+      desbloqueio.status === 204 && r.status === 200 && (await tentativasDaTroca(alunoTroca.id)) === 0,
+      { desbloqueio: desbloqueio.status, troca: r.status },
+    );
+
+    // 2FA ativo (conta do professor; senha atual agora e SENHA_TROCADA)
+    const professorTroca = contasDaTroca.PROFESSOR;
+    const sessaoProfessor = sessoesNovas.PROFESSOR;
+    r = await chamar("POST", "/auth/2fa/configuracao", { token: sessaoProfessor });
+    const segredoTroca: string = r.corpo.segredo;
+    r = await chamar("POST", "/auth/2fa/configuracao/confirmar", {
+      token: sessaoProfessor,
+      corpo: { codigo: await generate({ secret: segredoTroca }) },
+    });
+    const codigosTroca: string[] = r.corpo.codigosRecuperacao ?? [];
+    checar("professor ativa o 2FA para o teste", r.status === 200 && codigosTroca.length === 8, r.status);
+    const corpoProfessor = (extra: Record<string, unknown> = {}) => ({
+      senhaAtual: SENHA_TROCADA,
+      novaSenha: SENHA_TROCA,
+      confirmacaoSenha: SENHA_TROCA,
+      ...extra,
+    });
+    r = await chamar("POST", "/auth/alterar-senha", { token: sessaoProfessor, corpo: corpoProfessor() });
+    checar(
+      "com 2FA ativo, sem o código -> 422 no campo codigo (não conta tentativa)",
+      r.status === 422 && campoDoErro(r).includes("codigo") && (await tentativasDaTroca(professorTroca.id)) === 0,
+      r.corpo,
+    );
+    const codigoCerto = await generate({ secret: segredoTroca, epoch: Math.floor(Date.now() / 1000) + 30 });
+    const codigoErrado = String((Number(codigoCerto) + 500000) % 1000000).padStart(6, "0");
+    r = await chamar("POST", "/auth/alterar-senha", { token: sessaoProfessor, corpo: corpoProfessor({ codigo: codigoErrado }) });
+    checar(
+      "com 2FA ativo, código errado -> 422 genérico e conta tentativa",
+      r.status === 422 && r.corpo.message === "Senha atual ou código incorretos." && (await tentativasDaTroca(professorTroca.id)) === 1,
+      r.corpo,
+    );
+    r = await chamar("POST", "/auth/alterar-senha", { token: sessaoProfessor, corpo: corpoProfessor({ codigo: codigoCerto }) });
+    const sessaoProfessor2: string = r.corpo?.token;
+    checar(
+      "com 2FA ativo e o código do aplicativo -> 200, login com a nova senha pede o 2FA",
+      r.status === 200 &&
+        !!sessaoProfessor2 &&
+        (await tentativasDaTroca(professorTroca.id)) === 0 &&
+        (await login(professorTroca.email, SENHA_TROCA)).corpo?.mfa === "PENDENTE",
+      r.corpo,
+    );
+    r = await chamar("POST", "/auth/alterar-senha", {
+      token: sessaoProfessor2,
+      corpo: { senhaAtual: SENHA_TROCA, novaSenha: SENHA_TROCADA, confirmacaoSenha: SENHA_TROCADA, codigoRecuperacao: codigosTroca[0] },
+    });
+    checar(
+      "com 2FA ativo, um código de recuperação também serve e é gasto",
+      r.status === 200 &&
+        (await prisma.codigoRecuperacaoMfa.count({ where: { usuarioId: professorTroca.id, usadoEm: null } })) === 7 &&
+        !!(await prisma.logAuditoria.findFirst({
+          where: { usuarioId: professorTroca.id, acao: "SENHA_ALTERADA", detalhe: { contains: "código de recuperação" } },
+        })),
+      r.corpo,
+    );
+    r = await chamar("POST", "/auth/alterar-senha", {
+      token: r.corpo?.token,
+      corpo: { senhaAtual: SENHA_TROCADA, novaSenha: SENHA_TROCA, confirmacaoSenha: SENHA_TROCA, codigoRecuperacao: codigosTroca[0] },
+    });
+    checar("o mesmo código de recuperação não vale duas vezes", r.status === 422 && r.corpo.message === "Senha atual ou código incorretos.", r.corpo);
+
     // ------------------------------------------------------------------ RF009/RNF010: exclusao bloqueada
     requisito("R19 Exclusão de evento bloqueada com inscrições (RF009/RNF010)");
     r = await chamar("DELETE", `/eventos/${eventoId}`, { token: admin.token });
@@ -2571,6 +2777,7 @@ async function main() {
               `recuperacao:conta:${indiceBusca(conta.email)}`,
               `mfa:conta:${conta.id}`,
               `primeiro-acesso:conta:${conta.id}`,
+              `troca-senha:conta:${conta.id}`,
             ],
           },
         },
