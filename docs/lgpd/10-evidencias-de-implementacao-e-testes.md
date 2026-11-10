@@ -12,9 +12,9 @@ verificação de todos os requisitos funcionais está em
 
 | Teste | Comando | Resultado em 10/11/2026 |
 |---|---|---|
-| Requisitos pela API | `cd backend && npx tsx scripts/testar-requisitos.ts` | **492/492** verificações |
+| Requisitos pela API | `cd backend && npx tsx scripts/testar-requisitos.ts` | **493/493** verificações |
 | 2FA pela API | `cd backend && npx tsx scripts/testar-2fa.ts` | **55/55** |
-| Interface com navegador de verdade | passo a passo no topo de `frontend/testes-interface/testar-interface.mjs` (rodado no Microsoft Edge, numa cópia com `channel: "msedge"`) | **168/168** |
+| Interface com navegador de verdade | passo a passo no topo de `frontend/testes-interface/testar-interface.mjs` (rodado no Microsoft Edge, numa cópia com `channel: "msedge"`) | **169/169** |
 | Demonstração do hash de senha | `cd backend && npx tsx scripts/demonstrar-hash-senha.ts` | ver `07`, "Formato do hash de senha" |
 | Carga de demonstração | `cd backend && npx tsx scripts/carga-demonstracao.ts --aplicar` | 46 s; conferência no banco abaixo |
 

@@ -34,7 +34,9 @@ function sessaoSalvaValida(): SessaoUsuario | null {
 
 // guarda quem esta logado e expoe login/logout pro resto do app via useAuth()
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [usuario, setUsuario] = useState<SessaoUsuario | null>(null);
+  // a sessao salva e lida ja na criacao do estado: se fosse lida depois do primeiro render, as rotas
+  // protegidas veriam "sem login" nesse instante e o F5 levaria a pessoa pro login e dali pro inicio
+  const [usuario, setUsuario] = useState<SessaoUsuario | null>(sessaoSalvaValida);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -49,9 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // carregamento do app: se a sessao salva ja venceu, nem chega a logar — descarta direto
   useEffect(() => {
-    const sessao = sessaoSalvaValida();
-    if (sessao) setUsuario(sessao);
-    else localStorage.removeItem(SESSION_KEY);
+    if (!sessaoSalvaValida()) localStorage.removeItem(SESSION_KEY);
   }, []);
 
   useEffect(() => {

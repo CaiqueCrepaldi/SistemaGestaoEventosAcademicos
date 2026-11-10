@@ -50,6 +50,12 @@ async function enviar(tipo: string, destinatario: string, assunto: string, html:
   }
 }
 
+// data e hora do evento no horario de Brasilia: o servidor (Vercel) roda em UTC, e sem o fuso o e-mail
+// mostraria o horario 3 horas adiantado
+export function dataHoraDeBrasilia(data: Date): string {
+  return data.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" });
+}
+
 interface DadosConfirmacaoInscricao {
   participanteNome: string;
   eventoTitulo: string;
@@ -60,7 +66,7 @@ interface DadosConfirmacaoInscricao {
 
 // monta e envia o email de confirmacao depois que a inscricao eh criada
 async function enviarConfirmacaoInscricao(destinatario: string, dados: DadosConfirmacaoInscricao): Promise<ResultadoEnvio> {
-  const dataFormatada = dados.eventoHorario.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  const dataFormatada = dataHoraDeBrasilia(dados.eventoHorario);
   const assunto = `Inscrição confirmada — ${dados.eventoTitulo}`;
   const html = `
     <p>Olá, ${dados.participanteNome}!</p>
@@ -83,7 +89,7 @@ interface DadosCancelamentoInscricao {
 
 // aviso pro aluno quando a EQUIPE cancela a inscricao dele (quando o proprio aluno cancela, ele ja sabe)
 async function enviarCancelamentoInscricao(destinatario: string, dados: DadosCancelamentoInscricao): Promise<ResultadoEnvio> {
-  const dataFormatada = dados.eventoHorario.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  const dataFormatada = dataHoraDeBrasilia(dados.eventoHorario);
   const assunto = `Inscrição cancelada — ${dados.eventoTitulo}`;
   const html = `
     <p>Olá, ${dados.participanteNome}!</p>
@@ -119,7 +125,7 @@ async function enviarCodigoCadastro(destinatario: string, codigo: string): Promi
 
 // aviso de que a senha foi trocada pela Minha Conta: so a data e a hora (horario de Brasilia), nunca a senha
 async function enviarAvisoSenhaAlterada(destinatario: string, alteradaEm: Date): Promise<ResultadoEnvio> {
-  const quando = alteradaEm.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" });
+  const quando = dataHoraDeBrasilia(alteradaEm);
   const assunto = "Sua senha no SGEA foi alterada";
   const html = `
     <p>A senha da sua conta no SGEA foi alterada em ${quando}.</p>

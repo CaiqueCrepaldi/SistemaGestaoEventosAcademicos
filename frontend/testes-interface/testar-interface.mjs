@@ -131,6 +131,12 @@ try {
       (await temTexto(page, "Presença por evento")) &&
       (await temTexto(page, "Aprendizagem por evento")),
   );
+  await page.goto(`${APP}/salas`);
+  await page.waitForTimeout(500);
+  await page.reload();
+  await page.waitForTimeout(1500);
+  checar("F5 numa tela da equipe (Salas) mantém a secretaria na mesma página", (await page.evaluate(() => location.hash)) === "#/salas", await page.evaluate(() => location.hash));
+  await page.goto(`${APP}/`);
   checar(
     "menu chama a tela de \"Dashboard\" (não mais \"Principal\") e não tem mais \"Usuários\"",
     (await page.locator("a.nav-link", { hasText: "Dashboard" }).count()) === 1 &&
@@ -548,13 +554,13 @@ try {
       (await page.inputValue("#confirmacaoSenha")) === "" &&
       (await page.evaluate(() => location.hash)) === "#/minha-conta",
   );
-  // recarregar leva ao inicio (comportamento de sempre do app); com a sessao nova valendo, nao volta pro login
+  // F5: a sessao nova vale e a pessoa fica na mesma pagina (antes o recarregamento passava pelo login e caia no inicio)
   await page.reload();
-  await page.waitForFunction(() => location.hash === "#/", null, { timeout: 8000 }).catch(() => {});
-  await page.waitForTimeout(1500);
+  await page.locator("#senhaAtual").waitFor({ timeout: 8000 }).catch(() => {});
+  await page.waitForTimeout(1000);
   checar(
-    "a sessão devolvida continua valendo depois de recarregar a página",
-    !(await page.evaluate(() => location.hash)).startsWith("#/login") && (await page.locator(".topbar button:has-text('Sair')").count()) === 1,
+    "F5 na Minha conta: continua logada e na mesma página, com a sessão devolvida",
+    (await page.evaluate(() => location.hash)) === "#/minha-conta" && (await page.locator("#senhaAtual").count()) === 1,
     await page.evaluate(() => location.hash),
   );
   await sair(page);

@@ -20,9 +20,9 @@ apaga no final (os registros de auditoria ficam, como em qualquer operação).
 
 | Teste | O que faz | Comando | Resultado |
 |---|---|---|---|
-| Requisitos pela API | Sobe o backend numa porta local e faz as chamadas HTTP de verdade, requisito por requisito | `cd backend && npx tsx scripts/testar-requisitos.ts` | **492/492** verificações (10/11/2026, banco `SGEA_dev`, com a troca de senha pela Minha Conta) |
+| Requisitos pela API | Sobe o backend numa porta local e faz as chamadas HTTP de verdade, requisito por requisito | `cd backend && npx tsx scripts/testar-requisitos.ts` | **493/493** verificações (10/11/2026, banco `SGEA_dev`, com a troca de senha e o horário de Brasília nos e-mails) |
 | 2FA pela API | Ativação, login em duas etapas, reuso de código, bloqueio, recuperação, reset, desativação | `cd backend && npx tsx scripts/testar-2fa.ts` | **55/55** (10/11/2026, banco `SGEA_dev`) |
-| Interface | Navegador de verdade (Google Chrome, sem janela) usando as telas no frontend local ligado ao backend local | ver `frontend/testes-interface/testar-interface.mjs` (passo a passo no topo do arquivo) | **168/168** (10/11/2026, no Microsoft Edge — ver a atualização de 04/11) |
+| Interface | Navegador de verdade (Google Chrome, sem janela) usando as telas no frontend local ligado ao backend local | ver `frontend/testes-interface/testar-interface.mjs` (passo a passo no topo do arquivo) | **169/169** (10/11/2026, no Microsoft Edge — ver a atualização de 04/11) |
 | Hash de senha | Mostra o formato do hash bcrypt gravado no banco de dev e prova que a mesma senha gera hashes diferentes | `cd backend && npx tsx scripts/demonstrar-hash-senha.ts` | ver `docs/lgpd/07` |
 | Conversão dos dados pessoais | Simulação, aplicação e segunda aplicação (idempotência) no dev | `cd backend && npx tsx scripts/converter-dados-pessoais.ts [--aplicar]` (o script saiu do código em 03/11/2026, junto com as colunas que ele convertia; está no histórico do git, commit `8c2e7df`) | 3 usuários, 3 participantes e 98 logs convertidos; a 2ª rodada não achou nada |
 
@@ -171,7 +171,7 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
 > **Atualização de 10/11/2026:** troca de senha pela Minha Conta para todos
 > os perfis (item 50), sem migration. Testes: API **R46** novo e a seção de
 > interface "Alterar senha na Minha conta (aluna)"; as três suítes rodaram
-> no `SGEA_dev`: **requisitos 492/492**, **2FA 55/55** e **Interface 168/168**
+> no `SGEA_dev`: **requisitos 493/493**, **2FA 55/55** e **Interface 169/169**
 > (no Microsoft Edge).
 
 ## Requisitos
@@ -246,6 +246,15 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
 - Os scripts `backfill-criptografia.ts` e `backfill-auditoria.ts` (migrações
   de dado de uso único, já rodadas) foram removidos: o primeiro voltaria a
   cifrar nome/e-mail/RGM, contrariando a decisão do item G.
+- (10/11/2026) Os e-mails de inscrição confirmada e de inscrição cancelada
+  formatavam a data do evento no fuso do servidor; como a Vercel roda em
+  UTC, o horário saía 3 horas adiantado. Agora todos os e-mails usam o
+  horário de Brasília (`dataHoraDeBrasilia` em `email.service.ts`;
+  verificado no R45).
+- (10/11/2026) Recarregar (F5) qualquer página logada levava ao login e dali
+  ao início, porque a sessão salva só era lida depois do primeiro desenho da
+  tela. Agora ela é lida antes (`AuthContext.tsx`) e a pessoa continua na
+  mesma página (verificado na interface, na Minha conta e em Salas).
 
 ## Pendências registradas (fora desta rodada)
 

@@ -100,7 +100,7 @@ async function main() {
   const { indiceBusca } = await import("../src/utils/criptografia");
   const { expirarCheckins } = await import("../src/utils/checkin");
   const { env } = await import("../src/config/env");
-  const { emailService, conteudoDoConvite } = await import("../src/modules/email/email.service");
+  const { emailService, conteudoDoConvite, dataHoraDeBrasilia } = await import("../src/modules/email/email.service");
   const { VERSAO_TERMOS_ATUAL } = await import("../src/config/termos");
 
   // o limite de tentativas por IP (bloco 2) conta os logins errados de proposito deste teste, que
@@ -2481,6 +2481,9 @@ async function main() {
     );
     r = await chamar("GET", "/usuarios/me", { token: aluno.token });
     checar("o campo ficticio não aparece em nenhuma resposta da API (conta do aluno)", r.status === 200 && !("ficticio" in r.corpo), Object.keys(r.corpo ?? {}));
+    // a Vercel roda em UTC: os e-mails mostram o horario do evento no fuso de Brasilia, qualquer que seja o do servidor
+    const horarioNoEmail = dataHoraDeBrasilia(new Date("2026-11-11T18:30:00Z"));
+    checar("e-mails mostram data e hora no horário de Brasília (18:30 UTC -> 15:30)", horarioNoEmail === "11/11/2026, 15:30" || horarioNoEmail === "11/11/2026 15:30", horarioNoEmail);
 
     r = await chamar("POST", "/eventos", {
       token: admin.token,
