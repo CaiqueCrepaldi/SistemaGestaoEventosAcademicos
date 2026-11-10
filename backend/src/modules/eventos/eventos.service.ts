@@ -376,6 +376,8 @@ async function avisarInscritos(eventoId: string, eventoTitulo: string, mudancas:
   });
   let avisados = 0;
   let simulado = false;
+  // inscrito de conta ficticia sai da lista (nao recebe e nao conta); os reais continuam recebendo
+  let suprimidos = 0;
   for (const inscricao of inscricoes) {
     const participante = participanteParaDominio(inscricao.participante);
     if (!participante.email) continue;
@@ -385,6 +387,10 @@ async function avisarInscritos(eventoId: string, eventoTitulo: string, mudancas:
         eventoTitulo,
         mudancas,
       });
+      if (resultado === "suprimido") {
+        suprimidos++;
+        continue;
+      }
       avisados++;
       if (resultado === "simulado") simulado = true;
     } catch {
@@ -396,10 +402,10 @@ async function avisarInscritos(eventoId: string, eventoTitulo: string, mudancas:
     await registrarAuditoria(
       atorId,
       "EMAIL_ENVIADO",
-      `aviso de alteração do evento ${eventoId} a ${avisados} de ${inscricoes.length} inscrito(s)${simulado ? " (simulado: SendGrid não configurado)" : ""}`,
+      `aviso de alteração do evento ${eventoId} a ${avisados} de ${inscricoes.length - suprimidos} inscrito(s)${simulado ? " (simulado: SendGrid não configurado)" : ""}`,
     );
   }
-  return { inscritos: inscricoes.length, avisados };
+  return { inscritos: inscricoes.length - suprimidos, avisados };
 }
 
 // ---------------------------------------------------------------- questionario travado

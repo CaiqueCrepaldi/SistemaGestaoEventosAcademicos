@@ -96,7 +96,9 @@ export type AcaoAuditoria =
   | "MFA_FALHA"
   | "MFA_BLOQUEADO"
   | "MFA_RESETADO"
-  | "CODIGO_RECUPERACAO_USADO";
+  | "CODIGO_RECUPERACAO_USADO"
+  // scripts/carga-demonstracao.ts: apagou tudo e carregou os dados de demonstracao (so as quantidades)
+  | "CARGA_DEMONSTRACAO";
 
 // grava uma linha na trilha de auditoria; nunca deixa uma falha de log derrubar a operacao
 // de verdade — so registra o erro no console e segue. "detalhe" precisa ser sempre contexto

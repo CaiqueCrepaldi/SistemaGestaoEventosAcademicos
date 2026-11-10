@@ -94,7 +94,12 @@ desenvolvimento:
 |---|---|---|
 | Administrador | admin@umc.br | a de `SEED_ADMIN_SENHA` no seu `backend/.env` |
 | Secretaria | secretaria@umc.br | a de `SEED_SECRETARIA_SENHA` |
-| Aluno | aluno@alunos.umc.br | a de `SEED_ALUNO_SENHA` (opcional; sem ela, o aluno entra pelo "Esqueci a senha") |
+| Professor | professor@umc.br | a de `SEED_PROFESSOR_SENHA` (conta já ativada, sem convite) |
+
+Não há conta de aluno de demonstração: os alunos, professores, salas,
+palestrantes e eventos de exemplo vêm da carga de demonstração
+(`scripts/carga-demonstracao.ts`), em contas fictícias que nunca recebem
+e-mail.
 
 Nenhuma senha fica no código nem na documentação. O seed nunca muda a senha
 de uma conta que já existe: num banco populado antes, as contas continuam
@@ -119,9 +124,9 @@ O frontend tem o seu, `frontend/.env.example`, com só a `VITE_API_URL`.
 | `SENDGRID_API_KEY` | Não | Chave do SendGrid (começa com `SG.`). Sem ela, os e-mails ficam simulados |
 | `EMAIL_FROM` | Não | Remetente verificado no SendGrid; vai junto com a chave |
 | `APP_URL` | Não para subir; **sim** para criar professor | Endereço do frontend, sem barra no fim (dev: `http://localhost:5173`; produção: o domínio do site, na Vercel). Vai no link do convite do professor (`APP_URL/#/primeiro-acesso?convite=...`). Sem ela, o servidor avisa na inicialização e criar professor e reenviar convite são recusados |
-| `SEED_ADMIN_SENHA` | Só para o seed | Senha da conta `admin@umc.br` criada pelo seed |
-| `SEED_SECRETARIA_SENHA` | Só para o seed | Senha da conta `secretaria@umc.br` criada pelo seed |
-| `SEED_ALUNO_SENHA` | Não | Senha do aluno de demonstração; sem ela, ele fica sem senha utilizável |
+| `SEED_ADMIN_SENHA` | Só para o seed e a carga | Senha da conta `admin@umc.br` |
+| `SEED_SECRETARIA_SENHA` | Só para o seed e a carga | Senha da conta `secretaria@umc.br` |
+| `SEED_PROFESSOR_SENHA` | Só para o seed e a carga | Senha da conta `professor@umc.br` (já ativada) |
 
 **O servidor não sobe** se `DATABASE_URL`, `JWT_SECRET` ou `ENCRYPTION_KEY`
 estiver ausente, vazia ou ainda com o valor de exemplo (qualquer valor com
@@ -236,13 +241,12 @@ e o login não depende dela. Siga a ordem:
    - Professor: cadastrar um professor de teste com um e-mail `@umc.br` real,
      conferir se o convite chega com o botão "Criar minha senha" e o link
      abre a tela de primeiro acesso no domínio de produção (`APP_URL`).
-   - Entrar com cada perfil (administrador, secretaria e aluno). Os Termos
-     de Uso e a Política de Privacidade passaram para a versão 3
-     (`VERSAO_TERMOS_ATUAL` = "3"): contas novas já gravam a versão 3.
-     Quem aceitou a versão 2 recebe `precisaAceitarTermos: true` no login,
-     mas **a tela que pede o novo aceite ainda não existe** (ficou para
-     depois), então ninguém vê pedido de aceite por enquanto — o login
-     funciona normalmente.
+   - Entrar com cada perfil (administrador, secretaria, professor e aluno).
+     Os Termos de Uso e a Política de Privacidade estão na versão 1
+     (`VERSAO_TERMOS_ATUAL` = "1", de 09/11/2026): toda conta nova grava a
+     versão 1 no aceite. Conta com outra versão recebe
+     `precisaAceitarTermos: true` no login, mas **a tela que pede o novo
+     aceite ainda não existe**, então o login funciona normalmente.
    - Em Participantes, abrir "Editar" de um aluno: o e-mail aparece só para
      leitura e não pode ser alterado.
    - Clicar em "Sair": deve pedir confirmação ("Sair do sistema?").
@@ -267,10 +271,46 @@ tabela pode ficar no banco, porque o código antigo não a usa.
 | `npm run typecheck` | Só confere tipos, sem gerar arquivo nenhum. |
 | `npm run typecheck:scripts` | Confere os tipos dos scripts de `scripts/` e do seed. |
 | `npm run db:migrate` | Cria/atualiza as tabelas no banco a partir do `schema.prisma`. |
-| `npm run db:seed` | Popula o banco com os dados de demonstração (idempotente, pode rodar de novo). |
+| `npm run db:seed` | Cria as três contas de demonstração (admin@, secretaria@ e professor@umc.br) que ainda não existirem (idempotente). |
 | `npm run db:studio` | Abre o Prisma Studio (interface visual pra ver/editar os dados). |
 | `npx tsx scripts/definir-senha.ts email@dominio` | Define uma senha nova para uma conta que já existe (ver abaixo). |
 | `npx tsx scripts/resetar-2fa.ts email@dominio` | Zera o 2FA de uma conta (emergência; mesmo esquema de flags). |
+| `npx tsx scripts/carga-demonstracao.ts` | **Apaga todos os dados** e carrega a demonstração (ver abaixo). |
+
+### Carga de demonstração
+
+Apaga **todos** os dados do banco (contas, eventos, inscrições, auditoria,
+limites de acesso, cadastros pendentes, convites, códigos do 2FA etc.) e
+carrega um cenário realista para a apresentação: 12 salas, 40 palestrantes,
+150 professores e 1.000 alunos fictícios, 200 eventos (140 passados, 10 nos
+próximos 7 dias e 50 de 8 a 30 dias à frente) com aprovação e histórico,
+inscrições, check-in, questionário, certificados e avaliações, além das três
+contas de demonstração com as senhas das `SEED_*_SENHA`. As contas fictícias
+(`usuarios.ficticio`) nunca recebem e-mail. A auditoria começa com um único
+registro, "carga de demonstração executada", só com as quantidades.
+
+Rode de dentro de `backend/`:
+
+```powershell
+npx tsx scripts/carga-demonstracao.ts                         # simulação no banco do .env
+npx tsx scripts/carga-demonstracao.ts --aplicar               # apaga tudo e carrega no banco do .env
+npx tsx scripts/carga-demonstracao.ts --producao              # simulação no banco de produção
+npx tsx scripts/carga-demonstracao.ts --producao --aplicar    # apaga tudo e carrega em produção
+```
+
+- Sem `--aplicar`, só mostra o banco de destino (o nome, nunca a URL), o que
+  seria criado e quantos registros seriam apagados.
+- `--producao` carrega o `.env.production.local`, onde também precisam estar
+  `SEED_ADMIN_SENHA`, `SEED_SECRETARIA_SENHA` e `SEED_PROFESSOR_SENHA`. Se
+  faltar alguma, o script para antes de apagar qualquer coisa.
+- Com `--aplicar`, **antes de apagar**, salva uma cópia de todas as tabelas
+  em `backend/backups/backup-<data-hora>.json` (fora do git). Se a cópia
+  falhar, nada é apagado. **A cópia tem dados pessoais: apague o arquivo
+  assim que conferir a carga.**
+- As datas são calculadas a partir do dia em que o script roda (fuso de São
+  Paulo). O evento da apresentação do professor de demonstração fica em
+  13/11/2026 às 21:00, com 35 inscritos e 12 pedidos de check-in; troque a
+  data com `--evento-apresentacao "2026-11-13T21:00"`.
 
 ### Definir a senha de uma conta que já existe
 

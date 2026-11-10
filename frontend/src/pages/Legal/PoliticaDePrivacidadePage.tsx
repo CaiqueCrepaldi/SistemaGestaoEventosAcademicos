@@ -1,15 +1,14 @@
 import { Link } from "react-router-dom";
 
-// pagina publica, sem autenticacao — descreve o tratamento de dados de verdade feito pelo SGEA (reflete
-// o que o codigo faz hoje). Mesmo texto de docs/lgpd/politica-de-privacidade.md: ao mudar um, mude o
-// outro. A versao vigente fica em VERSAO_TERMOS_ATUAL (backend/src/config/termos.ts)
+// pagina publica, sem autenticacao — descreve o tratamento de dados feito pelo SGEA hoje. Mesmo texto de
+// docs/lgpd/politica-de-privacidade.md. A versao vigente fica em VERSAO_TERMOS_ATUAL (backend/src/config/termos.ts).
+// Gerado a partir do .md (mesmo texto); ao mudar um, mude o outro
 export function PoliticaDePrivacidadePage() {
   return (
     <div className="login-screen">
       <div className="login-card legal-card">
         <h1>Política de Privacidade</h1>
-        <p className="legal-versao">Versão 4 — 09/11/2026.</p>
-
+        <p className="legal-versao">Versão 1 — 09/11/2026.</p>
         <h2>1. Quem trata os dados</h2>
         <p>
           O SGEA (Sistema de Gestão de Eventos Acadêmicos) é um protótipo acadêmico desenvolvido como Projeto de Final
@@ -19,86 +18,89 @@ export function PoliticaDePrivacidadePage() {
         </p>
         <ul>
           <li>
-            <strong>Neste protótipo</strong>, os responsáveis pelo tratamento são os integrantes da equipe citados acima.
+            <strong>Neste protótipo</strong>, os responsáveis pelo tratamento são os integrantes da equipe citados
+            acima.
           </li>
           <li>
-            <strong>Numa implantação real</strong>, a controladora seria a própria Universidade de Mogi das Cruzes, com um
-            encarregado (DPO) nomeado pela UMC.
+            <strong>Numa implantação real</strong>, a controladora seria a própria Universidade de Mogi das Cruzes, com
+            um encarregado (DPO) nomeado pela UMC.
           </li>
           <li>
-            <strong>Operadores</strong> (tratam dados por conta do controlador, sob instrução): Vercel (hospedagem), TiDB
-            Cloud (banco de dados) e SendGrid/Twilio (envio de e-mail), detalhados na seção 4.
+            <strong>Operadores</strong> (tratam dados por conta do controlador, sob instrução): Vercel (hospedagem),
+            TiDB Cloud (banco de dados) e SendGrid/Twilio (envio de e-mail), detalhados na seção 4.
           </li>
           <li>
-            <strong>Canal de privacidade:</strong> a página "Meus dados", dentro do sistema, e o e-mail{" "}
-            <strong>privacidade@sgeacademicos.com.br</strong> (seção 8).
+            <strong>Canal de privacidade:</strong> a página &ldquo;Meus dados&rdquo;, dentro do sistema, e o e-mail{" "}
+            <code>privacidade@sgeacademicos.com.br</code> (seção 8).
           </li>
         </ul>
-
         <h2>2. Dados pessoais tratados</h2>
         <ul>
           <li>
-            <strong>Identificação e contato (aluno):</strong> nome completo, RGM (matrícula) e e-mail institucional,
-            informados no cadastro.
+            <strong>Aluno:</strong> nome completo, RGM (matrícula) e e-mail institucional, informados no cadastro. Para
+            confirmar que o e-mail é seu, o sistema envia a ele um código de 6 dígitos; até a confirmação, nome, e-mail,
+            RGM e a senha (só como hash) ficam guardados provisoriamente por até 15 minutos. Sem a confirmação, esses
+            dados são apagados e nenhuma conta é criada.
           </li>
           <li>
-            <strong>Confirmação do e-mail no cadastro:</strong> ao criar a conta, o sistema envia um código de 6 dígitos ao
-            e-mail institucional para confirmar que o endereço é seu. Até a confirmação, nome, e-mail, RGM e a senha (só
-            como hash) ficam guardados provisoriamente por até 15 minutos. Se o código não for confirmado, esses dados são
-            apagados e nenhuma conta é criada.
+            <strong>Professor:</strong> nome completo e e-mail institucional (<code>@umc.br</code>), informados pela
+            secretaria ou pela administração ao criar a conta. Nada além disso. O professor recebe por e-mail um link de
+            convite, válido por 24 horas e de uso único; a chave do link fica guardada só como hash. Ao usar o convite,
+            ele define a senha e aceita os Termos de Uso.
           </li>
           <li>
-            <strong>Autenticação:</strong> senha (nunca guardada em texto puro; ver seção 6).
+            <strong>Palestrante:</strong> nome e e-mail, informados pela equipe ou pelo professor. O nome aparece na
+            programação para quem está conectado, depois que o palestrante é aprovado pela equipe; o e-mail é visto só
+            pela equipe e pelo professor que o cadastrou. O palestrante não recebe e-mail do sistema. O canal de
+            privacidade vale também para palestrantes.
           </li>
           <li>
-            <strong>Dados acadêmicos:</strong> inscrições em eventos, confirmações de presença (check-in), respostas ao
-            questionário de cada evento, resultado (aprovação ou reprovação) e feedback enviado sobre as palestras.
+            <strong>Autenticação:</strong> senha (nunca guardada em texto legível; ver seção 6) e, para quem decidir
+            ativar a autenticação em dois fatores (opcional), uma chave secreta guardada cifrada e códigos de
+            recuperação guardados só em forma irreversível.
           </li>
           <li>
-            <strong>Certificados emitidos:</strong> ao emitir um certificado, o sistema guarda uma cópia do que vai impresso
-            nele (nome, RGM, evento, data e carga horária) e um código de validação.
+            <strong>Inscrições e check-in:</strong> inscrições em eventos, o pedido de check-in feito pelo aluno (com a
+            hora do pedido) e a decisão (aprovado ou recusado, com quem decidiu e quando). Quem não pede o check-in até
+            o fim do prazo fica como ausente.
           </li>
           <li>
-            <strong>Registros de acesso:</strong> login (sucesso e falha), acesso negado, cadastro e alterações em registros
-            críticos, para segurança e auditoria. Esses registros nunca guardam senha, código, e-mail ou RGM.
+            <strong>Questionário e certificado:</strong> respostas ao questionário de cada evento e o resultado (acertos
+            e percentual). Ao emitir um certificado, o sistema guarda uma cópia do que vai impresso nele (nome, RGM,
+            evento, tema, palestrante, data e carga horária) e um código de validação.
+          </li>
+          <li>
+            <strong>Avaliações das palestras:</strong> nota e comentário, enviados de forma opcional por quem tem
+            direito ao certificado.
+          </li>
+          <li>
+            <strong>Aprovação e histórico:</strong> o que o professor cadastra passa pela aprovação da equipe. O
+            histórico guarda cada envio, aprovação, recusa e proposta de alteração, com a data, o nome de quem agiu, o
+            motivo da recusa e a resposta do professor.
+          </li>
+          <li>
+            <strong>Situação da conta:</strong> se a equipe inativar uma conta (de aluno ou de professor), fica
+            registrado o motivo, visível só para a equipe.
+          </li>
+          <li>
+            <strong>Registros de acesso e auditoria:</strong> login (sucesso e falha), acesso negado, cadastro, check-in
+            e alterações em registros críticos, para segurança e auditoria. Esses registros nunca guardam senha, código,
+            e-mail, RGM nem textos livres como motivos e comentários.
           </li>
           <li>
             <strong>Endereço IP:</strong> usado só para bloquear por alguns minutos o excesso de tentativas no login, na
-            recuperação de senha, no envio do código do cadastro e na consulta pública de certificados.
-          </li>
-          <li>
-            <strong>Autenticação em dois fatores:</strong> para quem decidir ativar (é opcional), uma chave secreta guardada
-            cifrada e códigos de recuperação guardados apenas em forma irreversível.
-          </li>
-          <li>
-            <strong>Situação da conta:</strong> se a secretaria inativar sua conta, fica registrado o motivo, visível só
-            para a equipe.
-          </li>
-          <li>
-            <strong>Identificação e contato (palestrante):</strong> nome e e-mail, informados pela equipe ou pelo professor
-            ao cadastrar o evento. O nome aparece na agenda para quem está conectado (só depois de o palestrante ser
-            aprovado pela equipe); o e-mail é visto só pela equipe e pelo professor que o cadastrou. O canal de privacidade
-            vale também para palestrantes.
-          </li>
-          <li>
-            <strong>Identificação e contato (professor):</strong> nome completo e e-mail institucional (<code>@umc.br</code>),
-            informados pela administração ou pela secretaria ao criar a conta. Nada além disso. A conta só fica ativa depois
-            do primeiro acesso, em que o professor informa o código de 6 dígitos enviado ao e-mail (guardado só como hash,
-            vale 24 horas), define a senha e aceita os Termos de Uso.
-          </li>
-          <li>
-            <strong>Aprovação de eventos e palestrantes:</strong> o que o professor cadastra passa pela aprovação da equipe.
-            O histórico guarda cada envio, aprovação e recusa, com a data, o nome de quem agiu, o motivo da recusa e a
-            resposta do professor.
+            recuperação de senha, no envio do código do cadastro, no link de convite do professor e na consulta pública
+            de certificados.
           </li>
         </ul>
         <p>
-          <strong>O que o professor vê dos alunos:</strong> só nos eventos que ele criou, o nome, o RGM, a presença, as notas
-          do questionário e as avaliações enviadas pelos alunos inscritos. Ele usa esses dados só para organizar o evento e
-          registrar a presença; não vê alunos de outros eventos nem a lista geral de alunos.
+          <strong>O que o professor vê dos alunos:</strong> só nos eventos que ele criou, o nome, o RGM, a situação do
+          check-in, as notas do questionário e as avaliações enviadas pelos alunos inscritos. Ele usa esses dados só
+          para organizar o evento; não vê alunos de outros eventos nem a lista geral de alunos. No calendário, os
+          eventos dos outros professores e da equipe aparecem para ele só como &ldquo;Sala ocupada&rdquo;, sem título,
+          palestrante nem inscritos.
         </p>
         <p>Não coletamos CPF, endereço, data de nascimento, foto ou dados de saúde.</p>
-
         <h2>3. Para que usamos cada dado</h2>
         <table className="legal-tabela">
           <thead>
@@ -115,28 +117,30 @@ export function PoliticaDePrivacidadePage() {
               <td>Execução de contrato a pedido do titular (art. 7º, V da LGPD)</td>
             </tr>
             <tr>
-              <td>Nome e e-mail do professor, código do primeiro acesso</td>
-              <td>Criar a conta do professor e permitir que ele crie e organize os próprios eventos e registre a presença</td>
-              <td>Execução de contrato (art. 7º, V)</td>
-            </tr>
-            <tr>
-              <td>Dados dos alunos vistos pelo professor (nome, RGM, presença, notas e avaliações, só dos eventos dele)</td>
-              <td>Organizar o evento, registrar a presença e acompanhar o resultado</td>
-              <td>Execução de contrato (art. 7º, V)</td>
-            </tr>
-            <tr>
-              <td>Histórico da aprovação (quem enviou, aprovou ou recusou, motivo e resposta)</td>
-              <td>Registrar as decisões da equipe sobre o que o professor cadastra</td>
-              <td>Legítimo interesse da instituição na organização dos eventos (art. 7º, IX)</td>
-            </tr>
-            <tr>
               <td>Cadastro aguardando confirmação (nome, e-mail, RGM e hash da senha, por até 15 minutos)</td>
               <td>Garantir que a conta e os certificados pertencem ao dono do e-mail</td>
               <td>Procedimentos preliminares a pedido do titular (art. 7º, V)</td>
             </tr>
             <tr>
-              <td>Inscrição e presença</td>
-              <td>Controlar as vagas e liberar o questionário e o certificado</td>
+              <td>Nome e e-mail do professor, convite (hash da chave)</td>
+              <td>Criar a conta do professor e permitir que ele crie e organize os próprios eventos</td>
+              <td>Execução de contrato (art. 7º, V)</td>
+            </tr>
+            <tr>
+              <td>
+                Dados dos alunos vistos pelo professor (nome, RGM, check-in, notas e avaliações, só dos eventos dele)
+              </td>
+              <td>Organizar o evento, decidir o check-in e acompanhar o resultado</td>
+              <td>Execução de contrato (art. 7º, V)</td>
+            </tr>
+            <tr>
+              <td>Histórico da aprovação e propostas de alteração</td>
+              <td>Registrar as decisões da equipe sobre o que o professor cadastra</td>
+              <td>Legítimo interesse da instituição na organização dos eventos (art. 7º, IX)</td>
+            </tr>
+            <tr>
+              <td>Inscrição e check-in (pedido, decisão, quem decidiu e quando)</td>
+              <td>Controlar as vagas, registrar a presença e liberar o questionário e o certificado</td>
               <td>Execução de contrato (art. 7º, V)</td>
             </tr>
             <tr>
@@ -153,9 +157,19 @@ export function PoliticaDePrivacidadePage() {
               <td>Execução de contrato (art. 7º, V)</td>
             </tr>
             <tr>
-              <td>Feedback da palestra</td>
+              <td>Avisos por e-mail (inscrição, cancelamento e mudança no evento)</td>
+              <td>Manter o aluno informado sobre os eventos em que está inscrito</td>
+              <td>Execução de contrato (art. 7º, V)</td>
+            </tr>
+            <tr>
+              <td>Avaliação da palestra</td>
               <td>Avaliação do evento pela organização (envio opcional)</td>
               <td>Consentimento (art. 7º, I)</td>
+            </tr>
+            <tr>
+              <td>Motivo da inativação da conta</td>
+              <td>Registrar por que a conta foi inativada</td>
+              <td>Legítimo interesse da instituição na gestão dos eventos (art. 7º, IX)</td>
             </tr>
             <tr>
               <td>Registros de acesso e auditoria</td>
@@ -179,18 +193,28 @@ export function PoliticaDePrivacidadePage() {
             </tr>
           </tbody>
         </table>
-
         <h2>4. Compartilhamento com terceiros</h2>
         <ul>
           <li>
             <strong>TiDB Cloud</strong> (banco de dados): armazena os dados descritos acima.
           </li>
           <li>
-            <strong>SendGrid</strong> (Twilio, envio de e-mail): envia o código de confirmação do cadastro, o código do
-            primeiro acesso do professor, o código de recuperação de senha e os avisos de confirmação e de cancelamento de
-            inscrição. Recebe o e-mail do destinatário
-            e o conteúdo da mensagem (nos avisos de inscrição, também o nome do aluno), só o necessário para entregar
-            aquela mensagem.
+            <strong>SendGrid</strong> (Twilio, envio de e-mail): envia somente estes e-mails:
+            <ul>
+              <li>o código de confirmação do cadastro do aluno;</li>
+              <li>o convite do professor (link para criar a senha);</li>
+              <li>o código de recuperação de senha;</li>
+              <li>a confirmação de inscrição;</li>
+              <li>o aviso de inscrição cancelada pela equipe;</li>
+              <li>
+                o aviso de mudança de sala, horário, carga horária ou palestrante num evento em que o aluno está
+                inscrito.
+              </li>
+            </ul>
+            <p>
+              Recebe o e-mail do destinatário e o conteúdo da mensagem (nos avisos, também o nome da pessoa e os dados
+              do evento), só o necessário para entregar aquela mensagem.
+            </p>
           </li>
           <li>
             <strong>Vercel</strong> (hospedagem): processa toda requisição feita ao SGEA, o que inclui o endereço IP de
@@ -199,124 +223,126 @@ export function PoliticaDePrivacidadePage() {
         </ul>
         <p>
           Nenhum dado é vendido, usado para publicidade ou compartilhado para outra finalidade. A autenticação em dois
-          fatores usa um aplicativo autenticador no seu celular, que gera os códigos no próprio aparelho: nenhum dado seu é
-          enviado a terceiros por causa do 2FA.
+          fatores usa um aplicativo autenticador no seu celular, que gera os códigos no próprio aparelho: nenhum dado
+          seu é enviado a terceiros por causa do 2FA.
         </p>
-
         <h2>5. Transferência internacional e armazenamento no navegador</h2>
         <p>
-          TiDB Cloud, SendGrid e Vercel têm infraestrutura nos Estados Unidos: usar o SGEA implica que seus dados podem ser
-          processados fora do Brasil. Como protótipo acadêmico, essa transferência segue os termos padrão desses
-          provedores; numa implantação real, a instituição precisaria formalizar as salvaguardas cabíveis (por exemplo,
+          TiDB Cloud, SendGrid e Vercel têm infraestrutura nos Estados Unidos: usar o SGEA implica que seus dados podem
+          ser processados fora do Brasil. Como protótipo acadêmico, essa transferência segue os termos padrão desses
+          provedores; numa implantação real, a instituição precisaria formalizar as salvaguardas cabíveis (como
           cláusulas contratuais padrão).
         </p>
         <p>
-          O sistema não usa cookies. O navegador guarda só a sua sessão (o token de acesso e os dados da conta mostrados na
-          tela, como nome e perfil), apagada ao sair ou quando a sessão expira.
+          O sistema não usa cookies. O navegador guarda só a sua sessão (o token de acesso e os dados da conta mostrados
+          na tela, como nome e perfil), apagada ao sair ou quando a sessão expira.
         </p>
-
         <h2>6. Segurança</h2>
         <ul>
           <li>
             Senhas são protegidas com hash forte e salt aleatório por senha (bcrypt) e nunca ficam gravadas em texto
-            legível. Toda senha nova precisa ter de 8 a 64 caracteres, com pelo menos uma letra maiúscula, um número e um
-            caractere especial.
+            legível. Toda senha nova precisa ter de 8 a 64 caracteres, com pelo menos uma letra maiúscula, um número e
+            um caractere especial.
           </li>
           <li>
-            O código de confirmação do cadastro também fica guardado só como hash, vale por 15 minutos e deixa de valer
-            depois de 5 tentativas erradas. O envio de códigos é limitado por e-mail e por IP.
+            Os códigos de confirmação do cadastro e de recuperação de senha ficam guardados só como hash, valem por 15
+            minutos e deixam de valer depois de 5 tentativas erradas. A chave do convite do professor também fica só
+            como hash, vale por 24 horas e só pode ser usada uma vez; um convite novo invalida o anterior. O envio de
+            códigos é limitado por e-mail e por IP.
           </li>
+          <li>O e-mail de acesso não pode ser alterado: ele identifica a sua conta.</li>
           <li>
-            O e-mail de acesso não pode ser alterado depois do cadastro: ele foi confirmado por código e identifica a sua
-            conta.
-          </li>
-          <li>
-            Nome, e-mail e RGM são dados pessoais comuns, guardados sem criptografia e protegidos por controle de acesso por
-            perfil (cada perfil só vê o que precisa), conexão segura (HTTPS) e banco com acesso restrito. A chave do 2FA
-            fica cifrada.
+            Nome, e-mail e RGM são dados pessoais comuns, guardados sem criptografia e protegidos por controle de acesso
+            por perfil (cada perfil só vê o que precisa), conexão segura (HTTPS) e banco com acesso restrito. A chave do
+            2FA fica cifrada.
           </li>
           <li>Toda regra de acesso é verificada no servidor, nunca só escondendo botões na tela.</li>
-          <li>Autenticação em dois fatores por aplicativo autenticador, opcional para todos (página "Minha conta").</li>
           <li>
-            Tentativas de login em excesso bloqueiam o acesso por alguns minutos. Trocar a senha, inativar a conta ou mexer
-            no 2FA encerra as sessões já abertas.
+            Autenticação em dois fatores por aplicativo autenticador, opcional para todos (página &ldquo;Minha
+            conta&rdquo;).
           </li>
           <li>
-            Login, falhas de acesso, acessos negados e alterações críticas ficam registrados numa trilha de auditoria que
-            não pode ser editada nem apagada pelo sistema.
+            Tentativas de login em excesso bloqueiam o acesso por alguns minutos. Trocar a senha, inativar a conta ou
+            mexer no 2FA encerra as sessões já abertas.
+          </li>
+          <li>
+            Login, falhas de acesso, acessos negados e alterações críticas ficam registrados numa trilha de auditoria
+            que não pode ser editada nem apagada pelo sistema.
           </li>
         </ul>
-
         <h2>7. Por quanto tempo guardamos os dados</h2>
         <ul>
           <li>
-            <strong>Cadastro aguardando confirmação:</strong> apagado ao concluir o cadastro (os dados passam para a conta)
-            ou depois de expirar. Sem confirmação, o código deixa de valer em 15 minutos, e os dados são apagados na
-            próxima vez que alguém entrar no sistema ou fizer um cadastro.
+            <strong>Cadastro aguardando confirmação:</strong> apagado ao concluir o cadastro (os dados passam para a
+            conta) ou depois de expirar. Sem confirmação, o código deixa de valer em 15 minutos, e os dados são apagados
+            na próxima vez que alguém entrar no sistema ou fizer um cadastro.
           </li>
           <li>
-            <strong>Conta:</strong> permanece enquanto você usa o sistema. A secretaria pode inativar a conta (o histórico
-            de inscrições e certificados é preservado) e só pode excluí-la definitivamente depois de inativada. A exclusão
-            apaga a conta e o histórico vinculado (inscrições, feedbacks e tentativas de questionário) de forma permanente.
+            <strong>Convite do professor:</strong> apagado quando é usado; um convite novo substitui o anterior.
+          </li>
+          <li>
+            <strong>Conta:</strong> permanece enquanto você usa o sistema. A secretaria pode inativar a conta (o
+            histórico de inscrições e certificados é preservado) e só pode excluí-la definitivamente depois de
+            inativada. A exclusão apaga a conta e o histórico vinculado (inscrições, avaliações e tentativas de
+            questionário) de forma permanente.
           </li>
           <li>
             <strong>Quem já tem certificado emitido</strong> não tem a conta excluída: o certificado é a prova da
-            participação e precisa continuar válido (por exemplo, numa conferência de horas complementares). Nesse caso a
-            conta fica inativada, sem acesso ao sistema, e o registro do certificado é mantido.
+            participação e precisa continuar válido (numa conferência de horas complementares, por exemplo). Nesse caso
+            a conta fica inativada, sem acesso ao sistema, e o registro do certificado é mantido.
           </li>
           <li>
-            <strong>Feedback:</strong> você pode excluir o seu a qualquer momento e enviar outro.
+            <strong>Avaliação:</strong> você pode excluir a sua a qualquer momento e enviar outra.
           </li>
           <li>
-            <strong>Registros de auditoria:</strong> guardados por até 5 anos e nunca editados ou apagados pelas telas do
-            sistema.
+            <strong>Registros de auditoria:</strong> guardados por até 5 anos e nunca editados ou apagados pelas telas
+            do sistema.
           </li>
           <li>
-            <strong>Cópias de segurança:</strong> o provedor do banco faz uma cópia por dia, que expira em 1 dia. Um dado
-            excluído pode continuar numa cópia já feita por no máximo 24 horas.
+            <strong>Cópias de segurança:</strong> o provedor do banco faz uma cópia por dia, que expira em 1 dia. Um
+            dado excluído pode continuar numa cópia já feita por no máximo 24 horas.
           </li>
         </ul>
-
         <h2>8. Seus direitos</h2>
         <p>
-          Na página <strong>"Meus dados"</strong>, no menu do sistema depois que você entra com a sua conta de aluno, você
-          vê tudo o que o SGEA guarda sobre você: dados cadastrais, aceite dos termos, situação do 2FA, inscrições e
-          presenças, resultados dos questionários, certificados e avaliações.
+          Na página <strong>&ldquo;Meus dados&rdquo;</strong>, no menu do sistema depois que você entra com a sua conta
+          de aluno, você vê tudo o que o SGEA guarda sobre você: dados cadastrais, aceite dos termos, situação do 2FA,
+          inscrições e check-in (pedido e decisão), resultados dos questionários, certificados e avaliações.
         </p>
         <p>
-          Os demais pedidos são feitos pelo e-mail <strong>privacidade@sgeacademicos.com.br</strong> e respondidos em até
-          15 dias:
+          Os demais pedidos são feitos pelo e-mail <code>privacidade@sgeacademicos.com.br</code> e respondidos em até 15
+          dias:
         </p>
         <ul>
           <li>Cópia dos seus dados para levar a outro serviço (portabilidade).</li>
           <li>
-            Correção de dados: nome e RGM podem ser corrigidos pelo canal de privacidade. O e-mail não pode ser alterado,
-            porque é a identificação de acesso confirmada no cadastro. Se o seu e-mail institucional mudar, escreva para o
-            canal de privacidade e a equipe analisa o caso.
+            Correção de dados: nome e RGM podem ser corrigidos pelo canal de privacidade. O e-mail não pode ser
+            alterado, porque é a identificação de acesso. Se o seu e-mail institucional mudar, escreva para o canal de
+            privacidade e a equipe analisa o caso.
           </li>
           <li>
-            Exclusão da conta e dos dados (veja na seção 7 o caso de quem já tem certificado, que tem a conta inativada).
+            Exclusão da conta e dos dados (veja na seção 7 o caso de quem já tem certificado, que tem a conta
+            inativada).
           </li>
           <li>
-            Revisão humana do resultado do questionário, que é calculado automaticamente e libera o certificado (art. 20 da
-            LGPD). A revisão confere se a correção foi feita certo; não é uma nova tentativa: quem não atinge o mínimo nas
-            2 tentativas permitidas não recebe o certificado daquele evento.
+            Revisão humana do resultado do questionário, que é calculado automaticamente e libera o certificado (art. 20
+            da LGPD). A revisão confere se a correção foi feita certo; não é uma nova tentativa: quem não atinge o
+            mínimo nas 2 tentativas permitidas não recebe o certificado daquele evento.
           </li>
           <li>
-            Oposição ao tratamento, informação sobre com quem seus dados são compartilhados e qualquer outro pedido sobre
-            seus dados.
+            Oposição ao tratamento, informação sobre com quem seus dados são compartilhados e qualquer outro pedido
+            sobre seus dados.
           </li>
         </ul>
-
+        <p>Professores e palestrantes fazem os pedidos pelo mesmo e-mail.</p>
         <h2>9. Incidentes de segurança</h2>
         <p>
-          Em caso de incidente que exponha dados pessoais com risco ou dano relevante, a equipe responsável avalia o risco e
-          comunica os titulares afetados e, quando exigido, a Autoridade Nacional de Proteção de Dados (ANPD), no prazo
-          regulatório aplicável.
+          Em caso de incidente que exponha dados pessoais com risco ou dano relevante, a equipe responsável avalia o
+          risco e comunica os titulares afetados e, quando exigido, a Autoridade Nacional de Proteção de Dados (ANPD),
+          no prazo regulatório aplicável.
         </p>
-
         <p className="legal-versao">
-          Versão 4 — 09/11/2026. Quando este texto mudar, a nova versão é publicada nesta página com a data, e a versão
+          Versão 1 — 09/11/2026. Quando este texto mudar, a nova versão é publicada nesta página com a data, e a versão
           que você aceitou fica registrada na sua conta.
         </p>
 

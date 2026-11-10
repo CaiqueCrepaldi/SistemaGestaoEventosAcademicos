@@ -1,113 +1,82 @@
 # Plano de retenção e descarte — SGEA
 
-**Data:** 06/11/2026 · **Versão:** 3 (cadastro aguardando confirmação do
-e-mail, apagado ao concluir ou depois de 15 minutos; tabela `certificados`;
-exclusão a pedido como acontece hoje; nota sobre a anonimização, que saiu
-da Política de Privacidade versão 3. A versão 2, de
-29/09/2026, separou "conta sem uso" de "aluno inativado" e incluiu as
-inscrições canceladas na inativação, o feedback excluído pelo próprio aluno
-e os registros do limite de tentativas)
+**Data:** 09/11/2026 · **Versão:** 1 (acompanha a versão 1 dos Termos de Uso e da
+Política de Privacidade)
 
-> **Anonimização:** a Política de Privacidade versão 3 (06/11/2026) não
-> promete anonimização ao titular, porque ela não existe no sistema: o que
-> existe é a exclusão definitiva (ou a inativação, para quem tem
-> certificado). As linhas e a rotina abaixo que falam em anonimizar ficam
-> como plano, ainda não implementado.
-
-Prazos decididos na Fase 0 (`00-diagnostico.md`, seção "Decisões tomadas").
 Tabela no formato da seção 4.6 do guia, seguida de como cada descarte é
-(ou será) executado tecnicamente.
+executado. O que ainda não está implementado aparece marcado como **plano**:
+o guia não aceita prometer exclusão sem implementá-la, e a Política de
+Privacidade só promete ao titular o que já funciona.
 
 **Dois conceitos que não se confundem:**
 
-- **Conta sem uso** — critério de retenção: 24 meses sem login. Leva à
-  anonimização automática (rotina ainda não implementada).
-- **Aluno inativado** — ação da equipe (ADMINISTRADOR ou SECRETARIA), com
-  motivo, que bloqueia o uso do sistema enquanto durar e pode ser desfeita
-  (reativação). Não apaga nem anonimiza nada por si só.
-
-No código, nas telas e nestes documentos, "inativo/inativado" se refere só
-à ação da equipe; o critério de retenção é sempre chamado de "conta sem uso".
+- **Conta sem uso** — critério de retenção: 24 meses sem login (plano).
+- **Conta inativada** — ação da equipe, com motivo, que bloqueia o uso do
+  sistema enquanto durar e pode ser desfeita (reativação). Não apaga nada
+  por si só.
 
 ## Tabela de retenção
 
 | Categoria | Finalidade | Prazo ou critério | Destino |
 |---|---|---|---|
-| Cadastro aguardando confirmação do e-mail (`cadastros_pendentes`: nome, e-mail, RGM, hash da senha, hash do código, aceite dos Termos) | Garantir que a conta pertence ao dono do e-mail institucional antes de criá-la | Até 15 minutos (`expiraEm`); renovado para 15 minutos a cada reenvio do código | **Apagado ao concluir o cadastro** (na mesma transação que cria a conta) **ou depois de expirar**: no próximo cadastro, a cada login e na tentativa de confirmar ou reenviar o código daquele e-mail. Sem rotina agendada. Preencher o cadastro de novo com o mesmo e-mail ou RGM substitui o pendente anterior |
-| Conta ativa (Usuario + Participante) | Autenticação, participação em eventos | Enquanto ativa | — |
-| Aluno inativado pela equipe | Bloquear o uso do sistema (ex.: uso indevido, dado incorreto, a pedido) | Até a reativação | A conta e o histórico são mantidos; as inscrições **pendentes** em eventos futuros são canceladas na inativação (liberam a vaga, cada uma registrada na auditoria); presenças e certificados continuam valendo; o motivo da inativação é apagado na reativação |
-| Conta sem uso (24 meses sem login) | Autenticação | 24 meses sem login, contados a partir de `LOGIN_SUCESSO` mais recente na auditoria | Anonimizar automaticamente |
-| Conta excluída a pedido do titular ou pela equipe | — | Imediato, ao atender o pedido | **Hoje:** a equipe inativa e depois remove a conta e o histórico (inscrições, feedbacks e tentativas de questionário) na tela Participantes; se houver certificado emitido, a remoção é recusada (`409 PARTICIPANTE_COM_CERTIFICADO`) e a conta fica só inativada. **Plano (não implementado):** anonimizar |
-| Inscrições, presenças, tentativas de questionário | Participação no evento; estatística do evento (contagem, taxa de aprovação) | Enquanto a conta associada existir | Apagadas junto com a conta na remoção. A inscrição que deu origem a um certificado fica (ver a linha abaixo). **Plano (não implementado):** sobreviver à anonimização da conta, sem vínculo pessoal |
-| Certificados emitidos (`certificados`: cópia do nome e do RGM gravada na emissão, dados do evento e código de validação) | Permitir a validação pública do código (RF027) e comprovar a participação, com o que foi impresso no PDF | Enquanto o certificado precisar ser verificável (sem prazo automático: nenhuma rotina apaga certificado) | Mantido. O aluno com certificado não é removido, só inativado (sem acesso ao sistema); a inscrição de origem é protegida no banco (`onDelete: Restrict`). A validação pública mostra só nome, evento, data, carga horária e emissão, nunca o RGM |
-| Feedbacks | Avaliação do evento/palestrante | Até o próprio aluno excluir (pode fazer isso a qualquer momento e enviar outro) ou a equipe excluir por um motivo da lista fechada; senão, igual às inscrições | Exclusão imediata, registrada na auditoria (`FEEDBACK_EXCLUIDO`); na anonimização da conta, manter a nota e **apagar** o texto do comentário |
-| Registros do limite de tentativas (`limites_acesso`: conta ou IP) | Bloquear tentativa de adivinhar senha ou de disparar código em massa | O bloqueio expira sozinho em 15 min; a linha fica na tabela com o contador zerado | Excluir pela rotina automática (ainda não implementada) |
-| Códigos de recuperação de senha | Confirmar identidade na troca de senha | 24h após expirar ou ser usado | Excluir |
-| Logs de auditoria | Segurança, investigação, exercício regular de direitos | 5 anos a partir do registro (art. 7º, VI da LGPD; prazo do art. 27 do CDC, por ser relação de consumo aluno–UMC) | Excluir, só pela rotina automática — nunca manualmente (ver `07-medidas-tecnicas-de-seguranca.md`) |
-| Registro de aceite de Termos/Política | Comprovar aceite | Mesmo prazo dos logs (5 anos) | Manter como registro pseudonimizado (data/hora + versão) após a conta ser anonimizada |
-| Dados de demonstração (`[TESTE]`) | Testes acadêmicos do PFC | Até 31/12/2026 (após a apresentação) | Excluir via script de limpeza |
-| Backups do banco (TiDB Cloud) | Recuperação de desastre | Backup diário (07:00 UTC), expira em 1 dia — ver "Backups" abaixo | Rotação automática do provedor, sem ação manual necessária |
+| Cadastro aguardando confirmação (`cadastros_pendentes`) | Garantir que a conta pertence ao dono do e-mail antes de criá-la | Até 15 minutos (`expiraEm`), renovados a cada reenvio do código | **Apagado ao concluir o cadastro** (na transação que cria a conta) **ou depois de expirar**, a cada login e a cada cadastro novo. Refazer o cadastro com o mesmo e-mail ou RGM substitui o pendente anterior |
+| Convite do professor (`primeiros_acessos`) | Ativar a conta do professor pelo link | 24 horas, uso único | **Apagado ao ser usado** (na transação que ativa a conta). Um convite novo substitui o anterior. O convite vencido e não usado fica até o reenvio ou a exclusão da conta |
+| Conta ativa (`usuarios`, `participantes`) | Autenticação e participação em eventos | Enquanto ativa | — |
+| Conta de aluno inativada | Bloquear o uso do sistema (uso indevido, dado incorreto, a pedido) | Até a reativação | Conta e histórico mantidos; as inscrições sem pedido de check-in em eventos que ainda não começaram são canceladas na inativação (cada uma registrada na auditoria); presenças e certificados continuam valendo; o motivo é apagado na reativação |
+| Conta de professor inativada | Bloquear o acesso | Até a reativação | Os eventos em aberto passam antes para outro professor ou para a equipe; os encerrados há mais de 24 horas continuam ligados a ele; o motivo é apagado na reativação |
+| Conta excluída a pedido do titular ou pela equipe | — | Ao atender o pedido | A equipe inativa e depois remove a conta e o histórico (inscrições, avaliações e tentativas) na tela Participantes. Com certificado emitido, a remoção é recusada (`409 PARTICIPANTE_COM_CERTIFICADO`) e a conta fica só inativada |
+| Conta sem uso (24 meses sem login) | — | 24 meses sem `LOGIN_SUCESSO` | **Plano:** anonimizar pela rotina de retenção |
+| Inscrições, check-in e tentativas de questionário | Participação no evento e estatística | Enquanto a conta existir | Apagadas junto com a conta na remoção; a inscrição de origem de um certificado fica. Quando o prazo do check-in fecha, o pedido sem decisão vira recusado e quem não pediu fica ausente (`utils/checkin.ts`), sem apagar nada |
+| Certificados emitidos (`certificados`) | Validação pública do código e prova da participação | Enquanto o certificado precisar ser verificável (nenhuma rotina apaga certificado) | Mantido. A inscrição de origem é protegida no banco (`onDelete: Restrict`) |
+| Avaliações (`feedbacks`) | Avaliação do evento | Até o aluno excluir ou a equipe excluir com motivo de lista fechada; senão, igual às inscrições | Exclusão imediata, registrada na auditoria (`FEEDBACK_EXCLUIDO`) |
+| Histórico da aprovação e propostas de alteração | Registro das decisões da equipe | Enquanto o evento ou palestrante existir | Apagados junto com o item; a proposta cancelada é apagada na hora |
+| Registros do limite de tentativas (`limites_acesso`) | Bloquear adivinhação de senha e envio de códigos em massa | O bloqueio expira sozinho em 15 minutos; a linha fica com o contador zerado | **Plano:** excluir pela rotina de retenção |
+| Códigos de recuperação de senha (`recuperacoes_senha`) | Confirmar a identidade na troca de senha | 15 minutos de validade | Ficam marcados como usados ou vencidos. **Plano:** excluir 24 horas depois, pela rotina |
+| Registros de auditoria (`logs_auditoria`) | Segurança, investigação, exercício regular de direitos | 5 anos (art. 7º, VI da LGPD; prazo do art. 27 do CDC) | Nenhuma tela edita ou apaga. **Plano:** a rotina de retenção será a única a remover os registros com mais de 5 anos |
+| Registro de aceite dos Termos/Política | Comprovar o aceite | Na conta, enquanto ela existir; na auditoria (`CONSENTIMENTO_LGPD_ACEITO`), pelo prazo dos logs | — |
+| Contas e dados da carga de demonstração (`usuarios.ficticio = true`) | Mostrar o sistema com volume realista, sem dado de pessoa real | Até a próxima carga ou limpeza | O script `backend/scripts/carga-demonstracao.ts` apaga tudo antes de carregar |
+| Cópia de segurança feita pela carga de demonstração (`backend/backups/backup-<data-hora>.json`) | Desfazer a carga se algo der errado | Só até confirmar que a carga deu certo | Fica só no computador de quem rodou o script, fora do repositório (`.gitignore`). **Contém todos os dados da base apagada, inclusive dados pessoais:** apagar o arquivo assim que a carga for conferida |
+| Backups do banco (TiDB Cloud) | Recuperação de desastre | Backup diário (07:00 UTC), expira em 1 dia | Rotação automática do provedor |
 
 ## Como o descarte é executado
 
-**Já implementado:** o cancelamento das inscrições pendentes em eventos
-futuros na inativação do aluno e a exclusão do feedback (pelo próprio
-aluno ou pela equipe, com motivo) — ambos imediatos e registrados na
-auditoria. E o descarte do cadastro aguardando confirmação: o pendente sai
-na transação que cria a conta e, se expirar, é apagado por
-`apagarCadastrosExpirados()` (`auth.service.ts`), chamada no cadastro e em
-todo login. A chamada no login nunca impede a entrada: se falhar, só fica
-registrada no log do servidor.
+**Implementado:**
 
-**Ainda não implementado (rotina automática):** o restante desta seção
-descreve o desenho que será construído (item 7 da Fase 2), não algo que já
-funciona — a distinção importa porque o critério de avaliação do guia
-proíbe "prometer exclusão sem implementá-la".
+- o cadastro pendente sai na transação que cria a conta e, se expirar, é
+  apagado por `apagarCadastrosExpirados()` (`auth.service.ts`), chamada a
+  cada login e a cada cadastro; a chamada no login nunca impede a entrada;
+- o convite do professor sai na transação que ativa a conta;
+- a inativação do aluno cancela na hora as inscrições sem pedido de
+  check-in em eventos futuros, cada uma registrada na auditoria;
+- a exclusão de avaliação (pelo aluno ou pela equipe, com motivo) é imediata
+  e auditada;
+- a remoção da conta pela equipe apaga a conta e o histórico, exceto quando
+  há certificado emitido;
+- a expiração do check-in (`expirarCheckins`) roda antes das leituras e
+  ações que dependem da presença e registra só as quantidades na auditoria.
 
-- **Rotina de retenção:** uma rotina agendada (Vercel Cron chamando uma
-  rota protegida por segredo, ou equivalente) roda periodicamente e faz,
-  em uma única passada, idempotente:
-  1. Localiza **contas sem uso**: `LOGIN_SUCESSO` mais recente há mais de
-     24 meses (ou nenhum login registrado e `criadoEm` há mais de 24 meses)
-     e ainda não anonimizadas — independentemente de o aluno estar ou não
-     inativado pela equipe.
-  2. Anonimiza essas contas pelo mesmo procedimento da exclusão manual
-     (ver `08-procedimento-direitos-dos-titulares.md`).
-  3. Apaga códigos de recuperação de senha expirados ou usados há mais de
-     24h.
-  4. Verifica logs de auditoria com mais de 5 anos e os remove — **essa é
-     a única rotina do sistema com permissão de apagar log**; nenhuma
-     rota, service ou script fora dela pode fazer isso.
-  5. Registra na própria auditoria (`RETENCAO_EXECUTADA` ou equivalente)
-     quantos registros de cada tipo foram tratados naquela execução — a
-     rotina se audita a si mesma.
-- **Idempotência:** rodar a rotina duas vezes seguidas no mesmo dia não
-  deve alterar nada na segunda vez além do que já foi feito na primeira —
-  cada critério é uma consulta que já exclui quem já foi tratado (conta já
-  anonimizada não entra de novo no filtro, por exemplo).
-- **Script de limpeza dos dados de demonstração:** script avulso (mesmo
-  padrão dos scripts em `backend/scripts/`), que localiza tudo com o
-  prefixo `[TESTE]`/`Teste` criado pelo lote de demonstração e remove via
-  API ou diretamente pelas mesmas regras de negócio do sistema — a ser
-  rodado uma vez, manualmente, antes de 31/12/2026.
+**Plano (rotina de retenção, ainda não implementada):** uma rotina agendada
+(Vercel Cron chamando uma rota protegida por segredo, ou equivalente),
+idempotente, que em uma passada:
+
+1. anonimiza as **contas sem uso** (sem login há mais de 24 meses);
+2. apaga os códigos de recuperação de senha vencidos ou usados há mais de
+   24 horas e os registros antigos de `limites_acesso`;
+3. remove os registros de auditoria com mais de 5 anos — a única parte do
+   sistema com permissão de apagar log;
+4. registra na própria auditoria (`RETENCAO_EXECUTADA`) quantos registros de
+   cada tipo tratou.
 
 ## Backups
 
-Confirmado no console do TiDB Cloud (Data > Backup) para este cluster
-específico: o backup automático roda **1 vez por dia, às 07:00 UTC (04:00
-de Brasília)**, e cada backup **expira em 1 dia**. Ou seja, a qualquer
-momento existe no máximo um backup guardado, com no máximo 24 horas de
-idade.
+Conferido no console do TiDB Cloud (Data > Backup) para este cluster: o
+backup automático roda **1 vez por dia, às 07:00 UTC (04:00 de Brasília)**,
+e cada backup **expira em 1 dia**. A qualquer momento existe no máximo um
+backup guardado, com no máximo 24 horas de idade.
 
-**Implicação prática:** um dado anonimizado ou excluído no banco principal
-pode continuar existindo dentro do backup do dia por, no máximo, 24 horas
-— depois disso, o próprio ciclo diário substitui aquele backup por um novo
-(que já não vai mais ter o dado, porque a anonimização já tinha acontecido
-no banco principal antes daquele backup ser tirado). Não é preciso nenhuma
-ação manual pra "limpar" o backup — o prazo máximo de 24h já resolve
-sozinho, pela rotação diária.
+**Implicação prática:** um dado excluído no banco principal pode continuar
+no backup do dia por, no máximo, 24 horas; o ciclo diário resolve isso
+sozinho, sem ação manual.
 
-**Implicação para resposta a incidentes:** só é possível restaurar o
-estado das últimas 24 horas. Um problema percebido depois desse prazo não
-tem backup correspondente pra recuperação — ver a limitação registrada em
-`05-plano-de-resposta-a-incidentes.md`.
+**Implicação para resposta a incidentes:** só é possível restaurar o estado
+das últimas 24 horas (ver `05-plano-de-resposta-a-incidentes.md`).

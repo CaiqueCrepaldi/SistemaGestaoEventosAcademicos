@@ -228,7 +228,7 @@ async function main() {
         pendenteAluno.codigoHash.startsWith("$2a$12$") &&
         pendenteAluno.codigoHash !== codigoCadastro &&
         Math.abs(pendenteAluno.expiraEm.getTime() - pendenteAluno.aceiteEm.getTime() - 15 * 60 * 1000) < 1000 &&
-        pendenteAluno.versaoTermos === "4",
+        pendenteAluno.versaoTermos === VERSAO_TERMOS_ATUAL,
       pendenteAluno && { expira: pendenteAluno.expiraEm, versao: pendenteAluno.versaoTermos },
     );
     r = await chamar("POST", "/auth/registro/confirmar", { corpo: { emailInstitucional: emailAluno, codigo: codigoCadastro === "000000" ? "111111" : "000000" } });
@@ -241,11 +241,11 @@ async function main() {
     contas.push(aluno);
     const contaCriada = await prisma.usuario.findUnique({ where: { id: aluno.id } });
     checar(
-      "a conta recebe a senha do cadastro, o instante do aceite e a versão vigente (4) dos termos; o pendente é apagado",
+      "a conta recebe a senha do cadastro, o instante do aceite e a versão vigente (1) dos termos; o pendente é apagado",
       !!contaCriada &&
         contaCriada.senhaHash === pendenteAluno?.senhaHash &&
         contaCriada.consentimentoLgpdEm?.getTime() === pendenteAluno?.aceiteEm.getTime() &&
-        contaCriada.versaoTermosAceitos === "4" &&
+        contaCriada.versaoTermosAceitos === VERSAO_TERMOS_ATUAL &&
         !(await prisma.cadastroPendente.findUnique({ where: { emailLogin: emailAluno } })),
     );
     r = await chamar("POST", "/auth/registro/confirmar", { corpo: { emailInstitucional: emailAluno, codigo: codigoCadastro } });
@@ -343,7 +343,7 @@ async function main() {
         senhaHash: "x",
         codigoHash: "x",
         aceiteEm: new Date(),
-        versaoTermos: "4",
+        versaoTermos: VERSAO_TERMOS_ATUAL,
         expiraEm: new Date(Date.now() - 60 * 1000),
       },
     });
@@ -1542,8 +1542,8 @@ async function main() {
     checar("convite válido + senha + aceite -> 200", r.status === 200, r.corpo);
     const contaAtivada = await prisma.usuario.findUnique({ where: { id: professorA.id }, include: { primeiroAcesso: true } });
     checar(
-      "grava a senha (hash), o aceite e a versão \"4\" dos Termos; o convite sai do banco",
-      !!contaAtivada?.consentimentoLgpdEm && contaAtivada.versaoTermosAceitos === "4" && contaAtivada.senhaHash.startsWith("$2a$12$") && !contaAtivada.primeiroAcesso,
+      "grava a senha (hash), o aceite e a versão \"1\" dos Termos; o convite sai do banco",
+      !!contaAtivada?.consentimentoLgpdEm && contaAtivada.versaoTermosAceitos === VERSAO_TERMOS_ATUAL && contaAtivada.senhaHash.startsWith("$2a$12$") && !contaAtivada.primeiroAcesso,
     );
     checar(
       "aceite do professor registrado na auditoria",
@@ -2445,6 +2445,83 @@ async function main() {
         r.corpo.every((e: { situacao?: string }) => e.situacao === undefined),
       r.status,
     );
+
+    // ------------------------------------------------------------------ contas ficticias (carga de demonstracao)
+    requisito("R45 Conta fictícia nunca recebe e-mail; conta normal recebe como antes");
+    const participanteFicticio = await prisma.participante.create({ data: { id: randomUUID(), rgm: rgmAleatorio() } });
+    const alunoFicticio: Conta = {
+      id: randomUUID(),
+      email: `${String(Date.now()).slice(-10)}k${sufixo.slice(0, 2)}@alunos.umc.br`,
+      senha: SENHA_ALUNO,
+      perfil: "ALUNO",
+      participanteId: participanteFicticio.id,
+    };
+    await prisma.usuario.create({
+      data: {
+        id: alunoFicticio.id,
+        nome: "Aluna Fictícia Requisitos",
+        emailLogin: alunoFicticio.email,
+        senhaHash: "!",
+        perfil: "ALUNO",
+        participanteId: participanteFicticio.id,
+        ficticio: true,
+        consentimentoLgpdEm: new Date(),
+        versaoTermosAceitos: VERSAO_TERMOS_ATUAL,
+      },
+    });
+    contas.push(alunoFicticio);
+    const dadosDoAviso = { participanteNome: "Aluno", eventoTitulo: "Evento", eventoTema: "Tema", palestranteNome: "Palestrante", eventoHorario: new Date() };
+    const envioFicticio = await emailService.enviarConfirmacaoInscricao(alunoFicticio.email.toUpperCase(), dadosDoAviso);
+    const envioNormal = await emailService.enviarConfirmacaoInscricao(aluno.email, dadosDoAviso);
+    checar(
+      "e-mail para conta fictícia é suprimido; para conta normal sai como antes (enviado ou simulado)",
+      envioFicticio === "suprimido" && envioNormal !== "suprimido",
+      [envioFicticio, envioNormal],
+    );
+    r = await chamar("GET", "/usuarios/me", { token: aluno.token });
+    checar("o campo ficticio não aparece em nenhuma resposta da API (conta do aluno)", r.status === 200 && !("ficticio" in r.corpo), Object.keys(r.corpo ?? {}));
+
+    r = await chamar("POST", "/eventos", {
+      token: admin.token,
+      corpo: { ...eventoBase, titulo: `Evento Fictício ${sufixo}`, horario: emHoras(emBreve, 40), questionario: questionario() },
+    });
+    const eventoFicticioId: string = r.corpo.id;
+    eventos.push(eventoFicticioId);
+    r = await chamar("POST", "/inscricoes", { token: secretaria.token, corpo: { participanteId: participanteFicticio.id, eventoId: eventoFicticioId } });
+    const inscricaoFicticia: string = r.corpo.id;
+    checar(
+      "inscrição de conta fictícia funciona normalmente, sem e-mail (auditoria: suprimido)",
+      r.status === 201 &&
+        !!(await prisma.logAuditoria.findFirst({
+          where: { acao: "EMAIL_ENVIADO", detalhe: { contains: `inscrição ${inscricaoFicticia} (suprimido: conta fictícia)` } },
+        })),
+      r.corpo,
+    );
+    r = await chamar("POST", `/eventos/${eventoFicticioId}/inscricoes`, { token: aluno.token });
+    const inscricaoReal: string = r.corpo.id;
+    checar(
+      "a conta normal inscrita no mesmo evento recebe a confirmação",
+      r.status === 201 &&
+        r.corpo.emailConfirmacaoEnviado === true &&
+        !(await prisma.logAuditoria.findFirst({ where: { detalhe: { contains: `inscrição ${inscricaoReal} (suprimido` } } })),
+      r.corpo,
+    );
+    r = await chamar("PUT", `/eventos/${eventoFicticioId}`, { token: secretaria.token, corpo: { horario: emHoras(emBreve, 44) } });
+    checar(
+      "mudança de horário avisa só os inscritos reais (o fictício sai da lista)",
+      r.status === 200 && r.corpo.avisoInscritos?.inscritos === 1 && r.corpo.avisoInscritos?.avisados === 1,
+      r.corpo?.avisoInscritos,
+    );
+    r = await chamar("DELETE", `/inscricoes/${inscricaoFicticia}`, { token: secretaria.token });
+    checar(
+      "cancelar a inscrição da conta fictícia funciona (204), sem e-mail",
+      r.status === 204 &&
+        !!(await prisma.logAuditoria.findFirst({
+          where: { acao: "EMAIL_ENVIADO", detalhe: { contains: `cancelamento de inscrição, inscrição ${inscricaoFicticia} (suprimido: conta fictícia)` } },
+        })),
+      r.status,
+    );
+    await prisma.inscricao.deleteMany({ where: { eventoId: eventoFicticioId } });
 
     // ------------------------------------------------------------------ RF009/RNF010: exclusao bloqueada
     requisito("R19 Exclusão de evento bloqueada com inscrições (RF009/RNF010)");

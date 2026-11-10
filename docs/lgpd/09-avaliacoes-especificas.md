@@ -1,82 +1,83 @@
 # Avaliações específicas por área — SGEA
 
-**Data:** 27/09/2026 · **Versão:** 1
+**Data:** 09/11/2026 · **Versão:** 1 (acompanha a versão 1 dos Termos de Uso e da
+Política de Privacidade)
 
 Segue a seção 5 do guia, área por área, com justificativa de aplicação ou
-não aplicação — nenhuma marcada como "não se aplica" sem explicação, como
-o próprio guia exige.
+não aplicação — nenhuma marcada como "não se aplica" sem explicação, como o
+próprio guia exige.
 
 ## 5.1 Educação — aplica-se
 
 É o caso central do sistema. Cuidados adotados:
 
-- **Perfis separados:** ADMINISTRADOR, SECRETARIA e ALUNO, com autorização
-  checada no backend em toda rota (`03-matriz-perfis-e-permissoes.md`) —
-  não professor/responsável/direção, porque o SGEA não modela esses papéis
-  (é gestão de eventos de extensão/palestra, não sistema de notas de
-  disciplina regular).
-- **Presença e desempenho no questionário:** protegidos — só o próprio
-  aluno e a equipe enxergam a nota de alguém; não existe tela nem endpoint
+- **Perfis separados:** ADMINISTRADOR, SECRETARIA, PROFESSOR e ALUNO, com
+  autorização conferida no backend em toda rota
+  (`03-matriz-perfis-e-permissoes.md`). O SGEA é gestão de eventos
+  acadêmicos (palestras, minicursos), não sistema de notas de disciplina:
+  não modela responsável nem direção.
+- **O professor só vê os próprios eventos:** dos alunos inscritos neles,
+  nome, RGM, check-in, notas do questionário e avaliações. Não vê a lista
+  geral de alunos nem os eventos dos colegas (no calendário, só "Sala
+  ocupada").
+- **Presença e desempenho no questionário:** só o próprio aluno, a equipe e
+  o professor do evento enxergam a nota de alguém; não existe tela nem rota
   que exponha ranking ou comparação entre alunos.
-- **Quem pode alterar presença/nota:** o aluno pede o check-in e só o
-  professor do evento, a secretaria ou o administrador aprovam ou recusam
-  (rotas `/api/checkin`); a nota do questionário é calculada pelo servidor
-  a partir das respostas do próprio aluno, sem edição manual possível por
-  ninguém. Todo pedido e toda decisão geram log de auditoria
-  (`CHECKIN_SOLICITADO`, `CHECKIN_APROVADO`, `CHECKIN_RECUSADO`,
-  `CHECKIN_REVERTIDO`, `CHECKIN_APROVADO_TODOS`; até 09/11/2026,
-  `PRESENCA_CONFIRMADA`/`PRESENCA_MARCADA_AUSENTE`).
+- **Quem altera presença e nota:** o aluno pede o check-in e só o professor
+  do evento, a secretaria ou o administrador aprovam ou recusam (rotas
+  `/api/checkin`); a nota do questionário é calculada pelo servidor a
+  partir das respostas do próprio aluno, sem edição manual por ninguém.
+  Depois da primeira tentativa do questionário, a presença não muda mais, e
+  o questionário do evento também não. Todo pedido e toda decisão geram
+  registro de auditoria (`CHECKIN_SOLICITADO`, `CHECKIN_APROVADO`,
+  `CHECKIN_RECUSADO`, `CHECKIN_REVERTIDO`, `CHECKIN_APROVADO_TODOS`), só com
+  ids.
 
 ## 5.2 Crianças e adolescentes — não se aplica, com justificativa
 
-O SGEA é destinado a alunos de graduação já matriculados na UMC, cadastro
-feito com e-mail institucional próprio. Decisão da Fase 0: **não coletar
-data de nascimento** (minimização — não há campo de idade em lugar
-nenhum do sistema). Em vez de verificar idade tecnicamente, os Termos de
-Uso e o aceite do cadastro passam a exigir a declaração "Tenho 18 anos ou
-mais, ou tenho autorização do meu responsável legal" (Fase 2 item 2). Não
-há fluxo de vínculo com responsável, publicidade comportamental ou
-qualquer coleta adicional pensada para menor — se um caso real de aluno
-menor de idade surgisse, exigiria desenho específico que este PFC não
-cobre.
+O SGEA é destinado a alunos de graduação matriculados na UMC, com cadastro
+feito pelo e-mail institucional próprio (`@alunos.umc.br`), e a
+professores da instituição (`@umc.br`). Por minimização, **não coleta data
+de nascimento** nem qualquer dado de idade, e não há fluxo de vínculo com
+responsável, publicidade comportamental ou coleta adicional pensada para
+menor. O sistema não verifica idade nem pede declaração de maioridade: se
+um caso real de aluno menor de idade surgir, ele exige um desenho
+específico que este projeto não cobre.
 
 ## 5.3 Saúde, odontologia e bem-estar — não se aplica
 
 O sistema não trata dado de saúde, diagnóstico, prontuário, imagem clínica
-ou qualquer informação relacionada a bem-estar físico/mental do titular.
+ou qualquer informação sobre o bem-estar físico ou mental do titular.
 Nenhum campo do schema (`backend/prisma/schema.prisma`) se aproxima dessa
-categoria.
+categoria. Eventos com tema de saúde são só conteúdo da programação.
 
 ## 5.4 Finanças e investimentos — não se aplica
 
 O sistema não trata renda, patrimônio, dado bancário, cartão de pagamento
-nem qualquer simulação financeira. Não há cobrança nem pagamento
-associado a evento, inscrição ou certificado.
+nem simulação financeira. Não há cobrança nem pagamento associado a
+evento, inscrição ou certificado.
 
-## 5.5 Presença, imagem, voz e biometria — parcialmente relacionado, sem coleta biométrica
+## 5.5 Presença, imagem, voz e biometria — relacionado, sem coleta biométrica
 
-Há "presença" no sentido de check-in (confirmação booleana de comparecimento
-físico ao evento, com data/hora e quem confirmou) — não é biometria, nem
-imagem, nem voz. Nenhuma câmera, microfone, leitor biométrico ou
-reconhecimento facial/de voz é usado em nenhum ponto do sistema. O único
-dado ligado a "presença" é o registro administrativo de check-in descrito
-na matriz de dados (`02-matriz-dados-finalidade-base-legal.md`).
+Há "presença" no sentido de check-in: o aluno pede, com data e hora, e o
+professor do evento ou a equipe decide, com registro de quem decidiu e
+quando. Não é biometria, nem imagem, nem voz: nenhuma câmera, microfone,
+leitor biométrico, geolocalização ou reconhecimento facial ou de voz é
+usado em nenhum ponto do sistema. O aluno só confirma, na tela, que está no
+local do evento.
 
 ## 5.6 Inteligência artificial — não se aplica, verificado no código
 
 Nenhuma funcionalidade do SGEA depende de IA, generativa ou não:
 
-- **Certificado:** montado inteiramente pelo `jsPDF` no navegador do
-  próprio titular — vetores desenhados diretamente, sem chamada a nenhum
-  serviço externo (confirmado em `frontend/src/services/certificadoService.ts`).
-- **Correção do questionário:** comparação direta de índice de resposta
-  contra o gabarito, feita no backend (`questionario.service.ts`) — não
-  há modelo de linguagem nem qualquer inferência estatística envolvida.
-- **Nenhuma dependência de IA no `package.json`** de nenhum dos dois
-  lados (frontend ou backend) — confirmado na Fase 0.
+- **Certificado:** montado pelo `jsPDF` no navegador do próprio titular, sem
+  chamada a serviço externo (`frontend/src/services/certificadoService.ts`).
+- **Correção do questionário:** comparação direta do índice da resposta com
+  o gabarito, no backend (`questionario.service.ts`), sem modelo de
+  linguagem nem inferência estatística.
+- **Nenhuma dependência de IA** no `package.json` do frontend nem do backend.
 
-Não há, portanto, prompt, modelo, fornecedor de IA, treinamento ou dado
-enviado a serviço de IA para documentar aqui. Se uma versão futura do
-sistema vier a incorporar IA (ex.: sugestão automática de perguntas do
-questionário), este documento precisa ser atualizado antes de a
-funcionalidade entrar em produção — não depois.
+Não há prompt, modelo, fornecedor de IA, treinamento ou dado enviado a
+serviço de IA para documentar. Se uma versão futura incorporar IA, este
+documento precisa ser atualizado antes de a funcionalidade entrar em
+produção.

@@ -1,7 +1,7 @@
 # Plano de resposta a incidentes de segurança — SGEA
 
-**Data:** 29/09/2026 · **Versão:** 2 (etapa 3 atualizada: nome, e-mail e
-RGM deixaram de ser criptografados)
+**Data:** 09/11/2026 · **Versão:** 1 (acompanha a versão 1 dos Termos de Uso e da
+Política de Privacidade)
 
 Aplica as 6 etapas da seção 4.7 do guia ao SGEA, com responsável por etapa
 e o prazo regulatório vigente, conferido na fonte oficial da ANPD (ver
@@ -30,7 +30,9 @@ vazamento de credencial) e não é falso positivo.
 
 Ações possíveis, dependendo do tipo de incidente: revogar/rotacionar a
 credencial comprometida (`JWT_SECRET`, `ENCRYPTION_KEY`, chave do
-SendGrid), bloquear a conta afetada, reverter um deploy problemático na
+SendGrid, senha do banco), inativar a conta afetada (o que derruba as
+sessões dela), reenviar o convite de um professor cujo link possa ter
+vazado (o anterior deixa de valer), reverter um deploy problemático na
 Vercel. Preservar evidência aqui significa **não apagar nada da tabela
 `logs_auditoria`** durante a investigação — ela é exatamente a fonte de
 evidência que a arquitetura já garante ser imutável.
@@ -49,20 +51,26 @@ disponível na Vercel.
 
 Consulta direta ao banco (por quem tem acesso de administrador),
 cruzando `logs_auditoria` com o período do incidente. Nome, e-mail e RGM
-ficam em texto puro desde 29/09/2026 (ver `07-medidas-tecnicas-de-seguranca.md`),
+ficam em texto puro (dados pessoais comuns; ver `07-medidas-tecnicas-de-seguranca.md`),
 então a identificação dos titulares afetados não depende de decifrar nada
 — e, pelo mesmo motivo, um vazamento do banco expõe esses dados
 diretamente, o que pesa na avaliação de risco da etapa 4. A consulta deve
 ser feita só pelo responsável técnico, registrando fora do sistema quem
 consultou, quando e com que finalidade. Senhas (hash bcrypt), códigos de
-recuperação (hash) e o segredo do 2FA (cifrado) continuam protegidos
-mesmo num vazamento do banco.
+recuperação e de confirmação (hash), a chave do convite do professor (hash
+SHA-256) e o segredo do 2FA (cifrado) continuam protegidos mesmo num
+vazamento do banco.
+
+Outro ponto a conferir: a cópia de segurança que a carga de demonstração
+salva em `backend/backups/` (no computador de quem rodou o script) tem
+todos os dados da base apagada. Se esse computador ou o arquivo forem
+comprometidos, trate como vazamento do banco inteiro daquele momento.
 
 ### 4. Avaliar risco ou dano relevante
 
 Critério: o incidente permite a alguém não autorizado ler, alterar ou
-apagar dado pessoal de titular real (não dado de demonstração)? Um erro
-que só afetou dados fictícios (`[TESTE]`) ou que não expôs nada legível
+apagar dado pessoal de titular real? Um erro que só afetou as contas
+fictícias da carga de demonstração (`usuarios.ficticio`) ou que não expôs nada legível
 (ex.: um 500 genérico sem vazar conteúdo) não configura risco relevante.
 
 ### 5. Definir e executar as comunicações necessárias

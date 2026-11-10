@@ -3,7 +3,7 @@ import type { Inscricao as InscricaoDb, Prisma } from "@prisma/client";
 import { montarPagina } from "../../utils/paginacao";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
-import { emailService } from "../email/email.service";
+import { emailService, observacaoDoEnvio } from "../email/email.service";
 import { COM_CONTA_DO_ALUNO, paraDominio as participanteParaDominio } from "../participantes/participantes.service";
 import { registrarAuditoria } from "../../utils/auditoria";
 import { eventosVisiveis, inscricaoDoAtorOuFalhar, type Ator } from "../../utils/escopo";
@@ -202,7 +202,7 @@ async function avisarCancelamentoPorEmail(
     await registrarAuditoria(
       atorId,
       "EMAIL_ENVIADO",
-      `aviso de cancelamento de inscrição, inscrição ${inscricao.id}${resultado === "simulado" ? " (simulado: SendGrid não configurado)" : ""}`,
+      `aviso de cancelamento de inscrição, inscrição ${inscricao.id}${observacaoDoEnvio(resultado)}`,
     );
   } catch {
     // email.service.ts ja loga o detalhe sanitizado da falha
@@ -294,7 +294,7 @@ export async function enviarConfirmacaoPorEmail(inscricaoId: string, atorId: str
     await registrarAuditoria(
       atorId,
       "EMAIL_ENVIADO",
-      `confirmação de inscrição, inscrição ${inscricaoId}${resultado === "simulado" ? " (simulado: SendGrid não configurado)" : ""}`,
+      `confirmação de inscrição, inscrição ${inscricaoId}${observacaoDoEnvio(resultado)}`,
     );
     return true;
   } catch {

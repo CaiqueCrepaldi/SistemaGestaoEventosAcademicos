@@ -10,7 +10,7 @@ import { gerarHashSenha, SENHA_INUTILIZAVEL } from "../../utils/password";
 import { normalizarEmail } from "../../utils/validacao";
 import { registrarHistorico } from "../aprovacoes/aprovacoes.service";
 import { eventoEncerrado } from "../../utils/escopo";
-import { emailService } from "../email/email.service";
+import { emailService, observacaoDoEnvio } from "../email/email.service";
 import type { ConsultaConviteInput, PrimeiroAcessoInput } from "../auth/auth.schemas";
 import type { InativacaoProfessorInput, ProfessorInput } from "./professores.schemas";
 
@@ -105,11 +105,11 @@ function garantirEnderecoConfigurado() {
 async function enviarConvite(usuarioId: string, email: string, nome: string, link: string, atorId: string): Promise<boolean> {
   try {
     const resultado = await emailService.enviarConviteProfessor(email, nome, link);
-    if (resultado === "enviado" || !env.isProduction) {
+    if (resultado !== "simulado" || !env.isProduction) {
       await registrarAuditoria(
         atorId,
         "EMAIL_ENVIADO",
-        `convite de primeiro acesso do professor ${usuarioId}${resultado === "simulado" ? " (simulado: SendGrid não configurado)" : ""}`,
+        `convite de primeiro acesso do professor ${usuarioId}${observacaoDoEnvio(resultado)}`,
       );
       return true;
     }

@@ -1,18 +1,39 @@
 import sgMail from "@sendgrid/mail";
 import { env } from "../../config/env";
+import { prisma } from "../../db/prisma";
+import { normalizarEmail } from "../../utils/validacao";
 
 // sem SENDGRID_API_KEY/EMAIL_FROM configurados (padrao em dev local) cai no fallback de so logar no console
 const sendgridPronto = Boolean(env.sendgrid.apiKey && env.sendgrid.from);
 if (env.sendgrid.apiKey) sgMail.setApiKey(env.sendgrid.apiKey);
 
-// "simulado" = SendGrid nao configurado, o e-mail so foi logado no console (quem audita precisa saber a diferenca)
-export type ResultadoEnvio = "enviado" | "simulado";
+// "simulado" = SendGrid nao configurado, o e-mail so foi logado no console (quem audita precisa saber a diferenca);
+// "suprimido" = o destinatario e uma conta ficticia (carga de demonstracao): nada sai
+export type ResultadoEnvio = "enviado" | "simulado" | "suprimido";
+
+// complemento do detalhe da auditoria conforme o resultado do envio
+export function observacaoDoEnvio(resultado: ResultadoEnvio): string {
+  if (resultado === "simulado") return " (simulado: SendGrid não configurado)";
+  if (resultado === "suprimido") return " (suprimido: conta fictícia)";
+  return "";
+}
+
+// conta da carga de demonstracao (usuarios.ficticio): o sistema nunca manda e-mail pra ela, em nenhum fluxo.
+// O e-mail sem conta (ex.: cadastro ainda nao confirmado) segue normal
+async function destinatarioFicticio(destinatario: string): Promise<boolean> {
+  const conta = await prisma.usuario.findUnique({ where: { emailLogin: normalizarEmail(destinatario) }, select: { ficticio: true } });
+  return conta?.ficticio === true;
+}
 
 // manda o email de verdade ou so loga, dependendo se o SendGrid ta configurado.
 // "tipo" eh so um rotulo curto pro log (ex.: "recuperacao-senha") — o log NUNCA
 // pode ter destinatario, assunto ou corpo, porque o corpo pode carregar codigo/token
 // (achado da adequacao LGPD: o codigo de recuperacao nao pode aparecer em log de servidor)
 async function enviar(tipo: string, destinatario: string, assunto: string, html: string): Promise<ResultadoEnvio> {
+  if (await destinatarioFicticio(destinatario)) {
+    console.info(`[e-mail] envio suprimido (conta fictícia) tipo=${tipo}`);
+    return "suprimido";
+  }
   if (!sendgridPronto) {
     console.info(`[e-mail simulado] tipo=${tipo} (SendGrid nao configurado; destinatario e conteudo omitidos do log de proposito)`);
     return "simulado";

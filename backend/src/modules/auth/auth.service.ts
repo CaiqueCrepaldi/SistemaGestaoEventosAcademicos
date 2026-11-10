@@ -18,7 +18,7 @@ import {
 } from "../../utils/limiteAcesso";
 import { env } from "../../config/env";
 import { VERSAO_TERMOS_ATUAL } from "../../config/termos";
-import { emailService } from "../email/email.service";
+import { emailService, observacaoDoEnvio } from "../email/email.service";
 import type { Usuario } from "../../types/domain";
 import type {
   ConfirmarCadastroInput,
@@ -123,11 +123,11 @@ async function enviarCodigoDoCadastro(pendenteId: string, destinatario: string, 
   let motivoFalha: string;
   try {
     const resultado = await emailService.enviarCodigoCadastro(destinatario, codigo);
-    if (resultado === "enviado" || !env.isProduction) {
+    if (resultado !== "simulado" || !env.isProduction) {
       await registrarAuditoria(
         null,
         "EMAIL_ENVIADO",
-        `código de confirmação do cadastro ${pendenteId}${resultado === "simulado" ? " (simulado: SendGrid não configurado)" : ""}`,
+        `código de confirmação do cadastro ${pendenteId}${observacaoDoEnvio(resultado)}`,
       );
       return;
     }
@@ -465,7 +465,7 @@ async function solicitarRecuperacaoSenha(dados: SolicitarRecuperacaoInput, ip: s
     await registrarAuditoria(
       usuario.id,
       "EMAIL_ENVIADO",
-      `recuperação de senha, usuário ${usuario.id}${resultado === "simulado" ? " (simulado: SendGrid não configurado)" : ""}`,
+      `recuperação de senha, usuário ${usuario.id}${observacaoDoEnvio(resultado)}`,
     );
   } catch (erro) {
     // email.service.ts ja loga o detalhe sanitizado da falha — aqui so registra o contexto

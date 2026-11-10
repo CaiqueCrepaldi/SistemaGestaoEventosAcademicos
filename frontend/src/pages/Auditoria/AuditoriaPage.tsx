@@ -67,6 +67,7 @@ const ACAO_LABEL: Record<string, string> = {
   CHECKIN_REVERTIDO: "Decisão do check-in revertida",
   CHECKIN_APROVADO_TODOS: "Check-ins aprovados em lote",
   CHECKIN_EXPIRADO: "Check-ins expirados (janela encerrada)",
+  CARGA_DEMONSTRACAO: "Carga de demonstração executada",
   QUESTIONARIO_RESPONDIDO: "Questionário respondido",
   CERTIFICADO_EMITIDO: "Certificado emitido",
   FEEDBACK_CRIADO: "Feedback criado",

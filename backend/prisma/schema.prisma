@@ -81,6 +81,9 @@ model Usuario {
   // O aluno continua usando Participante.ativo. motivoInativacao: texto livre, visivel so pra equipe
   ativo               Boolean       @default(true)
   motivoInativacao    String?       @db.VarChar(500)
+  // conta da carga de demonstracao (scripts/carga-demonstracao.ts): o sistema nunca manda e-mail pra ela
+  // (email.service.ts). Nao aparece em tela nem em resposta da API
+  ficticio            Boolean       @default(false)
   criadoEm            DateTime      @default(now())
 
   checkinsFeitos        Inscricao[]            @relation("CheckinFeitoPor")

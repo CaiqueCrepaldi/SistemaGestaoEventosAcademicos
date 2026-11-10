@@ -50,7 +50,7 @@ function paraDominio({ inscricao, ...certificado }: CertificadoComInscricao): Ce
 // 12 simbolos sorteados com crypto.randomBytes (60 bits), sem relacao com id de inscricao, aluno ou
 // evento: nao da pra deduzir o codigo de um certificado a partir de outro. 256 e multiplo de 32,
 // entao "byte % 32" nao favorece nenhum simbolo
-function gerarCodigoValidacao(): string {
+export function gerarCodigoValidacao(): string {
   return Array.from(randomBytes(TAMANHO_CODIGO_VALIDACAO), (byte) => ALFABETO_CODIGO_VALIDACAO[byte % ALFABETO_CODIGO_VALIDACAO.length]).join("");
 }
 

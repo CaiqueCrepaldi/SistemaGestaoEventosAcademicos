@@ -99,16 +99,18 @@ o ideal é ativar o 2FA nas contas da equipe):
 |---|---|---|
 | Administrador | admin@umc.br | a de `SEED_ADMIN_SENHA` no seu `backend/.env` |
 | Secretaria | secretaria@umc.br | a de `SEED_SECRETARIA_SENHA` |
-| Aluno | aluno@alunos.umc.br | a de `SEED_ALUNO_SENHA` (opcional) |
+| Professor | professor@umc.br | a de `SEED_PROFESSOR_SENHA` |
 
 Nenhuma senha fica no código nem na documentação: cada um define as suas no
 `backend/.env`. As variáveis, quais são obrigatórias e como gerar os
 segredos estão em
 [`backend/README.md` → Variáveis de ambiente](backend/README.md#variáveis-de-ambiente).
 
-O aluno de demonstração já está inscrito e com presença confirmada num
-evento, pronto pra testar o questionário e a emissão do certificado sem
-precisar repetir os passos de inscrição e check-in.
+Para ter o sistema cheio, como na apresentação (salas, palestrantes, 150
+professores e 1.000 alunos fictícios, 200 eventos com inscrições, check-in,
+notas, certificados e avaliações), rode a carga de demonstração
+(`backend/scripts/carga-demonstracao.ts`, ver `backend/README.md`). Ela apaga
+todos os dados antes de carregar. As contas fictícias nunca recebem e-mail.
 
 ## Rodando o frontend
 

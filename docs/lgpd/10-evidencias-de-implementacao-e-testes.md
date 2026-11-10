@@ -1,72 +1,74 @@
 # Evidências de implementação e testes — SGEA
 
-**Data:** 06/11/2026 · **Versão:** 4 (confirmação do e-mail no cadastro,
-regra da senha nova, e-mail do aluno não editável e confirmação ao sair,
-com a rodada de testes de 06/11/2026. A versão 3, de 29/09/2026, cobria o
-hash de senha com custo 12, a inativação padronizada, o feedback sem
-edição, os campos obrigatórios, o 2FA opcional e o fim da criptografia de
-nome/e-mail/RGM; a versão 2, de 28/09/2026, cobria até o 2FA obrigatório
-para a equipe)
+**Data:** 09/11/2026 · **Versão:** 1 (acompanha a versão 1 dos Termos de Uso e da
+Política de Privacidade)
 
 Para cada controle, onde está no código, como foi testado e o resultado.
-Controles que ainda não existem aparecem como "pendente" — não têm
-evidência aqui até serem implementados e testados de verdade, conforme a
-regra deste trabalho de nunca prometer o que não está implementado. A
-verificação de todos os requisitos funcionais, com o que foi corrigido em
-cada um, está em `docs/verificacao-de-requisitos.md`.
+Controles que ainda não existem aparecem como "pendente", sem evidência. A
+verificação de todos os requisitos funcionais está em
+`docs/verificacao-de-requisitos.md`.
 
-## Testes automatizados (todos no banco de desenvolvimento `SGEA_dev`)
+## Testes automatizados (banco de desenvolvimento `SGEA_dev`)
 
-| Teste | Comando | Resultado em 06/11/2026 (em 29/09/2026) |
+| Teste | Comando | Resultado em 09/11/2026 |
 |---|---|---|
-| Requisitos pela API (inclui os itens B, C, D, F e G) | `cd backend && npx tsx scripts/testar-requisitos.ts` | **231/231** verificações (123/123) |
-| 2FA pela API | `cd backend && npx tsx scripts/testar-2fa.ts` | **55/55** (53/53) |
-| Interface com navegador de verdade | passo a passo no topo de `frontend/testes-interface/testar-interface.mjs` (em 06/11/2026 rodado no Microsoft Edge, numa cópia com `channel: "msedge"`, porque a máquina não tinha o Chrome) | **110/110** (60/60) |
-| Demonstração do hash de senha | `cd backend && npx tsx scripts/demonstrar-hash-senha.ts` | ver `07-medidas-tecnicas-de-seguranca.md`, seção "Formato do hash de senha" |
+| Requisitos pela API | `cd backend && npx tsx scripts/testar-requisitos.ts` | **460/460** verificações |
+| 2FA pela API | `cd backend && npx tsx scripts/testar-2fa.ts` | **55/55** |
+| Interface com navegador de verdade | passo a passo no topo de `frontend/testes-interface/testar-interface.mjs` (rodado no Microsoft Edge, numa cópia com `channel: "msedge"`) | **157/157** |
+| Demonstração do hash de senha | `cd backend && npx tsx scripts/demonstrar-hash-senha.ts` | ver `07`, "Formato do hash de senha" |
+| Carga de demonstração | `cd backend && npx tsx scripts/carga-demonstracao.ts --aplicar` | 46 s; conferência no banco abaixo |
 
-Os scripts se recusam a rodar se o `DATABASE_URL` não for o `SGEA_dev`,
-criam os próprios dados e apagam no final.
+Os scripts de teste se recusam a rodar se o `DATABASE_URL` não for o
+`SGEA_dev`, criam os próprios dados e apagam no final.
 
-## Controles já implementados
+## Controles implementados
 
 | Controle | Onde no código | Como foi testado | Resultado |
 |---|---|---|---|
-| Autorização por perfil em toda rota | `backend/src/middleware/auth.ts` + todas as `*.routes.ts` | `testar-requisitos.ts` R04: aluno em rotas da equipe (participantes, salas, auditoria, tentativas de todos, dashboard) → `403`; sem token → `401`. Sessões anteriores do projeto: aluno acessando participante/feedback de outro aluno pelo id → `403`/dado filtrado | Confirmado |
-| `participanteId` sempre do token, nunca do corpo | `feedbacks.routes.ts`, `eventos.routes.ts` (autoinscrição), `inscricoes.routes.ts` | R08 e R14: aluno envia o `participanteId` de outro aluno no corpo → o registro usa o do token; R10: parâmetro forjado na URL é ignorado | Confirmado |
-| Hash de senha bcrypt, custo 12, salt por senha, rehash no login | `utils/password.ts`, `auth.service.ts` (`login`) | R20: conta com hash de custo 10 entra e o hash vira custo 12 sem trocar a senha, a senha continua valendo e o rehash fica na auditoria (`SENHA_HASH_ATUALIZADO`); duas contas com a mesma senha têm salts e hashes diferentes. `demonstrar-hash-senha.ts` mostra o hash do banco de dev decomposto (versão, custo, salt, hash) | Confirmado |
-| Nome/e-mail/RGM em texto puro, sem quebrar os registros antigos | `utils/dadosPessoais.ts`, `auth.service.ts`, `participantes.service.ts`, `utils/auditoria.ts` | R24: cadastro novo grava nome/e-mail/RGM em texto puro no banco e a senha continua só como hash; conta ainda no formato antigo (cifrado) é lida normalmente; log novo guarda o nome do responsável em texto (`atorNome`) | Confirmado |
-| Conversão dos registros antigos | `backend/scripts/converter-dados-pessoais.ts` | No dev: simulação (3 usuários, 3 participantes e 98 logs a converter; 0 falhas; 0 índices divergentes), aplicação, e segunda aplicação sem nada a converter (idempotente); depois disso as três suítes rodaram de novo sem falha. Em produção só aplica com `--confirmo-exportacao` (recusou sem ele) | Confirmado no dev; em produção depende de confirmação |
-| Criptografia só do que é credencial | `utils/criptografia.ts`, `mfa.service.ts` | `testar-2fa.ts`: segredo do 2FA gravado cifrado (não aparece em texto puro no banco) | Confirmado |
-| Inativação padronizada | `participantes.service.ts`, `auth.service.ts`, `inscricoes.service.ts`, `eventos.service.ts`, `questionario.service.ts` | R16: inativar sem motivo → `422`; aluno não inativa ninguém (`403`); a sessão aberta do aluno cai; login → `403 CONTA_INATIVA` "Sua conta está inativa. Procure a secretaria.", sem o motivo; inscrição pendente em evento futuro cancelada e registrada (`INSCRICAO_CANCELADA`); inscrição com presença e de evento passado mantidas; equipe não inscreve nem faz check-in do inativo (`409`); reativar apaga o motivo, audita e libera o login. Interface: mensagem no login, badge "Inativo" em Participantes e Inscrições (a tela Usuários foi removida em 03/11/2026; o teste passou a conferir Participantes) | Confirmado (rodada de 29/09/2026; suítes ajustadas em 03/11/2026, a rodar de novo) |
-| Feedback sem edição; exclusão pelo aluno ou pela equipe com motivo | `feedbacks.routes.ts`, `feedbacks.service.ts` | R22: `PUT` → `403` para aluno e equipe (conteúdo intacto); equipe não cria feedback em nome de aluno (`403`); aluno não exclui o de outro (`403`); aluno exclui o próprio, o evento volta a ficar disponível e ele envia outro; equipe sem motivo → `422` no campo `motivo`, motivo fora da lista → `422`, com motivo → `204`; `FEEDBACK_EXCLUIDO` diz quem excluiu e o motivo. Interface: sem botão de editar, confirmação antes de excluir, equipe sem "Novo feedback" | Confirmado |
-| Feedback só com certificado, um por evento | `feedbacks.service.ts`, índice único `(participanteId, eventoId)` | R14: sem certificado → `403`; segundo feedback → `409`; nota fora de 1–5 → `422` | Confirmado |
-| Questionário só com presença confirmada | `questionario.service.ts` (`responder`) | R13: aluno sem presença confirmada no evento → `403` (antes a tentativa era aceita) | Confirmado (corrigido nesta rodada) |
-| 2FA opcional para todos | `modules/mfa/`, `middleware/auth.ts` | `testar-2fa.ts`: secretaria e administrador sem 2FA entram direto; sessão de equipe sem 2FA não é mais recusada; secretaria ativa por vontade própria e passa a ter o login em duas etapas; administrador desativa o próprio 2FA com senha + código. Interface: equipe entra sem tela de QR code; "Minha conta" oferece ativar | Confirmado |
-| 2FA: segredo, QR no servidor, códigos de recuperação, reuso, bloqueio, reset | `modules/mfa/`, `usuarios.routes.ts`, `scripts/resetar-2fa.ts` | `testar-2fa.ts` (53 verificações): QR em PNG gerado no servidor; mesmo segredo antes de confirmar; 8 códigos de recuperação só em hash, cada um uma vez; token "2FA pendente" recusado em outras rotas; reuso do código na mesma janela recusado; 5 erros → `429`; reset pelo administrador e pelo script de emergência, com auditoria; nenhum segredo nem código nos logs | Confirmado |
-| Campos obrigatórios e erros de validação nos formulários | `frontend/src/components/ui/Campo.tsx`, `frontend/src/hooks/useErrosFormulario.ts` e cada página | Interface: login, cadastro, esqueci a senha, salas, palestrantes, eventos (com erro por pergunta do questionário), inscrições, feedback, exclusão de feedback, questionário, inativação e 2FA — enviar com algo faltando marca o campo, mostra a mensagem embaixo e foca o primeiro inválido; e-mail duplicado vindo do backend aparece embaixo do campo e-mail; R01: o `422` do backend traz o campo | Confirmado |
-| Limite de tentativas de login e de recuperação (conta e IP) | `utils/limiteAcesso.ts`, `auth.service.ts`, tabela `limites_acesso` | Teste do bloco 2 (39/39): bloqueio por conta e por IP isolados, mensagem idêntica para senha errada/conta inexistente/conta bloqueada, expiração sozinha, desbloqueio manual só por ADMINISTRADOR com auditoria | Confirmado |
-| Invalidação de sessão | `middleware/auth.ts`, `usuarios.versaoToken` | R16 e R17: token antigo → `401` depois da inativação e da troca de senha; `testar-2fa.ts`: idem depois de desativar e de resetar o 2FA | Confirmado |
-| Senha nunca em texto puro | `password.ts` (bcrypt) | R24: o valor gravado é um hash `$2a$12$…`, diferente da senha | Confirmado |
-| Trilha de auditoria | `utils/auditoria.ts` chamado em cada `*.service.ts` de escrita | R18: filtros por ação e responsável; parâmetro inválido → `422`; lista de responsáveis. Interface: filtro por "Feedback excluído" mostra o responsável e o motivo | Confirmado |
-| Log nunca contém dado sensível no `detalhe` | Todos os `registrarAuditoria(...)` | R18: nenhum log do teste contém e-mail, RGM, senha, código, comentário de feedback, nome editado ou motivo de inativação; `testar-2fa.ts`: nenhum segredo nem código | Confirmado, 0 vazamentos |
-| Aceite de Termos/Política obrigatório e datado pelo servidor | `auth.schemas.ts` (`z.literal(true)`), `auth.service.ts` | R01: cadastro sem aceite → `422`; com aceite → `202` e, depois do código, a conta recebe o instante do aceite e a versão 3 dos Termos | Confirmado (06/11/2026) |
-| Conta só depois da confirmação do e-mail | `auth.service.ts` (`iniciarCadastro`, `confirmarCadastro`, `reenviarCodigoCadastro`), tabela `cadastros_pendentes` | R01: dados válidos → `202` sem criar conta nem participante; senha e código só como hash bcrypt, validade de 15 min; código errado → `422 CODIGO_INVALIDO`; código certo → `201`, pendente apagado; confirmar de novo → `422 CODIGO_EXPIRADO`. R32: reenvio antes de 60 s → `429`; no 5º erro o código deixa de valer (nem o certo passa); reenvio gera código novo, invalida o anterior, zera tentativas e renova a validade; expirado → `422 CODIGO_EXPIRADO` e é apagado sem criar conta; refazer o cadastro substitui o pendente; 6º envio para o mesmo e-mail → `429` (limite guarda só o HMAC do e-mail); o login apaga pendentes expirados; auditoria `CADASTRO_INICIADO`/`_CODIGO_REENVIADO`/`_CONCLUIDO` sem e-mail, RGM, senha ou código. Interface: etapa do código com aviso de spam e de saída, campo só numérico, "Reenviar código" com contagem de 60 s, código errado embaixo do campo, "Corrigir meus dados" sem perder o que foi digitado, código certo entra direto em Eventos | Confirmado (06/11/2026) |
-| Regra da senha nova (cadastro e recuperação) | `utils/validacao.ts` (backend e frontend), `auth.schemas.ts`, `RequisitosSenha.tsx` | R33: sem maiúscula, sem número, sem caractere especial, só com espaço como "especial" e com 65 caracteres → `422` no campo `senha` com a mensagem da regra; 64 caracteres com maiúscula acentuada (Á) → aceita. R17: nova senha fora da regra → `422` no campo `novaSenha`. Interface: lista com 4 requisitos (• pendente, ✓ cumprido, a cada tecla, em `aria-live`), aviso acima de 64 caracteres, erro embaixo do campo ao enviar com requisito faltando, a mesma lista em "Esqueci a senha" | Confirmado (06/11/2026) |
-| E-mail do aluno não editável | `participantes.routes.ts`, `participantes.schemas.ts`, `ParticipantesPage.tsx` | R15: `PUT` com `email` (mesmo igual ao atual) → `422` "O e-mail não pode ser alterado.", nada gravado; nome corrigido → `200`, e-mail igual; RGM continua validado; o aluno entra com o e-mail do cadastro. Interface: na edição o e-mail aparece só para leitura, com a explicação | Confirmado (06/11/2026) |
-| Confirmação ao sair | `Layout.tsx` | Interface: "Sair" abre "Sair do sistema?"; "Cancelar" mantém no sistema; "Sair" volta para o login | Confirmado (06/11/2026) |
-| Minimização: telefone do palestrante removido; e-mail do palestrante fora da resposta para ALUNO | `schema.prisma`, `utils/dto.ts`, `palestrantes.routes.ts` | R06: aluno recebe só `id` e `nome`; equipe recebe o e-mail | Confirmado |
-| Cabeçalhos de segurança e limite de corpo | `expressApp.ts`, `errorHandler.ts` | Requisição local (28/09/2026): sem `X-Powered-By`; CSP, HSTS, `X-Content-Type-Options` e `X-Frame-Options` presentes; corpo de 300 kb → `413` | Confirmado |
-| Separação de ambientes | `backend/.env` → `SGEA_dev`; `.env.production.local` só para migration e scripts com `--producao` | Todos os testes desta versão rodaram no `SGEA_dev` e se recusam a rodar em outro banco | Confirmado |
-| Sem serviço externo além dos três documentados | `frontend/index.html`, `package.json` (frontend e backend) | Inspeção de todo import/script/dependência; as bibliotecas do 2FA (`otplib`, `qrcode`) rodam localmente; o Playwright dos testes de interface fica numa pasta própria, fora do build | Confirmado |
-| Nenhuma migration destrutiva aplicada sem confirmação prévia | Processo de trabalho deste PFC | Todas as migrations foram mostradas antes de aplicar em produção | Confirmado, histórico em `backend/prisma/migrations/` |
+| Autorização por perfil em toda rota | `middleware/auth.ts` e todas as `*.routes.ts` | R04: aluno nas rotas da equipe → `403`; sem token → `401`. R36: professor sem Auditoria, Participantes e criação de sala; evento de outro → `404` | Confirmado |
+| `participanteId` sempre do token | `feedbacks.routes.ts`, `eventos.routes.ts`, `inscricoes.routes.ts` | R08, R10 e R14: id de outro aluno no corpo ou na URL é ignorado | Confirmado |
+| Hash de senha bcrypt custo 12 com salt; rehash no login | `utils/password.ts`, `auth.service.ts` | R20: hash de custo 10 vira 12 no login, sem trocar a senha; mesma senha em duas contas gera hashes diferentes | Confirmado |
+| Nome, e-mail e RGM em texto, cada um numa tabela só | `schema.prisma`, `participantes.service.ts` | R24: cadastro grava em texto e a senha só como hash | Confirmado |
+| Criptografia só do que é credencial | `utils/criptografia.ts`, `mfa.service.ts` | `testar-2fa.ts`: segredo do 2FA gravado cifrado | Confirmado |
+| Conta do aluno só depois de confirmar o e-mail | `auth.service.ts`, `cadastros_pendentes` | R01 e R32: nenhuma conta antes do código; código e senha só em hash; 5 tentativas; reenvio com 60 s; expiração; limites por e-mail e IP | Confirmado |
+| Regra da senha nova | `utils/validacao.ts` (backend e frontend) | R33 e R17: senha fora da regra → `422`; interface com a lista de requisitos | Confirmado |
+| E-mail do aluno não editável | `participantes.routes.ts` | R15: `PUT` com e-mail → `422` | Confirmado |
+| Professor ativado só pelo convite | `professores.service.ts`, `auth.routes.ts`, `PrimeiroAcessoPage.tsx` | R35: link com a chave depois do `#`, sem código; só o SHA-256 no banco; consultar não gasta; sem aceite → `422`; uso único; vencido recusado; reenvio invalida o anterior; chave errada cai no limite por IP; "Esqueci a senha" de quem espera o convite responde igual a e-mail inexistente; sem `APP_URL`, criar professor é recusado. Interface: login sem link de primeiro acesso; a chave some do endereço | Confirmado |
+| Check-in pedido pelo aluno e decidido pelo professor do evento ou pela equipe | `modules/checkin/`, `utils/checkin.ts` | R12 e R43: fora da janela recusado; professor de outro evento → `403`; grava quem decidiu e quando; recusa impede novo pedido; reversão dentro do prazo; depois do questionário → `PRESENCA_TRAVADA`; expiração idempotente; dashboard pela regra nova | Confirmado |
+| Aprovação, propostas de alteração e questionário travado | `eventos.service.ts`, `palestrantes.service.ts` | R37 a R41 | Confirmado |
+| Inativação de aluno e de professor | `participantes.service.ts`, `professores.service.ts` | R16: aluno inativo não entra, sessões caem, inscrições sem pedido canceladas. R42: professor inativo não entra; eventos em aberto transferidos, com histórico e auditoria | Confirmado |
+| Calendário: o professor vê os eventos dos outros só como "Sala ocupada" | `eventos.service.ts` (`calendario`) | R44: resposta ao professor sem título, palestrante, inscritos nem id dos outros. Interface: "Sala ocupada" sem título | Confirmado |
+| Contas fictícias nunca recebem e-mail | `email.service.ts`, `usuarios.ficticio` | R45: envio para conta fictícia suprimido, conta normal recebe; inscrição, mudança de horário e cancelamento funcionam sem e-mail; o campo não aparece na API | Confirmado |
+| Avaliação sem edição; exclusão pelo aluno ou pela equipe com motivo | `feedbacks.routes.ts`, `feedbacks.service.ts` | R22 e R14 | Confirmado |
+| 2FA opcional, segredo e QR no servidor, códigos de recuperação, reuso, bloqueio, reset | `modules/mfa/`, `scripts/resetar-2fa.ts` | `testar-2fa.ts` (55 verificações) | Confirmado |
+| Limite de tentativas (conta e IP) | `utils/limiteAcesso.ts` | R02, R32, R35 e `testar-2fa.ts` | Confirmado |
+| Invalidação de sessão | `middleware/auth.ts`, `usuarios.versaoToken` | R16, R17, R42 e `testar-2fa.ts`: token antigo → `401` | Confirmado |
+| Trilha de auditoria sem dado pessoal | `utils/auditoria.ts` | R18: nenhum log do teste tem e-mail, RGM, senha, código, comentário ou motivo de inativação | Confirmado, 0 vazamentos |
+| Aceite dos Termos versão 1, datado pelo servidor | `config/termos.ts`, `auth.service.ts`, `professores.service.ts` | R01 e R35: a conta grava o instante e a versão "1" | Confirmado |
+| Validação pública do certificado sem RGM | `certificados.service.ts` | R29 | Confirmado |
+| Página "Meus dados" | `modules/titular/` | R30: só o próprio aluno; sem gabarito, senha ou ids; mostra o check-in | Confirmado |
+| Separação de ambientes | `.env` → `SGEA_dev`; `.env.production.local` só com `--producao` | Todos os testes rodaram no `SGEA_dev` | Confirmado |
+| Sem serviço externo além dos três documentados | `frontend/index.html`, `package.json` | Inspeção de dependências e imports | Confirmado |
+
+## Carga de demonstração (09/11/2026, `SGEA_dev`)
+
+Conferido consultando o banco depois de `carga-demonstracao.ts --aplicar`:
+nenhum conflito de sala; nenhum evento acima da capacidade; 1.153 contas com
+1.153 e-mails distintos; 1.000 RGMs distintos no formato `09` + 9 dígitos;
+nenhuma ocorrência de "teste", "demo", "fake" ou "exemplo" nos dados; as três
+contas de demonstração entram sem 2FA, com o aceite da versão 1; o evento da
+apresentação (13/11/2026, 21:00) tem 35 inscritos e 12 pedidos de check-in
+entre 20:00 e 20:15, listados no painel do professor; a auditoria começa com
+um único registro (`CARGA_DEMONSTRACAO`); o Dashboard mostra ocupação,
+presença e certificados; um certificado da carga valida pela consulta
+pública.
 
 ## Controles pendentes — sem evidência ainda
 
-| Controle | Onde vai ficar | Como será testado (planejado) |
+| Controle | Onde vai ficar | Como será testado |
 |---|---|---|
-| Conversão dos dados pessoais em produção e retirada do código de leitura em dois formatos | Conversão: rota temporária `POST /api/manutencao/conversao-dados-pessoais` (só ADMINISTRADOR, commit `3ef98dd`), porque a `ENCRYPTION_KEY` de produção só existe na Vercel como Secret; mesma lógica e mesmas travas do script `converter-dados-pessoais.ts`. Testada num banco separado (`SGEA_dev_migracao`) com dados cifrados no formato antigo: 11/11 verificações, incluindo a recusa quando um valor não decifra. Segunda implantação: migration `20261103150000_dados_pessoais_sem_duplicacao` + código sem os índices e sem as cópias (já pronto, aguardando a conversão em produção) | Simulação e aplicação da conversão em produção mostrando só contagens; depois, `testar-requisitos.ts` R24 (cada dado numa tabela só, login com e-mail normalizado) e busca/unicidade direto nas colunas |
-| Reaceite de Termos/Política quando a versão muda | Falta a tela que pede o novo aceite. A versão vigente já é a 3 (06/11/2026); o backend grava a versão no cadastro, devolve `precisaAceitarTermos` no login e tem a rota `POST /api/auth/aceitar-termos` | Entrar com conta que aceitou a versão 2 e confirmar que a tela pede o aceite e registra `TERMOS_REACEITOS` |
-| Página "Meus dados" (acesso, correção, exportação, exclusão, revisão de decisão automatizada) | Novo módulo frontend + backend | Teste de cada ação, incluindo exportação (JSON com todos os campos esperados e nenhum a mais) |
-| Anonimização em vez de exclusão definitiva | `participantes.service.ts` | Após excluir, nome/e-mail/RGM não identificam mais a pessoa; inscrições/certificados continuam sem vínculo pessoal; comentário de feedback apagado, nota mantida |
-| Rotina de retenção automática (conta sem uso há 24 meses, códigos expirados, logs de 5 anos, registros de limite por IP) | Rota protegida + agendamento | Rodar duas vezes seguidas sem repetir ação (idempotência); cada critério com dado fabricado no banco de teste |
-| Script de limpeza dos dados de demonstração | `backend/scripts/` | Rodar e confirmar que o lote de demonstração some do banco |
+| Tela de reaceite dos Termos quando a versão mudar | Frontend, depois do login (o backend já devolve `precisaAceitarTermos` e tem `POST /api/auth/aceitar-termos`) | Conta com versão antiga entra, a tela pede o aceite e registra `TERMOS_REACEITOS` |
+| Tela da equipe para registrar e responder os pedidos do titular | Tabela `solicitacoes_titular` (já existe) | Pedido registrado, atendido e auditado |
+| Cópia e correção feitas pelo próprio aluno em "Meus dados" | `modules/titular/` | Exportação com todos os campos esperados e nenhum a mais |
+| Anonimização em vez de exclusão | `participantes.service.ts` | Depois da exclusão, nada identifica a pessoa; estatísticas preservadas |
+| Rotina de retenção automática | Rota protegida + agendamento | Rodar duas vezes sem repetir ação; cada critério com dado fabricado |

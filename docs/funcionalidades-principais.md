@@ -184,6 +184,6 @@ Permitir que a secretaria bloqueie o uso do sistema por um aluno (uso indevido, 
 
 ---
 
-## Contas de teste
+## Contas de demonstração
 
-O seed (`backend/prisma/seed.ts`) cria, no banco de desenvolvimento, um administrador, uma secretaria e um aluno de demonstração já inscrito e com presença confirmada no evento "Abertura e Palestra Magna: IA na Educação", pronto para testar o questionário e a emissão do certificado. Os logins estão no `README.md`; as senhas vêm das variáveis `SEED_*_SENHA` do `backend/.env` local, nunca do código nem da documentação.
+O seed (`backend/prisma/seed.ts`) cria três contas: administrador (`admin@umc.br`), secretaria (`secretaria@umc.br`) e professor (`professor@umc.br`, já ativado). Não há aluno de demonstração: para ter o sistema cheio, a carga de demonstração (`backend/scripts/carga-demonstracao.ts`) apaga tudo e cria salas, palestrantes, 150 professores e 1.000 alunos fictícios (que nunca recebem e-mail) e 200 eventos com inscrições, check-in, notas, certificados e avaliações. As senhas das três contas vêm das variáveis `SEED_*_SENHA` do `.env`, nunca do código nem da documentação.

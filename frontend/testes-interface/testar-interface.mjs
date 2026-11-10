@@ -896,10 +896,15 @@ try {
   );
   const chipCheckin = page.locator(".calendario-dia.hoje .cal-chip", { hasText: tituloCheckinCal });
   await chipCheckin.waitFor({ timeout: 8000 }).catch(() => {});
+  // com mais de 3 eventos no dia (outros dados do banco de dev), o chip fica atras do "+N": ai a marcacao e
+  // conferida no proprio "+N" e, logo abaixo, na lista do dia
+  const maisNoDia = page.locator(".calendario-dia.hoje .calendario-mais");
   checar(
-    "o evento aparece no dia com horário, título e a marcação \"1 check-in\"",
-    (await chipCheckin.count()) === 1 && (await chipCheckin.innerText()).includes("1 check-in") && ((await chipCheckin.getAttribute("title")) ?? "").includes("esperando aprovação"),
-    (await chipCheckin.count()) ? await chipCheckin.innerText() : "chip não encontrado",
+    "o evento aparece no dia com horário, título e a marcação \"1 check-in\" (ou no \"+N\" do dia cheio)",
+    (await chipCheckin.count()) === 1
+      ? (await chipCheckin.innerText()).includes("1 check-in") && ((await chipCheckin.getAttribute("title")) ?? "").includes("esperando aprovação")
+      : (await maisNoDia.count()) === 1 && /^\+\d+$/.test((await maisNoDia.innerText()).trim()),
+    (await chipCheckin.count()) ? await chipCheckin.innerText() : await page.locator(".calendario-dia.hoje").innerText(),
   );
   await page.locator(".calendario-dia.hoje").click();
   const itemDoDia = page.locator(".calendario-lista .calendario-evento", { hasText: tituloCheckinCal });
