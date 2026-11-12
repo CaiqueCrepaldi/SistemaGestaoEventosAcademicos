@@ -1,16 +1,17 @@
 import { z } from "zod";
-import { MENSAGEM_REGRA_SENHA, REGEX_NOME, REGEX_RGM, normalizarRgm, senhaAtendeRegras } from "../../utils/validacao";
+import { MENSAGEM_REGRA_SENHA, REGEX_NOME, REGEX_RGM, normalizarEmail, normalizarRgm, senhaAtendeRegras } from "../../utils/validacao";
 
 const DOMINIO_INSTITUCIONAL = "@alunos.umc.br";
 
 // toda senha NOVA (cadastro e recuperacao) segue a mesma regra — ver utils/validacao.ts
 const senhaNovaSchema = z.string().refine(senhaAtendeRegras, MENSAGEM_REGRA_SENHA);
 
+// todo e-mail que entra e comparado e gravado normalizado (normalizarEmail: sem espacos, minusculo)
 const emailInstitucionalSchema = z
   .string()
   .trim()
   .email("E-mail institucional inválido.")
-  .toLowerCase()
+  .transform(normalizarEmail)
   .refine((email) => email.endsWith(DOMINIO_INSTITUCIONAL), {
     message: `E-mail precisa ser institucional (terminar com ${DOMINIO_INSTITUCIONAL}).`,
   });
@@ -62,18 +63,18 @@ export const primeiroAcessoSchema = z.object({
 export type PrimeiroAcessoInput = z.infer<typeof primeiroAcessoSchema>;
 
 export const loginSchema = z.object({
-  emailLogin: z.string().trim().min(1, "E-mail é obrigatório."),
+  emailLogin: z.string().trim().min(1, "E-mail é obrigatório.").transform(normalizarEmail),
   senha: z.string().min(1, "Senha é obrigatória."),
 });
 export type LoginInput = z.infer<typeof loginSchema>;
 
 export const solicitarRecuperacaoSchema = z.object({
-  email: z.string().trim().email("Informe um e-mail válido."),
+  email: z.string().trim().email("Informe um e-mail válido.").transform(normalizarEmail),
 });
 export type SolicitarRecuperacaoInput = z.infer<typeof solicitarRecuperacaoSchema>;
 
 export const confirmarRecuperacaoSchema = z.object({
-  email: z.string().trim().email("Informe um e-mail válido."),
+  email: z.string().trim().email("Informe um e-mail válido.").transform(normalizarEmail),
   codigo: z.string().trim().min(1, "Código é obrigatório."),
   novaSenha: senhaNovaSchema,
 });

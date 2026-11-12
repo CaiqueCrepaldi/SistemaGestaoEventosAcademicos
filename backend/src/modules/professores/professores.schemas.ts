@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { REGEX_NOME } from "../../utils/validacao";
+import { REGEX_NOME, normalizarEmail } from "../../utils/validacao";
 
 export const DOMINIO_EQUIPE = "@umc.br";
 
@@ -11,8 +11,8 @@ export const contaEquipeSchema = z.object({
   email: z
     .string()
     .trim()
-    .toLowerCase()
     .email("E-mail inválido.")
+    .transform(normalizarEmail)
     .refine((email) => email.endsWith(DOMINIO_EQUIPE), {
       message: `O e-mail precisa ser institucional (terminar com ${DOMINIO_EQUIPE}).`,
     }),

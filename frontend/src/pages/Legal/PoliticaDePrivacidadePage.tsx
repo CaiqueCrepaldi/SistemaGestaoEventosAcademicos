@@ -50,10 +50,16 @@ export function PoliticaDePrivacidadePage() {
             convite, ela define a senha e aceita os Termos de Uso.
           </li>
           <li>
+            <strong>E-mail de acesso:</strong> cada e-mail identifica uma única conta em todo o sistema, qualquer que
+            seja o perfil. O mesmo e-mail não é aceito para outra conta nem enquanto houver um cadastro em andamento com
+            ele. O sistema compara e guarda o e-mail sempre em letras minúsculas e sem espaços.
+          </li>
+          <li>
             <strong>Palestrante:</strong> nome e e-mail, informados pela equipe ou pelo professor. O nome aparece na
             programação para quem está conectado, depois que o palestrante é aprovado pela equipe; o e-mail é visto só
-            pela equipe e pelo professor que o cadastrou. O palestrante não recebe e-mail do sistema. O canal de
-            privacidade vale também para palestrantes.
+            pela equipe e pelo professor que o cadastrou, é único entre os palestrantes e também é guardado em
+            minúsculas. O palestrante não recebe e-mail do sistema. O canal de privacidade vale também para
+            palestrantes.
           </li>
           <li>
             <strong>Autenticação:</strong> senha (nunca guardada em texto legível; ver seção 6) e, para quem decidir
@@ -70,13 +76,15 @@ export function PoliticaDePrivacidadePage() {
           <li>
             <strong>Questionário e certificado:</strong> respostas ao questionário de cada evento e o resultado (acertos
             e percentual). Ao emitir um certificado, o sistema guarda uma cópia do que vai impresso nele (nome, RGM,
-            evento, tema, palestrante, data e carga horária) e um código de validação.
+            evento, tema, palestrante, data e carga horária) e um código de validação. Dentro do sistema, o certificado
+            é visto só pelo próprio aluno e pela equipe (secretaria e administração); o professor não acessa
+            certificados.
           </li>
           <li>
             <strong>Avaliações das palestras:</strong> nota e comentário, enviados de forma opcional por quem teve a
-            presença confirmada no evento (check-in aprovado), mesmo antes de responder o questionário. Se a presença
-            for desfeita (o que só é possível enquanto o aluno não respondeu o questionário), a avaliação é apagada
-            junto.
+            presença confirmada no evento (check-in aprovado), mesmo antes de responder o questionário. São vistas só
+            pela equipe (secretaria e administração); o professor não acessa avaliações. Se a presença for desfeita (o
+            que só é possível enquanto o aluno não respondeu o questionário), a avaliação é apagada junto.
           </li>
           <li>
             <strong>Aprovação e histórico:</strong> o que o professor cadastra passa pela aprovação da equipe. O
@@ -100,10 +108,11 @@ export function PoliticaDePrivacidadePage() {
         </ul>
         <p>
           <strong>O que o professor vê dos alunos:</strong> só nos eventos que ele criou, o nome, o RGM, a situação do
-          check-in, as notas do questionário e as avaliações enviadas pelos alunos inscritos. Ele usa esses dados só
-          para organizar o evento; não vê alunos de outros eventos nem a lista geral de alunos. No calendário, os
-          eventos dos outros professores e da equipe aparecem para ele só como &ldquo;Sala ocupada&rdquo;, sem título,
-          palestrante nem inscritos.
+          check-in e as notas do questionário dos alunos inscritos. Ele usa esses dados só para organizar o evento e só
+          inscreve alunos nos eventos dele; não vê certificados, avaliações, alunos de outros eventos nem a lista geral
+          de alunos, e o Dashboard dele mostra só os números dos eventos dele. No calendário, os eventos dos outros
+          professores e da equipe aparecem para ele só como &ldquo;Sala ocupada&rdquo;, sem título, palestrante nem
+          inscritos.
         </p>
         <p>Não coletamos CPF, endereço, data de nascimento, foto ou dados de saúde.</p>
         <h2>3. Para que usamos cada dado</h2>
@@ -136,7 +145,8 @@ export function PoliticaDePrivacidadePage() {
             </tr>
             <tr>
               <td>
-                Dados dos alunos vistos pelo professor (nome, RGM, check-in, notas e avaliações, só dos eventos dele)
+                Dados dos alunos vistos pelo professor (nome, RGM, check-in e notas do questionário, só dos eventos
+                dele; sem certificados nem avaliações)
               </td>
               <td>Organizar o evento, decidir o check-in e acompanhar o resultado</td>
               <td>Execução de contrato (art. 7º, V)</td>
@@ -171,7 +181,7 @@ export function PoliticaDePrivacidadePage() {
             </tr>
             <tr>
               <td>Avaliação da palestra</td>
-              <td>Avaliação do evento pela organização (envio opcional)</td>
+              <td>Avaliação do evento pela organização (envio opcional; vista só pela equipe)</td>
               <td>Consentimento (art. 7º, I)</td>
             </tr>
             <tr>
@@ -327,6 +337,11 @@ export function PoliticaDePrivacidadePage() {
           <li>
             <strong>Avaliação:</strong> você pode excluir a sua a qualquer momento e enviar outra. Se a sua presença no
             evento for desfeita, a avaliação é apagada junto.
+          </li>
+          <li>
+            <strong>Palestrante:</strong> o cadastro permanece enquanto for útil para a programação. A equipe só o
+            exclui depois de aprová-lo ou recusá-lo (e de decidir a proposta de alteração que estiver aguardando), e
+            nunca enquanto ele estiver ligado a um evento.
           </li>
           <li>
             <strong>Registros de auditoria:</strong> guardados por até 5 anos e nunca editados ou apagados pelas telas

@@ -1,5 +1,5 @@
 import { Router, type Request } from "express";
-import { eventosVisiveis } from "../../utils/escopo";
+import { eventosVisiveis, garantirFiltroDeEventoDoProfessor } from "../../utils/escopo";
 import { z } from "zod";
 import type { StatusPresenca } from "../../types/domain";
 import { buscaSchema, lerConsulta, paginacaoSchema } from "../../utils/paginacao";
@@ -27,9 +27,12 @@ inscricoesRouter.get(
 
     // ALUNO nunca consulta inscricao de outra pessoa, mesmo forjando o query param
     const participanteId = req.usuario!.perfil === "ALUNO" ? req.usuario!.participanteId ?? undefined : participanteIdQuery;
+    const eventoId = typeof req.query.eventoId === "string" ? req.query.eventoId : undefined;
+    // professor filtrando por evento de outro: 403
+    await garantirFiltroDeEventoDoProfessor(atorDe(req), eventoId);
 
     const inscricoes = await inscricoesService.listar({
-      eventoId: typeof req.query.eventoId === "string" ? req.query.eventoId : undefined,
+      eventoId,
       participanteId,
       status: typeof req.query.status === "string" ? (req.query.status as StatusPresenca) : undefined,
       // o professor so ve as inscricoes dos eventos dele (o aluno ja fica preso ao proprio participante)
@@ -52,13 +55,13 @@ inscricoesRouter.get(
   autorizar("ADMINISTRADOR", "SECRETARIA", "PROFESSOR"),
   expirarCheckinsAntes,
   asyncHandler(async (req, res) => {
-    res.json(
-      await inscricoesService.listarParaGestao({ ...lerConsulta(consultaGestaoSchema, req.query), escopoEvento: eventosVisiveis(atorDe(req)) }),
-    );
+    const consulta = lerConsulta(consultaGestaoSchema, req.query);
+    await garantirFiltroDeEventoDoProfessor(atorDe(req), consulta.eventoId);
+    res.json(await inscricoesService.listarParaGestao({ ...consulta, escopoEvento: eventosVisiveis(atorDe(req)) }));
   }),
 );
 
-// inscricao manual: equipe (qualquer evento) ou professor (so os dele) escolhe o participante (aluno usa
+// inscricao manual: equipe (qualquer evento) ou professor (so os dele: 403 nos outros) escolhe o participante (aluno usa
 // /eventos/{id}/inscricoes)
 inscricoesRouter.post(
   "/",

@@ -27,7 +27,7 @@ docs/       contrato de API e detalhamento das funcionalidades principais
 
 ## Perfis e permissões
 
-Três perfis de usuário:
+Quatro perfis de usuário:
 
 - **Administrador** e **Secretaria** — acesso igual, total: CRUD de
   eventos, salas e palestrantes; lista de participantes com busca,
@@ -46,6 +46,14 @@ Três perfis de usuário:
   aluno (botões na tela Participantes), cria e gerencia contas de secretaria
   na tela Equipe e consulta a trilha de **Auditoria** (a secretaria não tem a
   aba e a API a recusa com `403`).
+- **Professor** — conta criada pela equipe na tela Equipe e ativada pelo link
+  do convite. Cria e organiza os próprios eventos e palestrantes, que passam
+  pela aprovação da equipe (a recusa aparece num aviso no topo da tela, que
+  ele fecha no X e que só volta com uma recusa nova); inscreve alunos,
+  cancela inscrições e decide o check-in só nos eventos que criou (nos
+  outros, a API responde `403`); o Dashboard dele mostra só os números dos
+  eventos dele. Não acessa certificados nem avaliações (a API recusa com
+  `403`) e não tem as abas Salas, Participantes, Equipe e Auditoria.
 - **Aluno** — perfil com cadastro público (`/cadastro`, sem precisar de
   admin criar a conta, e-mail institucional obrigatório terminando em
   `@alunos.umc.br`). Vê os eventos em três opções (Inscritas, Abertas e
@@ -65,7 +73,12 @@ secretaria — sala com código no padrão da UMC (prédio, andar e número, com
 palestrante com nome e e-mail. As contas de professor e de secretaria ficam
 na tela **Equipe** (`/equipe`): o administrador cria as duas, a secretaria só
 professores, todas por convite enviado ao e-mail `@umc.br`. O aluno não se
-inscreve em dois eventos no mesmo horário.
+inscreve em dois eventos no mesmo horário. O e-mail de acesso é único no
+sistema todo (qualquer perfil, sem diferença de maiúsculas, e nem o de um
+cadastro em andamento) e é gravado em minúsculas; o do palestrante é único
+entre os palestrantes. A equipe só exclui um palestrante depois de aprová-lo
+ou recusá-lo (e de decidir a proposta de alteração que estiver aguardando), e
+nunca o ligado a um evento.
 Aluno só enxerga as duas listas em modo leitura. Cada evento referencia uma sala e um palestrante já existentes,
 além de um questionário obrigatório
 de 10 perguntas (4 alternativas, 1 correta cada) definido por

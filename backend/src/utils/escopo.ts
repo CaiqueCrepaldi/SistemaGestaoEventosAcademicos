@@ -53,6 +53,21 @@ export async function inscricaoDoAtorOuFalhar(ator: Ator, inscricaoId: string) {
   return inscricao;
 }
 
+// o professor so age sobre as inscricoes dos eventos dele (o responsavel e quem criou o evento: criadoPorId). Em
+// evento de outro, 403 com a mensagem de cada acao. A equipe age em qualquer evento; o aluno tem rotas proprias
+export function garantirEventoDoProfessor(ator: Ator, evento: { criadoPorId: string | null }, mensagem: string) {
+  if (ator.perfil === "PROFESSOR" && evento.criadoPorId !== ator.id) {
+    throw new AppError(403, "EVENTO_DE_OUTRO_PROFESSOR", mensagem);
+  }
+}
+
+// professor filtrando uma lista de inscricoes por um evento que nao e dele: 403 (evento inexistente: lista vazia)
+export async function garantirFiltroDeEventoDoProfessor(ator: Ator, eventoId: string | undefined) {
+  if (ator.perfil !== "PROFESSOR" || !eventoId) return;
+  const evento = await prisma.evento.findUnique({ where: { id: eventoId }, select: { criadoPorId: true } });
+  if (evento) garantirEventoDoProfessor(ator, evento, "Você só pode ver as inscrições dos seus próprios eventos.");
+}
+
 // encerrado = horario + carga horaria (em horas) ja passou
 export function eventoEncerrado(evento: { horario: Date; cargaHoraria: number }, agora = new Date()): boolean {
   return evento.horario.getTime() + evento.cargaHoraria * 3600 * 1000 <= agora.getTime();

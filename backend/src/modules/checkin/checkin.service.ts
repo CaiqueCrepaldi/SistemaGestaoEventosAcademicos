@@ -4,7 +4,7 @@ import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { registrarAuditoria } from "../../utils/auditoria";
 import { janelaDoCheckin, garantirJanelaAberta, PRAZO_CHECKIN_APOS_FIM_MS, ANTECEDENCIA_CHECKIN_MS, situacaoDaJanela } from "../../utils/checkin";
-import { eventosVisiveis, type Ator } from "../../utils/escopo";
+import { ehEquipe, eventosVisiveis, type Ator } from "../../utils/escopo";
 import { garantirPresencaDestravada, paraDominio } from "../inscricoes/inscricoes.service";
 
 // CHECK-IN PEDIDO PELO ALUNO: o aluno inscrito pede (SOLICITADO) dentro da janela e quem cuida do evento
@@ -234,12 +234,18 @@ async function painel(eventoId: string, ator: Ator) {
       })
     ).map((t) => t.participanteId),
   );
-  // quem ja avaliou o evento: ao desfazer a presenca dele, a avaliacao e apagada (a tela avisa antes)
-  const avaliaram = new Set(
-    (await prisma.feedback.findMany({ where: { eventoId, participanteId: { in: inscricoes.map((i) => i.participanteId) } }, select: { participanteId: true } })).map(
-      (f) => f.participanteId,
-    ),
-  );
+  // quem ja avaliou o evento: ao desfazer a presenca dele, a avaliacao e apagada (a tela avisa antes). So a equipe
+  // recebe essa informacao: o professor nao ve avaliacoes (a tela dele avisa de forma generica)
+  const avaliaram = ehEquipe(ator.perfil)
+    ? new Set(
+        (
+          await prisma.feedback.findMany({
+            where: { eventoId, participanteId: { in: inscricoes.map((i) => i.participanteId) } },
+            select: { participanteId: true },
+          })
+        ).map((f) => f.participanteId),
+      )
+    : null;
   const [semPedido, ausentes] = await Promise.all([
     prisma.inscricao.count({ where: { eventoId, statusPresenca: "PENDENTE" } }),
     prisma.inscricao.count({ where: { eventoId, statusPresenca: "AUSENTE" } }),
@@ -255,7 +261,7 @@ async function painel(eventoId: string, ator: Ator) {
     decididoEm: i.dataCheckin ? i.dataCheckin.toISOString() : null,
     decididoPor: i.usuario?.nome ?? null,
     presencaTravada: comTentativa.has(i.participanteId),
-    avaliou: avaliaram.has(i.participanteId),
+    ...(avaliaram ? { avaliou: avaliaram.has(i.participanteId) } : {}),
   });
 
   return {

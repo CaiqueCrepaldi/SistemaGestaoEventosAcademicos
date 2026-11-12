@@ -40,8 +40,9 @@ export interface PedidoCheckin {
   decididoPor: string | null;
   // o aluno ja respondeu o questionario: a presenca nao muda mais (409 PRESENCA_TRAVADA)
   presencaTravada: boolean;
-  // o aluno ja avaliou o evento: desfazer a presenca apaga a avaliacao (a tela avisa antes)
-  avaliou: boolean;
+  // o aluno ja avaliou o evento: desfazer a presenca apaga a avaliacao (a tela avisa antes). So vem pra equipe: o
+  // professor nao ve avaliacoes
+  avaliou?: boolean;
 }
 
 export interface PainelCheckin {

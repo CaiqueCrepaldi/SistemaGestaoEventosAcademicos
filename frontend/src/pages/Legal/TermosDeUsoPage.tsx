@@ -51,6 +51,11 @@ export function TermosDeUsoPage() {
             analisa o caso.
           </li>
           <li>
+            Cada e-mail identifica uma única conta no sistema, qualquer que seja o perfil: o mesmo e-mail não serve para
+            duas contas, nem para uma conta e um cadastro em andamento. O sistema compara e guarda o e-mail sem
+            diferenciar letras maiúsculas de minúsculas e sem espaços.
+          </li>
+          <li>
             A senha precisa ter de 8 a 64 caracteres, com pelo menos uma letra maiúscula, um número e um caractere
             especial (como ! @ # $ %).
           </li>
@@ -99,6 +104,10 @@ export function TermosDeUsoPage() {
             valendo.
           </li>
           <li>
+            O professor inscreve alunos, e cancela inscrições, só nos eventos que ele criou; a secretaria e a
+            administração, em qualquer evento.
+          </li>
+          <li>
             O <strong>check-in é pedido pelo próprio aluno</strong>, na tela Eventos, de 1 hora antes do início até 24
             horas depois do fim do evento, confirmando que está no local. O professor responsável pelo evento, a
             secretaria ou a administração aprova ou recusa o pedido; o sistema guarda quem decidiu e quando. Enquanto o
@@ -116,12 +125,15 @@ export function TermosDeUsoPage() {
           automatizada do sistema: você pode pedir a revisão humana do resultado pelo canal de privacidade. O
           certificado é gerado em PDF, tem um código de validação que qualquer pessoa pode conferir na página pública de
           validação, é destinado ao uso pessoal do titular e não pode ser alterado nem emitido em nome de terceiros.
+          Dentro do sistema, o certificado é visto só pelo próprio aluno e pela equipe (secretaria e administração); o
+          professor não acessa certificados.
         </p>
         <h2>7. Avaliação das palestras</h2>
         <p>
           A avaliação de uma palestra (nota e comentário) é opcional e fica disponível assim que a sua presença no
-          evento é confirmada (check-in aprovado), mesmo antes de você responder o questionário. Ela é vista pela equipe
-          e pelo professor responsável pelo evento, para avaliar o evento, e não é publicada para outros alunos.
+          evento é confirmada (check-in aprovado), mesmo antes de você responder o questionário. Ela é vista só pela
+          equipe (secretaria e administração), para avaliar o evento: não aparece para o professor nem para outros
+          alunos.
         </p>
         <p>
           Enquanto você ainda não respondeu o questionário, quem aprovou o check-in pode desfazer a presença (dentro do
@@ -152,15 +164,19 @@ export function TermosDeUsoPage() {
             passa pela aprovação da equipe.
           </li>
           <li>
+            A equipe só exclui um palestrante depois de aprová-lo ou recusá-lo, e depois de decidir a proposta de
+            alteração que estiver aguardando; o palestrante ligado a um evento não é excluído.
+          </li>
+          <li>
             Depois que um aluno responde o questionário de um evento, o questionário daquele evento não muda mais.
             Depois que o evento termina, ninguém mais o edita nem o exclui.
           </li>
           <li>
-            O professor só vê e só altera os eventos que ele criou. Dos alunos inscritos nesses eventos, ele vê o nome,
-            o RGM, a situação do check-in, as notas do questionário e as avaliações, e deve usar esses dados só para
-            organizar o evento. Ele não acessa a lista geral de alunos nem a trilha de auditoria, e não exclui
-            avaliações. No calendário, os eventos dos outros aparecem para ele só como &ldquo;Sala ocupada&rdquo;, sem
-            título, palestrante nem inscritos.
+            O professor só vê e só altera os eventos que ele criou, e só inscreve alunos nesses eventos. Dos alunos
+            inscritos neles, ele vê o nome, o RGM, a situação do check-in e as notas do questionário, e deve usar esses
+            dados só para organizar o evento. Ele não acessa certificados, avaliações, a lista geral de alunos nem a
+            trilha de auditoria, e o Dashboard dele mostra só os números dos eventos dele. No calendário, os eventos dos
+            outros aparecem para ele só como &ldquo;Sala ocupada&rdquo;, sem título, palestrante nem inscritos.
           </li>
           <li>
             A equipe pode <strong>inativar</strong> a conta de um professor, informando um motivo. Antes, os eventos

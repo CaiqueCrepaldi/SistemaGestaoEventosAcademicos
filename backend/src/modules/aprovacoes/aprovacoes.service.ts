@@ -61,14 +61,48 @@ export async function contadores(ator: Ator) {
   }
   if (ator.perfil === "PROFESSOR") {
     const [eventos, propostasEvento, palestrantes, propostasPalestrante] = await Promise.all([
-      prisma.evento.count({ where: { situacao: "RECUSADO", criadoPorId: ator.id } }),
-      prisma.propostaAlteracao.count({ where: { tipo: "EVENTO", situacao: "RECUSADO", evento: { criadoPorId: ator.id } } }),
-      prisma.palestrante.count({ where: { situacao: "RECUSADO", criadoPorId: ator.id } }),
-      prisma.propostaAlteracao.count({ where: { tipo: "PALESTRANTE", situacao: "RECUSADO", palestrante: { criadoPorId: ator.id } } }),
+      prisma.evento.findMany({ where: { situacao: "RECUSADO", criadoPorId: ator.id }, select: { id: true } }),
+      prisma.propostaAlteracao.findMany({
+        where: { tipo: "EVENTO", situacao: "RECUSADO", evento: { criadoPorId: ator.id } },
+        select: { eventoId: true },
+      }),
+      prisma.palestrante.findMany({ where: { situacao: "RECUSADO", criadoPorId: ator.id }, select: { id: true } }),
+      prisma.propostaAlteracao.findMany({
+        where: { tipo: "PALESTRANTE", situacao: "RECUSADO", palestrante: { criadoPorId: ator.id } },
+        select: { palestranteId: true },
+      }),
     ]);
-    return { eventosRecusados: eventos + propostasEvento, palestrantesRecusados: palestrantes + propostasPalestrante };
+    return {
+      eventosRecusados: eventos.length + propostasEvento.length,
+      palestrantesRecusados: palestrantes.length + propostasPalestrante.length,
+      recusas: await identificarRecusas([
+        ...eventos.map((e) => ({ tipo: "EVENTO", itemId: e.id, acao: "RECUSADO" })),
+        ...propostasEvento.flatMap((p) => (p.eventoId ? [{ tipo: "EVENTO", itemId: p.eventoId, acao: "PROPOSTA_RECUSADA" }] : [])),
+        ...palestrantes.map((p) => ({ tipo: "PALESTRANTE", itemId: p.id, acao: "RECUSADO" })),
+        ...propostasPalestrante.flatMap((p) =>
+          p.palestranteId ? [{ tipo: "PALESTRANTE", itemId: p.palestranteId, acao: "PROPOSTA_RECUSADA" }] : [],
+        ),
+      ]),
+    };
   }
   return {};
+}
+
+// um identificador por recusa em aberto do professor: o id da linha do historico que registrou a recusa (a
+// mais recente do item). Recusar de novo um item reenviado gera outra linha, e portanto outro id: e assim que
+// a tela sabe que chegou uma recusa nova depois que o professor fechou o aviso. Sem a linha (dado antigo),
+// vale um id montado com o item
+async function identificarRecusas(abertas: { tipo: string; itemId: string; acao: string }[]) {
+  if (abertas.length === 0) return [];
+  const linhas = await prisma.historicoAprovacao.findMany({
+    where: { OR: abertas },
+    select: { id: true, tipo: true, itemId: true, acao: true },
+    orderBy: { criadoEm: "desc" },
+  });
+  return abertas.map(
+    ({ tipo, itemId, acao }) =>
+      linhas.find((l) => l.tipo === tipo && l.itemId === itemId && l.acao === acao)?.id ?? `${tipo}-${acao}-${itemId}`,
+  );
 }
 
 export const aprovacoesService = { registrarHistorico, listarHistorico, contadores };

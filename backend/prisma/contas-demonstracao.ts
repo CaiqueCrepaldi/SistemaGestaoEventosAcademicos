@@ -62,7 +62,7 @@ export interface ContaDeDemonstracao {
 function emailDoAdministrador(): string {
   const valor = normalizarEmail(process.env.SEED_ADMIN_EMAIL ?? "");
   if (!valor) return "admin@umc.br";
-  if (!/^[^s@]+@[^s@]+.[^s@]+$/.test(valor)) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valor)) {
     throw new SenhaDeDemonstracaoInvalida("SEED_ADMIN_EMAIL não é um e-mail válido. Corrija no .env (ver backend/.env.example).");
   }
   return valor;
@@ -88,7 +88,9 @@ export async function garantirContasDeDemonstracao(
 ): Promise<Record<keyof SenhasDeDemonstracao, string>> {
   const ids = {} as Record<keyof SenhasDeDemonstracao, string>;
   for (const conta of contasDeDemonstracao()) {
-    const existente = await prisma.usuario.findUnique({ where: { emailLogin: conta.email }, select: { id: true } });
+    // o e-mail de login e sempre gravado e buscado normalizado (mesma funcao do sistema)
+    const emailLogin = normalizarEmail(conta.email);
+    const existente = await prisma.usuario.findUnique({ where: { emailLogin }, select: { id: true } });
     if (existente) {
       ids[conta.chave] = existente.id;
       continue;
@@ -97,7 +99,7 @@ export async function garantirContasDeDemonstracao(
       data: {
         id: idsDesejados[conta.chave] ?? randomUUID(),
         nome: conta.nome,
-        emailLogin: conta.email,
+        emailLogin,
         senhaHash: await gerarHashSenha(senhas[conta.chave]),
         perfil: conta.perfil,
         ativo: true,

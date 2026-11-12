@@ -110,8 +110,9 @@ entra e circula no sistema.
 - **Obrigatório:** opcional.
 - **Onde fica:** tabela `feedbacks` (nota e comentário em texto livre, até
   1000 caracteres).
-- **Quem consulta/altera:** o próprio autor; a equipe (todas, com média por
-  evento); o professor (só as dos eventos dele, sem excluir). Ninguém edita
+- **Quem consulta/altera:** o próprio autor e a equipe (todas, com média por
+  evento). O professor não acessa avaliações, nem dos eventos dele (desde
+  12/11/2026; a API responde `403`). Ninguém edita
   depois de enviada: o aluno pode excluir a própria e enviar outra; a equipe
   só exclui, com motivo de uma lista fechada.
 - **Compartilhado:** não.
@@ -151,7 +152,11 @@ entra e circula no sistema.
   passa pela aprovação da equipe; a mudança de nome ou e-mail de um
   palestrante já aprovado vira proposta de alteração (seção 15).
 - **Onde fica:** tabela `palestrantes`, em texto puro (dados pessoais
-  comuns; ver `07`). Não há telefone nem outro dado.
+  comuns; ver `07`). Não há telefone nem outro dado. O e-mail é único entre
+  os palestrantes e é gravado em minúsculas.
+- **Exclusão:** só pela equipe e só depois da decisão: palestrante
+  aguardando aprovação, ou com proposta de alteração aguardando, não é
+  excluído (`409`); o ligado a um evento também não.
 - **Quem consulta:** a equipe e o professor que o cadastrou (nome e
   e-mail); os demais perfis veem só o nome, e só de palestrante aprovado.
 - **Compartilhado:** não. O sistema não envia e-mail para palestrante.
@@ -234,8 +239,9 @@ entra e circula no sistema.
   isso o aluno com certificado não é removido, só inativado (a remoção
   responde `409 PARTICIPANTE_COM_CERTIFICADO`, e a inscrição de origem é
   protegida no banco com `onDelete: Restrict`).
-- **Quem consulta:** o próprio aluno; a equipe; o professor (só dos eventos
-  dele); qualquer pessoa com o código vê só nome, evento, data, carga
+- **Quem consulta:** o próprio aluno e a equipe. O professor não acessa
+  certificados, nem dos eventos dele (desde 12/11/2026; a API responde
+  `403`). Qualquer pessoa com o código vê só nome, evento, data, carga
   horária e emissão — **nunca o RGM** (limite de 30 consultas por IP).
 - **Compartilhado:** não. O PDF é montado no navegador (jsPDF) com os dados
   que a API devolve.
@@ -247,7 +253,10 @@ entra e circula no sistema.
   na mesma tela.
 - **Onde é coletado:** `POST /api/equipe` (o mesmo que `/api/professores`):
   só o **nome completo**, o **e-mail institucional** (`@umc.br`) e o perfil
-  (Professor ou Secretaria).
+  (Professor ou Secretaria). O e-mail passa por `normalizarEmail` (sem
+  espaços e em minúsculas) e é único no sistema todo: não pode ser o de
+  outra conta, de qualquer perfil, nem o de um cadastro de aluno em
+  andamento (`409 EMAIL_DUPLICADO`).
 - **Onde fica:** `usuarios` (`nome`, `emailLogin`, perfil `PROFESSOR` ou
   `SECRETARIA`), com
   senha inutilizável e sem aceite dos Termos até usar o convite. O convite é
@@ -265,13 +274,14 @@ entra e circula no sistema.
   excluída, só fica inativa; os registros de auditoria ficam em qualquer
   caso (`logs_auditoria.usuarioId` vira nulo e o `atorNome` continua).
 - **Para que serve:** o professor cria e organiza os próprios eventos e
-  palestrantes, decide o check-in dos alunos inscritos neles e acompanha
-  notas, certificados e avaliações; a secretaria administra o sistema junto
+  palestrantes, inscreve alunos só nesses eventos, decide o check-in dos
+  inscritos e acompanha as notas do questionário e os números dos eventos
+  dele no Dashboard; a secretaria administra o sistema junto
   com a administração (salas, alunos, aprovações, professores).
 - **O que o professor vê dos alunos:** só nos eventos que ele criou: nome,
-  RGM, situação do check-in, notas do questionário e avaliações. Ele não
-  acessa a tela Participantes nem a lista geral de alunos (a busca para
-  inscrição manual devolve no máximo 20 resultados).
+  RGM, situação do check-in e notas do questionário. Ele não acessa
+  certificados, avaliações, a tela Participantes nem a lista geral de alunos
+  (a busca para inscrição manual devolve no máximo 20 resultados).
 - **O que o professor vê dos outros eventos:** no calendário
   (`GET /api/eventos?de=&ate=`), os eventos de outros professores e da
   equipe que ocupam uma sala chegam só como sala, início e fim ("Sala

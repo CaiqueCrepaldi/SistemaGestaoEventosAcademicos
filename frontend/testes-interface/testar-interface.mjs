@@ -1326,6 +1326,85 @@ try {
   );
   await sair(page);
 
+  titulo("Professor sem Certificados e Avaliações; aviso de recusa com X; Excluir do palestrante pendente");
+  {
+    const tokenProfessorAviso = await tokenDe(emailProfessor, SENHA_PROFESSOR);
+    const palestranteDoProfessorUi = async (rotulo) =>
+      (
+        await api("POST", "/palestrantes", tokenProfessorAviso, {
+          nome: `Palestrante ${rotulo} Interface`,
+          email: `ui-pal-${rotulo.toLowerCase()}-${sufixo}@teste.invalido`,
+        })
+      ).corpo;
+    const recusarPalestranteUi = (id) => api("POST", `/palestrantes/${id}/recusar`, tokenSecretaria, { motivo: "Faltou o currículo do palestrante" });
+    const palestranteRecusadoUi = await palestranteDoProfessorUi("Recusado");
+    await recusarPalestranteUi(palestranteRecusadoUi.id);
+    await palestranteDoProfessorUi("Aguardando");
+    // cada troca de tela recarrega os contadores; espera a resposta (e a tela redesenhar) antes de conferir o aviso
+    const contadoresDaTela = () =>
+      page
+        .waitForResponse((resposta) => resposta.url().includes("/aprovacoes/contadores"), { timeout: 8000 })
+        .then(() => page.waitForTimeout(300))
+        .catch(() => null);
+
+    await entrar(page, emailProfessor, SENHA_PROFESSOR);
+    const aviso = page.locator(".aviso-recusados");
+    await aviso.waitFor({ timeout: 8000 }).catch(() => {});
+    const abasDoProfessor = await page.locator("a.nav-link").allInnerTexts();
+    checar(
+      "professor: o menu não tem Certificados nem Avaliações",
+      abasDoProfessor.length > 0 && !abasDoProfessor.some((aba) => aba.includes("Certificados") || aba.includes("Avaliações")),
+      abasDoProfessor.join(" | "),
+    );
+    checar("o aviso de recusa aparece com o X (Fechar aviso)", (await aviso.count()) === 1 && (await aviso.locator("button[aria-label='Fechar aviso']").count()) === 1);
+    await aviso.locator("button[aria-label='Fechar aviso']").click();
+    checar("o X fecha o aviso", (await page.locator(".aviso-recusados").count()) === 0);
+    let recarga = contadoresDaTela();
+    await page.locator("a.nav-link", { hasText: "Palestrantes" }).click();
+    await recarga;
+    checar("fechado, o aviso continua fechado ao trocar de tela", (await page.locator(".aviso-recusados").count()) === 0);
+    recarga = contadoresDaTela();
+    await page.reload();
+    await recarga;
+    checar("e continua fechado depois de recarregar a página", (await page.locator(".aviso-recusados").count()) === 0);
+
+    await page.goto(`${APP}/certificados`);
+    await page.waitForURL((url) => !url.hash.includes("certificados"), { timeout: 8000 }).catch(() => {});
+    checar("o professor que digita /certificados volta para o Dashboard", page.url().endsWith("#/"), page.url());
+    await page.goto(`${APP}/feedback`);
+    await page.waitForURL((url) => !url.hash.includes("feedback"), { timeout: 8000 }).catch(() => {});
+    checar("e /feedback também", page.url().endsWith("#/"), page.url());
+    await page.getByText("Dados dos seus eventos").waitFor({ timeout: 8000 }).catch(() => {});
+    checar(
+      "o Dashboard do professor avisa que os dados são dos eventos dele, sem certificados nem avaliações",
+      (await temTexto(page, "Dados dos seus eventos")) && !(await temTexto(page, "Certificados liberados")) && !(await temTexto(page, "Média do feedback")),
+    );
+
+    const outroRecusadoUi = await palestranteDoProfessorUi("Revisto");
+    await recusarPalestranteUi(outroRecusadoUi.id);
+    recarga = contadoresDaTela();
+    await page.locator("a.nav-link", { hasText: "Eventos" }).click();
+    await recarga;
+    await page.locator(".aviso-recusados").waitFor({ timeout: 8000 }).catch(() => {});
+    checar("uma recusa nova faz o aviso voltar", (await page.locator(".aviso-recusados").count()) === 1);
+    await sair(page);
+
+    await entrar(page, secretaria.email, secretaria.senha);
+    await page.goto(`${APP}/palestrantes`);
+    const linhaAguardandoUi = page.locator("tr", { hasText: "Palestrante Aguardando Interface" });
+    await linhaAguardandoUi.waitFor({ timeout: 8000 }).catch(() => {});
+    const excluirAguardando = linhaAguardandoUi.locator("button", { hasText: "Excluir" });
+    checar(
+      "Excluir desabilitado para palestrante aguardando aprovação, com a orientação no botão",
+      (await excluirAguardando.count()) === 1 &&
+        (await excluirAguardando.isDisabled()) &&
+        (await excluirAguardando.getAttribute("title")) === "Aprove ou recuse este palestrante antes de excluir.",
+    );
+    const excluirRecusado = page.locator("tr", { hasText: "Palestrante Recusado Interface" }).locator("button", { hasText: "Excluir" });
+    checar("palestrante recusado tem o Excluir habilitado", (await excluirRecusado.count()) === 1 && (await excluirRecusado.isEnabled()));
+    await sair(page);
+  }
+
   titulo("E / Esqueci a senha");
   await page.goto(`${APP}/esqueci-senha`);
   await page.click("button[type=submit]");

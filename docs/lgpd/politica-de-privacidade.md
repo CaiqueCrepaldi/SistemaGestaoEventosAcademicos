@@ -39,10 +39,16 @@ dados tratados).
   de convite, válido por 24 horas e de uso único; a chave do link fica
   guardada só como hash. Ao usar o convite, ela define a senha e aceita os
   Termos de Uso.
+- **E-mail de acesso:** cada e-mail identifica uma única conta em todo o
+  sistema, qualquer que seja o perfil. O mesmo e-mail não é aceito para
+  outra conta nem enquanto houver um cadastro em andamento com ele. O
+  sistema compara e guarda o e-mail sempre em letras minúsculas e sem
+  espaços.
 - **Palestrante:** nome e e-mail, informados pela equipe ou pelo professor.
   O nome aparece na programação para quem está conectado, depois que o
   palestrante é aprovado pela equipe; o e-mail é visto só pela equipe e pelo
-  professor que o cadastrou. O palestrante não recebe e-mail do sistema. O
+  professor que o cadastrou, é único entre os palestrantes e também é
+  guardado em minúsculas. O palestrante não recebe e-mail do sistema. O
   canal de privacidade vale também para palestrantes.
 - **Autenticação:** senha (nunca guardada em texto legível; ver seção 6) e,
   para quem decidir ativar a autenticação em dois fatores (opcional), uma
@@ -58,12 +64,15 @@ dados tratados).
 - **Questionário e certificado:** respostas ao questionário de cada evento
   e o resultado (acertos e percentual). Ao emitir um certificado, o sistema
   guarda uma cópia do que vai impresso nele (nome, RGM, evento, tema,
-  palestrante, data e carga horária) e um código de validação.
+  palestrante, data e carga horária) e um código de validação. Dentro do
+  sistema, o certificado é visto só pelo próprio aluno e pela equipe
+  (secretaria e administração); o professor não acessa certificados.
 - **Avaliações das palestras:** nota e comentário, enviados de forma
   opcional por quem teve a presença confirmada no evento (check-in
-  aprovado), mesmo antes de responder o questionário. Se a presença for
-  desfeita (o que só é possível enquanto o aluno não respondeu o
-  questionário), a avaliação é apagada junto.
+  aprovado), mesmo antes de responder o questionário. São vistas só pela
+  equipe (secretaria e administração); o professor não acessa avaliações.
+  Se a presença for desfeita (o que só é possível enquanto o aluno não
+  respondeu o questionário), a avaliação é apagada junto.
 - **Aprovação e histórico:** o que o professor cadastra passa pela aprovação
   da equipe. O histórico guarda cada envio, aprovação, recusa e proposta de
   alteração, com a data, o nome de quem agiu, o motivo da recusa e a
@@ -81,11 +90,12 @@ dados tratados).
   certificados.
 
 **O que o professor vê dos alunos:** só nos eventos que ele criou, o nome, o
-RGM, a situação do check-in, as notas do questionário e as avaliações
-enviadas pelos alunos inscritos. Ele usa esses dados só para organizar o
-evento; não vê alunos de outros eventos nem a lista geral de alunos. No
-calendário, os eventos dos outros professores e da equipe aparecem para ele
-só como "Sala ocupada", sem título, palestrante nem inscritos.
+RGM, a situação do check-in e as notas do questionário dos alunos inscritos.
+Ele usa esses dados só para organizar o evento e só inscreve alunos nos
+eventos dele; não vê certificados, avaliações, alunos de outros eventos nem a
+lista geral de alunos, e o Dashboard dele mostra só os números dos eventos
+dele. No calendário, os eventos dos outros professores e da equipe aparecem
+para ele só como "Sala ocupada", sem título, palestrante nem inscritos.
 
 Não coletamos CPF, endereço, data de nascimento, foto ou dados de saúde.
 
@@ -96,13 +106,13 @@ Não coletamos CPF, endereço, data de nascimento, foto ou dados de saúde.
 | Nome, RGM, e-mail, senha | Criar e autenticar a conta | Execução de contrato a pedido do titular (art. 7º, V da LGPD) |
 | Cadastro aguardando confirmação (nome, e-mail, RGM e hash da senha, por até 15 minutos) | Garantir que a conta e os certificados pertencem ao dono do e-mail | Procedimentos preliminares a pedido do titular (art. 7º, V) |
 | Nome e e-mail do professor e da secretaria, convite (hash da chave) | Criar a conta da equipe: o professor cria e organiza os próprios eventos; a secretaria administra o sistema junto com a administração | Execução de contrato (art. 7º, V) |
-| Dados dos alunos vistos pelo professor (nome, RGM, check-in, notas e avaliações, só dos eventos dele) | Organizar o evento, decidir o check-in e acompanhar o resultado | Execução de contrato (art. 7º, V) |
+| Dados dos alunos vistos pelo professor (nome, RGM, check-in e notas do questionário, só dos eventos dele; sem certificados nem avaliações) | Organizar o evento, decidir o check-in e acompanhar o resultado | Execução de contrato (art. 7º, V) |
 | Histórico da aprovação e propostas de alteração | Registrar as decisões da equipe sobre o que o professor cadastra | Legítimo interesse da instituição na organização dos eventos (art. 7º, IX) |
 | Inscrição e check-in (pedido, decisão, quem decidiu e quando) | Controlar as vagas, registrar a presença e liberar o questionário e o certificado | Execução de contrato (art. 7º, V) |
 | Respostas do questionário | Calcular o aproveitamento e liberar o certificado | Execução de contrato (art. 7º, V) |
 | Certificado emitido | Comprovar a participação: com o código, a consulta pública mostra só nome, evento, data e carga horária (nunca o RGM) | Execução de contrato (art. 7º, V) |
 | Avisos por e-mail (inscrição, cancelamento e mudança no evento) | Manter o aluno informado sobre os eventos em que está inscrito | Execução de contrato (art. 7º, V) |
-| Avaliação da palestra | Avaliação do evento pela organização (envio opcional) | Consentimento (art. 7º, I) |
+| Avaliação da palestra | Avaliação do evento pela organização (envio opcional; vista só pela equipe) | Consentimento (art. 7º, I) |
 | Motivo da inativação da conta | Registrar por que a conta foi inativada | Legítimo interesse da instituição na gestão dos eventos (art. 7º, IX) |
 | Registros de acesso e auditoria | Detectar acesso indevido e investigar incidentes | Legítimo interesse em segurança (art. 7º, IX) e exercício regular de direitos (art. 7º, VI) |
 | IP no limite de tentativas | Proteger as contas contra adivinhação de senha e o envio de códigos em massa | Legítimo interesse em segurança (art. 7º, IX) |
@@ -215,6 +225,10 @@ ao sair ou quando a sessão expira.
   mantido.
 - **Avaliação:** você pode excluir a sua a qualquer momento e enviar outra.
   Se a sua presença no evento for desfeita, a avaliação é apagada junto.
+- **Palestrante:** o cadastro permanece enquanto for útil para a
+  programação. A equipe só o exclui depois de aprová-lo ou recusá-lo (e de
+  decidir a proposta de alteração que estiver aguardando), e nunca enquanto
+  ele estiver ligado a um evento.
 - **Registros de auditoria:** guardados por até 5 anos e nunca editados ou
   apagados pelas telas do sistema.
 - **Cópias de segurança:** o provedor do banco faz uma cópia por dia, que

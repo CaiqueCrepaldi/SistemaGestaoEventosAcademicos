@@ -252,8 +252,17 @@ async function recusarProposta(id: string, motivo: string, ator: Ator) {
 }
 
 // so sem evento vinculado e sem proposta de evento pendente que o use (a proposta do proprio palestrante sai junto)
+// a equipe so exclui palestrante ja decidido (aprovado ou recusado): o que aguarda aprovacao, ou que tem proposta
+// de alteracao aguardando, precisa da decisao antes. E palestrante com evento vinculado continua sem sair
 async function remover(id: string, ator: Ator) {
-  await doAtorOuFalhar(id, ator);
+  const palestrante = await doAtorOuFalhar(id, ator);
+  if (palestrante.situacao === "PENDENTE") {
+    throw AppError.conflito("PALESTRANTE_PENDENTE", "Aprove ou recuse este palestrante antes de excluir.");
+  }
+  const propostaPendente = await prisma.propostaAlteracao.count({ where: { palestranteId: id, situacao: "PENDENTE" } });
+  if (propostaPendente > 0) {
+    throw AppError.conflito("PROPOSTA_PENDENTE", "Aprove ou recuse a proposta de alteração deste palestrante antes de excluir.");
+  }
   const eventos = await prisma.evento.count({ where: { palestranteId: id } });
   const propostasDeEvento = await prisma.propostaAlteracao.count({ where: { novoPalestranteId: id, situacao: { in: ["PENDENTE", "RECUSADO"] } } });
   if (eventos > 0 || propostasDeEvento > 0) {

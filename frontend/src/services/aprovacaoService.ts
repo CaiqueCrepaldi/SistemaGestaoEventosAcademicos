@@ -18,6 +18,8 @@ export interface ContadoresAprovacao {
   palestrantesPendentes?: number;
   eventosRecusados?: number;
   palestrantesRecusados?: number;
+  // so o professor: um id por recusa em aberto, pro aviso saber se chegou recusa nova depois de fechado
+  recusas?: string[];
 }
 
 // avisa o menu (Layout) que algo mudou e os contadores precisam ser recarregados

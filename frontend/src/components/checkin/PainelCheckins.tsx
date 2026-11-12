@@ -211,7 +211,9 @@ export function PainelCheckins({ eventoId, onAlterado }: { eventoId: string; onA
               ? "Tem certeza que deseja aprovar?"
               : confirmacao.reverter && confirmacao.item.avaliou
                 ? "Este aluno já avaliou o evento. Ao desfazer a presença, a avaliação dele será apagada."
-                : "Tem certeza que deseja recusar?"
+                : confirmacao.reverter && confirmacao.item.statusPresenca === "PRESENTE" && confirmacao.item.avaliou === undefined
+                  ? "Tem certeza que deseja desfazer a presença? Se o aluno já tiver avaliado o evento, a avaliação dele será apagada."
+                  : "Tem certeza que deseja recusar?"
           }
           confirmLabel={confirmacao.tipo === "aprovar" ? "Aprovar" : "Recusar"}
           tone={confirmacao.tipo === "recusar" ? "danger" : "default"}

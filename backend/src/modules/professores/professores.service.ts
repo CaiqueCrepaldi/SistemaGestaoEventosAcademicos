@@ -205,8 +205,14 @@ async function criar(dados: ContaEquipeInput, ator: Ator) {
     throw new AppError(403, "SO_ADMINISTRADOR", "Só o administrador cria contas de secretaria.");
   }
   garantirEnderecoConfigurado();
+  // o e-mail e unico no sistema todo: entre as contas de qualquer perfil e os cadastros de aluno ainda em andamento
+  // (codigo enviado e no prazo). O indice unico de usuarios.emailLogin garante o resto, ate numa corrida
   const emailLogin = normalizarEmail(dados.email);
-  if (await prisma.usuario.findUnique({ where: { emailLogin }, select: { id: true } })) {
+  const [contaComEmail, cadastroComEmail] = await Promise.all([
+    prisma.usuario.findUnique({ where: { emailLogin }, select: { id: true } }),
+    prisma.cadastroPendente.findFirst({ where: { emailLogin, expiraEm: { gt: new Date() } }, select: { id: true } }),
+  ]);
+  if (contaComEmail || cadastroComEmail) {
     throw AppError.conflito("EMAIL_DUPLICADO", "Já existe uma conta com este e-mail.");
   }
   const convite = gerarConvite();
@@ -266,7 +272,7 @@ async function reenviarConvite(id: string, ator: Ator) {
   });
   await registrarAuditoria(ator.id, ACOES[perfil].convite, `conta de ${NOME_DO_PERFIL[perfil]} ${conta.id}: novo convite de primeiro acesso`);
   const link = linkDoConvite(convite.chave);
-  const emailEnviado = await enviarConvite({ id: conta.id, perfil }, conta.emailLogin, conta.nome, link, ator.id);
+  const emailEnviado = await enviarConvite({ id: conta.id, perfil }, normalizarEmail(conta.emailLogin), conta.nome, link, ator.id);
   return respostaDoEnvio(link, emailEnviado);
 }
 

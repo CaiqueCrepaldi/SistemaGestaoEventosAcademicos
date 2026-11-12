@@ -15,8 +15,15 @@ ACESSO_NEGADO` antes de a rota executar.
 (ADMINISTRADOR e SECRETARIA) vê todos os eventos; o PROFESSOR vê só os que
 ele criou (`eventos.criadoPorId`); o ALUNO vê só os aprovados. Evento de
 outro professor ou da equipe responde `404` ao professor (ele não descobre
-que existe), com duas exceções descritas abaixo: o calendário, em que ele vê
-só a ocupação da sala, e as rotas do check-in, que respondem `403`.
+que existe), com três exceções descritas abaixo: o calendário, em que ele vê
+só a ocupação da sala; as rotas do check-in, que respondem `403`; e as de
+inscrição, que respondem `403 EVENTO_DE_OUTRO_PROFESSOR` com a mensagem
+(desde 12/11/2026 o professor só inscreve, cancela e lista inscrições nos
+eventos dele).
+
+**Desde 12/11/2026 o professor não acessa certificados nem avaliações**
+(`403` mesmo nos eventos dele; as abas saem do menu). A validação pública
+do certificado continua aberta.
 
 ## Rotas públicas (sem autenticação)
 
@@ -70,7 +77,7 @@ id vindo da tela.
 | `/api/eventos/:eventoId/questionario` | GET | ✅ | ✅ | só os dele | só aprovados | Perguntas sem gabarito |
 | `/api/eventos/:eventoId/questionario/respostas` | POST | ❌ | ❌ | ❌ | só o próprio | Exige check-in aprovado e conta ativa; no máximo 2 tentativas |
 | `/api/eventos/:eventoId/questionario/tentativas` | GET | ❌ | ❌ | ❌ | só o próprio | — |
-| `/api/checkin/eventos`, `/eventos/:eventoId` | GET | ✅ | ✅ | só os dele (`403` nos outros) | ❌ | Eventos com o check-in aberto e painel com nome, RGM e horário de cada pedido |
+| `/api/checkin/eventos`, `/eventos/:eventoId` | GET | ✅ | ✅ | só os dele (`403` nos outros) | ❌ | Eventos com o check-in aberto e painel com nome, RGM e horário de cada pedido. Se o aluno já avaliou o evento (`avaliou`): só para a equipe |
 | `/api/checkin/inscricoes/:id/aprovar`, `/recusar`, `/eventos/:eventoId/aprovar-todos` | POST | ✅ | ✅ | só os dele (`403` nos outros) | ❌ | Grava quem decidiu e quando; revisão dentro do prazo até o aluno responder o questionário |
 | `/api/salas` e `/api/salas/:id` | GET | ✅ | ✅ | ✅ | ✅ | Os números de ocupação só para a equipe |
 | `/api/salas` | POST/PUT/DELETE | ✅ | ✅ | ❌ | ❌ | Não exclui sala com evento |
@@ -81,27 +88,28 @@ id vindo da tela.
 | `/api/palestrantes/:id/reenviar` | POST | ❌ | ❌ | só os dele | ❌ | — |
 | `/api/palestrantes/:id/historico` | GET | ✅ | ✅ | só os dele | ❌ | — |
 | `/api/palestrantes/:id/aprovar`, `/recusar`, `/proposta/aprovar`, `/proposta/recusar` | POST | ✅ | ✅ | ❌ | ❌ | — |
-| `/api/palestrantes/:id` | DELETE | ✅ | ✅ | ❌ | ❌ | Não exclui palestrante com evento |
+| `/api/palestrantes/:id` | DELETE | ✅ | ✅ | ❌ | ❌ | Só palestrante já decidido (aprovado ou recusado): aguardando aprovação → `409 PALESTRANTE_PENDENTE` ("Aprove ou recuse este palestrante antes de excluir."); com proposta de alteração aguardando → `409 PROPOSTA_PENDENTE`; com evento → `409 CONFLITO_DEPENDENCIA` |
 | `/api/participantes/alunos` | GET | ✅ | ✅ | ✅ | ❌ | Busca de aluno para a inscrição manual, no máximo 20 resultados |
 | `/api/participantes`, `/:id` | GET | ✅ | ✅ | ❌ | ❌ | Lista com a situação da conta (ativa, 2FA, bloqueio), sem segredo nem hash |
 | `/api/participantes/:id` | PUT | ✅ | ✅ | ❌ | ❌ | Corrige nome e RGM (o e-mail não muda: `422`); inativar exige motivo, encerra as sessões e cancela as inscrições sem pedido de check-in em eventos futuros; reativar apaga o motivo |
 | `/api/participantes/:id` | DELETE | ✅ | ✅ | ❌ | ❌ | Só aluno já inativo e sem certificado (`409 PARTICIPANTE_COM_CERTIFICADO`) |
-| `/api/equipe` (também em `/api/professores`), `/:id/reenviar-convite`, `/:id/eventos-em-aberto`, `/:id/inativar`, `/:id/reativar`, `/:id` (DELETE) | GET/POST/DELETE | ✅ professores e secretarias | só professores | ❌ | ❌ | Tela Equipe. Criar conta de secretaria: só ADMINISTRADOR (`403 SO_ADMINISTRADOR`). Ninguém mexe na própria conta (`403 PROPRIA_CONTA`); conta de administrador não aparece e não é criada, inativada nem excluída (`403`, ou `409 ULTIMO_ADMINISTRADOR` se for o único ativo). Inativar exige motivo e, havendo evento em aberto do professor, para quem transferir. Excluir: só conta inativa ou com convite pendente; com histórico, fica inativa |
-| `/api/inscricoes` | GET | ✅ | ✅ | só os dele | só o próprio | O `participanteId` da consulta é ignorado para o aluno |
-| `/api/inscricoes/gestao` | GET | ✅ | ✅ | só os dele | ❌ | Paginada e filtrada no servidor |
-| `/api/inscricoes` | POST | ✅ | ✅ | só os dele | ❌ | Inscrição manual; aluno inativo: `409`; aluno já inscrito noutro evento no mesmo horário: `409 CONFLITO_DE_HORARIO` |
-| `/api/inscricoes/:id` | DELETE | ✅ | ✅ | só os dele | ❌ | Mesma regra do cancelamento pelo aluno; o aluno é avisado por e-mail |
-| `/api/questionario-tentativas` | GET | ✅ | ✅ | só os dele | ❌ | Notas para a gestão; nunca vira ranking para aluno |
-| `/api/certificados` | GET | ✅ | ✅ | só os dele | só o próprio | — |
-| `/api/certificados/situacao` | GET | ✅ | ✅ | só os dele | ❌ | — |
-| `/api/certificados/emitir/:inscricaoId` | POST | ✅ | ✅ | só os dele | só o próprio | Exige check-in aprovado e 60% no questionário |
-| `/api/feedbacks` | GET | ✅ | ✅ | só os dele | só o próprio | — |
+| `/api/equipe` (também em `/api/professores`), `/:id/reenviar-convite`, `/:id/eventos-em-aberto`, `/:id/inativar`, `/:id/reativar`, `/:id` (DELETE) | GET/POST/DELETE | ✅ professores e secretarias | só professores | ❌ | ❌ | Tela Equipe. Criar conta de secretaria: só ADMINISTRADOR (`403 SO_ADMINISTRADOR`). E-mail de qualquer conta (de qualquer perfil) ou de cadastro em andamento, em qualquer combinação de maiúsculas: `409 EMAIL_DUPLICADO` ("Já existe uma conta com este e-mail."). Ninguém mexe na própria conta (`403 PROPRIA_CONTA`); conta de administrador não aparece e não é criada, inativada nem excluída (`403`, ou `409 ULTIMO_ADMINISTRADOR` se for o único ativo). Inativar exige motivo e, havendo evento em aberto do professor, para quem transferir. Excluir: só conta inativa ou com convite pendente; com histórico, fica inativa |
+| `/api/inscricoes` | GET | ✅ | ✅ | só os dele | só o próprio | O `participanteId` da consulta é ignorado para o aluno. Professor com `?eventoId=` de outro evento: `403` |
+| `/api/inscricoes/gestao` | GET | ✅ | ✅ | só os dele | ❌ | Paginada e filtrada no servidor. Professor com `?eventoId=` de outro evento: `403` |
+| `/api/inscricoes` | POST | ✅ | ✅ | só os dele | ❌ | Inscrição manual; a equipe em qualquer evento. Professor em evento de outro: `403 EVENTO_DE_OUTRO_PROFESSOR` ("Você só pode inscrever alunos nos seus próprios eventos."); aluno inativo: `409`; aluno já inscrito noutro evento no mesmo horário: `409 CONFLITO_DE_HORARIO` (vale para todos) |
+| `/api/inscricoes/:id` | DELETE | ✅ | ✅ | só os dele | ❌ | Mesma regra do cancelamento pelo aluno; o aluno é avisado por e-mail. Professor em evento de outro: `403` ("Você só pode cancelar inscrições dos seus próprios eventos.") |
+| `/api/questionario-tentativas` | GET | ✅ | ✅ | só os dele | ❌ | Notas para a gestão; nunca vira ranking para aluno. Nenhuma tela do professor usa esta rota desde 12/11/2026 |
+| `/api/certificados` | GET | ✅ | ✅ | ❌ | só o próprio | O professor não vê certificados (desde 12/11/2026) |
+| `/api/certificados/situacao` | GET | ✅ | ✅ | ❌ | ❌ | — |
+| `/api/certificados/emitir/:inscricaoId` | POST | ✅ | ✅ | ❌ | só o próprio | Exige check-in aprovado e 60% no questionário |
+| `/api/feedbacks` | GET | ✅ | ✅ | ❌ | só o próprio | O professor não vê avaliações (desde 12/11/2026) |
+| `/api/feedbacks/:id` | GET | ✅ | ✅ | ❌ | só o próprio | — |
 | `/api/feedbacks/elegiveis` | GET | ❌ | ❌ | ❌ | só o próprio | Eventos com presença confirmada (`PRESENTE`) e ainda sem avaliação |
 | `/api/feedbacks` | POST | ❌ | ❌ | ❌ | só o próprio | Exige presença confirmada (`PRESENTE`), com ou sem questionário (`403 PRESENCA_NAO_CONFIRMADA`); uma avaliação por evento |
 | `/api/feedbacks/:id` | PUT | ❌ | ❌ | ❌ | ❌ | Ninguém edita avaliação |
 | `/api/feedbacks/:id` | DELETE | ✅ (com motivo) | ✅ (com motivo) | ❌ | só o próprio | Equipe: motivo de lista fechada; auditoria `FEEDBACK_EXCLUIDO` |
-| `/api/dashboard` | GET | ✅ | ✅ | só os dele | ❌ | Só números agregados, título do evento e nome da sala |
-| `/api/aprovacoes/contadores` | GET | ✅ | ✅ | ✅ | ❌ | Equipe: pendentes; professor: os recusados dele |
+| `/api/dashboard` | GET | ✅ | ✅ | só os dele | ❌ | Só números agregados, título do evento e nome da sala. Professor: só os eventos dele, sem `certificadosLiberados`, `mediaFeedback` e `totalFeedbacks` |
+| `/api/aprovacoes/contadores` | GET | ✅ | ✅ | ✅ | ❌ | Equipe: pendentes; professor: os recusados dele e `recusas`, um id por recusa em aberto (o aviso que ele fecha no X volta só com recusa nova) |
 | `/api/logs-auditoria`, `/responsaveis` | GET | ✅ | ❌ | ❌ | ❌ | Só leitura, paginada. Só o administrador (desde 12/11/2026); a aba Auditoria nem aparece para a secretaria |
 | `/api/meus-dados` | GET | ❌ | ❌ | ❌ | só o próprio | Tudo o que o sistema guarda sobre o aluno, sem cache |
 
@@ -129,6 +137,13 @@ id vindo da tela.
   preservada como inativa." Os registros de auditoria nunca são apagados.
 - **Aluno e evento não aprovado:** evento pendente ou recusado não aparece
   para o aluno em lugar nenhum, e palestrante não aprovado também não.
+- **E-mail único:** o e-mail de login identifica uma única conta em todo o
+  sistema, de qualquer perfil, e não pode ser o de um cadastro de aluno em
+  andamento. Toda entrada passa por `normalizarEmail` (sem espaços e em
+  minúsculas) e o e-mail é gravado assim. O do palestrante é único só entre
+  palestrantes, também em minúsculas. `backend/scripts/verificar-emails-duplicados.ts`
+  (só leitura, `--producao` opcional) confere os dados já gravados sem
+  mostrar nenhum e-mail.
 - **Contas fictícias da carga de demonstração:** o campo `usuarios.ficticio`
   não aparece em nenhuma tela nem resposta da API; ele só faz o sistema não
   enviar e-mail para essas contas.

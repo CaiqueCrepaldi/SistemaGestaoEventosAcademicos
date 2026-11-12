@@ -50,9 +50,12 @@ export function App() {
                 <Route path="/palestrantes" element={<PalestrantesPage />} />
                 {/* a Agenda foi unida a tela Eventos: link antigo leva pra la */}
                 <Route path="/agenda" element={<Navigate to="/eventos" replace />} />
+                <Route path="/minha-conta" element={<MinhaContaPage />} />
+              </Route>
+              {/* certificados e avaliacoes: aluno e equipe. O professor nao ve (a API recusa com 403) */}
+              <Route element={<ProtectedRoute perfis={["ADMINISTRADOR", "SECRETARIA", "ALUNO"]} />}>
                 <Route path="/certificados" element={<CertificadosPage />} />
                 <Route path="/feedback" element={<FeedbackPage />} />
-                <Route path="/minha-conta" element={<MinhaContaPage />} />
               </Route>
               {/* rotas exclusivas do ALUNO */}
               <Route element={<ProtectedRoute perfis={["ALUNO"]} />}>

@@ -169,6 +169,7 @@ async function main() {
   const { PERCENTUAL_APROVACAO, MAX_TENTATIVAS_QUESTIONARIO } = await import("../src/utils/questionario");
   const { janelaDoCheckin } = await import("../src/utils/checkin");
   const { REGEX_CODIGO_SALA, rotuloSala } = await import("../src/utils/salas");
+  const { normalizarEmail } = await import("../src/utils/validacao");
   const contas = await import("../prisma/contas-demonstracao");
   const dados = await import("./carga-demonstracao-dados");
 
@@ -224,7 +225,7 @@ async function main() {
     while (palestrantes.length < 40) {
       const nome = sortear(dados.PRIMEIROS_NOMES);
       const sobrenome = sortear(dados.SOBRENOMES);
-      const email = `${semAcento(nome).toLowerCase()}.${semAcento(sobrenome).toLowerCase()}@${sortear(dados.DOMINIOS_PALESTRANTES)}`;
+      const email = normalizarEmail(`${semAcento(nome)}.${semAcento(sobrenome)}@${sortear(dados.DOMINIOS_PALESTRANTES)}`);
       if (emailsPalestrantes.has(email) || palestrantes.some((p) => p.nome === `${nome} ${sobrenome}`)) continue;
       emailsPalestrantes.add(email);
       palestrantes.push({ id: randomUUID(), nome: `${nome} ${sobrenome}`, email, situacao: "APROVADO" });
@@ -232,7 +233,7 @@ async function main() {
 
     // ------------------------------------------------------------ professores ficticios (so o primeiro nome)
     const usuarios: Usuario[] = [];
-    const emailsUsados = new Set(contas.contasDeDemonstracao().map((c) => c.email));
+    const emailsUsados = new Set(contas.contasDeDemonstracao().map((c) => normalizarEmail(c.email)));
     const repeticoes = new Map<string, number>();
     const professores: Usuario[] = [];
     for (let i = 0; i < 150; i++) {
@@ -240,7 +241,7 @@ async function main() {
       const base = semAcento(nome).toLowerCase();
       const vez = (repeticoes.get(base) ?? 0) + 1;
       repeticoes.set(base, vez);
-      const emailLogin = `${base}${vez === 1 ? "" : vez}@umc.br`;
+      const emailLogin = normalizarEmail(`${base}${vez === 1 ? "" : vez}@umc.br`);
       emailsUsados.add(emailLogin);
       const criadoEm = entreDatas(dataSP(2026, 7, 1, 8), dataSP(2026, 7, 10, 18));
       const professor: Usuario = {
@@ -266,7 +267,7 @@ async function main() {
     for (let i = 1; i <= 1000; i++) {
       let emailLogin: string;
       do {
-        emailLogin = `${String(inteiro(0, 9999999999)).padStart(10, "0")}${"abcdefghijklmnopqrstuvwxyz"[inteiro(0, 25)]}@alunos.umc.br`;
+        emailLogin = normalizarEmail(`${String(inteiro(0, 9999999999)).padStart(10, "0")}${"abcdefghijklmnopqrstuvwxyz"[inteiro(0, 25)]}@alunos.umc.br`);
       } while (emailsUsados.has(emailLogin));
       emailsUsados.add(emailLogin);
       const sobrenomes = chance(0.6) ? `${sortear(dados.SOBRENOMES)} ${sortear(dados.SOBRENOMES)}` : sortear(dados.SOBRENOMES);
@@ -546,7 +547,7 @@ async function main() {
         do {
           nome = `${sortear(dados.PRIMEIROS_NOMES)} ${sortear(dados.SOBRENOMES)}`;
           const [primeiro, ultimo] = [nome.split(" ")[0], nome.split(" ").slice(-1)[0]];
-          email = `${semAcento(primeiro).toLowerCase()}.${semAcento(ultimo).toLowerCase()}@${sortear(dados.DOMINIOS_PALESTRANTES)}`;
+          email = normalizarEmail(`${semAcento(primeiro)}.${semAcento(ultimo)}@${sortear(dados.DOMINIOS_PALESTRANTES)}`);
         } while (emailsPalestrantes.has(email) || palestrantes.some((p) => p.nome === nome));
         emailsPalestrantes.add(email);
         const palestrante = { id: randomUUID(), nome, email, situacao: "PENDENTE" as const, criadoPorId: dono };
@@ -826,7 +827,7 @@ async function main() {
       let emailLogin: string;
       do {
         nome = `${sortear(dados.PRIMEIROS_NOMES)} ${sortear(dados.SOBRENOMES)}`;
-        emailLogin = `${semAcento(nome.split(" ")[0]).toLowerCase()}.${semAcento(nome.split(" ")[1]).toLowerCase()}@umc.br`;
+        emailLogin = normalizarEmail(`${semAcento(nome.split(" ")[0])}.${semAcento(nome.split(" ")[1])}@umc.br`);
       } while (emailsUsados.has(emailLogin));
       emailsUsados.add(emailLogin);
       const criadoEm = dataSP(2026, 7, 2, 9);
@@ -879,7 +880,17 @@ async function main() {
     if (new Set(salas.map((sala) => sala.nome)).size !== salas.length) problemas.push("código de sala repetido");
     const porTipo = (tipo: string) => salas.filter((sala) => sala.tipo === tipo).length;
     if (porTipo("SALA_DE_AULA") !== 8 || porTipo("LABORATORIO") !== 2 || porTipo("AUDITORIO") !== 2) problemas.push("tipos de sala fora do combinado");
-    if (new Set(usuarios.map((u) => u.emailLogin)).size !== usuarios.length) problemas.push("e-mail repetido");
+    // e-mail: gravado sempre normalizado (normalizarEmail) e unico entre todas as contas, contando as tres de
+    // demonstracao, sem diferenca de maiusculas; o dos palestrantes, unico entre os palestrantes
+    const emailsDasContas = [...usuarios.map((u) => u.emailLogin), ...contas.contasDeDemonstracao().map((c) => c.email)];
+    const emailsDosPalestrantes = [...palestrantes, ...palestrantesPendentes].map((p) => p.email);
+    if ([...emailsDasContas, ...emailsDosPalestrantes].some((email) => email !== normalizarEmail(email))) {
+      problemas.push("e-mail fora do padrão (com maiúscula ou espaço)");
+    }
+    if (new Set(emailsDasContas.map(normalizarEmail)).size !== emailsDasContas.length) problemas.push("e-mail repetido entre as contas");
+    if (new Set(emailsDosPalestrantes.map(normalizarEmail)).size !== emailsDosPalestrantes.length) {
+      problemas.push("e-mail repetido entre os palestrantes");
+    }
     // a proposta pendente reserva a sala proposta: nao pode cruzar com outro evento ativo nem com outra proposta nessa sala
     const reservasDasPropostas = propostas
       .filter((p) => p.situacao === "PENDENTE" && p.novaSalaId !== eventoPorId.get(p.eventoId)!.salaId)

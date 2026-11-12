@@ -12,7 +12,8 @@ export interface TotaisDashboard {
   aguardando: number;
   // presentes / (presentes + ausentes), em %; null enquanto nenhuma presenca foi definida
   taxaPresenca: number | null;
-  certificadosLiberados: number;
+  // certificados e avaliacoes: so na resposta da equipe (o professor nao ve nenhum dos dois)
+  certificadosLiberados?: number;
   // resultado do questionario de quem teve a presenca confirmada (indicador de aprendizagem, RF021):
   // aprovado = alguma tentativa com 60% ou mais; reprovado = usou as 2 tentativas abaixo de 60%;
   // podem responder = nenhuma tentativa, ou 1 abaixo de 60%
@@ -24,9 +25,9 @@ export interface TotaisDashboard {
   // RF021, ocupacao real: media, entre os eventos ENCERRADOS, de presentes / capacidade da sala, em %;
   // null enquanto nenhum evento tiver terminado
   ocupacaoMediaSalas: number | null;
-  // 1 a 5; null sem nenhum feedback
-  mediaFeedback: number | null;
-  totalFeedbacks: number;
+  // 1 a 5; null sem nenhum feedback (so pra equipe)
+  mediaFeedback?: number | null;
+  totalFeedbacks?: number;
 }
 
 export interface ProximoEventoDashboard {

@@ -7,7 +7,7 @@ import { AppError } from "../../errors/AppError";
 import { dataHoraDeBrasilia, emailService, observacaoDoEnvio } from "../email/email.service";
 import { COM_CONTA_DO_ALUNO, paraDominio as participanteParaDominio } from "../participantes/participantes.service";
 import { registrarAuditoria } from "../../utils/auditoria";
-import { eventosVisiveis, inscricaoDoAtorOuFalhar, type Ator } from "../../utils/escopo";
+import { garantirEventoDoProfessor, type Ator } from "../../utils/escopo";
 import type { Inscricao, Perfil, StatusPresenca } from "../../types/domain";
 import type { InscricaoInput } from "./inscricoes.schemas";
 
@@ -140,18 +140,20 @@ export async function garantirSemConflitoDeHorario(
   throw AppError.conflito("CONFLITO_DE_HORARIO", mensagem);
 }
 
-// inscricao manual feita pela equipe ou pelo professor (so nos eventos dele), checa duplicidade e vaga.
+// inscricao manual feita pela equipe (qualquer evento) ou pelo professor (so nos eventos dele: 403 nos outros), checa
+// duplicidade, horario e vaga.
 // Evento que nao esta APROVADO nao aceita inscricao
 async function criarManual(dados: InscricaoInput, ator: Ator) {
   const [participante, evento] = await Promise.all([
     prisma.participante.findUnique({ where: { id: dados.participanteId } }),
-    prisma.evento.findFirst({ where: { id: dados.eventoId, ...eventosVisiveis(ator) }, include: { sala: true } }),
+    prisma.evento.findUnique({ where: { id: dados.eventoId }, include: { sala: true } }),
   ]);
 
   const erros: { campo: string; mensagem: string }[] = [];
   if (!participante) erros.push({ campo: "participanteId", mensagem: "Participante não encontrado." });
   if (!evento) erros.push({ campo: "eventoId", mensagem: "Evento não encontrado." });
   if (erros.length > 0) throw AppError.validacao("Dados inválidos.", erros);
+  garantirEventoDoProfessor(ator, evento!, "Você só pode inscrever alunos nos seus próprios eventos.");
   if (evento!.situacao !== "APROVADO") {
     throw AppError.conflito("EVENTO_NAO_APROVADO", "Este evento ainda não foi aprovado e não aceita inscrições.");
   }
@@ -284,9 +286,11 @@ async function cancelar(id: string, ator: QuemCancela) {
 }
 
 // DELETE /inscricoes/:id — a equipe cancela a inscricao de qualquer aluno; o professor, so nos eventos
-// dele (mesma regra do aluno)
+// dele (403 nos outros; mesma regra do aluno)
 async function remover(id: string, ator: QuemCancela) {
-  await inscricaoDoAtorOuFalhar(ator, id);
+  const inscricao = await prisma.inscricao.findUnique({ where: { id }, select: { evento: { select: { criadoPorId: true } } } });
+  if (!inscricao) throw AppError.naoEncontrado("INSCRICAO_NAO_ENCONTRADA", "Inscrição não encontrada.");
+  garantirEventoDoProfessor(ator, inscricao.evento, "Você só pode cancelar inscrições dos seus próprios eventos.");
   await cancelar(id, ator);
 }
 

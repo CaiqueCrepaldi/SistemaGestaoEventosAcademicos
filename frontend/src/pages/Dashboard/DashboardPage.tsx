@@ -3,6 +3,7 @@ import { Badge } from "../../components/ui/Badge";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatCard } from "../../components/ui/StatCard";
 import { toast } from "../../components/ui/Toast";
+import { useAuth } from "../../context/AuthContext";
 import { dashboardService, type ProximoEventoDashboard, type ResumoDashboard } from "../../services";
 import { GraficoAprendizagemPorEvento } from "./GraficoAprendizagemPorEvento";
 import { GraficoPresencaPorEvento } from "./GraficoPresencaPorEvento";
@@ -64,6 +65,9 @@ function ProximoEvento({ evento }: { evento: ProximoEventoDashboard }) {
 // visao geral da equipe: 8 indicadores (2 linhas de 4 no desktop), proximos eventos com ocupacao,
 // presenca por evento e aprendizagem por evento. Tudo vem agregado de GET /api/dashboard numa chamada so
 export function DashboardPage() {
+  const { usuario } = useAuth();
+  // o professor ve so os dados dos eventos dele, sem certificados nem avaliacoes (a API ja manda assim)
+  const ehProfessor = usuario?.perfil === "PROFESSOR";
   const [resumo, setResumo] = useState<ResumoDashboard | null>(null);
 
   useEffect(() => {
@@ -88,6 +92,7 @@ export function DashboardPage() {
   return (
     <div>
       <PageHeader title="Dashboard" />
+      {ehProfessor && <p className="card-subtitulo dashboard-subtitulo">Dados dos seus eventos</p>}
 
       <div className="stat-grid dashboard-stats">
         <StatCard label="Eventos cadastrados" value={numero(totais.eventos)} tone="blue" />
@@ -119,24 +124,28 @@ export function DashboardPage() {
           }
           tone="green"
         />
-        <StatCard
-          label="Certificados liberados"
-          value={numero(totais.certificadosLiberados)}
-          hint="Presença + 60% no questionário"
-          tone="green"
-        />
+        {totais.certificadosLiberados !== undefined && (
+          <StatCard
+            label="Certificados liberados"
+            value={numero(totais.certificadosLiberados)}
+            hint="Presença + 60% no questionário"
+            tone="green"
+          />
+        )}
         <StatCard
           label="Aprovação no questionário"
           value={totais.taxaAprovacao === null ? "—" : `${Math.round(totais.taxaAprovacao)}%`}
           hint="aprovados ÷ alunos que concluíram o questionário"
           tone="blue"
         />
-        <StatCard
-          label="Média do feedback"
-          value={totais.mediaFeedback === null ? "—" : `${totais.mediaFeedback.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / 5`}
-          hint={totais.totalFeedbacks === 0 ? "Nenhuma avaliação ainda" : plural(totais.totalFeedbacks, "avaliação", "avaliações")}
-          tone="orange"
-        />
+        {totais.totalFeedbacks !== undefined && (
+          <StatCard
+            label="Média do feedback"
+            value={totais.mediaFeedback == null ? "—" : `${totais.mediaFeedback.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / 5`}
+            hint={totais.totalFeedbacks === 0 ? "Nenhuma avaliação ainda" : plural(totais.totalFeedbacks, "avaliação", "avaliações")}
+            tone="orange"
+          />
+        )}
       </div>
 
       <div className="grid-2">

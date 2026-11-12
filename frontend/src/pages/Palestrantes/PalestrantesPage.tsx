@@ -40,6 +40,13 @@ function mudancasDoPalestrante(p: Palestrante): Mudanca[] {
   return mudancas;
 }
 
+// a equipe so exclui palestrante ja decidido; a API recusa os outros com 409 e a mesma mensagem
+function motivoSemExclusao(p: Palestrante): string | undefined {
+  if (p.situacao === "PENDENTE") return "Aprove ou recuse este palestrante antes de excluir.";
+  if (p.proposta?.situacao === "PENDENTE") return "Aprove ou recuse a proposta de alteração deste palestrante antes de excluir.";
+  return undefined;
+}
+
 function formatarDataHora(iso: string): string {
   return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
@@ -321,7 +328,14 @@ export function PalestrantesPage() {
                     <button className="btn btn-ghost" onClick={() => abrirEdicao(palestrante)}>Editar</button>
                   )}
                   {ehEquipe && (
-                    <button className="btn btn-ghost btn-danger" onClick={() => setExcluindo(palestrante)}>Excluir</button>
+                    <button
+                      className="btn btn-ghost btn-danger"
+                      onClick={() => setExcluindo(palestrante)}
+                      disabled={motivoSemExclusao(palestrante) !== undefined}
+                      title={motivoSemExclusao(palestrante)}
+                    >
+                      Excluir
+                    </button>
                   )}
                 </td>
               </tr>

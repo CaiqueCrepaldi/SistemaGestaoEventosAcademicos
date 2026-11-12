@@ -20,9 +20,9 @@ apaga no final (os registros de auditoria ficam, como em qualquer operação).
 
 | Teste | O que faz | Comando | Resultado |
 |---|---|---|---|
-| Requisitos pela API | Sobe o backend numa porta local e faz as chamadas HTTP de verdade, requisito por requisito | `cd backend && npx tsx scripts/testar-requisitos.ts` | **561/561** verificações (12/11/2026, banco `SGEA_dev`, com os itens 54 a 58) |
+| Requisitos pela API | Sobe o backend numa porta local e faz as chamadas HTTP de verdade, requisito por requisito | `cd backend && npx tsx scripts/testar-requisitos.ts` | **611/611** verificações (12/11/2026, banco `SGEA_dev`, com os itens 59 a 64) |
 | 2FA pela API | Ativação, login em duas etapas, reuso de código, bloqueio, recuperação, reset, desativação | `cd backend && npx tsx scripts/testar-2fa.ts` | **55/55** (12/11/2026, banco `SGEA_dev`) |
-| Interface | Navegador de verdade (Google Chrome, sem janela) usando as telas no frontend local ligado ao backend local | ver `frontend/testes-interface/testar-interface.mjs` (passo a passo no topo do arquivo) | **201/201** (12/11/2026, no Microsoft Edge — ver a atualização de 04/11) |
+| Interface | Navegador de verdade (Google Chrome, sem janela) usando as telas no frontend local ligado ao backend local | ver `frontend/testes-interface/testar-interface.mjs` (passo a passo no topo do arquivo) | **212/212** (12/11/2026, no Microsoft Edge — ver a atualização de 04/11) |
 | Hash de senha | Mostra o formato do hash bcrypt gravado no banco de dev e prova que a mesma senha gera hashes diferentes | `cd backend && npx tsx scripts/demonstrar-hash-senha.ts` | ver `docs/lgpd/07` |
 | Conversão dos dados pessoais | Simulação, aplicação e segunda aplicação (idempotência) no dev | `cd backend && npx tsx scripts/converter-dados-pessoais.ts [--aplicar]` (o script saiu do código em 03/11/2026, junto com as colunas que ele convertia; está no histórico do git, commit `8c2e7df`) | 3 usuários, 3 participantes e 98 logs convertidos; a 2ª rodada não achou nada |
 
@@ -183,6 +183,19 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
 > rodaram no `SGEA_dev`: **requisitos 561/561**, **2FA 55/55** e
 > **Interface 201/201** (no Microsoft Edge).
 
+> **Atualização de 12/11/2026 (permissões do professor e e-mail único):**
+> professor sem Certificados e Avaliações, inscrição só nos próprios eventos,
+> aviso de recusa com X, Dashboard do professor só com os dados dele,
+> exclusão de palestrante só depois da decisão e e-mail único entre as
+> contas (itens 59 a 64, sem migration). Testes: API R36 ajustado e R50
+> novo; seção de interface "Professor sem Certificados e Avaliações; aviso
+> de recusa com X; Excluir do palestrante pendente". As três suítes rodaram
+> no `SGEA_dev`: **requisitos 611/611**, **2FA 55/55** e **Interface
+> 212/212** (no Microsoft Edge; uma primeira rodada teve 5 falhas de toast
+> não visto a tempo, em telas que esta rodada não mexeu, e a segunda passou
+> inteira). `verificar-emails-duplicados.ts` no `SGEA_dev`: nenhum e-mail
+> repetido nem fora do padrão.
+
 ## Requisitos
 
 | # | Requisito | Como foi testado | Resultado | O que foi corrigido |
@@ -259,6 +272,12 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
 | 57 | E-mails com o visual do site: modelo único (`backend/src/modules/email/conteudos-email.ts`) para código do cadastro, convite, recuperação de senha, senha alterada, confirmação e cancelamento de inscrição e mudança em evento — cabeçalho escuro "UMC · Gestão de Eventos Acadêmicos" em texto, título, cartão do evento (horário de Brasília, sala com código e tipo, palestrante), botão amarelo com o link em texto, código grande em caixa com a validade, rodapé com "Mensagem automática do SGEA, não responda." e o canal de privacidade; tabelas com CSS inline, 600px, sem imagem nem fonte externa; preheader e versão em texto puro (`text` do SendGrid); todo dado de pessoa escapado. `backend/scripts/previa-emails.ts` gera as prévias em `backend/previas-email/` (fora do git), sem enviar nada nem acessar o banco | API R49 (todos com HTML e texto, cabeçalho e rodapé, código e validade, `<script>` escapado) e R35 (convite sem código, link três vezes); prévias abertas no Edge (computador e celular) | OK (12/11/2026) | Implementado em 12/11/2026 |
 
 | 58 | Termos na Minha Conta (todos os perfis): seção "Termos e privacidade" com a versão aceita e a data e hora do aceite (de `GET /api/usuarios/me`, só a própria conta), links para os Termos de Uso e a Política de Privacidade e, para o aluno, para "Meus dados". Logado, as páginas dos Termos e da Política mostram "Voltar para Minha conta"; sem login, "Voltar para o cadastro", como antes | Interface "Termos e privacidade na Minha conta (aluna)" e "E / Login" (sem login, "Voltar para o cadastro") | OK (12/11/2026) | Implementado em 12/11/2026 |
+| 59 | O professor não vê certificados nem avaliações: as abas Certificados e Avaliações saem do menu dele e as rotas `/certificados` e `/feedback` da tela o mandam para o Dashboard; na API, `GET /api/certificados`, `GET /api/certificados/situacao`, `POST /api/certificados/emitir/:id`, `GET /api/feedbacks`, `GET /api/feedbacks/:id` e `DELETE /api/feedbacks/:id` respondem `403` para ele, mesmo nos eventos dele; o painel do check-in não traz mais `avaliou` para ele (a confirmação de desfazer a presença avisa de forma genérica). Aluno, secretaria e administrador continuam como antes, e a validação pública do certificado continua aberta | API R36 (atualizado) e R50 (as seis rotas com `403` para o professor, `200` para aluno e equipe, validação pública sem login, painel sem `avaliou` para o professor e com ele para a equipe); Interface "Professor sem Certificados e Avaliações" (menu sem as abas; `/certificados` e `/feedback` voltam para o Dashboard) | OK (12/11/2026) | Implementado em 12/11/2026 |
+| 60 | O professor inscreve alunos só nos eventos que ele criou (`eventos.criadoPorId`): em evento de outro professor ou da equipe, `403` "Você só pode inscrever alunos nos seus próprios eventos."; o mesmo para cancelar ("Você só pode cancelar inscrições dos seus próprios eventos.") e para listar com `?eventoId=` de outro evento. A tela Inscrições lista para ele só os eventos dele (aprovados). A equipe inscreve em qualquer evento, e o conflito de horário vale para todos | API R36 (evento da equipe agora `403`) e R50 (próprio evento `201`; evento de outro `403` ao inscrever, cancelar e listar; equipe `201`; `409 CONFLITO_DE_HORARIO` para o professor e para a equipe) | OK (12/11/2026) | Implementado em 12/11/2026 |
+| 61 | Aviso de recusa do professor com X (`aria-label="Fechar aviso"`): fechado, só volta quando chega uma recusa que ele ainda não viu. `GET /api/aprovacoes/contadores` passa a trazer para o professor `recusas`, um id por recusa em aberto (o id da linha do histórico; recusar de novo um item reenviado gera outro id); a tela guarda no `localStorage`, por usuário e dentro de try/catch, os ids já vistos. Sem `localStorage`, o aviso fica fechado até recarregar a página. É o único aviso desse tipo (os toasts já tinham X) | API R50 (um id por recusa; reenviado, sai da lista; recusado de novo, id novo; a equipe não recebe a lista); Interface "aviso de recusa com X" (o X fecha; continua fechado ao trocar de tela e depois do F5; uma recusa nova faz o aviso voltar) | OK (12/11/2026) | Implementado em 12/11/2026 |
+| 62 | Dashboard do professor só com os dados dos eventos dele (números, gráficos, próximos eventos e tabela), com o subtítulo "Dados dos seus eventos" e sem os indicadores de certificados e de avaliações (a API nem manda `certificadosLiberados`, `mediaFeedback` e `totalFeedbacks` para ele). A equipe vê tudo | API R36 e R50 (dois professores, cada um com um evento no mesmo horário: cada dashboard tem só o próprio evento e as próprias inscrições, sem os campos de certificado e avaliação; o da equipe tem os dois eventos e os campos); Interface (subtítulo e sem os cartões) | OK (12/11/2026) | Implementado em 12/11/2026 |
+| 63 | Exclusão de palestrante só depois da decisão: a equipe exclui só palestrante aprovado ou recusado; aguardando aprovação → `409` "Aprove ou recuse este palestrante antes de excluir."; com proposta de alteração aguardando → `409` "Aprove ou recuse a proposta de alteração deste palestrante antes de excluir."; com evento vinculado continua `409`. Na tela, o Excluir fica desabilitado com a orientação no botão | API R50 (pendente `409`; aprovado e recusado sem evento `204`; com proposta aguardando `409`; proposta recusada, `204`) e R07 (com evento `409`); Interface (Excluir desabilitado para o palestrante aguardando, habilitado para o recusado) | OK (12/11/2026) | Implementado em 12/11/2026 |
+| 64 | E-mail único entre as contas de todos os perfis e os cadastros de aluno em andamento, sempre comparado e gravado normalizado por uma função só (`normalizarEmail`: sem espaços nas pontas e em minúsculas) no cadastro do aluno, na criação de conta da Equipe, no reenvio do convite, no login, na recuperação de senha, no seed e na carga de demonstração. A tela Equipe recusa e-mail de qualquer conta existente ou de cadastro em andamento: `409` "Já existe uma conta com este e-mail." O cadastro público continua recusando com a mesma resposta de antes. O e-mail do palestrante continua único só entre palestrantes, mas é gravado em minúsculas. Script novo `backend/scripts/verificar-emails-duplicados.ts`, só leitura, com `--producao` | API R50 (e-mail de aluno na Equipe recusado; de outra conta `409`; em maiúsculas e com espaços, noutro perfil, `409`; de cadastro em andamento `409`; conta nova gravada em minúsculas; cadastro de aluno com e-mail de professor não cria nada; com e-mail já usado em maiúsculas `409`; palestrante em minúsculas, repetido com outras maiúsculas `409`, igual ao de uma conta aceito). Script rodado no `SGEA_dev`: 1.154 contas, nenhum e-mail repetido nem fora do padrão | OK (12/11/2026) | **Corrigido:** a validação do `SEED_ADMIN_EMAIL` em `prisma/contas-demonstracao.ts` tinha perdido as barras invertidas da expressão regular e recusava qualquer e-mail com a letra "s" |
 
 ## Outras correções encontradas na verificação
 
@@ -280,6 +299,17 @@ Na coluna "Teste", **API Rxx** é a seção de mesmo código em
   ao início, porque a sessão salva só era lida depois do primeiro desenho da
   tela. Agora ela é lida antes (`AuthContext.tsx`) e a pessoa continua na
   mesma página (verificado na interface, na Minha conta e em Salas).
+- (12/11/2026) `docs/api-contract.md` tinha, no meio da seção Salas, uma
+  segunda cópia (desatualizada) das primeiras ~600 linhas do próprio
+  arquivo: uma substituição de texto da rodada das salas (commit `1f675bc`) interpretou o `$` e a
+  crase do fim da expressão `^[1-3][T1-3]-(0[1-9]|1[0-9]|2[01])$` como
+  "insira aqui o texto anterior". A cópia antiga saiu (as duas foram
+  comparadas: tudo o que ela tinha está na primeira, em versão mais nova) e
+  a expressão voltou a terminar em `$`.
+- (12/11/2026) A validação do `SEED_ADMIN_EMAIL` em
+  `backend/prisma/contas-demonstracao.ts` tinha perdido as barras invertidas
+  (`[^s@]` em vez de `[^\s@]`) e recusava qualquer e-mail com a letra "s"; o
+  e-mail usado na apresentação passava só por não ter "s". Corrigida.
 
 ## Pendências registradas (fora desta rodada)
 

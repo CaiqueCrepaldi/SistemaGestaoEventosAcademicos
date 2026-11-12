@@ -1,9 +1,11 @@
 import { z } from "zod";
-import { REGEX_NOME } from "../../utils/validacao";
+import { REGEX_NOME, normalizarEmail } from "../../utils/validacao";
 
+// o e-mail do palestrante e unico so entre palestrantes (nao e login de ninguem), mas tambem e gravado
+// normalizado (normalizarEmail), como os das contas
 export const palestranteSchema = z.object({
   nome: z.string().trim().regex(REGEX_NOME, "Nome deve conter apenas letras."),
-  email: z.string().trim().email("E-mail inválido."),
+  email: z.string().trim().email("E-mail inválido.").transform(normalizarEmail),
 });
 
 export const palestranteUpdateSchema = palestranteSchema.partial();

@@ -11,6 +11,10 @@ import { certificadosService } from "./certificados.service";
 
 export const certificadosRouter = Router();
 
+// certificados: o aluno (os proprios) e a equipe (todos). O professor nao ve certificado nenhum (403); a validacao
+// publica pelo codigo, logo abaixo, continua aberta a qualquer pessoa
+const SEM_PROFESSOR = ["ADMINISTRADOR", "SECRETARIA", "ALUNO"] as const;
+
 // RF027: validacao PUBLICA (sem token) pelo codigo impresso no PDF. So devolve o necessario pra
 // conferir o documento (nome, evento, data, carga horaria, emissao) — sem RGM nem e-mail.
 // Limitada por IP (ver certificados.service.ts)
@@ -22,11 +26,12 @@ certificadosRouter.get(
   }),
 );
 
-// GET /api/certificados?eventoId= — a equipe lista todos; o professor os dos eventos dele; o aluno so os proprios (sempre o
-// participante do token, mesmo que mande outro filtro)
+// GET /api/certificados?eventoId= — a equipe lista todos; o aluno so os proprios (sempre o participante do token,
+// mesmo que mande outro filtro); o professor recebe 403
 certificadosRouter.get(
   "/",
   autenticar,
+  autorizar(...SEM_PROFESSOR),
   expirarCheckinsAntes,
   asyncHandler(async (req, res) => {
     const eventoId = typeof req.query.eventoId === "string" ? req.query.eventoId : undefined;
@@ -55,7 +60,7 @@ const consultaSituacaoSchema = paginacaoSchema.extend({
 certificadosRouter.get(
   "/situacao",
   autenticar,
-  autorizar("ADMINISTRADOR", "SECRETARIA", "PROFESSOR"),
+  autorizar("ADMINISTRADOR", "SECRETARIA"),
   expirarCheckinsAntes,
   asyncHandler(async (req, res) => {
     res.json(
@@ -68,10 +73,11 @@ certificadosRouter.get(
 );
 
 // RF018/RF019: emite o certificado da inscricao (201 na primeira vez) ou devolve o mesmo ja emitido
-// (200). Aluno so a propria inscricao; administrador/secretaria qualquer uma que cumpra os requisitos
+// (200). Aluno so a propria inscricao; administrador/secretaria qualquer uma que cumpra os requisitos; professor 403
 certificadosRouter.post(
   "/emitir/:inscricaoId",
   autenticar,
+  autorizar(...SEM_PROFESSOR),
   expirarCheckinsAntes,
   asyncHandler(async (req, res) => {
     const { certificado, novo } = await certificadosService.emitir(req.params.inscricaoId, {

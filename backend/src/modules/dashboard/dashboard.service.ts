@@ -36,10 +36,12 @@ function situacaoNoQuestionario(tentativa: { melhorPercentual: number; tentativa
 
 // tudo que o Dashboard mostra, numa chamada so. So numeros agregados, titulo do evento e nome da sala —
 // nenhum dado pessoal (nome, e-mail, RGM, quem se inscreveu ou quem avaliou). So eventos APROVADOS entram
-// na conta; para o professor, so os dele (utils/escopo.ts: eventosDoDashboard)
+// na conta; para o professor, TODOS os numeros, graficos e listas contam so os eventos dele (utils/escopo.ts:
+// eventosDoDashboard), e ele nao recebe os indicadores de certificados nem de avaliacoes (nao ve nenhum dos dois)
 async function resumo(ator: Ator) {
   const agora = new Date();
   const escopo = eventosDoDashboard(ator);
+  const professor = ator.perfil === "PROFESSOR";
 
   const [eventos, porEventoEStatus, presencas, tentativasPorAluno, feedbacks] = await Promise.all([
     prisma.evento.findMany({
@@ -56,7 +58,7 @@ async function resumo(ator: Ator) {
       _max: { percentual: true },
       _count: { _all: true },
     }),
-    prisma.feedback.aggregate({ where: { evento: escopo }, _avg: { nota: true }, _count: { _all: true } }),
+    professor ? Promise.resolve(null) : prisma.feedback.aggregate({ where: { evento: escopo }, _avg: { nota: true }, _count: { _all: true } }),
   ]);
 
   // situacao do check-in de cada evento
@@ -141,15 +143,16 @@ async function resumo(ator: Ator) {
       aguardando: totalAguardando,
       // entre as presencas ja definidas (presente, ou ausente/recusado); null enquanto nao houver nenhuma
       taxaPresenca: checkinsRegistrados > 0 ? (totalPresentes / checkinsRegistrados) * 100 : null,
-      certificadosLiberados,
+      // certificados e avaliacoes: so pra equipe (o professor nao ve nenhum dos dois)
+      ...(professor || !feedbacks
+        ? {}
+        : { certificadosLiberados, mediaFeedback: feedbacks._avg.nota, totalFeedbacks: feedbacks._count._all }),
       aprovadosQuestionario: totalAprovados,
       reprovadosQuestionario: totalReprovados,
       podemResponderQuestionario: totalPodemResponder,
       // null enquanto ninguem concluiu o questionario (nem aprovado nem com as 2 tentativas usadas)
       taxaAprovacao: concluiramQuestionario > 0 ? (totalAprovados / concluiramQuestionario) * 100 : null,
       ocupacaoMediaSalas,
-      mediaFeedback: feedbacks._avg.nota,
-      totalFeedbacks: feedbacks._count._all,
     },
     proximosEventos: futuros.slice(0, LIMITE_PROXIMOS).map((e) => ({
       id: e.id,

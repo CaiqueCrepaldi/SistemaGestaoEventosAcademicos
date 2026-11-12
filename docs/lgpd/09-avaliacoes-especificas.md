@@ -17,9 +17,11 @@ próprio guia exige.
   acadêmicos (palestras, minicursos), não sistema de notas de disciplina:
   não modela responsável nem direção.
 - **O professor só vê os próprios eventos:** dos alunos inscritos neles,
-  nome, RGM, check-in, notas do questionário e avaliações. Não vê a lista
-  geral de alunos nem os eventos dos colegas (no calendário, só "Sala
-  ocupada").
+  nome, RGM, check-in e notas do questionário, e só inscreve alunos nesses
+  eventos. Desde 12/11/2026 não acessa certificados nem avaliações (a API
+  responde `403`), e o Dashboard dele mostra só os números dos eventos
+  dele. Não vê a lista geral de alunos nem os eventos dos colegas (no
+  calendário, só "Sala ocupada").
 - **Presença e desempenho no questionário:** só o próprio aluno, a equipe e
   o professor do evento enxergam a nota de alguém; não existe tela nem rota
   que exponha ranking ou comparação entre alunos.

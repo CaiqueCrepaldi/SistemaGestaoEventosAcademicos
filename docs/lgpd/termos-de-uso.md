@@ -42,6 +42,10 @@ UMC, com finalidade exclusivamente acadêmica, e não é um serviço comercial.
   e RGM podem ser corrigidos pelo canal de privacidade. Se o seu e-mail
   institucional mudar, escreva para o canal de privacidade e a equipe
   analisa o caso.
+- Cada e-mail identifica uma única conta no sistema, qualquer que seja o
+  perfil: o mesmo e-mail não serve para duas contas, nem para uma conta e um
+  cadastro em andamento. O sistema compara e guarda o e-mail sem diferenciar
+  letras maiúsculas de minúsculas e sem espaços.
 - A senha precisa ter de 8 a 64 caracteres, com pelo menos uma letra
   maiúscula, um número e um caractere especial (como ! @ # $ %).
 - Você é responsável por manter sua senha em segredo. Se desconfiar que
@@ -83,6 +87,8 @@ UMC, com finalidade exclusivamente acadêmica, e não é um serviço comercial.
   começa) não contam. A regra vale também quando a equipe ou o professor
   inscrevem um aluno. Se o horário de um evento mudar depois da inscrição,
   ela continua valendo.
+- O professor inscreve alunos, e cancela inscrições, só nos eventos que ele
+  criou; a secretaria e a administração, em qualquer evento.
 - O **check-in é pedido pelo próprio aluno**, na tela Eventos, de 1 hora
   antes do início até 24 horas depois do fim do evento, confirmando que está
   no local. O professor responsável pelo evento, a secretaria ou a
@@ -102,15 +108,17 @@ decisão automatizada do sistema: você pode pedir a revisão humana do
 resultado pelo canal de privacidade. O certificado é gerado em PDF, tem um
 código de validação que qualquer pessoa pode conferir na página pública de
 validação, é destinado ao uso pessoal do titular e não pode ser alterado nem
-emitido em nome de terceiros.
+emitido em nome de terceiros. Dentro do sistema, o certificado é visto só
+pelo próprio aluno e pela equipe (secretaria e administração); o professor
+não acessa certificados.
 
 ## 7. Avaliação das palestras
 
 A avaliação de uma palestra (nota e comentário) é opcional e fica
 disponível assim que a sua presença no evento é confirmada (check-in
-aprovado), mesmo antes de você responder o questionário. Ela é vista pela
-equipe e pelo professor responsável pelo evento, para avaliar o evento, e
-não é publicada para outros alunos.
+aprovado), mesmo antes de você responder o questionário. Ela é vista só pela
+equipe (secretaria e administração), para avaliar o evento: não aparece para
+o professor nem para outros alunos.
 
 Enquanto você ainda não respondeu o questionário, quem aprovou o check-in
 pode desfazer a presença (dentro do prazo do check-in). Nesse caso, a sua
@@ -138,14 +146,18 @@ informando o motivo, e toda exclusão fica registrada na auditoria.
   equipe), os alunos inscritos recebem um e-mail com o que mudou. No
   palestrante já aprovado, a mudança de nome ou e-mail também passa pela
   aprovação da equipe.
+- A equipe só exclui um palestrante depois de aprová-lo ou recusá-lo, e
+  depois de decidir a proposta de alteração que estiver aguardando; o
+  palestrante ligado a um evento não é excluído.
 - Depois que um aluno responde o questionário de um evento, o questionário
   daquele evento não muda mais. Depois que o evento termina, ninguém mais o
   edita nem o exclui.
-- O professor só vê e só altera os eventos que ele criou. Dos alunos
-  inscritos nesses eventos, ele vê o nome, o RGM, a situação do check-in, as
-  notas do questionário e as avaliações, e deve usar esses dados só para
-  organizar o evento. Ele não acessa a lista geral de alunos nem a trilha de
-  auditoria, e não exclui avaliações. No calendário, os eventos dos outros
+- O professor só vê e só altera os eventos que ele criou, e só inscreve
+  alunos nesses eventos. Dos alunos inscritos neles, ele vê o nome, o RGM, a
+  situação do check-in e as notas do questionário, e deve usar esses dados
+  só para organizar o evento. Ele não acessa certificados, avaliações, a
+  lista geral de alunos nem a trilha de auditoria, e o Dashboard dele mostra
+  só os números dos eventos dele. No calendário, os eventos dos outros
   aparecem para ele só como "Sala ocupada", sem título, palestrante nem
   inscritos.
 - A equipe pode **inativar** a conta de um professor, informando um motivo.

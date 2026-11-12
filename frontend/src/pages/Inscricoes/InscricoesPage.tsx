@@ -6,6 +6,7 @@ import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Paginacao } from "../../components/ui/Paginacao";
 import { toast } from "../../components/ui/Toast";
+import { useAuth } from "../../context/AuthContext";
 import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
 import {
   ApiError,
@@ -24,6 +25,7 @@ const FILTROS_VAZIOS = { eventoId: "", status: "" as StatusPresenca | "", busca:
 // inscricoes da equipe: lista paginada e filtrada no servidor (evento, presenca e aluno por nome,
 // e-mail ou RGM), inscricao manual com busca de aluno no servidor e cancelamento
 export function InscricoesPage() {
+  const { usuario } = useAuth();
   const [pagina, setPagina] = useState<Pagina<InscricaoGestao> | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [filtros, setFiltros] = useState(FILTROS_VAZIOS);
@@ -40,6 +42,12 @@ export function InscricoesPage() {
   const [eventoId, setEventoId] = useState("");
   const [excluindo, setExcluindo] = useState<InscricaoGestao | null>(null);
   const { erros, formRef, mostrar, mostrarErroDaApi, limpar, limparAoEditar } = useErrosFormulario();
+
+  // eventos em que quem esta logado pode inscrever: so os aprovados e, para o professor, so os dele (a API recusa os
+  // outros com 403)
+  const eventosParaInscrever = eventos.filter(
+    (e) => (!e.situacao || e.situacao === "APROVADO") && (usuario?.perfil !== "PROFESSOR" || e.criadoPorId === usuario.id),
+  );
 
   // eventos (com a contagem de inscritos) e salas: pro filtro, pro modal e pra mostrar as vagas
   async function carregarEventos() {
@@ -355,7 +363,7 @@ export function InscricoesPage() {
             >
               <select value={eventoId} onChange={(e) => setEventoId(e.target.value)}>
                 <option value="">Selecione…</option>
-                {eventos.map((e) => (
+                {eventosParaInscrever.map((e) => (
                   <option key={e.id} value={e.id}>
                     {e.titulo}
                   </option>

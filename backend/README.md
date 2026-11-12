@@ -321,6 +321,25 @@ ela aplicada. Siga a ordem:
 | `npx tsx scripts/definir-senha.ts email@dominio` | Define uma senha nova para uma conta que já existe (ver abaixo). |
 | `npx tsx scripts/resetar-2fa.ts email@dominio` | Zera o 2FA de uma conta (emergência; mesmo esquema de flags). |
 | `npx tsx scripts/carga-demonstracao.ts` | **Apaga todos os dados** e carrega a demonstração (ver abaixo). |
+| `npx tsx scripts/verificar-emails-duplicados.ts` | Só leitura: confere se há e-mail repetido entre as contas e os cadastros em andamento (ver abaixo). |
+
+### Conferir e-mails repetidos (só leitura)
+
+O e-mail de login é único no sistema todo, de qualquer perfil, e toda entrada
+passa por `normalizarEmail` (`src/utils/validacao.ts`: sem espaços nas pontas
+e em minúsculas). O script confere os dados já gravados:
+
+```bash
+npx tsx scripts/verificar-emails-duplicados.ts              # banco do .env (desenvolvimento)
+npx tsx scripts/verificar-emails-duplicados.ts --producao   # banco de produção (.env.production.local)
+```
+
+- Compara, sem diferença de maiúsculas e espaços, os e-mails das contas
+  (todos os perfis) e dos cadastros de aluno em andamento; conta também os
+  e-mails gravados com maiúscula ou espaço e os repetidos entre palestrantes.
+- **Nunca mostra o e-mail:** de cada repetição imprime só quantos registros
+  são, os perfis envolvidos e o domínio.
+- **Não corrige nada.** O que aparecer é resolvido caso a caso.
 
 ### Carga de demonstração
 
