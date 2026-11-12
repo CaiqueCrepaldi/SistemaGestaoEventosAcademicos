@@ -9,7 +9,7 @@ export function TermosDeUsoPage() {
     <div className="login-screen">
       <div className="login-card legal-card">
         <h1>Termos de Uso</h1>
-        <p className="legal-versao">Versão 1 — 09/11/2026.</p>
+        <p className="legal-versao">Versão 1 — 12/11/2026.</p>
         <h2>1. O que é o SGEA</h2>
         <p>
           O Sistema de Gestão de Eventos Acadêmicos (SGEA) organiza eventos acadêmicos (palestras, minicursos,
@@ -213,7 +213,7 @@ export function TermosDeUsoPage() {
           <Link to="/politica-de-privacidade">Política de Privacidade</Link>.
         </p>
         <p className="legal-versao">
-          Versão 1 — 09/11/2026. Quando este texto mudar, a nova versão é publicada nesta página com a data, e a versão
+          Versão 1 — 12/11/2026. Quando este texto mudar, a nova versão é publicada nesta página com a data, e a versão
           que você aceitou fica registrada na sua conta.
         </p>
 

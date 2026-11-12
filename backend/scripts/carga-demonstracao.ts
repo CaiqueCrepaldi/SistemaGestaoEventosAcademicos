@@ -1,9 +1,11 @@
-// CARGA DE DEMONSTRACAO: apaga TODOS os dados do banco e carrega um cenario realista para a apresentacao —
-// 12 salas no padrao da UMC (8 de aula, 2 laboratorios e 2 auditorios), 40 palestrantes, 150 professores e 1.000
-// alunos ficticios, 200 eventos (140 passados, 10 nos proximos 7 dias e 50 de 8 a 30 dias a frente), com aprovacao
-// e historico, inscricoes (nenhum aluno em dois eventos no mesmo horario), check-in, questionario, certificados e
-// avaliacoes — alem das tres contas de demonstracao (admin, secretaria e professor, com as senhas
-// das variaveis SEED_*_SENHA). As contas ficticias (usuarios.ficticio) nunca recebem e-mail.
+// CARGA DE DEMONSTRACAO: apaga TODOS os dados do banco (inclusive a auditoria, que recomeca vazia) e carrega um
+// cenario realista para a apresentacao — 12 salas no padrao da UMC (8 de aula, 2 laboratorios e 2 auditorios),
+// 40 palestrantes (mais 3 aguardando aprovacao), 150 professores, 1 secretaria e 1.000 alunos ficticios, 200 eventos
+// (150 encerrados, 25 futuros aprovados e 25 em aprovacao: 15 aguardando, 5 recusados e 5 aprovados com proposta de
+// alteracao aguardando), com historico, inscricoes (nenhum aluno em dois eventos no mesmo horario), check-in,
+// questionario, certificados e avaliacoes, e os cenarios para testar ao vivo (impressos no fim, no "roteiro") — alem
+// das tres contas de demonstracao (administrador, secretaria e professor, com as senhas das variaveis SEED_*_SENHA e o
+// e-mail do administrador em SEED_ADMIN_EMAIL). As contas ficticias (usuarios.ficticio) nunca recebem e-mail.
 //
 // como rodar (de dentro de backend/):
 //   npx tsx scripts/carga-demonstracao.ts                         -> SIMULACAO no banco do .env (dev): so mostra
@@ -17,7 +19,7 @@
 // se a copia falhar (ou faltar alguma senha), nada e apagado. O console mostra so quantidades, nunca dado pessoal.
 // Datas: a partir do dia em que o script roda, no fuso America/Sao_Paulo
 import { config, parse } from "dotenv";
-import { randomUUID } from "crypto";
+import { createHash, randomBytes, randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
 
@@ -37,7 +39,7 @@ if (producao) {
     process.exit(1);
   }
   const doArquivo = parse(readFileSync(".env.production.local"));
-  faltamNoArquivoDeProducao = SENHAS_EXIGIDAS.filter((v) => !doArquivo[v]?.trim());
+  faltamNoArquivoDeProducao = [...SENHAS_EXIGIDAS, "SEED_ADMIN_EMAIL"].filter((v) => !doArquivo[v]?.trim());
   config({ path: ".env.production.local", override: true });
 }
 
@@ -129,11 +131,12 @@ interface Usuario {
   nome: string;
   emailLogin: string;
   senhaHash: string;
-  perfil: "PROFESSOR" | "ALUNO";
+  perfil: "PROFESSOR" | "ALUNO" | "SECRETARIA";
   participanteId: string | null;
-  consentimentoLgpdEm: Date;
-  versaoTermosAceitos: string;
+  consentimentoLgpdEm: Date | null;
+  versaoTermosAceitos: string | null;
   ativo: boolean;
+  motivoInativacao?: string | null;
   ficticio: boolean;
   criadoEm: Date;
 }
@@ -165,7 +168,7 @@ async function main() {
   const { gerarCodigoValidacao } = await import("../src/modules/certificados/certificados.service");
   const { PERCENTUAL_APROVACAO, MAX_TENTATIVAS_QUESTIONARIO } = await import("../src/utils/questionario");
   const { janelaDoCheckin } = await import("../src/utils/checkin");
-  const { REGEX_CODIGO_SALA } = await import("../src/utils/salas");
+  const { REGEX_CODIGO_SALA, rotuloSala } = await import("../src/utils/salas");
   const contas = await import("../prisma/contas-demonstracao");
   const dados = await import("./carga-demonstracao-dados");
 
@@ -229,7 +232,7 @@ async function main() {
 
     // ------------------------------------------------------------ professores ficticios (so o primeiro nome)
     const usuarios: Usuario[] = [];
-    const emailsUsados = new Set(contas.CONTAS_DE_DEMONSTRACAO.map((c) => c.email));
+    const emailsUsados = new Set(contas.contasDeDemonstracao().map((c) => c.email));
     const repeticoes = new Map<string, number>();
     const professores: Usuario[] = [];
     for (let i = 0; i < 150; i++) {
@@ -258,7 +261,7 @@ async function main() {
     }
 
     // ------------------------------------------------------------ alunos ficticios (data da conta definida depois)
-    const participantes: { id: string; rgm: string; ativo: boolean; criadoEm: Date }[] = [];
+    const participantes: { id: string; rgm: string; ativo: boolean; motivoInativacao?: string | null; criadoEm: Date }[] = [];
     const alunos: (Usuario & { participanteId: string })[] = [];
     for (let i = 1; i <= 1000; i++) {
       let emailLogin: string;
@@ -285,6 +288,22 @@ async function main() {
       alunos.push(aluno);
       usuarios.push(aluno);
     }
+
+    // ------------------------------------------------------------ alunos inativados pela equipe (tela Participantes)
+    const MOTIVOS_INATIVACAO_ALUNO = [
+      "Trancou a matrícula neste semestre.",
+      "Pedido do próprio aluno pelo canal de privacidade.",
+      "Transferência para outro campus.",
+      "Dados cadastrais em revisão pela secretaria.",
+    ];
+    const alunosInativos = new Set<string>();
+    embaralhar(participantes)
+      .slice(0, 4)
+      .forEach((p, i) => {
+        p.ativo = false;
+        p.motivoInativacao = MOTIVOS_INATIVACAO_ALUNO[i];
+        alunosInativos.add(p.id);
+      });
 
     // ------------------------------------------------------------ titulos e questionarios
     const areas = Object.keys(dados.TEMAS) as (keyof typeof dados.TEMAS)[];
@@ -347,8 +366,9 @@ async function main() {
     // dias de referencia (deslocamento a partir de hoje)
     const primeiroDiaPassado = Math.round((dataSP(2026, 8, 1).getTime() - diaSP(0).getTime()) / DIA);
     const diasPassados = Array.from({ length: -primeiroDiaPassado }, (_, i) => primeiroDiaPassado + i); // 01/08 ate ontem
-    const diasProximos = [0, 1, 2, 3, 4, 5, 6, 7];
-    const diasDistantes = Array.from({ length: 23 }, (_, i) => 8 + i);
+    // futuros: os proximos 3 dias (check-in aberto e calendario cheio na apresentacao) e de 4 a 40 dias
+    const diasProximos = [0, 1, 2, 3];
+    const diasDistantes = Array.from({ length: 37 }, (_, i) => 4 + i);
     const minimoFuturo = new Date(agora.getTime() + 3 * HORA);
 
     // ------------------------------------------------------------ eventos
@@ -416,25 +436,124 @@ async function main() {
     const professorFicticio = () => sortear(professores).id;
     const donoComum = () => (chance(0.75) ? professorFicticio() : null);
 
+    // ------------------------------------------------------------ propostas de alteracao (evento ja aprovado)
+    // a PENDENTE reserva a sala proposta no mesmo horario (regra do sistema); a RECUSADA nao reserva nada
+    const propostas: {
+      id: string;
+      tipo: "EVENTO";
+      eventoId: string;
+      situacao: "PENDENTE" | "RECUSADO";
+      novaSalaId: string;
+      novoHorario: Date;
+      novaCargaHoraria: number;
+      novoPalestranteId: string;
+      motivoRecusa: string | null;
+      criadoPorId: string;
+      criadoEm: Date;
+      decididoEm: Date | null;
+    }[] = [];
+    const MOTIVOS_RECUSA_PROPOSTA = [
+      "A sala proposta já está combinada com outra atividade da coordenação nesse dia.",
+      "Mantenha o palestrante original: ele já confirmou a agenda com a coordenação.",
+      "A troca precisa vir com pelo menos uma semana de antecedência. Proponha outra data.",
+    ];
+    function criarProposta(evento: EventoGerado, situacao: "PENDENTE" | "RECUSADO") {
+      const salaAtual = salas.find((s) => s.id === evento.salaId)!;
+      // outra sala do mesmo tamanho ou maior, livre no mesmo horario; sem nenhuma, a proposta troca o palestrante
+      const outraSala = embaralhar(salas.filter((s) => s.id !== evento.salaId && s.capacidade >= salaAtual.capacidade)).find((s) =>
+        salaLivre(s.id, evento.horario, evento.cargaHoraria),
+      );
+      const outroPalestrante = sortear(palestrantes.filter((p) => p.id !== evento.palestranteId));
+      const novaSala = outraSala ?? salaAtual;
+      const novoPalestranteId = outraSala ? evento.palestranteId : outroPalestrante.id;
+      if (situacao === "PENDENTE" && outraSala) reservar(outraSala.id, evento.horario, evento.cargaHoraria);
+      const resumo = outraSala
+        ? `Sala: ${rotuloSala(salaAtual)} → ${rotuloSala(outraSala)}`
+        : `Palestrante: ${palestrantes.find((p) => p.id === evento.palestranteId)?.nome ?? ""} → ${outroPalestrante.nome}`;
+      const enviadaEm = minData(new Date(evento.aprovadoEm!.getTime() + inteiro(1, 4) * DIA), new Date(agora.getTime() - inteiro(3, 20) * HORA));
+      const proposta = {
+        id: randomUUID(),
+        tipo: "EVENTO" as const,
+        eventoId: evento.id,
+        situacao,
+        novaSalaId: novaSala.id,
+        novoHorario: evento.horario,
+        novaCargaHoraria: evento.cargaHoraria,
+        novoPalestranteId,
+        motivoRecusa: null as string | null,
+        criadoPorId: evento.criadoPorId!,
+        criadoEm: enviadaEm,
+        decididoEm: null as Date | null,
+      };
+      historico.push({ id: randomUUID(), tipo: "EVENTO", itemId: evento.id, acao: "PROPOSTA_ENVIADA", mensagem: resumo, autorId: evento.criadoPorId!, autorNome: nomeDe(evento.criadoPorId!), criadoEm: enviadaEm });
+      if (situacao === "RECUSADO") {
+        const quem = equipeQueAprova();
+        proposta.motivoRecusa = sortear(MOTIVOS_RECUSA_PROPOSTA);
+        proposta.decididoEm = minData(new Date(enviadaEm.getTime() + inteiro(2, 20) * HORA), new Date(agora.getTime() - HORA));
+        historico.push({ id: randomUUID(), tipo: "EVENTO", itemId: evento.id, acao: "PROPOSTA_RECUSADA", mensagem: proposta.motivoRecusa, autorId: quem, autorNome: nomeDe(quem), criadoEm: proposta.decididoEm });
+      }
+      propostas.push(proposta);
+    }
+
+    // cenarios marcados nos eventos (pra montar as inscricoes e o roteiro da apresentacao)
+    const cenarioDo = new Map<string, "LOTADO" | "UMA_VAGA" | "CONFLITO">();
+
     // evento da apresentacao (professor de demonstracao): horario fixo, sala de 40 lugares ou mais, livre
     const salaApresentacao = embaralhar(salas.filter((s) => s.capacidade >= 40)).find((s) => salaLivre(s.id, horarioApresentacao, 2));
     if (!salaApresentacao) throw new Error("nenhuma sala livre para o evento da apresentação");
     reservar(salaApresentacao.id, horarioApresentacao, 2);
     criarEvento(idProfessorDemo, "APROVADO", { horario: horarioApresentacao, carga: 2, sala: salaApresentacao }, { passado: false, apresentacao: true });
-    // professor de demonstracao: 6 passados, 4 futuros aprovados (2 nos proximos 7 dias, 2 depois), 1 pendente em 7 dias
+
+    // professor de demonstracao: 6 encerrados; 3 futuros aprovados (um sem proposta, um com a proposta recusada e um
+    // com a proposta aguardando aprovacao); 1 aguardando aprovacao; 1 recusado com motivo
     for (let i = 0; i < 6; i++) criarEvento(idProfessorDemo, "APROVADO", alocar(diasPassados.slice(10), null), { passado: true });
-    for (let i = 0; i < 2; i++) criarEvento(idProfessorDemo, "APROVADO", alocar(diasProximos.slice(1, 7), minimoFuturo), { passado: false });
-    for (let i = 0; i < 2; i++) criarEvento(idProfessorDemo, "APROVADO", alocar(diasDistantes, minimoFuturo), { passado: false });
+    criarEvento(idProfessorDemo, "APROVADO", alocar(diasProximos.slice(1), minimoFuturo), { passado: false });
+    criarProposta(criarEvento(idProfessorDemo, "APROVADO", alocar(diasDistantes, minimoFuturo), { passado: false }), "RECUSADO");
+    criarProposta(criarEvento(idProfessorDemo, "APROVADO", alocar(diasDistantes, minimoFuturo), { passado: false }), "PENDENTE");
+    criarEvento(idProfessorDemo, "PENDENTE", alocar(diasDistantes.slice(0, 7), minimoFuturo), { passado: false });
+    criarEvento(idProfessorDemo, "RECUSADO", alocar(diasDistantes, minimoFuturo), { passado: false });
+
+    // cenarios da equipe para testar ao vivo: dois eventos no mesmo horario em salas diferentes, os dois com vaga
+    // (inscricao no mesmo horario recusada); um lotado ("Sem vagas"); um com uma vaga so (cancelar e a vaga voltar)
     {
-      const agenda = alocar([7], minimoFuturo);
-      criarEvento(idProfessorDemo, "PENDENTE", agenda, { passado: false });
+      const horarioConflito = diaSP(2, 14, 0);
+      const salasLivres = embaralhar(salas.filter((s) => s.tipo === "SALA_DE_AULA" && salaLivre(s.id, horarioConflito, 2))).slice(0, 2);
+      if (salasLivres.length < 2) throw new Error("sem duas salas livres para o cenário de conflito de horário");
+      for (const sala of salasLivres) {
+        reservar(sala.id, horarioConflito, 2);
+        cenarioDo.set(criarEvento(null, "APROVADO", { horario: horarioConflito, carga: 2, sala }, { passado: false }).id, "CONFLITO");
+      }
+      cenarioDo.set(criarEvento(null, "APROVADO", alocar(diasProximos.slice(1), minimoFuturo), { passado: false }).id, "LOTADO");
+      cenarioDo.set(criarEvento(null, "APROVADO", alocar(diasProximos.slice(1), minimoFuturo), { passado: false }).id, "UMA_VAGA");
     }
-    // os demais: 134 passados, 6 nos proximos 7 dias e 48 de 8 a 30 dias (3 pendentes e 2 recusados de professores)
-    for (let i = 0; i < 134; i++) criarEvento(donoComum(), "APROVADO", alocar(diasPassados, null), { passado: true });
-    for (let i = 0; i < 6; i++) criarEvento(donoComum(), "APROVADO", alocar(diasProximos, minimoFuturo), { passado: false });
-    for (let i = 0; i < 3; i++) criarEvento(professorFicticio(), "PENDENTE", alocar(diasDistantes, minimoFuturo), { passado: false });
-    for (let i = 0; i < 2; i++) criarEvento(professorFicticio(), "RECUSADO", alocar(diasDistantes, minimoFuturo), { passado: false });
-    for (let i = 0; i < 43; i++) criarEvento(donoComum(), "APROVADO", alocar(diasDistantes, minimoFuturo), { passado: false });
+
+    // os demais: 144 encerrados; 18 futuros aprovados (4 nos proximos dias); 14 aguardando aprovacao; 4 recusados; 4
+    // aprovados com proposta de alteracao aguardando aprovacao
+    for (let i = 0; i < 144; i++) criarEvento(donoComum(), "APROVADO", alocar(diasPassados, null), { passado: true });
+    for (let i = 0; i < 4; i++) criarEvento(donoComum(), "APROVADO", alocar(diasProximos, minimoFuturo), { passado: false });
+    for (let i = 0; i < 14; i++) criarEvento(donoComum(), "APROVADO", alocar(diasDistantes, minimoFuturo), { passado: false });
+    for (let i = 0; i < 4; i++) criarProposta(criarEvento(professorFicticio(), "APROVADO", alocar(diasDistantes, minimoFuturo), { passado: false }), "PENDENTE");
+    for (let i = 0; i < 14; i++) criarEvento(professorFicticio(), "PENDENTE", alocar(diasDistantes, minimoFuturo), { passado: false });
+    for (let i = 0; i < 4; i++) criarEvento(professorFicticio(), "RECUSADO", alocar(diasDistantes, minimoFuturo), { passado: false });
+
+    // ------------------------------------------------------------ palestrantes aguardando aprovacao (cadastrados por professores)
+    const palestrantesPendentes: { id: string; nome: string; email: string; situacao: "PENDENTE"; criadoPorId: string }[] = [];
+    {
+      const donos = [idProfessorDemo, ...embaralhar(professores.map((p) => p.id)).slice(0, 2)];
+      for (const dono of donos) {
+        let nome: string;
+        let email: string;
+        do {
+          nome = `${sortear(dados.PRIMEIROS_NOMES)} ${sortear(dados.SOBRENOMES)}`;
+          const [primeiro, ultimo] = [nome.split(" ")[0], nome.split(" ").slice(-1)[0]];
+          email = `${semAcento(primeiro).toLowerCase()}.${semAcento(ultimo).toLowerCase()}@${sortear(dados.DOMINIOS_PALESTRANTES)}`;
+        } while (emailsPalestrantes.has(email) || palestrantes.some((p) => p.nome === nome));
+        emailsPalestrantes.add(email);
+        const palestrante = { id: randomUUID(), nome, email, situacao: "PENDENTE" as const, criadoPorId: dono };
+        palestrantesPendentes.push(palestrante);
+        historico.push({ id: randomUUID(), tipo: "PALESTRANTE", itemId: palestrante.id, acao: "ENVIADO", mensagem: null, autorId: dono, autorNome: nomeDe(dono), criadoEm: new Date(agora.getTime() - inteiro(5, 40) * HORA) });
+      }
+    }
 
     // ------------------------------------------------------------ inscricoes, check-in, questionario, certificado, avaliacao
     const inscricoes: {
@@ -467,6 +586,7 @@ async function main() {
     const alunoDoParticipante = new Map(alunos.map((a) => [a.participanteId, a]));
     const rgmDoParticipante = new Map(participantes.map((p) => [p.id, p.rgm]));
     const nomeDoPalestrante = new Map(palestrantes.map((p) => [p.id, p.nome]));
+    const apresentacaoPresentes: { participanteId: string; comAvaliacao: boolean }[] = [];
     // mesma regra da API (inscricoes.service.ts: garantirSemConflitoDeHorario): o aluno nao fica inscrito em dois
     // eventos que se cruzam no horario; [inicio, fim) — encostar nao e conflito
     const agendaDoAluno = new Map<string, [number, number][]>();
@@ -484,9 +604,16 @@ async function main() {
 
     for (const evento of eventos) {
       if (evento.situacao !== "APROVADO") continue;
+      const cenario = cenarioDo.get(evento.id);
       const quantidade = evento.apresentacao
-        ? Math.min(35, evento.capacidade)
-        : Math.round(evento.capacidade * (evento.passado ? entre(0.5, 0.95) : entre(0.2, 0.7)));
+        ? Math.min(35, evento.capacidade - 5)
+        : cenario === "LOTADO"
+          ? evento.capacidade
+          : cenario === "UMA_VAGA"
+            ? evento.capacidade - 1
+            : cenario === "CONFLITO"
+              ? Math.round(evento.capacidade * 0.4)
+              : Math.round(evento.capacidade * (evento.passado ? entre(0.5, 0.95) : entre(0.2, 0.7)));
       const fim = new Date(evento.horario.getTime() + evento.cargaHoraria * HORA);
       const { abre, fecha } = janelaDoCheckin({ horario: evento.horario, cargaHoraria: evento.cargaHoraria });
       // quem decide o check-in: o professor do evento (ou a equipe); evento da equipe, secretaria ou administrador
@@ -495,8 +622,9 @@ async function main() {
       const percentualRecusados = entre(0.02, 0.06);
       const inicioDoEvento = evento.horario.getTime();
       const escolhidos = embaralhar(participantes)
-        .filter((p) => alunoLivre(p.id, inicioDoEvento, fim.getTime()))
+        .filter((p) => alunoLivre(p.id, inicioDoEvento, fim.getTime()) && (evento.passado || !alunosInativos.has(p.id)))
         .slice(0, quantidade);
+      if (escolhidos.length < quantidade) throw new Error("alunos livres insuficientes para um evento");
       for (const p of escolhidos) agendaDoAluno.set(p.id, [...(agendaDoAluno.get(p.id) ?? []), [inicioDoEvento, fim.getTime()]]);
       const limiteInscricao = minData(new Date(evento.horario.getTime() - HORA), new Date(agora.getTime() - 5 * MIN));
 
@@ -516,11 +644,42 @@ async function main() {
         };
         inscricoes.push(inscricao);
 
-        // evento da apresentacao: 12 ja pediram o check-in entre 20:00 e 20:15 do dia, pra aprovacao ao vivo
+        // evento da apresentacao (o check-in abre as 20:00): 12 pediram o check-in entre 20:00 e 20:15, pra aprovar
+        // ao vivo; 2 tiveram a presenca confirmada e avaliaram sem fazer o questionario (desfazer a presenca apaga a
+        // avaliacao); 1 teve a presenca confirmada e ja respondeu o questionario (presenca travada); o resto sem pedido
         if (evento.apresentacao) {
-          if (posicao < 12) {
+          const abreAs = dataSP(...diaDoEvento(evento.horario), 20, 0).getTime();
+          if (posicao < 15) {
             inscricao.statusPresenca = "SOLICITADO";
-            inscricao.checkinSolicitadoEm = new Date(dataSP(...diaDoEvento(evento.horario), 20, 0).getTime() + inteiro(0, 15 * 60) * 1000);
+            inscricao.checkinSolicitadoEm = new Date(abreAs + inteiro(0, 15 * 60) * 1000);
+          }
+          if (posicao >= 12 && posicao < 15) {
+            inscricao.statusPresenca = "PRESENTE";
+            inscricao.usuarioId = idProfessorDemo;
+            inscricao.dataCheckin = new Date(abreAs + inteiro(16, 20) * MIN);
+            apresentacaoPresentes.push({ participanteId: participante.id, comAvaliacao: posicao < 14 });
+            if (posicao < 14) {
+              const nota = sortearPeso([[5, 3], [4, 2]]);
+              feedbacks.push({
+                id: randomUUID(),
+                eventoId: evento.id,
+                participanteId: participante.id,
+                nota,
+                comentario: sortear(dados.COMENTARIOS[nota]),
+                criadoEm: new Date(abreAs + inteiro(22, 30) * MIN),
+              });
+            } else {
+              tentativas.push({
+                id: randomUUID(),
+                participanteId: participante.id,
+                eventoId: evento.id,
+                respostas: respostasCom(evento.questionario, 7),
+                acertos: 7,
+                totalPerguntas: evento.questionario.length,
+                percentual: 70,
+                criadoEm: new Date(abreAs + inteiro(31, 40) * MIN),
+              });
+            }
           }
           return;
         }
@@ -543,8 +702,25 @@ async function main() {
         }
         inscricao.statusPresenca = "PRESENTE";
 
+        // avaliacao de quem tem a presenca confirmada mas nao tem certificado (regra do sistema: basta o PRESENTE)
+        const avaliarSemCertificado = (depoisDe: Date) => {
+          if (!chance(0.3)) return;
+          const nota = sortearPeso([[5, 30], [4, 35], [3, 22], [2, 9], [1, 4]]);
+          feedbacks.push({
+            id: randomUUID(),
+            eventoId: evento.id,
+            participanteId: participante.id,
+            nota,
+            comentario: sortear(dados.COMENTARIOS[nota]),
+            criadoEm: minData(new Date(maxData(fim, depoisDe).getTime() + inteiro(10, 72 * 60) * MIN), new Date(agora.getTime() - MIN)),
+          });
+        };
+
         // questionario: a maioria responde; uns 80% aprovam (no maximo 2 tentativas; aprovou, para)
-        if (!chance(0.85)) return;
+        if (!chance(0.85)) {
+          avaliarSemCertificado(inscricao.dataCheckin!);
+          return;
+        }
         const aprova = chance(0.8);
         const resultados: number[] = aprova
           ? chance(0.75)
@@ -573,7 +749,10 @@ async function main() {
             break;
           }
         }
-        if (!aprovadoEm) return;
+        if (!aprovadoEm) {
+          avaliarSemCertificado(momento);
+          return;
+        }
 
         // certificado: mesma logica do sistema (codigo aleatorio de 12 simbolos e copia do que vai impresso)
         const aluno = alunoDoParticipante.get(participante.id)!;
@@ -596,7 +775,7 @@ async function main() {
           emitidoEm,
         });
 
-        // avaliacao: so quem tem direito ao certificado (regra do sistema); uns 40% dos presentes
+        // avaliacao de quem tem certificado: uns 59%
         if (!chance(0.59)) return;
         const nota = sortearPeso([[5, 40], [4, 33], [3, 17], [2, 7], [1, 3]]);
         feedbacks.push({
@@ -609,6 +788,51 @@ async function main() {
         });
       });
     }
+
+    // ------------------------------------------------------------ tela Equipe: secretaria ficticia, convites pendentes
+    // e professores inativos. Convite pendente e inativo so entre os professores sem nenhum evento (o inativo nao pode ter
+    // evento em aberto, e o do convite nunca entrou)
+    const comEvento = new Set([...eventos.map((e) => e.criadoPorId), ...propostas.map((p) => p.criadoPorId), ...palestrantesPendentes.map((p) => p.criadoPorId)]);
+    const quemDecidiu = new Set(inscricoes.map((i) => i.usuarioId));
+    const semHistorico = embaralhar(professores.filter((p) => !comEvento.has(p.id) && !quemDecidiu.has(p.id)));
+    if (semHistorico.length < 4) throw new Error("professores sem evento insuficientes para os cenários da tela Equipe");
+    const convitesPendentes: { id: string; usuarioId: string; codigoHash: string; tentativas: number; envios: number; ultimoEnvioEm: Date; expiraEm: Date; criadoEm: Date }[] = [];
+    for (const professor of semHistorico.slice(0, 2)) {
+      const criadoEm = new Date(agora.getTime() - inteiro(2, 20) * HORA);
+      professor.consentimentoLgpdEm = null;
+      professor.versaoTermosAceitos = null;
+      professor.criadoEm = criadoEm;
+      // chave aleatoria que ninguem conhece (so o hash fica, como no sistema); "Reenviar convite" gera outra
+      convitesPendentes.push({
+        id: randomUUID(),
+        usuarioId: professor.id,
+        codigoHash: createHash("sha256").update(randomBytes(32)).digest("hex"),
+        tentativas: 0,
+        envios: 1,
+        ultimoEnvioEm: criadoEm,
+        expiraEm: new Date(criadoEm.getTime() + DIA),
+        criadoEm,
+      });
+    }
+    const MOTIVOS_INATIVACAO_PROFESSOR = ["Encerrou o vínculo com a universidade.", "Licença para pós-doutorado neste semestre."];
+    semHistorico.slice(2, 4).forEach((professor, i) => {
+      professor.ativo = false;
+      professor.motivoInativacao = MOTIVOS_INATIVACAO_PROFESSOR[i];
+    });
+    const professoresConvitePendente = semHistorico.slice(0, 2);
+    const professoresInativos = semHistorico.slice(2, 4);
+    const secretariaFicticia: Usuario = (() => {
+      let nome: string;
+      let emailLogin: string;
+      do {
+        nome = `${sortear(dados.PRIMEIROS_NOMES)} ${sortear(dados.SOBRENOMES)}`;
+        emailLogin = `${semAcento(nome.split(" ")[0]).toLowerCase()}.${semAcento(nome.split(" ")[1]).toLowerCase()}@umc.br`;
+      } while (emailsUsados.has(emailLogin));
+      emailsUsados.add(emailLogin);
+      const criadoEm = dataSP(2026, 7, 2, 9);
+      return { id: randomUUID(), nome, emailLogin, senhaHash: SENHA_INUTILIZAVEL, perfil: "SECRETARIA", participanteId: null, consentimentoLgpdEm: criadoEm, versaoTermosAceitos: VERSAO_TERMOS_ATUAL, ativo: true, ficticio: true, criadoEm };
+    })();
+    usuarios.push(secretariaFicticia);
 
     // conta do aluno criada entre julho e o inicio das inscricoes dele, com o aceite na mesma data
     for (const aluno of alunos) {
@@ -656,6 +880,38 @@ async function main() {
     const porTipo = (tipo: string) => salas.filter((sala) => sala.tipo === tipo).length;
     if (porTipo("SALA_DE_AULA") !== 8 || porTipo("LABORATORIO") !== 2 || porTipo("AUDITORIO") !== 2) problemas.push("tipos de sala fora do combinado");
     if (new Set(usuarios.map((u) => u.emailLogin)).size !== usuarios.length) problemas.push("e-mail repetido");
+    // a proposta pendente reserva a sala proposta: nao pode cruzar com outro evento ativo nem com outra proposta nessa sala
+    const reservasDasPropostas = propostas
+      .filter((p) => p.situacao === "PENDENTE" && p.novaSalaId !== eventoPorId.get(p.eventoId)!.salaId)
+      .map((p) => ({ salaId: p.novaSalaId, inicio: p.novoHorario.getTime(), fim: p.novoHorario.getTime() + p.novaCargaHoraria * HORA }));
+    for (const r of reservasDasPropostas) {
+      const cruza = ativos.some((e) => e.salaId === r.salaId && e.horario.getTime() < r.fim && e.horario.getTime() + e.cargaHoraria * HORA > r.inicio);
+      if (cruza) problemas.push("proposta de alteração pendente reservando sala já ocupada");
+    }
+    // a divisao combinada dos 200 eventos
+    const futurosAprovados = eventos.filter((e) => !e.passado && e.situacao === "APROVADO");
+    const comPropostaPendente = new Set(propostas.filter((p) => p.situacao === "PENDENTE").map((p) => p.eventoId));
+    const divisao = {
+      encerrados: eventos.filter((e) => e.passado).length,
+      futuros: futurosAprovados.filter((e) => !comPropostaPendente.has(e.id)).length,
+      pendentes: eventos.filter((e) => e.situacao === "PENDENTE").length,
+      recusados: eventos.filter((e) => e.situacao === "RECUSADO").length,
+      propostas: comPropostaPendente.size,
+    };
+    if (divisao.encerrados !== 150 || divisao.futuros !== 25 || divisao.pendentes !== 15 || divisao.recusados !== 5 || divisao.propostas !== 5) {
+      problemas.push(`divisão dos eventos fora do combinado: ${JSON.stringify(divisao)}`);
+    }
+    if (eventos.some((e) => e.situacao !== "APROVADO" && e.passado)) problemas.push("evento pendente ou recusado no passado");
+    // cenarios: lotado cheio, um com 1 vaga, os dois do conflito no mesmo horario com vaga, aluno inativo fora do futuro
+    const inscritosEm = (id: string) => inscricoes.filter((i) => i.eventoId === id).length;
+    for (const [id, cenario] of cenarioDo) {
+      const e = eventoPorId.get(id)!;
+      if (cenario === "LOTADO" && inscritosEm(id) !== e.capacidade) problemas.push("o evento lotado não ficou cheio");
+      if (cenario === "UMA_VAGA" && inscritosEm(id) !== e.capacidade - 1) problemas.push("o evento de uma vaga não ficou com uma vaga");
+      if (cenario === "CONFLITO" && inscritosEm(id) >= e.capacidade) problemas.push("evento do conflito sem vaga");
+    }
+    if (inscricoes.some((i) => alunosInativos.has(i.participanteId) && !eventoPorId.get(i.eventoId)!.passado)) problemas.push("aluno inativo inscrito em evento futuro");
+    if (eventos.some((e) => e.criadoPorId && professoresInativos.some((p) => p.id === e.criadoPorId))) problemas.push("professor inativo com evento");
     if (new Set(participantes.map((p) => p.rgm)).size !== participantes.length) problemas.push("RGM repetido");
     const textos = JSON.stringify([salas, palestrantes, usuarios.map((u) => [u.nome, u.emailLogin]), eventos.map((e) => [e.titulo, e.tema, e.questionario, e.motivoRecusa]), feedbacks.map((f) => f.comentario)]);
     const normalizado = semAcento(textos).toLowerCase();
@@ -665,18 +921,17 @@ async function main() {
     const contagem = {
       salas: salas.length,
       palestrantes: palestrantes.length,
-      "contas (3 de demonstração + professores e alunos fictícios)": 3 + usuarios.length,
-      "professores fictícios": professores.length,
-      "alunos fictícios": alunos.length,
+      "palestrantes aguardando aprovação": palestrantesPendentes.length,
+      "contas (3 de demonstração + professores, secretaria e alunos fictícios)": 3 + usuarios.length,
+      "professores fictícios (2 com convite pendente, 2 inativos)": professores.length,
+      "alunos fictícios (4 inativados)": alunos.length,
       eventos: eventos.length,
-      "eventos passados": eventos.filter((e) => e.passado).length,
-      "eventos nos próximos 7 dias": eventos.filter((e) => !e.passado && e.horario < diaSP(8)).length,
-      "eventos de 8 a 30 dias": eventos.filter((e) => !e.passado && e.horario >= diaSP(8)).length,
-      "eventos pendentes / recusados": `${eventos.filter((e) => e.situacao === "PENDENTE").length} / ${eventos.filter((e) => e.situacao === "RECUSADO").length}`,
+      "encerrados / futuros aprovados / aguardando / recusados / com proposta aguardando": `${divisao.encerrados} / ${divisao.futuros} / ${divisao.pendentes} / ${divisao.recusados} / ${divisao.propostas}`,
+      "propostas de alteração (aguardando / recusadas)": `${propostas.filter((p) => p.situacao === "PENDENTE").length} / ${propostas.filter((p) => p.situacao === "RECUSADO").length}`,
       "histórico de aprovação": historico.length,
       inscrições: inscricoes.length,
       "presentes / recusados / ausentes": `${inscricoes.filter((i) => i.statusPresenca === "PRESENTE").length} / ${inscricoes.filter((i) => i.statusPresenca === "RECUSADO").length} / ${inscricoes.filter((i) => i.statusPresenca === "AUSENTE").length}`,
-      "pedidos de check-in no evento da apresentação": inscricoes.filter((i) => i.statusPresenca === "SOLICITADO").length,
+      "pedidos de check-in esperando (evento da apresentação)": inscricoes.filter((i) => i.statusPresenca === "SOLICITADO").length,
       "tentativas do questionário": tentativas.length,
       certificados: certificados.length,
       avaliações: feedbacks.length,
@@ -687,8 +942,43 @@ async function main() {
     const p = partesSP(apresentacao.horario);
     console.log(
       `${PREFIXO} evento da apresentação: ${String(p.dia).padStart(2, "0")}/${String(p.mes).padStart(2, "0")}/${p.ano} às ${String(p.hora).padStart(2, "0")}:${String(p.minuto).padStart(2, "0")}, ` +
-        `${inscricoes.filter((i) => i.eventoId === apresentacao.id).length} inscritos, 12 pedidos de check-in`,
+        `${inscricoes.filter((i) => i.eventoId === apresentacao.id).length} inscritos, 12 pedidos de check-in, 3 presentes`,
     );
+
+    // ------------------------------------------------------------ roteiro da apresentacao (dados ficticios, nenhum real)
+    const hora = (d: Date) => { const q = partesSP(d); return `${String(q.dia).padStart(2, "0")}/${String(q.mes).padStart(2, "0")} ${String(q.hora).padStart(2, "0")}:${String(q.minuto).padStart(2, "0")}`; };
+    const linhaEvento = (e: EventoGerado) => `"${e.titulo}" — ${hora(e.horario)}, sala ${rotuloSala(salas.find((x) => x.id === e.salaId)!)}`;
+    const nomeAluno = (participanteId: string) => alunoDoParticipante.get(participanteId)!;
+    const roteiro: string[] = [];
+    roteiro.push(`evento da apresentação: ${linhaEvento(apresentacao)} — check-in abre 1 h antes`);
+    for (const p of apresentacaoPresentes) {
+      const a = nomeAluno(p.participanteId);
+      roteiro.push(`  presente ${p.comAvaliacao ? "com avaliação e sem questionário (desfazer apaga a avaliação)" : "com questionário respondido (presença travada)"}: ${a.nome}`);
+    }
+    for (const [id, cenario] of cenarioDo) {
+      const e = eventoPorId.get(id)!;
+      const rotuloCenario = { LOTADO: "lotado (Sem vagas)", UMA_VAGA: "uma vaga só", CONFLITO: "conflito de horário (os dois)" }[cenario];
+      roteiro.push(`${rotuloCenario}: ${linhaEvento(e)} — ${inscritosEm(id)}/${e.capacidade} inscritos`);
+    }
+    const doProfessorDemo = eventos.filter((e) => e.criadoPorId === idProfessorDemo && !e.passado && !e.apresentacao);
+    for (const e of doProfessorDemo) {
+      const proposta = propostas.find((p) => p.eventoId === e.id);
+      const situacao = e.situacao === "APROVADO" ? (proposta ? `aprovado, proposta ${proposta.situacao === "PENDENTE" ? "aguardando" : "recusada"}` : "aprovado") : e.situacao === "PENDENTE" ? "aguardando aprovação" : "recusado";
+      roteiro.push(`professor de demonstração — ${situacao}: ${linhaEvento(e)}`);
+    }
+    roteiro.push(`palestrantes aguardando aprovação: ${palestrantesPendentes.map((p) => p.nome).join(", ")}`);
+    roteiro.push(`Equipe — convite pendente: ${professoresConvitePendente.map((p) => `${p.nome} (${p.emailLogin})`).join(", ")}`);
+    roteiro.push(`Equipe — professores inativos: ${professoresInativos.map((p) => p.nome).join(", ")}`);
+    roteiro.push(`Equipe — secretaria fictícia: ${secretariaFicticia.nome} (${secretariaFicticia.emailLogin})`);
+    const professorComAbertos = professores.find((p) => p.ativo && eventos.some((e) => e.criadoPorId === p.id && !e.passado && e.situacao === "APROVADO"));
+    if (professorComAbertos) roteiro.push(`Equipe — professor ativo com eventos em aberto (inativar e transferir): ${professorComAbertos.nome} (${professorComAbertos.emailLogin})`);
+    for (const id of alunosInativos) roteiro.push(`aluno inativado: ${nomeAluno(id).nome} (RGM ${rgmDoParticipante.get(id)})`);
+    const alunoParaBloquear = alunos.find((a) => !alunosInativos.has(a.participanteId))!;
+    roteiro.push(`aluno para bloquear (errar a senha 5 vezes no login): ${alunoParaBloquear.emailLogin}`);
+    const certificadoExemplo = certificados[0];
+    if (certificadoExemplo) roteiro.push(`certificado para validar: ${certificadoExemplo.codigoValidacao} (${certificadoExemplo.nomeParticipante}, ${certificadoExemplo.tituloEvento})`);
+    console.log(`${PREFIXO} roteiro da apresentação:`);
+    for (const linha of roteiro) console.log(`  - ${linha}`);
 
     const tabelas = {
       certificado: prisma.certificado,
@@ -758,6 +1048,9 @@ async function main() {
     await emLotes("palestrantes", palestrantes, (lote) => prisma.palestrante.createMany({ data: lote }));
     await emLotes("participantes", participantes, (lote) => prisma.participante.createMany({ data: lote }));
     await emLotes("contas fictícias", usuarios, (lote) => prisma.usuario.createMany({ data: lote }));
+    await emLotes("convites pendentes", convitesPendentes, (lote) => prisma.primeiroAcesso.createMany({ data: lote }));
+    // os aguardando aprovacao apontam para o professor que cadastrou: vao depois das contas
+    await emLotes("palestrantes aguardando aprovação", palestrantesPendentes, (lote) => prisma.palestrante.createMany({ data: lote }));
     await emLotes("eventos", eventos, (lote) =>
       prisma.evento.createMany({
         data: lote.map((e) => ({
@@ -776,25 +1069,14 @@ async function main() {
         })),
       }),
     );
+    await emLotes("propostas de alteração", propostas, (lote) => prisma.propostaAlteracao.createMany({ data: lote }));
     await emLotes("histórico de aprovação", historico, (lote) => prisma.historicoAprovacao.createMany({ data: lote }));
     await emLotes("inscrições", inscricoes, (lote) => prisma.inscricao.createMany({ data: lote }));
     await emLotes("tentativas do questionário", tentativas, (lote) => prisma.tentativaQuestionario.createMany({ data: lote }));
     await emLotes("certificados", certificados, (lote) => prisma.certificado.createMany({ data: lote }));
     await emLotes("avaliações", feedbacks, (lote) => prisma.feedback.createMany({ data: lote }));
 
-    // auditoria: comeca vazia, so com o registro desta carga (quantidades, nenhum dado pessoal)
-    await prisma.logAuditoria.create({
-      data: {
-        id: randomUUID(),
-        usuarioId: null,
-        atorNome: "Carga de demonstração",
-        acao: "CARGA_DEMONSTRACAO",
-        detalhe:
-          `carga de demonstração executada: ${salas.length} salas, ${palestrantes.length} palestrantes, ${professores.length} professores e ` +
-          `${alunos.length} alunos fictícios, 3 contas de demonstração, ${eventos.length} eventos, ${inscricoes.length} inscrições, ` +
-          `${tentativas.length} tentativas do questionário, ${certificados.length} certificados e ${feedbacks.length} avaliações`,
-      },
-    });
+    // auditoria: comeca vazia (apagada acima); tudo o que for feito na apresentacao aparece nela na hora
     console.log(`${PREFIXO} concluída em ${((Date.now() - inicioDaExecucao) / 1000).toFixed(1)} s`);
   } finally {
     await prisma.$disconnect();
@@ -808,6 +1090,9 @@ function diaDoEvento(data: Date): [number, number, number] {
 }
 
 main().catch((erro) => {
-  console.error(`${PREFIXO} erro:`, erro instanceof Error ? erro.message : erro);
+  // so o tipo e o codigo do erro do Prisma (a mensagem dele repete os valores da gravacao)
+  const codigo = erro && typeof erro === "object" && "code" in erro ? ` (${String((erro as { code: unknown }).code)})` : "";
+  const resumo = erro instanceof Error ? erro.message.split(/\r?\n/).filter(Boolean).slice(-3).join(" | ") : erro;
+  console.error(`${PREFIXO} erro${codigo}:`, resumo);
   process.exitCode = 1;
 });

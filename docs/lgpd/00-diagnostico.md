@@ -1,6 +1,6 @@
 # Diagnóstico LGPD — SGEA
 
-**Data:** 09/11/2026 · **Versão:** 1 (acompanha a versão 1 dos Termos de Uso e da
+**Data:** 12/11/2026 · **Versão:** 1 (acompanha a versão 1 dos Termos de Uso e da
 Política de Privacidade)
 
 Comparação item a item entre o guia de adequação à LGPD do professor
@@ -39,7 +39,7 @@ que declará-la).
 | 2.5 Transferência internacional e cookies | Atende | Seção 5 da Política: os três operadores nos EUA; sem cookies (sessão em `localStorage`) |
 | 2.6 Retenção e descarte com critério verificável | Parcial | O que já é descartado está implementado e descrito (cadastro pendente, convite, exclusão a pedido, inativação). A rotina automática (conta sem uso, códigos vencidos, logs de 5 anos) é **plano** declarado em `04`, e a Política não a promete |
 | 2.7 Direitos dos titulares com canal de verdade | Atende | Acesso pela página "Meus dados"; os demais pedidos pelo e-mail, com prazo de 15 dias e procedimento em `08` |
-| 2.8 Segurança, incidentes, versão e data | Atende | Seções 6 e 9 da Política; plano de incidentes em `05`; versão 1, de 09/11/2026, gravada no aceite (`VERSAO_TERMOS_ATUAL`) |
+| 2.8 Segurança, incidentes, versão e data | Atende | Seções 6 e 9 da Política; plano de incidentes em `05`; versão 1, de 12/11/2026, gravada no aceite (`VERSAO_TERMOS_ATUAL`) |
 
 ## 3. Termos de Uso (seção 3 do guia)
 
@@ -51,7 +51,7 @@ que declará-la).
 | Conta, papéis, permissões e condutas proibidas | Atende | Seções 3, 4, 5 e 8 dos Termos e `03-matriz-perfis-e-permissoes.md` |
 | Encerramento da conta | Atende | Seção 10 dos Termos: inativação e exclusão; com certificado, só inativação |
 | Não transfere toda a responsabilidade ao usuário nem autoriza uso futuro genérico | Atende | Seção 11 dos Termos |
-| Versão e data | Atende | Versão 1 — 09/11/2026, registrada na conta no aceite |
+| Versão e data | Atende | Versão 1 — 12/11/2026, registrada na conta no aceite |
 
 ## 4. Requisitos técnicos mínimos (seção 4 do guia)
 

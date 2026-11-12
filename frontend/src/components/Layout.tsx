@@ -35,8 +35,6 @@ const SO_ALUNO: Perfil[] = ["ALUNO"];
 interface NavItem {
   to: string;
   label: string;
-  // rotulo no menu do professor, quando diferente (ex.: "Certificados e notas")
-  labelProfessor?: string;
   end?: boolean;
   perfis: Perfil[];
   icon: ComponentType<{ className?: string }>;
@@ -44,8 +42,8 @@ interface NavItem {
   contador?: keyof ContadoresAprovacao;
 }
 
-// fonte unica do menu. Professor: Dashboard, Eventos, Palestrantes, Inscricoes, Check-in, Certificados e
-// notas, Avaliacoes e Minha conta (sem Salas, Participantes, Auditoria, Professores e Meus dados)
+// fonte unica do menu, com o mesmo nome de cada tela pra todos os perfis. Professor: Dashboard, Eventos, Palestrantes,
+// Inscricoes, Check-in, Certificados, Avaliacoes e Minha conta (sem Salas, Participantes, Auditoria, Professores e Meus dados)
 const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Dashboard", end: true, perfis: GESTAO, icon: DashboardIcon },
   { to: "/eventos", label: "Eventos", perfis: TODOS_PERFIS, icon: EventoIcon, contador: "eventosPendentes" },
@@ -57,8 +55,8 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/checkin", label: "Check-in", perfis: GESTAO, icon: CheckinIcon },
   // trilha de auditoria: so o administrador (a API recusa a secretaria com 403)
   { to: "/auditoria", label: "Auditoria", perfis: ["ADMINISTRADOR"], icon: AuditoriaIcon },
-  { to: "/certificados", label: "Certificados", labelProfessor: "Certificados e notas", perfis: TODOS_PERFIS, icon: CertificadoIcon },
-  { to: "/feedback", label: "Feedback", labelProfessor: "Avaliações", perfis: TODOS_PERFIS, icon: FeedbackIcon },
+  { to: "/certificados", label: "Certificados", perfis: TODOS_PERFIS, icon: CertificadoIcon },
+  { to: "/feedback", label: "Avaliações", perfis: TODOS_PERFIS, icon: FeedbackIcon },
   { to: "/minha-conta", label: "Minha conta", perfis: TODOS_PERFIS, icon: ContaIcon },
   { to: "/meus-dados", label: "Meus dados", perfis: SO_ALUNO, icon: MeusDadosIcon },
 ];
@@ -146,7 +144,7 @@ export function Layout() {
             >
               <IconeItem />
               <span>
-                {ehProfessor && item.labelProfessor ? item.labelProfessor : item.label}
+                {item.label}
                 {quantidade > 0 && (
                   <span className="nav-contador" aria-label={`${quantidade} aguardando aprovação`} title="Aguardando aprovação">
                     {quantidade}

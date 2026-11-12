@@ -1,6 +1,6 @@
 # Matriz de perfis e permissões — SGEA
 
-**Data:** 09/11/2026 · **Versão:** 1 (acompanha a versão 1 dos Termos de Uso e da
+**Data:** 12/11/2026 · **Versão:** 1 (acompanha a versão 1 dos Termos de Uso e da
 Política de Privacidade)
 
 Gerada a partir das rotas reais do backend (`backend/src/modules/*/*.routes.ts`,

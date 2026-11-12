@@ -1,12 +1,14 @@
 // as tres contas de demonstracao (administrador, secretaria e professor), usadas pelo seed (prisma/seed.ts) e
-// pela carga de demonstracao (scripts/carga-demonstracao.ts). Contas reais (ficticio = false): recebem e-mail,
-// entram com a senha das variaveis SEED_*_SENHA e podem ativar o 2FA pela Minha conta. Nascem ativas, sem 2FA,
-// com o aceite da versao vigente dos Termos registrado; o professor ja nasce ativado (sem convite pendente)
+// pela carga de demonstracao (scripts/carga-demonstracao.ts). Entram com a senha das variaveis SEED_*_SENHA e podem
+// ativar o 2FA pela Minha conta. Nascem ativas, sem 2FA, com o aceite da versao vigente dos Termos registrado; o
+// professor ja nasce ativado (sem convite pendente). E-mail: o do administrador vem de SEED_ADMIN_EMAIL (o e-mail de
+// verdade de quem apresenta, que recebe os avisos; fica so no .env, nunca no codigo) e, sem ela, admin@umc.br.
+// secretaria@umc.br e professor@umc.br nao sao caixas de ninguem da equipe: ficam sem envio de e-mail (ficticio)
 import { randomUUID } from "crypto";
 import type { Perfil, PrismaClient } from "@prisma/client";
 import { VERSAO_TERMOS_ATUAL } from "../src/config/termos";
 import { gerarHashSenha } from "../src/utils/password";
-import { MENSAGEM_REGRA_SENHA, senhaAtendeRegras } from "../src/utils/validacao";
+import { MENSAGEM_REGRA_SENHA, normalizarEmail, senhaAtendeRegras } from "../src/utils/validacao";
 
 export class SenhaDeDemonstracaoInvalida extends Error {}
 
@@ -47,11 +49,33 @@ export function lerSenhasDeDemonstracao(): SenhasDeDemonstracao {
   return senhas;
 }
 
-export const CONTAS_DE_DEMONSTRACAO: { email: string; nome: string; perfil: Perfil; chave: keyof SenhasDeDemonstracao }[] = [
-  { email: "admin@umc.br", nome: "Administrador", perfil: "ADMINISTRADOR", chave: "admin" },
-  { email: "secretaria@umc.br", nome: "Secretaria", perfil: "SECRETARIA", chave: "secretaria" },
-  { email: "professor@umc.br", nome: "Professor", perfil: "PROFESSOR", chave: "professor" },
-];
+export interface ContaDeDemonstracao {
+  email: string;
+  nome: string;
+  perfil: Perfil;
+  chave: keyof SenhasDeDemonstracao;
+  // true = o sistema nunca manda e-mail pra ela (endereco que nao e de ninguem da equipe)
+  semEnvioDeEmail: boolean;
+}
+
+// e-mail do administrador de demonstracao: SEED_ADMIN_EMAIL do .env (validado) ou, sem ela, admin@umc.br
+function emailDoAdministrador(): string {
+  const valor = normalizarEmail(process.env.SEED_ADMIN_EMAIL ?? "");
+  if (!valor) return "admin@umc.br";
+  if (!/^[^s@]+@[^s@]+.[^s@]+$/.test(valor)) {
+    throw new SenhaDeDemonstracaoInvalida("SEED_ADMIN_EMAIL não é um e-mail válido. Corrija no .env (ver backend/.env.example).");
+  }
+  return valor;
+}
+
+export function contasDeDemonstracao(): ContaDeDemonstracao[] {
+  const emailAdmin = emailDoAdministrador();
+  return [
+    { email: emailAdmin, nome: "Administrador", perfil: "ADMINISTRADOR", chave: "admin", semEnvioDeEmail: false },
+    { email: "secretaria@umc.br", nome: "Secretaria", perfil: "SECRETARIA", chave: "secretaria", semEnvioDeEmail: true },
+    { email: "professor@umc.br", nome: "Professor", perfil: "PROFESSOR", chave: "professor", semEnvioDeEmail: true },
+  ];
+}
 
 // cria as tres contas que ainda nao existem (a que ja existe fica como esta: a senha dela nao muda). "criadaEm"
 // vale pra conta e pro aceite dos Termos; "idsDesejados" fixa o id de cada conta criada (a carga de demonstracao
@@ -63,7 +87,7 @@ export async function garantirContasDeDemonstracao(
   idsDesejados: Partial<Record<keyof SenhasDeDemonstracao, string>> = {},
 ): Promise<Record<keyof SenhasDeDemonstracao, string>> {
   const ids = {} as Record<keyof SenhasDeDemonstracao, string>;
-  for (const conta of CONTAS_DE_DEMONSTRACAO) {
+  for (const conta of contasDeDemonstracao()) {
     const existente = await prisma.usuario.findUnique({ where: { emailLogin: conta.email }, select: { id: true } });
     if (existente) {
       ids[conta.chave] = existente.id;
@@ -77,7 +101,7 @@ export async function garantirContasDeDemonstracao(
         senhaHash: await gerarHashSenha(senhas[conta.chave]),
         perfil: conta.perfil,
         ativo: true,
-        ficticio: false,
+        ficticio: conta.semEnvioDeEmail,
         consentimentoLgpdEm: criadaEm,
         versaoTermosAceitos: VERSAO_TERMOS_ATUAL,
         criadoEm: criadaEm,

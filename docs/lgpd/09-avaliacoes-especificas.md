@@ -1,6 +1,6 @@
 # Avaliações específicas por área — SGEA
 
-**Data:** 09/11/2026 · **Versão:** 1 (acompanha a versão 1 dos Termos de Uso e da
+**Data:** 12/11/2026 · **Versão:** 1 (acompanha a versão 1 dos Termos de Uso e da
 Política de Privacidade)
 
 Segue a seção 5 do guia, área por área, com justificativa de aplicação ou

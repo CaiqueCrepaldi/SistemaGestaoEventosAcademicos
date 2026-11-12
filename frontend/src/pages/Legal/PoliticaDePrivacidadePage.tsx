@@ -8,7 +8,7 @@ export function PoliticaDePrivacidadePage() {
     <div className="login-screen">
       <div className="login-card legal-card">
         <h1>Política de Privacidade</h1>
-        <p className="legal-versao">Versão 1 — 09/11/2026.</p>
+        <p className="legal-versao">Versão 1 — 12/11/2026.</p>
         <h2>1. Quem trata os dados</h2>
         <p>
           O SGEA (Sistema de Gestão de Eventos Acadêmicos) é um protótipo acadêmico desenvolvido como Projeto de Final
@@ -380,7 +380,7 @@ export function PoliticaDePrivacidadePage() {
           no prazo regulatório aplicável.
         </p>
         <p className="legal-versao">
-          Versão 1 — 09/11/2026. Quando este texto mudar, a nova versão é publicada nesta página com a data, e a versão
+          Versão 1 — 12/11/2026. Quando este texto mudar, a nova versão é publicada nesta página com a data, e a versão
           que você aceitou fica registrada na sua conta.
         </p>
 

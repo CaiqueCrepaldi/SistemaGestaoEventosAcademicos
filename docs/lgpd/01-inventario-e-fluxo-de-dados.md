@@ -1,6 +1,6 @@
 # Inventário de dados pessoais e fluxo de dados — SGEA
 
-**Data:** 09/11/2026 · **Versão:** 1 (acompanha a versão 1 dos Termos de Uso e da
+**Data:** 12/11/2026 · **Versão:** 1 (acompanha a versão 1 dos Termos de Uso e da
 Política de Privacidade)
 
 Responde, para cada dado pessoal tratado pelo SGEA, às perguntas da seção 1
@@ -67,7 +67,7 @@ entra e circula no sistema.
   primeiro acesso).
 - **Onde fica:** `usuarios.consentimentoLgpdEm` (data/hora) e
   `usuarios.versaoTermosAceitos` (versão aceita; a vigente é a 1, de
-  09/11/2026, em `backend/src/config/termos.ts`).
+  12/11/2026, em `backend/src/config/termos.ts`).
 - **Quem consulta:** o próprio titular ("Meus dados") e a equipe, pela
   trilha de auditoria (`CONSENTIMENTO_LGPD_ACEITO`).
 - **Compartilhado:** não.

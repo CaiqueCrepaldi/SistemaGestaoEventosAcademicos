@@ -1,6 +1,6 @@
 # Fornecedores e APIs externas — SGEA
 
-**Data:** 09/11/2026 · **Versão:** 1 (acompanha a versão 1 dos Termos de Uso e da
+**Data:** 12/11/2026 · **Versão:** 1 (acompanha a versão 1 dos Termos de Uso e da
 Política de Privacidade)
 
 Todo serviço de terceiro que recebe dado pessoal ou IP do usuário (código

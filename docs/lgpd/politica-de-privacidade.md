@@ -1,6 +1,6 @@
 # Política de Privacidade
 
-**Versão 1 — 09/11/2026.** Este é o mesmo texto publicado na página
+**Versão 1 — 12/11/2026.** Este é o mesmo texto publicado na página
 `/politica-de-privacidade` do sistema
 (`frontend/src/pages/Legal/PoliticaDePrivacidadePage.tsx`): ao mudar um,
 mude o outro. A versão vigente fica em `VERSAO_TERMOS_ATUAL`
@@ -260,6 +260,6 @@ regulatório aplicável.
 
 ---
 
-*Versão 1 — 09/11/2026. Quando este texto mudar, a nova versão é publicada
+*Versão 1 — 12/11/2026. Quando este texto mudar, a nova versão é publicada
 nesta página com a data, e a versão que você aceitou fica registrada na sua
 conta.*

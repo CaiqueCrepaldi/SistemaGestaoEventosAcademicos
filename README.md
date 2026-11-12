@@ -105,9 +105,9 @@ o ideal é ativar o 2FA nas contas da equipe):
 
 | Perfil | Login | Senha |
 |---|---|---|
-| Administrador | admin@umc.br | a de `SEED_ADMIN_SENHA` no seu `backend/.env` |
-| Secretaria | secretaria@umc.br | a de `SEED_SECRETARIA_SENHA` |
-| Professor | professor@umc.br | a de `SEED_PROFESSOR_SENHA` |
+| Administrador | o e-mail de `SEED_ADMIN_EMAIL` (sem ela, admin@umc.br) | a de `SEED_ADMIN_SENHA` no seu `backend/.env` |
+| Secretaria | secretaria@umc.br (sem envio de e-mail) | a de `SEED_SECRETARIA_SENHA` |
+| Professor | professor@umc.br (sem envio de e-mail) | a de `SEED_PROFESSOR_SENHA` |
 
 Nenhuma senha fica no código nem na documentação: cada um define as suas no
 `backend/.env`. As variáveis, quais são obrigatórias e como gerar os

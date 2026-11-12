@@ -145,7 +145,7 @@ export function FeedbackPage() {
   return (
     <div>
       <PageHeader
-        title="Feedback"
+        title="Avaliações"
         actions={
           !isEquipe && (
             <button className="btn btn-primary" onClick={abrirNovo} disabled={carregando || paraAvaliar.length === 0}>

@@ -3,13 +3,13 @@
 // e o resto da carga de demonstracao ficam em scripts/carga-demonstracao.ts, que apaga tudo e recria
 import "dotenv/config";
 import { prisma } from "../src/db/prisma";
-import { CONTAS_DE_DEMONSTRACAO, garantirContasDeDemonstracao, lerSenhasDeDemonstracao, SenhaDeDemonstracaoInvalida } from "./contas-demonstracao";
+import { contasDeDemonstracao, garantirContasDeDemonstracao, lerSenhasDeDemonstracao, SenhaDeDemonstracaoInvalida } from "./contas-demonstracao";
 
 async function main() {
   // senhas conferidas ANTES de gravar qualquer coisa: se faltar alguma, o seed nao toca no banco
   const senhas = lerSenhasDeDemonstracao();
   await garantirContasDeDemonstracao(prisma, senhas);
-  console.log(`[seed] contas de demonstração conferidas: ${CONTAS_DE_DEMONSTRACAO.map((c) => c.email).join(", ")}`);
+  console.log(`[seed] contas de demonstração conferidas: ${contasDeDemonstracao().length} (administrador, secretaria e professor)`);
 }
 
 main()

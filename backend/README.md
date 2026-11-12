@@ -92,9 +92,9 @@ desenvolvimento:
 
 | Perfil | E-mail | Senha |
 |---|---|---|
-| Administrador | admin@umc.br | a de `SEED_ADMIN_SENHA` no seu `backend/.env` |
-| Secretaria | secretaria@umc.br | a de `SEED_SECRETARIA_SENHA` |
-| Professor | professor@umc.br | a de `SEED_PROFESSOR_SENHA` (conta já ativada, sem convite) |
+| Administrador | o e-mail de `SEED_ADMIN_EMAIL` (sem ela, admin@umc.br) | a de `SEED_ADMIN_SENHA` no seu `backend/.env` |
+| Secretaria | secretaria@umc.br (sem envio de e-mail) | a de `SEED_SECRETARIA_SENHA` |
+| Professor | professor@umc.br (sem envio de e-mail) | a de `SEED_PROFESSOR_SENHA` (conta já ativada, sem convite) |
 
 Não há conta de aluno de demonstração: os alunos, professores, salas,
 palestrantes e eventos de exemplo vêm da carga de demonstração
@@ -124,7 +124,8 @@ O frontend tem o seu, `frontend/.env.example`, com só a `VITE_API_URL`.
 | `SENDGRID_API_KEY` | Não | Chave do SendGrid (começa com `SG.`). Sem ela, os e-mails ficam simulados |
 | `EMAIL_FROM` | Não | Remetente verificado no SendGrid; vai junto com a chave |
 | `APP_URL` | Não para subir; **sim** para criar professor | Endereço do frontend, sem barra no fim (dev: `http://localhost:5173`; produção: o domínio do site, na Vercel). Vai no link do convite do professor (`APP_URL/#/primeiro-acesso?convite=...`). Sem ela, o servidor avisa na inicialização e criar professor e reenviar convite são recusados |
-| `SEED_ADMIN_SENHA` | Só para o seed e a carga | Senha da conta `admin@umc.br` |
+| `SEED_ADMIN_EMAIL` | Não (no `.env.production.local`, sim para a carga em produção) | E-mail da conta de administrador de demonstração: o de quem apresenta, que recebe os avisos. Fica só no `.env`, nunca no código. Sem ela: `admin@umc.br` |
+| `SEED_ADMIN_SENHA` | Só para o seed e a carga | Senha da conta de administrador de demonstração |
 | `SEED_SECRETARIA_SENHA` | Só para o seed e a carga | Senha da conta `secretaria@umc.br` |
 | `SEED_PROFESSOR_SENHA` | Só para o seed e a carga | Senha da conta `professor@umc.br` (já ativada) |
 
@@ -325,13 +326,25 @@ ela aplicada. Siga a ordem:
 
 Apaga **todos** os dados do banco (contas, eventos, inscrições, auditoria,
 limites de acesso, cadastros pendentes, convites, códigos do 2FA etc.) e
-carrega um cenário realista para a apresentação: 12 salas no padrão da UMC (8 de aula, 2 laboratórios e 2 auditórios), 40 palestrantes,
-150 professores e 1.000 alunos fictícios, 200 eventos (140 passados, 10 nos
-próximos 7 dias e 50 de 8 a 30 dias à frente) com aprovação e histórico,
-inscrições, check-in, questionário, certificados e avaliações, além das três
-contas de demonstração com as senhas das `SEED_*_SENHA`. As contas fictícias
-(`usuarios.ficticio`) nunca recebem e-mail. A auditoria começa com um único
-registro, "carga de demonstração executada", só com as quantidades.
+carrega um cenário realista para a apresentação: 12 salas no padrão da UMC
+(8 de aula, 2 laboratórios e 2 auditórios), 40 palestrantes (mais 3
+aguardando aprovação), 150 professores, 1 secretaria e 1.000 alunos fictícios,
+200 eventos (150 encerrados, 25 futuros aprovados e 25 em aprovação: 15
+aguardando, 5 recusados e 5 aprovados com proposta de alteração aguardando),
+com histórico, inscrições (nenhum aluno em dois eventos no mesmo horário),
+check-in, questionário, certificados e avaliações, além das três contas de
+demonstração (senhas das `SEED_*_SENHA`; o e-mail do administrador em
+`SEED_ADMIN_EMAIL`). As contas fictícias (`usuarios.ficticio`), a secretaria e
+o professor de demonstração nunca recebem e-mail. A **auditoria começa vazia**.
+
+No fim, a carga imprime o **roteiro da apresentação**: o evento da
+apresentação (13/11 às 21:00, com 12 pedidos de check-in, 2 presentes que
+avaliaram sem questionário e 1 com o questionário respondido), os dois eventos
+no mesmo horário, o lotado, o de uma vaga, os eventos do professor de
+demonstração (aprovado, com proposta recusada e aguardando, aguardando
+aprovação e recusado), os palestrantes aguardando, os convites pendentes, os
+professores inativos, a secretaria fictícia, os alunos inativados, um aluno
+para bloquear ao vivo e um código de certificado para validar.
 
 Rode de dentro de `backend/`:
 
