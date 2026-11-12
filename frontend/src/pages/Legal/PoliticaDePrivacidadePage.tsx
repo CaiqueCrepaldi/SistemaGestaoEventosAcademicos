@@ -43,10 +43,11 @@ export function PoliticaDePrivacidadePage() {
             dados são apagados e nenhuma conta é criada.
           </li>
           <li>
-            <strong>Professor:</strong> nome completo e e-mail institucional (<code>@umc.br</code>), informados pela
-            secretaria ou pela administração ao criar a conta. Nada além disso. O professor recebe por e-mail um link de
-            convite, válido por 24 horas e de uso único; a chave do link fica guardada só como hash. Ao usar o convite,
-            ele define a senha e aceita os Termos de Uso.
+            <strong>Professor e secretaria:</strong> nome completo e e-mail institucional (<code>@umc.br</code>),
+            informados ao criar a conta na tela Equipe: a conta de professor é criada pela secretaria ou pela
+            administração; a de secretaria, só pela administração. Nada além disso. A pessoa recebe por e-mail um link
+            de convite, válido por 24 horas e de uso único; a chave do link fica guardada só como hash. Ao usar o
+            convite, ela define a senha e aceita os Termos de Uso.
           </li>
           <li>
             <strong>Palestrante:</strong> nome e e-mail, informados pela equipe ou pelo professor. O nome aparece na
@@ -62,7 +63,9 @@ export function PoliticaDePrivacidadePage() {
           <li>
             <strong>Inscrições e check-in:</strong> inscrições em eventos, o pedido de check-in feito pelo aluno (com a
             hora do pedido) e a decisão (aprovado ou recusado, com quem decidiu e quando). Quem não pede o check-in até
-            o fim do prazo fica como ausente.
+            o fim do prazo fica como ausente. Para recusar uma inscrição no mesmo horário de outra, o sistema consulta
+            as inscrições do próprio aluno e informa o título e o horário do outro evento só a ele (ou a quem da equipe
+            está fazendo a inscrição).
           </li>
           <li>
             <strong>Questionário e certificado:</strong> respostas ao questionário de cada evento e o resultado (acertos
@@ -79,8 +82,8 @@ export function PoliticaDePrivacidadePage() {
             motivo da recusa e a resposta do professor.
           </li>
           <li>
-            <strong>Situação da conta:</strong> se a equipe inativar uma conta (de aluno ou de professor), fica
-            registrado o motivo, visível só para a equipe.
+            <strong>Situação da conta:</strong> se a equipe inativar uma conta (de aluno, de professor ou de
+            secretaria), fica registrado o motivo, visível só para a equipe.
           </li>
           <li>
             <strong>Registros de acesso e auditoria:</strong> login (sucesso e falha), acesso negado, cadastro, check-in
@@ -89,8 +92,8 @@ export function PoliticaDePrivacidadePage() {
           </li>
           <li>
             <strong>Endereço IP:</strong> usado só para bloquear por alguns minutos o excesso de tentativas no login, na
-            recuperação de senha, no envio do código do cadastro, no link de convite do professor e na consulta pública
-            de certificados.
+            recuperação de senha, no envio do código do cadastro, no link de convite da conta da equipe e na consulta
+            pública de certificados.
           </li>
         </ul>
         <p>
@@ -122,8 +125,11 @@ export function PoliticaDePrivacidadePage() {
               <td>Procedimentos preliminares a pedido do titular (art. 7º, V)</td>
             </tr>
             <tr>
-              <td>Nome e e-mail do professor, convite (hash da chave)</td>
-              <td>Criar a conta do professor e permitir que ele crie e organize os próprios eventos</td>
+              <td>Nome e e-mail do professor e da secretaria, convite (hash da chave)</td>
+              <td>
+                Criar a conta da equipe: o professor cria e organiza os próprios eventos; a secretaria administra o
+                sistema junto com a administração
+              </td>
               <td>Execução de contrato (art. 7º, V)</td>
             </tr>
             <tr>
@@ -202,13 +208,13 @@ export function PoliticaDePrivacidadePage() {
             <strong>SendGrid</strong> (Twilio, envio de e-mail): envia somente estes e-mails:
             <ul>
               <li>o código de confirmação do cadastro do aluno;</li>
-              <li>o convite do professor (link para criar a senha);</li>
+              <li>o convite da conta de professor ou de secretaria (link para criar a senha);</li>
               <li>o código de recuperação de senha;</li>
               <li>
                 o aviso de senha alterada pela página &ldquo;Minha conta&rdquo; (só a data e a hora da troca, nunca a
                 senha);
               </li>
-              <li>a confirmação de inscrição;</li>
+              <li>a confirmação de inscrição (com a sala, no formato da UMC, e o tipo);</li>
               <li>o aviso de inscrição cancelada pela equipe;</li>
               <li>
                 o aviso de mudança de sala, horário, carga horária ou palestrante num evento em que o aluno está
@@ -250,9 +256,9 @@ export function PoliticaDePrivacidadePage() {
           </li>
           <li>
             Os códigos de confirmação do cadastro e de recuperação de senha ficam guardados só como hash, valem por 15
-            minutos e deixam de valer depois de 5 tentativas erradas. A chave do convite do professor também fica só
-            como hash, vale por 24 horas e só pode ser usada uma vez; um convite novo invalida o anterior. O envio de
-            códigos é limitado por e-mail e por IP.
+            minutos e deixam de valer depois de 5 tentativas erradas. A chave do convite da conta da equipe (professor
+            ou secretaria) também fica só como hash, vale por 24 horas e só pode ser usada uma vez; um convite novo
+            invalida o anterior. O envio de códigos é limitado por e-mail e por IP.
           </li>
           <li>O e-mail de acesso não pode ser alterado: ele identifica a sua conta.</li>
           <li>
@@ -288,11 +294,22 @@ export function PoliticaDePrivacidadePage() {
             na próxima vez que alguém entrar no sistema ou fizer um cadastro.
           </li>
           <li>
-            <strong>Convite do professor:</strong> apagado quando é usado; um convite novo substitui o anterior.
+            <strong>Convite da conta da equipe:</strong> apagado quando é usado ou quando a conta que ainda esperava o
+            convite é excluída; um convite novo substitui o anterior.
           </li>
           <li>
-            <strong>Conta:</strong> permanece enquanto você usa o sistema. A secretaria pode inativar a conta (o
-            histórico de inscrições e certificados é preservado) e só pode excluí-la definitivamente depois de
+            <strong>Conta de professor ou de secretaria:</strong> permanece enquanto a pessoa faz parte da equipe. Na
+            tela Equipe, a administração gerencia professores e secretarias, e a secretaria só professores; ninguém
+            altera a própria conta por essa tela, e o sistema sempre mantém pelo menos um administrador ativo. Inativar
+            encerra as sessões abertas (os eventos em aberto do professor passam antes para outro professor ou para a
+            equipe). Só é possível excluir conta inativa ou que ainda não usou o convite (por exemplo, criada com o
+            e-mail errado). Quem tem histórico no sistema (eventos ou palestrantes criados, decisões de aprovação,
+            propostas, check-ins decididos ou pedidos de titular atendidos) não é excluído: a conta fica preservada como
+            inativa. Os registros de auditoria ficam em qualquer caso.
+          </li>
+          <li>
+            <strong>Conta do aluno:</strong> permanece enquanto você usa o sistema. A secretaria pode inativar a conta
+            (o histórico de inscrições e certificados é preservado) e só pode excluí-la definitivamente depois de
             inativada. A exclusão apaga a conta e o histórico vinculado (inscrições, avaliações e tentativas de
             questionário) de forma permanente.
           </li>
@@ -344,7 +361,7 @@ export function PoliticaDePrivacidadePage() {
             sobre seus dados.
           </li>
         </ul>
-        <p>Professores e palestrantes fazem os pedidos pelo mesmo e-mail.</p>
+        <p>Professores, secretarias e palestrantes fazem os pedidos pelo mesmo e-mail.</p>
         <h2>9. Incidentes de segurança</h2>
         <p>
           Em caso de incidente que exponha dados pessoais com risco ou dano relevante, a equipe responsável avalia o

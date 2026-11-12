@@ -201,6 +201,19 @@ h1, h2, h3 {
   }
 }
 
+/* tres selecoes lado a lado (predio, andar e numero da sala); no celular, uma embaixo da outra */
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 520px) {
+  .grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Stat cards */
 .stat-grid {
   display: grid;
@@ -1929,4 +1942,11 @@ h1, h2, h3 {
     min-width: 0;
     font-size: 16px;
   }
+}
+
+/* recusa da inscricao do aluno (ex.: outro evento no mesmo horario), logo abaixo do botao "Inscrever-se" */
+.erro-inscricao {
+  max-width: 260px;
+  margin: 0;
+  line-height: 1.4;
 }

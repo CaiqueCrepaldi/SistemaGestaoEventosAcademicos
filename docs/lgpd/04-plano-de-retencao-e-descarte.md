@@ -20,10 +20,11 @@ Privacidade só promete ao titular o que já funciona.
 | Categoria | Finalidade | Prazo ou critério | Destino |
 |---|---|---|---|
 | Cadastro aguardando confirmação (`cadastros_pendentes`) | Garantir que a conta pertence ao dono do e-mail antes de criá-la | Até 15 minutos (`expiraEm`), renovados a cada reenvio do código | **Apagado ao concluir o cadastro** (na transação que cria a conta) **ou depois de expirar**, a cada login e a cada cadastro novo. Refazer o cadastro com o mesmo e-mail ou RGM substitui o pendente anterior |
-| Convite do professor (`primeiros_acessos`) | Ativar a conta do professor pelo link | 24 horas, uso único | **Apagado ao ser usado** (na transação que ativa a conta). Um convite novo substitui o anterior. O convite vencido e não usado fica até o reenvio ou a exclusão da conta |
+| Convite da conta da equipe (`primeiros_acessos`) | Ativar a conta do professor ou da secretaria pelo link | 24 horas, uso único | **Apagado ao ser usado** (na transação que ativa a conta). Um convite novo substitui o anterior. O convite vencido e não usado fica até o reenvio ou a exclusão da conta pendente na tela Equipe (que apaga a conta e o convite) |
 | Conta ativa (`usuarios`, `participantes`) | Autenticação e participação em eventos | Enquanto ativa | — |
 | Conta de aluno inativada | Bloquear o uso do sistema (uso indevido, dado incorreto, a pedido) | Até a reativação | Conta e histórico mantidos; as inscrições sem pedido de check-in em eventos que ainda não começaram são canceladas na inativação (cada uma registrada na auditoria); presenças e certificados continuam valendo; o motivo é apagado na reativação |
-| Conta de professor inativada | Bloquear o acesso | Até a reativação | Os eventos em aberto passam antes para outro professor ou para a equipe; os encerrados há mais de 24 horas continuam ligados a ele; o motivo é apagado na reativação |
+| Conta de professor ou de secretaria inativada | Bloquear o acesso | Até a reativação ou a exclusão | Os eventos em aberto do professor passam antes para outro professor ou para a equipe; os encerrados há mais de 24 horas continuam ligados a ele; o motivo é apagado na reativação |
+| Conta da equipe excluída (tela Equipe) | — | Ao excluir | Só conta inativa ou com convite pendente, e sem histórico: sai a conta com o convite, os códigos de recuperação e os contadores de tentativa. Com histórico (eventos ou palestrantes criados, decisões de aprovação, propostas, check-ins decididos, pedidos atendidos), a conta fica inativa. Os registros de auditoria ficam (`usuarioId` nulo, `atorNome` preservado) |
 | Conta excluída a pedido do titular ou pela equipe | — | Ao atender o pedido | A equipe inativa e depois remove a conta e o histórico (inscrições, avaliações e tentativas) na tela Participantes. Com certificado emitido, a remoção é recusada (`409 PARTICIPANTE_COM_CERTIFICADO`) e a conta fica só inativada |
 | Conta sem uso (24 meses sem login) | — | 24 meses sem `LOGIN_SUCESSO` | **Plano:** anonimizar pela rotina de retenção |
 | Inscrições, check-in e tentativas de questionário | Participação no evento e estatística | Enquanto a conta existir | Apagadas junto com a conta na remoção; a inscrição de origem de um certificado fica. Quando o prazo do check-in fecha, o pedido sem decisão vira recusado e quem não pediu fica ausente (`utils/checkin.ts`), sem apagar nada |
@@ -45,7 +46,8 @@ Privacidade só promete ao titular o que já funciona.
 - o cadastro pendente sai na transação que cria a conta e, se expirar, é
   apagado por `apagarCadastrosExpirados()` (`auth.service.ts`), chamada a
   cada login e a cada cadastro; a chamada no login nunca impede a entrada;
-- o convite do professor sai na transação que ativa a conta;
+- o convite da conta da equipe sai na transação que ativa a conta, ou junto
+  com a conta pendente excluída na tela Equipe;
 - a inativação do aluno cancela na hora as inscrições sem pedido de
   check-in em eventos futuros, cada uma registrada na auditoria;
 - a exclusão de avaliação (pelo aluno ou pela equipe, com motivo) é imediata

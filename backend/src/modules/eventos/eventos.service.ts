@@ -3,10 +3,11 @@ import { Prisma, type Evento as EventoDb, type PropostaAlteracao as PropostaDb, 
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { emailService, type MudancaEvento } from "../email/email.service";
-import { enviarConfirmacaoPorEmail, paraDominio as paraDominioInscricao } from "../inscricoes/inscricoes.service";
+import { enviarConfirmacaoPorEmail, garantirSemConflitoDeHorario, paraDominio as paraDominioInscricao } from "../inscricoes/inscricoes.service";
 import { COM_CONTA_DO_ALUNO, paraDominio as participanteParaDominio } from "../participantes/participantes.service";
 import { listarHistorico, registrarHistorico } from "../aprovacoes/aprovacoes.service";
 import { camposInformados, registrarAuditoria } from "../../utils/auditoria";
+import { rotuloSala } from "../../utils/salas";
 import { ehEquipe, eventoDoAtorOuFalhar, eventoEncerrado, eventosVisiveis, palestrantesVisiveis, type Ator } from "../../utils/escopo";
 import type { Evento, PerguntaQuestionario, PropostaEvento } from "../../types/domain";
 import type { BuscaEventos, EventoInput, EventoUpdateInput, IntervaloEventos, PropostaEventoInput } from "./eventos.schemas";
@@ -127,7 +128,7 @@ async function calendario(ator: Ator, intervalo: IntervaloEventos) {
   const [outros, propostas] = await Promise.all([
     prisma.evento.findMany({
       where: { AND: [deOutros, { situacao: { in: ["APROVADO", "PENDENTE"] }, horario: noIntervalo }] },
-      select: { horario: true, cargaHoraria: true, sala: { select: { id: true, nome: true } } },
+      select: { horario: true, cargaHoraria: true, sala: { select: { id: true, nome: true, tipo: true } } },
     }),
     prisma.propostaAlteracao.findMany({
       where: { tipo: "EVENTO", situacao: "PENDENTE", novoHorario: noIntervalo, evento: deOutros },
@@ -136,11 +137,11 @@ async function calendario(ator: Ator, intervalo: IntervaloEventos) {
   ]);
   const salasDasPropostas = await prisma.sala.findMany({
     where: { id: { in: propostas.map((p) => p.novaSalaId!).filter(Boolean) } },
-    select: { id: true, nome: true },
+    select: { id: true, nome: true, tipo: true },
   });
-  const nomeDaSala = new Map(salasDasPropostas.map((s) => [s.id, s.nome]));
+  const nomeDaSala = new Map(salasDasPropostas.map((s) => [s.id, rotuloSala(s)]));
   const salasOcupadas = [
-    ...outros.map((e) => ocupacao(e.sala.id, e.sala.nome, e.horario, e.cargaHoraria)),
+    ...outros.map((e) => ocupacao(e.sala.id, rotuloSala(e.sala), e.horario, e.cargaHoraria)),
     ...propostas
       .filter((p) => p.novaSalaId && p.novoHorario && p.novaCargaHoraria)
       .map((p) => ocupacao(p.novaSalaId!, nomeDaSala.get(p.novaSalaId!) ?? "Sala", p.novoHorario!, p.novaCargaHoraria!)),
@@ -251,13 +252,13 @@ async function validarConflitoDeSala(salaId: string, inicio: Date, cargaHoraria:
 // a sala nova precisa caber quem ja esta inscrito
 async function validarCapacidade(salaId: string, eventoId: string) {
   const [sala, inscritos] = await Promise.all([
-    prisma.sala.findUnique({ where: { id: salaId }, select: { nome: true, capacidade: true } }),
+    prisma.sala.findUnique({ where: { id: salaId }, select: { nome: true, tipo: true, capacidade: true } }),
     prisma.inscricao.count({ where: { eventoId } }),
   ]);
   if (sala && inscritos > sala.capacidade) {
     throw AppError.conflito(
       "SALA_SEM_CAPACIDADE",
-      `A sala "${sala.nome}" comporta ${sala.capacidade} pessoa(s), mas o evento já tem ${inscritos} inscrito(s). Escolha uma sala maior.`,
+      `A sala ${rotuloSala(sala)} comporta ${sala.capacidade} pessoa(s), mas o evento já tem ${inscritos} inscrito(s). Escolha uma sala maior.`,
     );
   }
 }
@@ -344,13 +345,16 @@ async function descreverMudancas(antes: Agenda, depois: Agenda): Promise<Mudanca
   const mudou = camposMudados(antes, depois);
   const [salas, palestrantes] = await Promise.all([
     mudou.includes("salaId")
-      ? prisma.sala.findMany({ where: { id: { in: [antes.salaId, depois.salaId] } }, select: { id: true, nome: true } })
+      ? prisma.sala.findMany({ where: { id: { in: [antes.salaId, depois.salaId] } }, select: { id: true, nome: true, tipo: true } })
       : [],
     mudou.includes("palestranteId")
       ? prisma.palestrante.findMany({ where: { id: { in: [antes.palestranteId, depois.palestranteId] } }, select: { id: true, nome: true } })
       : [],
   ]);
-  const nomeSala = (id: string) => salas.find((s) => s.id === id)?.nome ?? "—";
+  const nomeSala = (id: string) => {
+    const sala = salas.find((s) => s.id === id);
+    return sala ? rotuloSala(sala) : "—";
+  };
   const nomePalestrante = (id: string) => palestrantes.find((p) => p.id === id)?.nome ?? "—";
   return mudou.map((campo) => {
     if (campo === "salaId") return { rotulo: "Sala", antes: nomeSala(antes.salaId), depois: nomeSala(depois.salaId) };
@@ -756,6 +760,7 @@ async function autoinscrever(eventoId: string, participanteId: string, atorId: s
   if (jaInscrito) {
     throw AppError.conflito("JA_INSCRITO", "Você já está inscrito neste evento.");
   }
+  await garantirSemConflitoDeHorario(participanteId, evento, "ALUNO");
 
   const ocupadas = await prisma.inscricao.count({ where: { eventoId } });
   if (ocupadas >= evento.sala.capacidade) {

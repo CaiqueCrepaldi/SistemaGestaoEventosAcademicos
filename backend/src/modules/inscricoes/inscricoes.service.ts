@@ -1,9 +1,10 @@
+import { rotuloSala } from "../../utils/salas";
 import { randomUUID } from "crypto";
 import type { Inscricao as InscricaoDb, Prisma } from "@prisma/client";
 import { montarPagina } from "../../utils/paginacao";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
-import { emailService, observacaoDoEnvio } from "../email/email.service";
+import { dataHoraDeBrasilia, emailService, observacaoDoEnvio } from "../email/email.service";
 import { COM_CONTA_DO_ALUNO, paraDominio as participanteParaDominio } from "../participantes/participantes.service";
 import { registrarAuditoria } from "../../utils/auditoria";
 import { eventosVisiveis, inscricaoDoAtorOuFalhar, type Ator } from "../../utils/escopo";
@@ -110,6 +111,35 @@ async function buscarOuFalhar(id: string) {
   return paraDominio(inscricao);
 }
 
+const HORA_MS = 60 * 60 * 1000;
+
+// o aluno nao fica inscrito em dois eventos ao mesmo tempo. Cada evento ocupa [inicio, inicio + carga horaria):
+// encostar nao e conflito (um termina as 21h e o outro comeca as 21h). Inscricao cancelada nao conta porque o
+// cancelamento apaga a inscricao. Vale so pra inscricao NOVA: mudanca de horario de evento ja aprovado nao
+// cancela nada. "quem" muda o texto: o proprio aluno le "voce"; a equipe e o professor leem "o aluno"
+export async function garantirSemConflitoDeHorario(
+  participanteId: string,
+  evento: { id: string; horario: Date; cargaHoraria: number },
+  quem: "ALUNO" | "EQUIPE",
+) {
+  const inicio = evento.horario.getTime();
+  const fim = new Date(inicio + evento.cargaHoraria * HORA_MS);
+  // so as que comecam antes do fim desta podem cruzar; o fim de cada uma e conferido abaixo
+  const candidatas = await prisma.inscricao.findMany({
+    where: { participanteId, eventoId: { not: evento.id }, evento: { horario: { lt: fim } } },
+    select: { evento: { select: { titulo: true, horario: true, cargaHoraria: true } } },
+    orderBy: { evento: { horario: "asc" } },
+  });
+  const conflito = candidatas.find((i) => i.evento.horario.getTime() + i.evento.cargaHoraria * HORA_MS > inicio);
+  if (!conflito) return;
+  const quando = dataHoraDeBrasilia(conflito.evento.horario).replace(", ", " às ");
+  const mensagem =
+    quem === "ALUNO"
+      ? `Você já está inscrito em ${conflito.evento.titulo}, que acontece no mesmo horário (${quando}). Cancele aquela inscrição para se inscrever nesta.`
+      : `O aluno já está inscrito em ${conflito.evento.titulo}, que acontece no mesmo horário (${quando}). Cancele aquela inscrição para inscrevê-lo nesta.`;
+  throw AppError.conflito("CONFLITO_DE_HORARIO", mensagem);
+}
+
 // inscricao manual feita pela equipe ou pelo professor (so nos eventos dele), checa duplicidade e vaga.
 // Evento que nao esta APROVADO nao aceita inscricao
 async function criarManual(dados: InscricaoInput, ator: Ator) {
@@ -134,6 +164,7 @@ async function criarManual(dados: InscricaoInput, ator: Ator) {
     where: { participanteId_eventoId: { participanteId: dados.participanteId, eventoId: dados.eventoId } },
   });
   if (jaInscrito) throw AppError.conflito("JA_INSCRITO", "Este participante já está inscrito neste evento.");
+  await garantirSemConflitoDeHorario(dados.participanteId, evento!, "EQUIPE");
 
   const ocupadas = await prisma.inscricao.count({ where: { eventoId: dados.eventoId } });
   if (ocupadas >= evento!.sala.capacidade) {
@@ -278,7 +309,7 @@ export async function enviarConfirmacaoPorEmail(inscricaoId: string, atorId: str
   try {
     const inscricao = await prisma.inscricao.findUnique({
       where: { id: inscricaoId },
-      include: { participante: { include: COM_CONTA_DO_ALUNO }, evento: { include: { palestrante: true } } },
+      include: { participante: { include: COM_CONTA_DO_ALUNO }, evento: { include: { palestrante: true, sala: true } } },
     });
     // nome e e-mail do aluno vem da conta dele (o participante so guarda o RGM); sem conta, sem e-mail
     const participante = inscricao ? participanteParaDominio(inscricao.participante) : null;
@@ -290,6 +321,7 @@ export async function enviarConfirmacaoPorEmail(inscricaoId: string, atorId: str
       eventoTema: inscricao.evento.tema,
       palestranteNome: inscricao.evento.palestrante.nome,
       eventoHorario: inscricao.evento.horario,
+      salaRotulo: rotuloSala(inscricao.evento.sala),
     });
     await registrarAuditoria(
       atorId,

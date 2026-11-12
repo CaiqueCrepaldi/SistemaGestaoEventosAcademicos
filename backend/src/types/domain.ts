@@ -63,6 +63,7 @@ export interface SituacaoConta {
 export interface Sala {
   id: string;
   nome: string;
+  tipo: "SALA_DE_AULA" | "LABORATORIO" | "AUDITORIO";
   capacidade: number;
 }
 

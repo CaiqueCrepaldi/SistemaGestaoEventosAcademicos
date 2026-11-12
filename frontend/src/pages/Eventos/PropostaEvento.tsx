@@ -1,3 +1,4 @@
+import { ordenarSalas, rotuloSala } from "../../utils/salas";
 import { useState } from "react";
 import type { Mudanca } from "../../components/aprovacao/ResumoProposta";
 import { Campo } from "../../components/ui/Campo";
@@ -13,7 +14,7 @@ const dataHora = (iso: string) => new Date(iso).toLocaleString("pt-BR", { dateSt
 export function mudancasDoEvento(evento: Evento, salas: Sala[], palestrantes: Palestrante[]): Mudanca[] {
   const proposta = evento.proposta;
   if (!proposta) return [];
-  const sala = (id: string) => salas.find((s) => s.id === id)?.nome ?? "—";
+  const sala = (id: string) => rotuloSala(salas.find((s) => s.id === id));
   const palestrante = (id: string) => palestrantes.find((p) => p.id === id)?.nome ?? "—";
   const mudancas: Mudanca[] = [];
   if (proposta.salaId !== evento.salaId) mudancas.push({ rotulo: "Sala", antes: sala(evento.salaId), depois: sala(proposta.salaId) });
@@ -102,9 +103,9 @@ export function ModalPropostaEvento({
         <div className="field-row">
           <Campo nome="salaId" rotulo="Sala" obrigatorio erro={erros.salaId}>
             <select value={form.salaId} onChange={(e) => setForm({ ...form, salaId: e.target.value })}>
-              {salas.map((s) => (
+              {ordenarSalas(salas).map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.nome} ({s.capacidade} lugares)
+                  {rotuloSala(s)} ({s.capacidade} lugares)
                 </option>
               ))}
             </select>

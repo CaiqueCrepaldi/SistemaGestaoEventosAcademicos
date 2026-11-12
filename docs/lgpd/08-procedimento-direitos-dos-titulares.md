@@ -44,15 +44,18 @@ registrar e acompanhar esses pedidos (ver "Fora desta versão", no fim).
    própria pessoa usar a página "Meus dados"; se não for possível (ex.:
    conta inativada), a equipe envia a cópia como na linha "Portabilidade".
 
-## Professores e palestrantes
+## Professores, secretarias e palestrantes
 
-Professores e palestrantes também são titulares e fazem os pedidos pelo
-mesmo e-mail. A equipe corrige nome e e-mail do palestrante na tela
-Palestrantes. A tela Professores não edita nome nem e-mail: a correção do
-nome do professor é feita pela equipe técnica. A conta de professor
-pode ser inativada (com a transferência dos eventos em aberto); a remoção
-de uma conta de professor é feita pela equipe técnica, depois de transferir
-ou encerrar os eventos dele.
+Professores, secretarias e palestrantes também são titulares e fazem os
+pedidos pelo mesmo e-mail. A equipe corrige nome e e-mail do palestrante na
+tela Palestrantes. A tela Equipe não edita nome nem e-mail: a correção do
+nome é feita pela equipe técnica. A conta de professor ou de secretaria pode
+ser inativada na tela Equipe (o professor, com a transferência dos eventos
+em aberto). A exclusão, na mesma tela, só vale para conta inativa ou que
+ainda não usou o convite; quem tem histórico no sistema (eventos ou
+palestrantes criados, decisões de aprovação, propostas, check-ins decididos,
+pedidos atendidos) fica preservado como inativo, e os registros de
+auditoria nunca são apagados.
 
 ## Mudança do e-mail institucional
 

@@ -120,6 +120,23 @@ async function main() {
   const palestrantes: string[] = [];
   const eventos: string[] = [];
   const sufixo = randomUUID().slice(0, 8);
+  // sala no padrao da UMC (predio + andar + "-" + numero, ex.: 1T-01) e unica: o teste pega codigos que nenhuma
+  // sala do banco usa (de 33-21 para tras, longe das salas da carga de demonstracao)
+  const codigosDeSalaEmUso = new Set((await prisma.sala.findMany({ select: { nome: true } })).map((sala) => sala.nome));
+  function codigoDeSala(): string {
+    for (const predio of ["3", "2", "1"]) {
+      for (const andar of ["3", "2", "1", "T"]) {
+        for (let numero = 21; numero >= 1; numero--) {
+          const codigo = `${predio}${andar}-${String(numero).padStart(2, "0")}`;
+          if (!codigosDeSalaEmUso.has(codigo)) {
+            codigosDeSalaEmUso.add(codigo);
+            return codigo;
+          }
+        }
+      }
+    }
+    throw new Error("nenhum código de sala livre no banco de desenvolvimento");
+  }
 
   // conta de equipe criada direto no banco (nao existe cadastro publico de equipe). De proposito com
   // hash de senha de custo 10 (o custo antigo), pra o R20 conferir que o login refaz o hash com custo 12
@@ -466,17 +483,50 @@ async function main() {
 
     // ------------------------------------------------------------------ salas, palestrantes, eventos
     requisito("R05 Salas");
-    r = await chamar("POST", "/salas", { token: admin.token, corpo: { nome: `Sala Teste ${sufixo}`, capacidade: 0 } });
+    const codigoSalaTeste = codigoDeSala();
+    r = await chamar("POST", "/salas", { token: admin.token, corpo: { nome: codigoSalaTeste, tipo: "SALA_DE_AULA", capacidade: 0 } });
     checar("capacidade zero -> 422", r.status === 422, r.corpo);
-    r = await chamar("POST", "/salas", { token: admin.token, corpo: { nome: `Sala Teste ${sufixo}`, capacidade: 2 } });
-    checar("equipe cria sala -> 201", r.status === 201, r.corpo);
+    const camposDoErro = (resposta: Resposta) => (resposta.corpo?.erros ?? []).map((e: { campo: string }) => e.campo);
+    for (const codigoInvalido of [`Sala Teste ${sufixo}`, "4T-01", "1X-01", "11-22", "11-00", "11-1", "1T01"]) {
+      r = await chamar("POST", "/salas", { token: admin.token, corpo: { nome: codigoInvalido, tipo: "SALA_DE_AULA", capacidade: 10 } });
+      checar(`código de sala fora do padrão (${codigoInvalido.startsWith("Sala") ? "nome livre" : codigoInvalido}) -> 422 no campo nome`, r.status === 422 && camposDoErro(r).includes("nome"), r.corpo);
+    }
+    r = await chamar("POST", "/salas", { token: admin.token, corpo: { nome: codigoSalaTeste, tipo: "COZINHA", capacidade: 10 } });
+    checar("tipo de sala fora da lista -> 422 no campo tipo", r.status === 422 && camposDoErro(r).includes("tipo"), r.corpo);
+    r = await chamar("POST", "/salas", { token: admin.token, corpo: { nome: codigoSalaTeste.toLowerCase(), tipo: "LABORATORIO", capacidade: 2 } });
+    checar(
+      "equipe cria sala no padrão da UMC -> 201, código em maiúsculas e com o tipo",
+      r.status === 201 && r.corpo.nome === codigoSalaTeste && r.corpo.tipo === "LABORATORIO",
+      r.corpo,
+    );
     const salaId: string = r.corpo.id;
     salas.push(salaId);
-    r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: `Sala Pequena ${sufixo}`, capacidade: 1 } });
+    r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: codigoSalaTeste, tipo: "AUDITORIO", capacidade: 100 } });
+    checar(
+      "código repetido -> 409 \"Já existe uma sala <código>\"",
+      r.status === 409 && r.corpo.code === "SALA_DUPLICADA" && r.corpo.message === `Já existe uma sala ${codigoSalaTeste}.`,
+      r.corpo,
+    );
+    r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: codigoDeSala(), tipo: "SALA_DE_AULA", capacidade: 1 } });
     const salaPequenaId: string = r.corpo.id;
     salas.push(salaPequenaId);
-    r = await chamar("PUT", `/salas/${salaId}`, { token: secretaria.token, corpo: { nome: `Sala Teste Editada ${sufixo}` } });
-    checar("secretaria edita sala -> 200", r.status === 200 && r.corpo.nome.startsWith("Sala Teste Editada"), r.corpo);
+    r = await chamar("PUT", `/salas/${salaPequenaId}`, { token: secretaria.token, corpo: { nome: codigoSalaTeste } });
+    checar("editar para um código que outra sala já usa -> 409", r.status === 409 && r.corpo.code === "SALA_DUPLICADA", r.corpo);
+    const codigoEditado = codigoDeSala();
+    r = await chamar("PUT", `/salas/${salaId}`, { token: secretaria.token, corpo: { nome: codigoEditado, tipo: "SALA_DE_AULA" } });
+    checar("secretaria edita sala -> 200", r.status === 200 && r.corpo.nome === codigoEditado && r.corpo.tipo === "SALA_DE_AULA", r.corpo);
+    r = await chamar("PUT", `/salas/${salaId}`, { token: secretaria.token, corpo: { capacidade: 2 } });
+    checar("editar só a capacidade mantém o código", r.status === 200 && r.corpo.nome === codigoEditado, r.corpo);
+    r = await chamar("GET", "/salas", { token: secretaria.token });
+    const chaveOrdem = (nome: string) => `${nome[0]}${nome[1] === "T" ? "0" : nome[1]}${nome.slice(3)}`;
+    const nomesDasSalas: string[] = (r.corpo ?? []).map((sala: { nome: string }) => sala.nome).filter((nome: string) => /^[1-3][T1-3]-d{2}$/.test(nome));
+    checar(
+      "lista de salas por prédio, andar (térreo antes do 1º) e número, cada uma com o tipo",
+      r.status === 200 &&
+        nomesDasSalas.every((nome, i) => i === 0 || chaveOrdem(nomesDasSalas[i - 1]) < chaveOrdem(nome)) &&
+        r.corpo.every((sala: { tipo?: string }) => ["SALA_DE_AULA", "LABORATORIO", "AUDITORIO"].includes(sala.tipo ?? "")),
+      nomesDasSalas.slice(0, 6),
+    );
     r = await chamar("GET", "/salas", { token: aluno.token });
     checar("aluno lê salas", r.status === 200 && Array.isArray(r.corpo), r.status);
 
@@ -501,6 +551,7 @@ async function main() {
     // o evento principal comeca daqui a 30 min: ainda aceita inscricao e cancelamento (nao comecou) e o
     // check-in ja abriu (abre 1h antes do inicio). A rodada inteira leva poucos minutos
     const emBreve = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    const emHoras = (iso: string, horas: number) => new Date(new Date(iso).getTime() + horas * 3600 * 1000).toISOString();
     const eventoBase = { titulo: `Evento Teste ${sufixo}`, horario: emBreve, salaId, palestranteId, tema: "Tema de teste", cargaHoraria: 2 };
     r = await chamar("POST", "/eventos", { token: admin.token, corpo: { ...eventoBase, questionario: questionario(9) } });
     checar("questionário com 9 perguntas -> 422", r.status === 422, r.corpo);
@@ -512,7 +563,7 @@ async function main() {
     checar("equipe cria evento válido -> 201", r.status === 201, r.corpo);
     const eventoId: string = r.corpo.id;
     eventos.push(eventoId);
-    r = await chamar("POST", "/eventos", { token: admin.token, corpo: { ...eventoBase, titulo: `Evento Lotado ${sufixo}`, salaId: salaPequenaId, questionario: questionario() } });
+    r = await chamar("POST", "/eventos", { token: admin.token, corpo: { ...eventoBase, titulo: `Evento Lotado ${sufixo}`, salaId: salaPequenaId, horario: emHoras(emBreve, 3), questionario: questionario() } });
     const eventoLotadoId: string = r.corpo.id;
     eventos.push(eventoLotadoId);
     r = await chamar("GET", `/eventos/${eventoId}`, { token: aluno.token });
@@ -534,12 +585,12 @@ async function main() {
 
     // ------------------------------------------------------------------ RF024: conflito de sala
     requisito("R26 Conflito de sala (RF024)");
-    const emHoras = (iso: string, horas: number) => new Date(new Date(iso).getTime() + horas * 3600 * 1000).toISOString();
-    // "Evento Lotado" ocupa a sala pequena de emBreve ate emBreve + 2h; o "Evento Encostado" (emBreve + 2h)
-    // fica fora da janela do check-in, o que o R12 usa pra conferir a regra
+    // "Evento Lotado" ocupa a sala pequena de emBreve + 3h ate emBreve + 5h (depois do evento principal, que vai
+    // de emBreve ate emBreve + 2h: o mesmo aluno pode estar nos dois); o "Evento Encostado" (emBreve + 5h) fica
+    // fora da janela do check-in, o que o R12 usa pra conferir a regra
     r = await chamar("POST", "/eventos", {
       token: admin.token,
-      corpo: { ...eventoBase, titulo: `Evento Cruzado ${sufixo}`, salaId: salaPequenaId, horario: emHoras(emBreve, 1), questionario: questionario() },
+      corpo: { ...eventoBase, titulo: `Evento Cruzado ${sufixo}`, salaId: salaPequenaId, horario: emHoras(emBreve, 4), questionario: questionario() },
     });
     checar(
       "evento que cruza outro na mesma sala -> 409 CONFLITO_DE_SALA citando o outro evento",
@@ -548,14 +599,14 @@ async function main() {
     );
     r = await chamar("POST", "/eventos", {
       token: admin.token,
-      corpo: { ...eventoBase, titulo: `Evento Encostado ${sufixo}`, salaId: salaPequenaId, horario: emHoras(emBreve, 2), cargaHoraria: 1, questionario: questionario() },
+      corpo: { ...eventoBase, titulo: `Evento Encostado ${sufixo}`, salaId: salaPequenaId, horario: emHoras(emBreve, 5), cargaHoraria: 1, questionario: questionario() },
     });
     checar("evento que começa exatamente quando o outro termina não é conflito -> 201", r.status === 201, r.corpo);
     const eventoEncostadoId: string = r.corpo.id;
     eventos.push(eventoEncostadoId);
-    r = await chamar("PUT", `/eventos/${eventoLotadoId}`, { token: secretaria.token, corpo: { horario: emBreve, cargaHoraria: 2 } });
+    r = await chamar("PUT", `/eventos/${eventoLotadoId}`, { token: secretaria.token, corpo: { horario: emHoras(emBreve, 3), cargaHoraria: 2 } });
     checar("editar mantendo o horário não conflita com o próprio evento -> 200", r.status === 200, r.corpo);
-    r = await chamar("PUT", `/eventos/${eventoEncostadoId}`, { token: secretaria.token, corpo: { horario: emHoras(emBreve, 1) } });
+    r = await chamar("PUT", `/eventos/${eventoEncostadoId}`, { token: secretaria.token, corpo: { horario: emHoras(emBreve, 4) } });
     checar("editar pra cima do horário de outro evento da sala -> 409", r.status === 409 && r.corpo.code === "CONFLITO_DE_SALA", r.corpo);
 
     // ------------------------------------------------------------------ inscricoes e check-in
@@ -680,7 +731,7 @@ async function main() {
     checar("a rota antiga de disparo pela tela não existe mais -> 404", r.status === 404, r.status);
 
     requisito("R12 Check-in pedido pelo aluno e aprovado pelo professor do evento ou pela equipe");
-    // o "Evento Encostado" comeca daqui a 2h30: a janela (1 hora antes do inicio) ainda nao abriu
+    // o "Evento Encostado" comeca daqui a 5h30: a janela (1 hora antes do inicio) ainda nao abriu
     r = await chamar("POST", `/eventos/${eventoEncostadoId}/checkin`, { token: aluno.token });
     checar(
       "pedido antes de 1 hora do início -> 409 CHECKIN_NAO_LIBERADO",
@@ -1279,10 +1330,10 @@ async function main() {
 
     // ------------------------------------------------------------------ RF021: ocupacao real das salas
     requisito("R34 Ocupação das salas pelo uso real (presentes ÷ capacidade, só eventos encerrados)");
-    r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: `Sala Ocupação ${sufixo}`, capacidade: 10 } });
+    r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: codigoDeSala(), tipo: "SALA_DE_AULA", capacidade: 10 } });
     const salaOcupacaoId: string = r.corpo.id;
     salas.push(salaOcupacaoId);
-    r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: `Sala Sem Uso ${sufixo}`, capacidade: 5 } });
+    r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: codigoDeSala(), tipo: "SALA_DE_AULA", capacidade: 5 } });
     const salaSemUsoId: string = r.corpo.id;
     salas.push(salaSemUsoId);
     // 4 alunos só deste cenário, criados direto no banco (participante + conta), apagados no fim com os outros
@@ -1392,8 +1443,8 @@ async function main() {
     const MENSAGEM_CONVITE_INVALIDO = "Convite inválido ou vencido.";
     // os convites "enviados" (o e-mail sai simulado): guarda destinatario, nome e link de cada um
     const convitesEnviados: { destinatario: string; nome: string; link: string }[] = [];
-    const enviarConviteOriginal = emailService.enviarConviteProfessor;
-    emailService.enviarConviteProfessor = async (destinatario: string, nome: string, link: string) => {
+    const enviarConviteOriginal = emailService.enviarConviteEquipe;
+    emailService.enviarConviteEquipe = async (destinatario: string, nome: string, link: string) => {
       convitesEnviados.push({ destinatario, nome, link });
       return enviarConviteOriginal(destinatario, nome, link);
     };
@@ -1426,13 +1477,13 @@ async function main() {
     checar(
       "secretaria cria professor (só nome e e-mail) -> 201, aguardando primeiro acesso, com o link do convite fora de produção e sem código",
       r.status === 201 &&
-        r.corpo.professor?.situacao === "AGUARDANDO_PRIMEIRO_ACESSO" &&
-        r.corpo.professor.email === emailProfA &&
+        r.corpo.conta?.situacao === "AGUARDANDO_PRIMEIRO_ACESSO" &&
+        r.corpo.conta.email === emailProfA &&
         typeof r.corpo.linkConviteDemo === "string" &&
         r.corpo.codigoDemo === undefined,
       r.corpo,
     );
-    const professorA: Conta = { id: r.corpo.professor?.id, email: emailProfA, senha: SENHA_PROFESSOR, perfil: "PROFESSOR", participanteId: null };
+    const professorA: Conta = { id: r.corpo.conta?.id, email: emailProfA, senha: SENHA_PROFESSOR, perfil: "PROFESSOR", participanteId: null };
     contas.push(professorA);
     const linkA: string = r.corpo.linkConviteDemo ?? "";
     const conviteA = conviteDo(linkA);
@@ -1449,7 +1500,7 @@ async function main() {
         !urlA.pathname.includes(conviteA) &&
         !urlA.search.includes(conviteA) &&
         htmlDoConvite.includes("Criar minha senha") &&
-        htmlDoConvite.includes("O link vale por 24 horas. Se ele vencer, peça um novo convite à secretaria.") &&
+        htmlDoConvite.includes("O link vale por 24 horas. Se ele vencer, peça um novo convite a quem criou a sua conta.") &&
         htmlDoConvite.split(linkA).length >= 3 &&
         !/\d{6}/.test(htmlDoConvite.split(linkA).join("")),
       { link: linkA, html: htmlDoConvite.slice(0, 200) },
@@ -1509,7 +1560,7 @@ async function main() {
     // convite vencido e reenvio, num professor so pra isso
     const emailProfV = `prof.v.${sufixo}@umc.br`;
     r = await chamar("POST", "/professores", { token: secretaria.token, corpo: { nomeCompleto: "Professor Teste Vencido", email: emailProfV } });
-    const professorV: Conta = { id: r.corpo.professor?.id, email: emailProfV, senha: SENHA_PROFESSOR, perfil: "PROFESSOR", participanteId: null };
+    const professorV: Conta = { id: r.corpo.conta?.id, email: emailProfV, senha: SENHA_PROFESSOR, perfil: "PROFESSOR", participanteId: null };
     contas.push(professorV);
     const conviteV = conviteDo(r.corpo.linkConviteDemo);
     await prisma.primeiroAcesso.update({ where: { usuarioId: professorV.id }, data: { expiraEm: new Date(Date.now() - 1000), ultimoEnvioEm: new Date(Date.now() - 120 * 1000) } });
@@ -1586,18 +1637,18 @@ async function main() {
     );
     // o resto da rodada sai do mesmo IP: zera o contador local
     await limparContadorDoIpLocal();
-    emailService.enviarConviteProfessor = enviarConviteOriginal;
+    emailService.enviarConviteEquipe = enviarConviteOriginal;
 
     // segundo professor, pra conferir que um nao enxerga o do outro
     const emailProfB = `prof.b.${sufixo}@umc.br`;
     r = await chamar("POST", "/professores", { token: admin.token, corpo: { nomeCompleto: "Professor Teste B", email: emailProfB } });
-    const professorB: Conta = { id: r.corpo.professor?.id, email: emailProfB, senha: SENHA_PROFESSOR, perfil: "PROFESSOR", participanteId: null };
+    const professorB: Conta = { id: r.corpo.conta?.id, email: emailProfB, senha: SENHA_PROFESSOR, perfil: "PROFESSOR", participanteId: null };
     contas.push(professorB);
     await chamar("POST", "/auth/primeiro-acesso", { corpo: { convite: conviteDo(r.corpo.linkConviteDemo), novaSenha: SENHA_PROFESSOR, aceiteLgpd: true } });
     professorB.token = await entrar(professorB);
 
     requisito("R36 Professor: só os próprios eventos; sem Auditoria, Participantes e criação de sala");
-    r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: `Sala Professor ${sufixo}`, capacidade: 10 } });
+    r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: codigoDeSala(), tipo: "SALA_DE_AULA", capacidade: 10 } });
     const salaProfessorId: string = r.corpo.id;
     salas.push(salaProfessorId);
     r = await chamar("POST", "/palestrantes", { token: professorA.token, corpo: { nome: "Palestrante do Professor", email: `pal.prof.${sufixo}@teste.invalido` } });
@@ -1660,7 +1711,7 @@ async function main() {
       r = await chamar("GET", caminho, { token: professorA.token });
       checar(`professor não acessa ${nome} -> 403`, r.status === 403, r.status);
     }
-    r = await chamar("POST", "/salas", { token: professorA.token, corpo: { nome: `Sala do Prof ${sufixo}`, capacidade: 5 } });
+    r = await chamar("POST", "/salas", { token: professorA.token, corpo: { nome: codigoDeSala(), tipo: "SALA_DE_AULA", capacidade: 5 } });
     checar("professor não cria sala -> 403", r.status === 403, r.status);
     r = await chamar("GET", "/salas", { token: professorA.token });
     checar("professor consulta as salas (sem os números de ocupação da equipe)", r.status === 200 && r.corpo.every((s: Record<string, unknown>) => !("ocupacaoMedia" in s)), r.status);
@@ -1763,7 +1814,7 @@ async function main() {
     requisito("R38 Evento encerrado não é editado nem excluído");
     r = await chamar("POST", "/eventos", {
       token: admin.token,
-      corpo: { ...corpoEventoProf, titulo: `Evento Encerrado Trava ${sufixo}`, palestranteId, horario: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString() },
+      corpo: { ...corpoEventoProf, titulo: `Evento Encerrado Trava ${sufixo}`, palestranteId, horario: new Date(Date.now() - (3 * 24 + 6) * 3600 * 1000).toISOString() },
     });
     const eventoTravadoId: string = r.corpo.id;
     eventos.push(eventoTravadoId);
@@ -1787,10 +1838,10 @@ async function main() {
 
     // ------------------------------------------------------------------ etapa 3B
     requisito("R39 Proposta de alteração em evento aprovado");
-    r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: `Sala Proposta ${sufixo}`, capacidade: 30 } });
+    r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: codigoDeSala(), tipo: "SALA_DE_AULA", capacidade: 30 } });
     const salaPropostaId: string = r.corpo.id;
     salas.push(salaPropostaId);
-    r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: `Sala Minúscula ${sufixo}`, capacidade: 1 } });
+    r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: codigoDeSala(), tipo: "SALA_DE_AULA", capacidade: 1 } });
     const salaMinusculaId: string = r.corpo.id;
     salas.push(salaMinusculaId);
     // segundo inscrito gravado direto no banco (o aluno2 ja foi inativado acima): o evento fica com 2 inscritos
@@ -2017,11 +2068,11 @@ async function main() {
     // terceiro professor, inativado: nao serve de destino
     const emailProfC = `prof.c.${sufixo}@umc.br`;
     r = await chamar("POST", "/professores", { token: admin.token, corpo: { nomeCompleto: "Professor Teste C", email: emailProfC } });
-    const professorC: Conta = { id: r.corpo.professor?.id, email: emailProfC, senha: SENHA_PROFESSOR, perfil: "PROFESSOR", participanteId: null };
+    const professorC: Conta = { id: r.corpo.conta?.id, email: emailProfC, senha: SENHA_PROFESSOR, perfil: "PROFESSOR", participanteId: null };
     contas.push(professorC);
     await chamar("POST", "/auth/primeiro-acesso", { corpo: { convite: conviteDo(r.corpo.linkConviteDemo), novaSenha: SENHA_PROFESSOR, aceiteLgpd: true } });
     r = await chamar("POST", `/professores/${professorC.id}/inativar`, { token: admin.token, corpo: { motivo: "Licença" } });
-    checar("professor sem eventos em aberto é inativado sem transferência -> 200 INATIVO", r.status === 200 && r.corpo.professor?.situacao === "INATIVO" && r.corpo.eventosTransferidos === 0, r.corpo);
+    checar("professor sem eventos em aberto é inativado sem transferência -> 200 INATIVO", r.status === 200 && r.corpo.conta?.situacao === "INATIVO" && r.corpo.eventosTransferidos === 0, r.corpo);
     r = await chamar("POST", `/professores/${professorA.id}/inativar`, { token: secretaria.token, corpo: { motivo: MOTIVO_INATIVACAO, transferirPara: professorC.id } });
     checar("professor inativo não é destino de transferência -> 422", r.status === 422 && r.corpo.erros?.some((e: { campo: string }) => e.campo === "transferirPara"), r.corpo);
     r = await chamar("POST", `/professores/${professorA.id}/inativar`, { token: secretaria.token, corpo: { motivo: MOTIVO_INATIVACAO, transferirPara: professorA.id } });
@@ -2030,7 +2081,7 @@ async function main() {
     r = await chamar("POST", `/professores/${professorA.id}/inativar`, { token: secretaria.token, corpo: { motivo: MOTIVO_INATIVACAO, transferirPara: professorB.id } });
     checar(
       "com a transferência, o professor é inativado -> 200 INATIVO",
-      r.status === 200 && r.corpo.professor?.situacao === "INATIVO" && r.corpo.eventosTransferidos === abertos.length,
+      r.status === 200 && r.corpo.conta?.situacao === "INATIVO" && r.corpo.eventosTransferidos === abertos.length,
       r.corpo,
     );
     const [eventoTransferido, eventoAntigo, propostaTransferida, palestranteNovo] = await Promise.all([
@@ -2089,9 +2140,9 @@ async function main() {
     requisito("R43 Check-in: aprovação pelo professor do evento ou pela equipe, expiração e dashboard");
     professorA.token = await entrar(professorA);
     professorB.token = await entrar(professorB);
-    // 4 alunos criados direto no banco (o cadastro ja foi testado no R01), ja com os termos vigentes aceitos
+    // alunos criados direto no banco (o cadastro ja foi testado no R01), ja com os termos vigentes aceitos
     const alunosCheckin: Conta[] = [];
-    for (const letra of ["X", "Y", "Z", "W"]) {
+    async function criarAlunoCheckin(letra: string): Promise<Conta> {
       const participanteIdCheckin = randomUUID();
       await prisma.participante.create({ data: { id: participanteIdCheckin, rgm: rgmAleatorio() } });
       const conta: Conta = {
@@ -2115,12 +2166,13 @@ async function main() {
       });
       contas.push(conta);
       conta.token = await entrar(conta);
-      alunosCheckin.push(conta);
+      return conta;
     }
+    for (const letra of ["X", "Y", "Z", "W"]) alunosCheckin.push(await criarAlunoCheckin(letra));
     const [alunoX, alunoY, alunoZ, alunoW] = alunosCheckin;
     const salasCheckin: string[] = [];
-    for (const nome of ["Sala Check-in 1", "Sala Check-in 2"]) {
-      r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: `${nome} ${sufixo}`, capacidade: 10 } });
+    for (let i = 0; i < 2; i++) {
+      r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: codigoDeSala(), tipo: "SALA_DE_AULA", capacidade: 10 } });
       salas.push(r.corpo.id);
       salasCheckin.push(r.corpo.id);
     }
@@ -2134,8 +2186,12 @@ async function main() {
     r = await chamar("POST", `/eventos/${eventoP}/checkin`, { token: alunoX.token });
     checar("evento PENDENTE de aprovação: pedido recusado -> 404", r.status === 404 && r.corpo.code === "EVENTO_NAO_ENCONTRADO", r.corpo);
     await chamar("POST", `/eventos/${eventoP}/aprovar`, { token: secretaria.token });
-    // evento Q: da equipe
-    r = await chamar("POST", "/eventos", { token: admin.token, corpo: { ...corpoCheckin, titulo: `Evento Check-in Q ${sufixo}`, salaId: salasCheckin[1] } });
+    // evento Q: da equipe, de daqui a 5 min a daqui a 20 min (termina antes de P comecar: os mesmos alunos ficam nos
+    // dois sem inscricao no mesmo horario), tambem com o check-in aberto
+    r = await chamar("POST", "/eventos", {
+      token: admin.token,
+      corpo: { ...corpoCheckin, titulo: `Evento Check-in Q ${sufixo}`, salaId: salasCheckin[1], horario: new Date(Date.now() + 5 * 60 * 1000).toISOString(), cargaHoraria: 0.25 },
+    });
     const eventoQ: string = r.corpo.id;
     eventos.push(eventoQ);
     const inscricaoDe: Record<string, string> = {};
@@ -2238,8 +2294,11 @@ async function main() {
       !!(await prisma.logAuditoria.findFirst({ where: { acao: "CHECKIN_APROVADO_TODOS", usuarioId: secretaria.id, detalhe: { contains: `evento ${eventoQ}: 2 pedido(s)` } } })),
     );
 
-    // dashboard do professor A: so o evento P (X e Z presentes, Y recusado, W pediu, aluno principal sem pedido)
-    await chamar("POST", `/eventos/${eventoP}/inscricoes`, { token: aluno.token });
+    // dashboard do professor A: so o evento P (X e Z presentes, Y recusado, W pediu, V sem pedido). V e um aluno so
+    // deste passo: o aluno principal pode estar inscrito noutro evento no mesmo horario de P, o que a API recusa
+    const alunoV = await criarAlunoCheckin("V");
+    r = await chamar("POST", `/eventos/${eventoP}/inscricoes`, { token: alunoV.token });
+    checar("o aluno V se inscreve em P", r.status === 201, r.corpo);
     r = await chamar("GET", "/dashboard", { token: professorA.token });
     const pNoDashboard = r.corpo?.eventos?.find((e: { id: string }) => e.id === eventoP);
     checar(
@@ -2308,8 +2367,9 @@ async function main() {
     const deCal = diaCal.toISOString();
     const ateCal = emHorasCal(48);
     const salasCal: string[] = [];
-    for (const nome of ["Sala Calendário 1", "Sala Calendário 2"]) {
-      r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: `${nome} ${sufixo}`, capacidade: 20 } });
+    const codigosCal = [codigoDeSala(), codigoDeSala()];
+    for (const codigo of codigosCal) {
+      r = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: codigo, tipo: "AUDITORIO", capacidade: 20 } });
       salas.push(r.corpo.id);
       salasCal.push(r.corpo.id);
     }
@@ -2367,7 +2427,7 @@ async function main() {
       "os eventos dos outros (equipe e outro professor, aprovados e pendentes) chegam só como sala ocupada, com início e fim",
       ocupadas.length === 2 &&
         ocupadas.some((o) => o.inicio === emHorasCal(10) && o.fim === emHorasCal(12) && o.salaId === salasCal[0]) &&
-        ocupadas.some((o) => o.inicio === emHorasCal(30) && o.fim === emHorasCal(32) && o.salaNome === `Sala Calendário 1 ${sufixo}`),
+        ocupadas.some((o) => o.inicio === emHorasCal(30) && o.fim === emHorasCal(32) && o.salaNome === `${codigosCal[0]} · Auditório`),
       ocupadas,
     );
     const textoProfA = JSON.stringify(r.corpo?.salasOcupadas ?? []);
@@ -2409,7 +2469,7 @@ async function main() {
       r.status === 200 && r.corpo.itens.length === 1 && r.corpo.itens[0].id === calFora && r.corpo.temMais === false,
       r.corpo,
     );
-    r = await chamar("GET", `/eventos/busca?q=${encodeURIComponent(`Sala Calendário 2 ${sufixo}`)}`, { token: secretaria.token });
+    r = await chamar("GET", `/eventos/busca?q=${encodeURIComponent(codigosCal[1])}`, { token: secretaria.token });
     checar("a busca também procura pelo nome da sala", r.status === 200 && r.corpo.itens.some((e: { id: string }) => e.id === calRecusado), r.corpo);
     r = await chamar("GET", `/eventos/busca?q=${encodeURIComponent(sufixo)}&situacao=RECUSADO`, { token: secretaria.token });
     checar(
@@ -2731,6 +2791,254 @@ async function main() {
       corpo: { senhaAtual: SENHA_TROCADA, novaSenha: SENHA_TROCA, confirmacaoSenha: SENHA_TROCA, codigoRecuperacao: codigosTroca[0] },
     });
     checar("o mesmo código de recuperação não vale duas vezes", r.status === 422 && r.corpo.message === "Senha atual ou código incorretos.", r.corpo);
+
+    // ------------------------------------------------------------------ inscricao no mesmo horario
+    requisito("R47 Aluno não se inscreve em dois eventos no mesmo horário");
+    {
+      // aluno so deste cenario, num dia so do teste (daqui a 300 dias), em salas novas
+      const participanteConflito = await prisma.participante.create({ data: { id: randomUUID(), rgm: rgmAleatorio() } });
+      const alunoConflito: Conta = {
+        id: randomUUID(),
+        email: `conflito.${sufixo}@alunos.umc.br`,
+        senha: SENHA_ALUNO,
+        perfil: "ALUNO",
+        participanteId: participanteConflito.id,
+      };
+      await prisma.usuario.create({
+        data: {
+          id: alunoConflito.id,
+          nome: "Aluno Conflito Requisitos",
+          emailLogin: alunoConflito.email,
+          senhaHash: await bcrypt.hash(SENHA_ALUNO, 12),
+          perfil: "ALUNO",
+          participanteId: participanteConflito.id,
+          consentimentoLgpdEm: new Date(),
+          versaoTermosAceitos: VERSAO_TERMOS_ATUAL,
+        },
+      });
+      contas.push(alunoConflito);
+      alunoConflito.token = await entrar(alunoConflito);
+      const salaConflito1 = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: codigoDeSala(), tipo: "SALA_DE_AULA", capacidade: 30 } });
+      const salaConflito2 = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: codigoDeSala(), tipo: "LABORATORIO", capacidade: 30 } });
+      salas.push(salaConflito1.corpo.id, salaConflito2.corpo.id);
+      const diaConflito = new Date(Math.ceil((Date.now() + 300 * 24 * 3600 * 1000) / (24 * 3600 * 1000)) * 24 * 3600 * 1000);
+      const emHorasConflito = (horas: number) => new Date(diaConflito.getTime() + horas * 3600 * 1000);
+      const criarConflito = async (titulo: string, horas: number, carga: number, salaIdConflito: string) => {
+        const resposta = await chamar("POST", "/eventos", {
+          token: secretaria.token,
+          corpo: {
+            titulo: `${titulo} ${sufixo}`,
+            horario: emHorasConflito(horas).toISOString(),
+            salaId: salaIdConflito,
+            palestranteId,
+            tema: "Tema",
+            cargaHoraria: carga,
+            questionario: questionario(),
+          },
+        });
+        if (resposta.status !== 201) throw new Error(`evento do conflito não criado: ${JSON.stringify(resposta.corpo)}`);
+        eventos.push(resposta.corpo.id);
+        return resposta.corpo.id as string;
+      };
+      // A: 19h-21h na sala 1; B: 20h-22h na sala 2 (cruza com A); C: 17h-19h na sala 1 (so encosta em A)
+      const eventoA = await criarConflito("Evento Conflito A", 19, 2, salaConflito1.corpo.id);
+      const eventoB = await criarConflito("Evento Conflito B", 20, 2, salaConflito2.corpo.id);
+      const eventoC = await criarConflito("Evento Conflito C", 17, 2, salaConflito1.corpo.id);
+      const quandoA = dataHoraDeBrasilia(emHorasConflito(19)).replace(", ", " às ");
+
+      r = await chamar("POST", `/eventos/${eventoA}/inscricoes`, { token: alunoConflito.token });
+      checar("inscrição no evento A -> 201", r.status === 201, r.corpo);
+      r = await chamar("POST", `/eventos/${eventoB}/inscricoes`, { token: alunoConflito.token });
+      checar(
+        "o aluno não se inscreve no B, que cruza com o A -> 409 com a mensagem do outro evento",
+        r.status === 409 &&
+          r.corpo.code === "CONFLITO_DE_HORARIO" &&
+          r.corpo.message ===
+            `Você já está inscrito em Evento Conflito A ${sufixo}, que acontece no mesmo horário (${quandoA}). Cancele aquela inscrição para se inscrever nesta.`,
+        r.corpo,
+      );
+      r = await chamar("POST", "/inscricoes", { token: secretaria.token, corpo: { participanteId: participanteConflito.id, eventoId: eventoB } });
+      checar(
+        "a equipe também não inscreve o aluno no B -> 409, com a mensagem falando do aluno",
+        r.status === 409 &&
+          r.corpo.code === "CONFLITO_DE_HORARIO" &&
+          r.corpo.message ===
+            `O aluno já está inscrito em Evento Conflito A ${sufixo}, que acontece no mesmo horário (${quandoA}). Cancele aquela inscrição para inscrevê-lo nesta.`,
+        r.corpo,
+      );
+      r = await chamar("POST", `/eventos/${eventoC}/inscricoes`, { token: alunoConflito.token });
+      checar("evento que só encosta no horário (termina quando o A começa) é aceito -> 201", r.status === 201, r.corpo);
+      r = await chamar("DELETE", `/eventos/${eventoA}/inscricoes`, { token: alunoConflito.token });
+      checar("o aluno cancela a inscrição no A -> 204", r.status === 204, r.status);
+      r = await chamar("POST", `/eventos/${eventoB}/inscricoes`, { token: alunoConflito.token });
+      checar("inscrição cancelada não conta: agora o B é aceito -> 201", r.status === 201, r.corpo);
+      // mudar o horario de um evento aprovado nao cancela inscricao (a regra vale so para inscricao nova): o B (sozinho
+      // na sala 2) passa para 18h-20h, cruzando com o C (17h-19h)
+      r = await chamar("PUT", `/eventos/${eventoB}`, { token: secretaria.token, corpo: { horario: emHorasConflito(18).toISOString() } });
+      const inscricoesDoAluno = await prisma.inscricao.count({ where: { participanteId: participanteConflito.id, eventoId: { in: [eventoB, eventoC] } } });
+      checar(
+        "mudar o horário do B para cruzar com o C não cancela nenhuma inscrição",
+        r.status === 200 && inscricoesDoAluno === 2,
+        { status: r.status, inscricoesDoAluno },
+      );
+      await prisma.inscricao.deleteMany({ where: { participanteId: participanteConflito.id } });
+    }
+
+    // ------------------------------------------------------------------ tela Equipe (professor e secretaria)
+    requisito("R48 Tela Equipe: secretaria por convite, quem gerencia quem, exclusão e auditoria preservada");
+    {
+      const SENHA_SECRETARIA_NOVA = "Secretaria@Nova123";
+      r = await chamar("GET", "/equipe", { token: admin.token });
+      checar(
+        "a lista da Equipe tem professores e secretarias, nunca administradores, com o perfil",
+        r.status === 200 &&
+          r.corpo.length > 0 &&
+          r.corpo.every((c: { perfil: string }) => c.perfil === "PROFESSOR" || c.perfil === "SECRETARIA") &&
+          !r.corpo.some((c: { id: string }) => c.id === admin.id),
+        r.status,
+      );
+      r = await chamar("GET", "/equipe?perfil=SECRETARIA", { token: admin.token });
+      checar("filtro por perfil", r.status === 200 && r.corpo.every((c: { perfil: string }) => c.perfil === "SECRETARIA"), r.status);
+
+      const emailSecretariaNova = `secretaria.nova.${sufixo}@umc.br`;
+      r = await chamar("POST", "/equipe", {
+        token: secretaria.token,
+        corpo: { nomeCompleto: "Secretaria Nova", email: `outra.${sufixo}@umc.br`, perfil: "SECRETARIA" },
+      });
+      checar("a secretaria não cria conta de secretaria -> 403", r.status === 403 && r.corpo.code === "SO_ADMINISTRADOR", r.corpo);
+      r = await chamar("POST", "/equipe", { token: admin.token, corpo: { nomeCompleto: "Secretaria Nova", email: emailSecretariaNova, perfil: "SECRETARIA" } });
+      const secretariaNova: Conta = { id: r.corpo.conta?.id, email: emailSecretariaNova, senha: SENHA_SECRETARIA_NOVA, perfil: "SECRETARIA", participanteId: null };
+      contas.push(secretariaNova);
+      const conviteSecretaria = conviteDo(r.corpo.linkConviteDemo);
+      checar(
+        "o administrador cria a secretaria por convite -> 201, convite pendente, só o hash da chave no banco",
+        r.status === 201 &&
+          r.corpo.conta?.perfil === "SECRETARIA" &&
+          r.corpo.conta?.situacao === "AGUARDANDO_PRIMEIRO_ACESSO" &&
+          conviteSecretaria.length > 0 &&
+          (await prisma.primeiroAcesso.findUnique({ where: { usuarioId: secretariaNova.id } }))?.codigoHash === sha256(conviteSecretaria),
+        r.corpo,
+      );
+      r = await chamar("POST", "/auth/login", { corpo: { emailLogin: emailSecretariaNova, senha: SENHA_SECRETARIA_NOVA } });
+      checar("antes do primeiro acesso a secretaria não entra -> 401", r.status === 401, r.status);
+      r = await chamar("POST", "/auth/recuperacao-senha", { corpo: { email: emailSecretariaNova } });
+      checar('"Esqueci minha senha" de quem espera o convite responde como e-mail inexistente (sem código)', r.status === 200 && !r.corpo.codigoDemo, r.corpo);
+      r = await chamar("POST", "/auth/primeiro-acesso/convite", { corpo: { convite: conviteSecretaria } });
+      checar("o link do convite abre para a secretaria", r.status === 200 && r.corpo.email === emailSecretariaNova, r.corpo);
+      r = await chamar("POST", "/auth/primeiro-acesso", { corpo: { convite: conviteSecretaria, novaSenha: SENHA_SECRETARIA_NOVA, aceiteLgpd: true } });
+      checar("a secretaria cria a senha pelo convite -> 200", r.status === 200, r.corpo);
+      secretariaNova.token = await entrar(secretariaNova);
+      const usuarioSecretaria = await prisma.usuario.findUnique({ where: { id: secretariaNova.id } });
+      checar(
+        "depois do convite ela entra como SECRETARIA, com o aceite dos Termos gravado",
+        !!secretariaNova.token && usuarioSecretaria?.perfil === "SECRETARIA" && usuarioSecretaria?.versaoTermosAceitos === VERSAO_TERMOS_ATUAL && !!usuarioSecretaria?.consentimentoLgpdEm,
+      );
+
+      r = await chamar("GET", "/equipe", { token: secretaria.token });
+      const vistaPelaSecretaria = (r.corpo ?? []).find((c: { id: string }) => c.id === secretariaNova.id);
+      checar(
+        "para a secretaria, as outras secretarias aparecem sem ações (podeGerenciar = false)",
+        r.status === 200 && vistaPelaSecretaria?.podeGerenciar === false,
+        vistaPelaSecretaria,
+      );
+      r = await chamar("POST", `/equipe/${secretariaNova.id}/inativar`, { token: secretaria.token, corpo: { motivo: "Teste" } });
+      checar("a secretaria não inativa outra secretaria -> 403", r.status === 403 && r.corpo.code === "SO_ADMINISTRADOR", r.corpo);
+      r = await chamar("DELETE", `/equipe/${secretariaNova.id}`, { token: secretaria.token });
+      checar("a secretaria não exclui outra secretaria -> 403", r.status === 403, r.corpo);
+      r = await chamar("POST", `/equipe/${secretaria.id}/inativar`, { token: secretaria.token, corpo: { motivo: "Teste" } });
+      checar("ninguém inativa a própria conta por esta tela -> 403", r.status === 403 && r.corpo.code === "PROPRIA_CONTA", r.corpo);
+      r = await chamar("POST", `/equipe/${admin.id}/inativar`, { token: admin.token, corpo: { motivo: "Teste" } });
+      checar("nem o administrador na própria conta -> 403", r.status === 403 && r.corpo.code === "PROPRIA_CONTA", r.corpo);
+
+      // conta de administrador: a tela nunca inativa nem exclui (e o sistema nunca fica sem nenhum administrador ativo)
+      const outroAdmin = await prisma.usuario.findFirst({ where: { perfil: "ADMINISTRADOR", ativo: true, id: { not: admin.id } }, select: { id: true } });
+      const alvoAdmin = outroAdmin?.id ?? admin.id;
+      const inativarAdmin = await chamar("POST", `/equipe/${alvoAdmin}/inativar`, { token: secretaria.token, corpo: { motivo: "Teste" } });
+      r = await chamar("DELETE", `/equipe/${alvoAdmin}`, { token: secretaria.token });
+      const ativosDepois = await prisma.usuario.count({ where: { perfil: "ADMINISTRADOR", ativo: true } });
+      checar(
+        "conta de administrador não é inativada nem excluída pela tela (403 ou 409 ULTIMO_ADMINISTRADOR) e continua ativa",
+        [403, 409].includes(inativarAdmin.status) &&
+          [403, 409].includes(r.status) &&
+          !!(await prisma.usuario.findFirst({ where: { id: alvoAdmin, ativo: true } })) &&
+          ativosDepois >= 1,
+        { inativar: inativarAdmin.corpo?.code, excluir: r.corpo?.code },
+      );
+      r = await chamar("POST", "/equipe", { token: admin.token, corpo: { nomeCompleto: "Administrador Novo", email: `adm.${sufixo}@umc.br`, perfil: "ADMINISTRADOR" } });
+      checar("a tela não cria conta de administrador -> 422", r.status === 422, r.corpo);
+
+      // inativar a secretaria: as sessoes caem e o login recusa; nada para transferir
+      r = await chamar("GET", `/equipe/${secretariaNova.id}/eventos-em-aberto`, { token: admin.token });
+      checar("secretaria não tem eventos para transferir", r.status === 200 && Array.isArray(r.corpo) && r.corpo.length === 0, r.corpo);
+      r = await chamar("DELETE", `/equipe/${secretariaNova.id}`, { token: admin.token });
+      checar("conta ativa (já ativada) não é excluída -> 409", r.status === 409 && r.corpo.code === "CONTA_ATIVA", r.corpo);
+      r = await chamar("POST", `/equipe/${secretariaNova.id}/inativar`, { token: admin.token, corpo: { motivo: "Fim do contrato" } });
+      const meDepois = await chamar("GET", "/usuarios/me", { token: secretariaNova.token });
+      const loginDepois = await chamar("POST", "/auth/login", { corpo: { emailLogin: emailSecretariaNova, senha: SENHA_SECRETARIA_NOVA } });
+      checar(
+        "o administrador inativa a secretaria -> 200 INATIVO, a sessão dela cai e o login recusa",
+        r.status === 200 && r.corpo.conta?.situacao === "INATIVO" && meDepois.status === 401 && loginDepois.status === 403,
+        { inativar: r.status, me: meDepois.status, login: loginDepois.status },
+      );
+      // excluir: sem historico a conta sai; os logs dela ficam (usuarioId nulo, com o nome de quem agiu)
+      const logsAntes = await prisma.logAuditoria.count({ where: { usuarioId: secretariaNova.id } });
+      r = await chamar("DELETE", `/equipe/${secretariaNova.id}`, { token: admin.token });
+      const logsDepois = await prisma.logAuditoria.count({ where: { usuarioId: null, atorNome: "Secretaria Nova", criadoEm: { gte: inicioDoTeste } } });
+      const logExclusao = await prisma.logAuditoria.findFirst({ where: { acao: "CONTA_EQUIPE_EXCLUIDA", detalhe: { contains: secretariaNova.id } } });
+      checar(
+        "secretaria inativa sem histórico é excluída; os registros de auditoria dela ficam",
+        r.status === 200 &&
+          r.corpo.excluida === true &&
+          !(await prisma.usuario.findUnique({ where: { id: secretariaNova.id } })) &&
+          logsAntes > 0 &&
+          logsDepois >= logsAntes,
+        { status: r.status, logsAntes, logsDepois },
+      );
+      checar(
+        "a exclusão fica na auditoria sem dado pessoal (sem nome nem e-mail no detalhe)",
+        !!logExclusao && !logExclusao.detalhe!.includes("Secretaria Nova") && !logExclusao.detalhe!.includes(emailSecretariaNova),
+        logExclusao?.detalhe,
+      );
+
+      // convite pendente: a conta e o convite saem juntos (corrigir e-mail digitado errado)
+      const emailErrado = `prof.errado.${sufixo}@umc.br`;
+      r = await chamar("POST", "/equipe", { token: secretaria.token, corpo: { nomeCompleto: "Professor Digitado Errado", email: emailErrado } });
+      const pendenteId: string = r.corpo.conta?.id;
+      const convitePendente = conviteDo(r.corpo.linkConviteDemo);
+      contas.push({ id: pendenteId, email: emailErrado, senha: "", perfil: "PROFESSOR", participanteId: null });
+      checar("sem perfil a conta nasce como professor", r.status === 201 && r.corpo.conta?.perfil === "PROFESSOR", r.corpo);
+      r = await chamar("DELETE", `/equipe/${pendenteId}`, { token: secretaria.token });
+      const consultaDepois = await chamar("POST", "/auth/primeiro-acesso/convite", { corpo: { convite: convitePendente } });
+      checar(
+        "conta com convite pendente é excluída junto com o convite (o link deixa de valer)",
+        r.status === 200 &&
+          r.corpo.excluida === true &&
+          !(await prisma.usuario.findUnique({ where: { id: pendenteId } })) &&
+          !(await prisma.primeiroAcesso.findUnique({ where: { usuarioId: pendenteId } })) &&
+          consultaDepois.status === 422,
+        { excluir: r.corpo, convite: consultaDepois.status },
+      );
+      r = await chamar("POST", "/equipe", { token: secretaria.token, corpo: { nomeCompleto: "Professor Digitado Certo", email: emailErrado } });
+      if (r.corpo?.conta?.id) contas.push({ id: r.corpo.conta.id, email: emailErrado, senha: "", perfil: "PROFESSOR", participanteId: null });
+      checar("o mesmo e-mail pode ser cadastrado de novo depois da exclusão", r.status === 201, r.corpo);
+
+      // professor com historico (eventos criados): a exclusao so inativa
+      await chamar("POST", `/equipe/${professorA.id}/inativar`, { token: secretaria.token, corpo: { motivo: "Licença", transferirPara: "EQUIPE" } });
+      r = await chamar("DELETE", `/equipe/${professorA.id}`, { token: secretaria.token });
+      checar(
+        "professor com histórico não é excluído: fica inativo, com a mensagem",
+        r.status === 200 &&
+          r.corpo.excluida === false &&
+          r.corpo.mensagem === "Esta conta tem histórico no sistema e fica preservada como inativa." &&
+          !!(await prisma.usuario.findFirst({ where: { id: professorA.id, ativo: false } })),
+        r.corpo,
+      );
+      checar(
+        "a preservação fica na auditoria",
+        !!(await prisma.logAuditoria.findFirst({ where: { acao: "CONTA_EQUIPE_PRESERVADA", detalhe: { contains: professorA.id } } })),
+      );
+      await chamar("POST", `/equipe/${professorA.id}/reativar`, { token: secretaria.token });
+    }
 
     // ------------------------------------------------------------------ RF009/RNF010: exclusao bloqueada
     requisito("R19 Exclusão de evento bloqueada com inscrições (RF009/RNF010)");

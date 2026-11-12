@@ -25,14 +25,20 @@ export function TermosDeUsoPage() {
             informados são apagados.
           </li>
           <li>
-            <strong>Professor:</strong> a conta é criada pela secretaria ou pela administração, só com o nome completo e
-            o e-mail institucional (<code>@umc.br</code>). O professor recebe por e-mail um convite com um link, válido
-            por 24 horas e de uso único, em que define a senha e aceita estes Termos. Antes disso a conta não entra no
-            sistema. Se o link vencer, a secretaria envia um novo convite, e o anterior deixa de valer.
+            <strong>Professor:</strong> a conta é criada pela secretaria ou pela administração, na tela Equipe, só com o
+            nome completo e o e-mail institucional (<code>@umc.br</code>). O professor recebe por e-mail um convite com
+            um link, válido por 24 horas e de uso único, em que define a senha e aceita estes Termos. Antes disso a
+            conta não entra no sistema. Se o link vencer, quem criou a conta envia um novo convite, e o anterior deixa
+            de valer.
           </li>
           <li>
-            <strong>Secretaria e administração:</strong> contas criadas diretamente pela instituição, sem cadastro
-            público.
+            <strong>Secretaria:</strong> a conta é criada só pela administração, na tela Equipe, do mesmo jeito: nome
+            completo, e-mail institucional (<code>@umc.br</code>) e o convite por link, em que a secretaria define a
+            senha e aceita estes Termos.
+          </li>
+          <li>
+            <strong>Administração:</strong> contas criadas diretamente pela instituição, sem cadastro público. O sistema
+            sempre mantém pelo menos uma conta de administrador ativa.
           </li>
         </ul>
         <h2>3. Sua conta</h2>
@@ -49,8 +55,9 @@ export function TermosDeUsoPage() {
           </li>
           <li>
             Você é responsável por manter sua senha em segredo. Se desconfiar que outra pessoa a conhece, troque-a pela
-            opção &ldquo;Esqueci minha senha&rdquo; na tela de login. Essa opção não vale para a conta de professor que
-            ainda não usou o convite: ela só é ativada pelo link do convite.
+            opção &ldquo;Esqueci minha senha&rdquo; na tela de login, ou pela página &ldquo;Minha conta&rdquo;.
+            &ldquo;Esqueci minha senha&rdquo; não vale para a conta de professor ou de secretaria que ainda não usou o
+            convite: ela só é ativada pelo link do convite.
           </li>
           <li>
             A autenticação em dois fatores é opcional para todos os perfis; você pode ativá-la ou desativá-la na página
@@ -76,6 +83,14 @@ export function TermosDeUsoPage() {
           <li>
             O aluno se inscreve nos eventos aprovados enquanto houver vaga e antes de o evento começar. Pode cancelar a
             inscrição até o início do evento, enquanto não tiver pedido o check-in.
+          </li>
+          <li>
+            <strong>Ninguém fica inscrito em dois eventos no mesmo horário.</strong> Se o novo evento cruza com o
+            horário de outro em que o aluno já está inscrito (do início até o início mais a carga horária), o sistema
+            recusa a inscrição e mostra qual é o outro evento; para trocar, o aluno cancela aquela inscrição antes.
+            Eventos que só encostam (um termina quando o outro começa) não contam. A regra vale também quando a equipe
+            ou o professor inscrevem um aluno. Se o horário de um evento mudar depois da inscrição, ela continua
+            valendo.
           </li>
           <li>
             O <strong>check-in é pedido pelo próprio aluno</strong>, na tela Eventos, de 1 hora antes do início até 24
@@ -142,25 +157,44 @@ export function TermosDeUsoPage() {
             a equipe pode reativar a conta depois.
           </li>
         </ul>
-        <h2>9. Disponibilidade</h2>
+        <h2>9. Contas da equipe</h2>
+        <ul>
+          <li>
+            As contas de professor e de secretaria ficam na tela <strong>Equipe</strong>. A administração gerencia
+            professores e secretarias; a secretaria gerencia só professores. Ninguém altera a própria conta por essa
+            tela, e as contas de administrador não aparecem nela.
+          </li>
+          <li>
+            Inativar uma conta da equipe pede um motivo (visível só para a equipe) e encerra as sessões abertas; a conta
+            pode ser reativada depois.
+          </li>
+          <li>
+            Só é possível <strong>excluir</strong> uma conta inativa ou que ainda não usou o convite (por exemplo,
+            criada com o e-mail errado: a exclusão apaga a conta e o convite). A conta que tem histórico no sistema
+            (eventos ou palestrantes criados, decisões de aprovação, propostas, check-ins decididos ou pedidos de
+            titular atendidos) não é excluída: fica preservada como inativa. Os registros de auditoria nunca são
+            apagados.
+          </li>
+        </ul>
+        <h2>10. Disponibilidade</h2>
         <p>
           Por ser um sistema acadêmico, o SGEA pode passar por manutenções ou instabilidades sem aviso prévio. Não há
           garantia de disponibilidade contínua.
         </p>
-        <h2>10. Encerramento da conta</h2>
+        <h2>11. Encerramento da conta</h2>
         <p>
           Você pode pedir a qualquer momento, pelo canal de privacidade ou à secretaria, a inativação e, em seguida, a
           exclusão definitiva da sua conta. A exclusão remove permanentemente o histórico de inscrições, avaliações e
           tentativas de questionário vinculados a ela. Quem já tem certificado emitido tem a conta inativada em vez de
           excluída, para o certificado continuar válido.
         </p>
-        <h2>11. Limitação de responsabilidade</h2>
+        <h2>12. Limitação de responsabilidade</h2>
         <p>
           Estes Termos não transferem a você a responsabilidade pela segurança do sistema, nem autorizam o SGEA a usar
           seus dados para outra finalidade além das descritas na Política de Privacidade. Direitos previstos em lei não
           são reduzidos por nenhuma cláusula destes Termos.
         </p>
-        <h2>12. Legislação aplicável</h2>
+        <h2>13. Legislação aplicável</h2>
         <p>
           Estes Termos são regidos pela legislação brasileira, em especial a Lei Geral de Proteção de Dados Pessoais
           (Lei nº 13.709/2018) e o Código de Defesa do Consumidor. Para saber como seus dados são tratados, veja a{" "}

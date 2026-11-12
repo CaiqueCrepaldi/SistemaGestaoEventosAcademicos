@@ -261,6 +261,50 @@ e o login não depende dela. Siga a ordem:
 Para desfazer (só se for preciso voltar a versão anterior do código): a
 tabela pode ficar no banco, porque o código antigo não a usa.
 
+## Implantação em produção: salas no padrão da UMC (migration de 11/11/2026)
+
+A migration `20261111120000_salas_padrao_umc` é **só aditiva**: acrescenta a
+coluna `salas.tipo` (sala de aula, laboratório ou auditório, com padrão
+`SALA_DE_AULA` para as salas que já existem) e um índice único em
+`salas.nome`, que passa a guardar o código da sala (ex.: `1T-01`). Nada é
+apagado nem renomeado, e o código que está no ar continua funcionando com
+ela aplicada. Siga a ordem:
+
+1. **Conferir que não há duas salas com o mesmo nome** (o índice único
+   falharia). No SQL Editor do TiDB Cloud, no banco `SGEA`:
+   ```sql
+   SELECT nome, COUNT(*) FROM salas GROUP BY nome HAVING COUNT(*) > 1;
+   ```
+   Tem que voltar vazio. Se voltar alguma linha, pare e renomeie antes.
+2. **Aplicar a migration no banco de produção, ANTES do push.** No
+   PowerShell, de dentro de `backend/`, com a URL de produção:
+   ```powershell
+   $env:DATABASE_URL = "mysql://...SGEA?sslaccept=strict"
+   npx prisma migrate status    # deve listar só 20261111120000_salas_padrao_umc como pendente
+   npx prisma migrate deploy
+   Remove-Item Env:DATABASE_URL
+   ```
+   Se o `migrate status` listar qualquer outra migration pendente, pare e
+   confira antes de aplicar.
+3. **Push na `main`** e esperar a Vercel mostrar o deploy como Ready.
+4. **Recarregar a demonstração (opcional, apaga tudo):** as salas antigas
+   continuam com o nome de antes e o tipo "Sala de aula" até serem editadas.
+   Para ter as 12 salas no padrão da UMC, rode a carga de demonstração
+   (seção "Scripts disponíveis"), primeiro só simulando:
+   ```powershell
+   npx tsx scripts/carga-demonstracao.ts --producao
+   npx tsx scripts/carga-demonstracao.ts --producao --aplicar
+   ```
+5. **Testar em produção:** tela Salas (três seleções, tipo, filtros por
+   prédio e tipo, código repetido recusado); tela Equipe (o administrador
+   cria uma secretaria e o convite chega; a secretaria não vê a opção
+   Secretaria; excluir uma conta com convite pendente); inscrição de um aluno
+   em dois eventos no mesmo horário (a segunda é recusada com o nome do
+   outro evento).
+6. **Se a migration for esquecida:** a listagem e o cadastro de salas, os
+   eventos e o check-in falham, porque o código novo lê a coluna `tipo`.
+   Basta rodar o passo 2; não precisa de novo deploy.
+
 ## Scripts disponíveis
 
 | Comando | O que faz |
@@ -281,7 +325,7 @@ tabela pode ficar no banco, porque o código antigo não a usa.
 
 Apaga **todos** os dados do banco (contas, eventos, inscrições, auditoria,
 limites de acesso, cadastros pendentes, convites, códigos do 2FA etc.) e
-carrega um cenário realista para a apresentação: 12 salas, 40 palestrantes,
+carrega um cenário realista para a apresentação: 12 salas no padrão da UMC (8 de aula, 2 laboratórios e 2 auditórios), 40 palestrantes,
 150 professores e 1.000 alunos fictícios, 200 eventos (140 passados, 10 nos
 próximos 7 dias e 50 de 8 a 30 dias à frente) com aprovação e histórico,
 inscrições, check-in, questionário, certificados e avaliações, além das três

@@ -60,7 +60,7 @@ que declará-la).
 | Item | Situação | Evidência |
 |---|---|---|
 | Aluno: nome, e-mail e RGM, todos necessários | Atende | `schema.prisma`; cada dado numa tabela só |
-| Professor: só nome e e-mail institucional | Atende | `professores.schemas.ts` |
+| Professor e secretaria (tela Equipe): só nome e e-mail institucional | Atende | `professores.schemas.ts` (`contaEquipeSchema`) |
 | Palestrante: só nome e e-mail; o aluno não recebe o e-mail | Atende | `schema.prisma`, `utils/dto.ts` |
 | Professor vê só os alunos dos próprios eventos; no calendário, só "Sala ocupada" dos outros | Atende | `utils/escopo.ts`, `eventos.service.ts` (`calendario`) |
 | Sem CPF, endereço, nascimento, foto ou dado de saúde | Atende | Schema inteiro |

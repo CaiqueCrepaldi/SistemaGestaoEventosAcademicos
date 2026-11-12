@@ -33,9 +33,14 @@ export interface PassoAprovacao {
   criadoEm: string;
 }
 
+// tipo da sala no padrao da UMC
+export type TipoSala = "SALA_DE_AULA" | "LABORATORIO" | "AUDITORIO";
+
 export interface Sala {
   id: string;
+  // codigo no padrao da UMC (ex.: 1T-01): predio + andar + "-" + numero (ver utils/salas.ts)
   nome: string;
+  tipo: TipoSala;
   capacidade: number;
   // so na listagem da equipe (RF021): eventos encerrados na sala e a media de presentes / capacidade
   // neles, em %; null sem evento encerrado

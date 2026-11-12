@@ -6,12 +6,14 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { toast } from "../../components/ui/Toast";
 import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFormulario";
 import { eventoService, salaService } from "../../services";
-import type { Sala } from "../../types";
+import type { Sala, TipoSala } from "../../types";
+import { ANDARES, montarCodigoSala, NUMEROS, ordenarSalas, partesDoCodigo, PREDIOS, rotuloSala, rotuloTipoSala, TIPOS_SALA } from "../../utils/salas";
 
-// capacidade fica como texto no formulario pra campo vazio nao virar 0 sozinho
-const VAZIO = { nome: "", capacidade: "" };
+// capacidade fica como texto no formulario pra campo vazio nao virar 0 sozinho. O codigo da sala (padrao da UMC,
+// ex.: 1T-01) e montado das tres selecoes: predio, andar e numero
+const VAZIO = { predio: "", andar: "", numero: "", tipo: "SALA_DE_AULA" as TipoSala, capacidade: "" };
 
-// crud de salas
+// crud de salas, por predio, andar e numero, com filtro por predio e por tipo
 export function SalasPage() {
   const [salas, setSalas] = useState<Sala[]>([]);
   // enquanto carrega a lista diz "Carregando" (e nao "Nenhuma sala cadastrada")
@@ -21,6 +23,8 @@ export function SalasPage() {
   const [form, setForm] = useState(VAZIO);
   const [confirmandoSalvar, setConfirmandoSalvar] = useState(false);
   const [excluindo, setExcluindo] = useState<Sala | null>(null);
+  const [filtroPredio, setFiltroPredio] = useState("");
+  const [filtroTipo, setFiltroTipo] = useState<"" | TipoSala>("");
   const { erros, formRef, mostrar, mostrarErroDaApi, limpar, limparAoEditar } = useErrosFormulario();
 
   useEffect(() => {
@@ -30,7 +34,7 @@ export function SalasPage() {
   // busca a lista atualizada de salas
   async function carregar() {
     try {
-      setSalas(await salaService.list());
+      setSalas(ordenarSalas(await salaService.list()));
     } finally {
       setCarregando(false);
     }
@@ -47,14 +51,16 @@ export function SalasPage() {
   // abre o modal ja preenchido com os dados da sala clicada
   function abrirEdicao(sala: Sala) {
     setEditando(sala);
-    setForm({ nome: sala.nome, capacidade: String(sala.capacidade) });
+    setForm({ ...partesDoCodigo(sala.nome), tipo: sala.tipo, capacidade: String(sala.capacidade) });
     limpar();
     setModalAberto(true);
   }
 
   function validar(): ErrosFormulario {
     const faltando: ErrosFormulario = {};
-    if (!form.nome.trim()) faltando.nome = "Informe o nome da sala.";
+    if (!form.predio) faltando.predio = "Escolha o prédio.";
+    if (!form.andar) faltando.andar = "Escolha o andar.";
+    if (!form.numero) faltando.numero = "Escolha o número da sala.";
     const capacidade = Number(form.capacidade);
     if (!form.capacidade.trim()) faltando.capacidade = "Informe a capacidade.";
     else if (!Number.isInteger(capacidade) || capacidade <= 0) faltando.capacidade = "A capacidade deve ser um número inteiro maior que zero.";
@@ -70,7 +76,7 @@ export function SalasPage() {
 
   // cria ou atualiza dependendo se ta editando
   async function salvar() {
-    const dados = { nome: form.nome.trim(), capacidade: Number(form.capacidade) };
+    const dados = { nome: codigo, tipo: form.tipo, capacidade: Number(form.capacidade) };
     try {
       if (editando) {
         await salaService.update(editando.id, dados);
@@ -84,7 +90,8 @@ export function SalasPage() {
       await carregar();
     } catch (erro) {
       setConfirmandoSalvar(false);
-      if (!mostrarErroDaApi(erro)) toast.error(erro instanceof Error ? erro.message : "Não foi possível salvar a sala.");
+      // o codigo vem da API no campo "nome": o aviso vai pra selecao do numero
+      if (!mostrarErroDaApi(erro, (campo) => (campo === "nome" ? "numero" : campo))) toast.error(erro instanceof Error ? erro.message : "Não foi possível salvar a sala.");
     }
   }
 
@@ -104,6 +111,9 @@ export function SalasPage() {
     await carregar();
   }
 
+  const codigo = montarCodigoSala(form.predio, form.andar, form.numero);
+  const visiveis = salas.filter((sala) => (!filtroPredio || sala.nome.startsWith(filtroPredio)) && (!filtroTipo || sala.tipo === filtroTipo));
+
   return (
     <div>
       <PageHeader
@@ -116,10 +126,29 @@ export function SalasPage() {
       />
 
       <div className="card table-scroll">
+        <div className="filtros-linha">
+          <select value={filtroPredio} onChange={(e) => setFiltroPredio(e.target.value)} aria-label="Filtrar por prédio">
+            <option value="">Todos os prédios</option>
+            {PREDIOS.map((p) => (
+              <option key={p} value={p}>
+                Prédio {p}
+              </option>
+            ))}
+          </select>
+          <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value as "" | TipoSala)} aria-label="Filtrar por tipo">
+            <option value="">Todos os tipos</option>
+            {TIPOS_SALA.map((t) => (
+              <option key={t.valor} value={t.valor}>
+                {t.rotulo}
+              </option>
+            ))}
+          </select>
+        </div>
         <table className="table">
           <thead>
             <tr>
-              <th>Nome</th>
+              <th>Sala</th>
+              <th>Tipo</th>
               <th>Capacidade</th>
               <th>Eventos realizados</th>
               <th title="Presentes ÷ capacidade, média dos eventos encerrados">Ocupação média</th>
@@ -127,9 +156,10 @@ export function SalasPage() {
             </tr>
           </thead>
           <tbody>
-            {salas.map((sala) => (
+            {visiveis.map((sala) => (
               <tr key={sala.id}>
                 <td>{sala.nome}</td>
+                <td>{rotuloTipoSala(sala.tipo)}</td>
                 <td>{sala.capacidade} lugares</td>
                 <td>{sala.eventosRealizados ?? 0}</td>
                 <td>
@@ -149,10 +179,10 @@ export function SalasPage() {
                 </td>
               </tr>
             ))}
-            {salas.length === 0 && (
+            {visiveis.length === 0 && (
               <tr>
-                <td colSpan={5} className="empty-cell">
-                  {carregando ? "Carregando…" : "Nenhuma sala cadastrada."}
+                <td colSpan={6} className="empty-cell">
+                  {carregando ? "Carregando…" : salas.length === 0 ? "Nenhuma sala cadastrada." : "Nenhuma sala com esses filtros."}
                 </td>
               </tr>
             )}
@@ -173,8 +203,50 @@ export function SalasPage() {
             }}
           >
             <LegendaObrigatorio />
-            <Campo nome="nome" rotulo="Nome" obrigatorio erro={erros.nome}>
-              <input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} autoFocus />
+            <div className="grid-3">
+              <Campo nome="predio" rotulo="Prédio" obrigatorio erro={erros.predio}>
+                <select value={form.predio} onChange={(e) => setForm({ ...form, predio: e.target.value })} autoFocus>
+                  <option value="">Selecione…</option>
+                  {PREDIOS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </Campo>
+              <Campo nome="andar" rotulo="Andar" obrigatorio erro={erros.andar}>
+                <select value={form.andar} onChange={(e) => setForm({ ...form, andar: e.target.value })}>
+                  <option value="">Selecione…</option>
+                  {ANDARES.map((a) => (
+                    <option key={a.valor} value={a.valor}>
+                      {a.rotulo}
+                    </option>
+                  ))}
+                </select>
+              </Campo>
+              <Campo nome="numero" rotulo="Número" obrigatorio erro={erros.numero}>
+                <select value={form.numero} onChange={(e) => setForm({ ...form, numero: e.target.value })}>
+                  <option value="">Selecione…</option>
+                  {NUMEROS.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </Campo>
+            </div>
+            <p className="form-hint" aria-live="polite">
+              Código da sala: <strong>{form.predio && form.andar && form.numero ? codigo : "—"}</strong> (prédio, andar e
+              número; T = térreo)
+            </p>
+            <Campo nome="tipo" rotulo="Tipo" obrigatorio erro={erros.tipo}>
+              <select value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value as TipoSala })}>
+                {TIPOS_SALA.map((t) => (
+                  <option key={t.valor} value={t.valor}>
+                    {t.rotulo}
+                  </option>
+                ))}
+              </select>
             </Campo>
             <Campo nome="capacidade" rotulo="Capacidade (lugares)" obrigatorio erro={erros.capacidade}>
               <input
@@ -200,7 +272,7 @@ export function SalasPage() {
       {confirmandoSalvar && (
         <ConfirmDialog
           title="Confirmar alteração"
-          message={`Salvar as alterações da sala "${form.nome}"?`}
+          message={`Salvar as alterações da sala ${codigo} · ${rotuloTipoSala(form.tipo)}?`}
           onConfirm={() => void salvar()}
           onCancel={() => setConfirmandoSalvar(false)}
         />
@@ -209,7 +281,7 @@ export function SalasPage() {
       {excluindo && (
         <ConfirmDialog
           title="Remover sala"
-          message={`Tem certeza que deseja remover a sala "${excluindo.nome}"? Essa ação não pode ser desfeita.`}
+          message={`Tem certeza que deseja remover a sala ${rotuloSala(excluindo)}? Essa ação não pode ser desfeita.`}
           confirmLabel="Remover"
           tone="danger"
           onConfirm={() => void excluir()}

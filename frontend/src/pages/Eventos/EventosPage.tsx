@@ -1,3 +1,4 @@
+import { ordenarSalas, rotuloSala } from "../../utils/salas";
 import { useEffect, useMemo, useState } from "react";
 import { DialogoAprovacao, type AcaoAprovacao } from "../../components/aprovacao/DialogoAprovacao";
 import { ListaMudancas, ResumoProposta } from "../../components/aprovacao/ResumoProposta";
@@ -226,7 +227,7 @@ function EventosEquipe() {
     irPara(chaveDoDia(evento.horario));
   }
 
-  const nomeDaSala = (evento: Evento) => salas.find((s) => s.id === evento.salaId)?.nome ?? "—";
+  const nomeDaSala = (evento: Evento) => rotuloSala(salas.find((s) => s.id === evento.salaId));
   const nomeDoPalestrante = (evento: Evento) => palestrantes.find((p) => p.id === evento.palestranteId)?.nome ?? "—";
   // professor editando evento ja aprovado: titulo, tema e questionario mudam na hora; sala, horario, carga
   // horaria e palestrante viram uma proposta de alteracao (a API decide). Com uma proposta ja aguardando, ou
@@ -734,9 +735,9 @@ function EventosEquipe() {
               <Campo nome="salaId" rotulo="Sala" obrigatorio erro={erros.salaId}>
                 <select value={form.salaId} onChange={(e) => setForm({ ...form, salaId: e.target.value })} disabled={travarAgenda}>
                   <option value="">Selecione…</option>
-                  {salas.map((s) => (
+                  {ordenarSalas(salas).map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.nome} ({s.capacidade} lugares)
+                      {rotuloSala(s)} ({s.capacidade} lugares)
                     </option>
                   ))}
                 </select>

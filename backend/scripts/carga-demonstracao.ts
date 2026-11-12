@@ -1,7 +1,8 @@
 // CARGA DE DEMONSTRACAO: apaga TODOS os dados do banco e carrega um cenario realista para a apresentacao —
-// 12 salas, 40 palestrantes, 150 professores e 1.000 alunos ficticios, 200 eventos (140 passados, 10 nos
-// proximos 7 dias e 50 de 8 a 30 dias a frente), com aprovacao e historico, inscricoes, check-in, questionario,
-// certificados e avaliacoes — alem das tres contas de demonstracao (admin, secretaria e professor, com as senhas
+// 12 salas no padrao da UMC (8 de aula, 2 laboratorios e 2 auditorios), 40 palestrantes, 150 professores e 1.000
+// alunos ficticios, 200 eventos (140 passados, 10 nos proximos 7 dias e 50 de 8 a 30 dias a frente), com aprovacao
+// e historico, inscricoes (nenhum aluno em dois eventos no mesmo horario), check-in, questionario, certificados e
+// avaliacoes — alem das tres contas de demonstracao (admin, secretaria e professor, com as senhas
 // das variaveis SEED_*_SENHA). As contas ficticias (usuarios.ficticio) nunca recebem e-mail.
 //
 // como rodar (de dentro de backend/):
@@ -164,6 +165,7 @@ async function main() {
   const { gerarCodigoValidacao } = await import("../src/modules/certificados/certificados.service");
   const { PERCENTUAL_APROVACAO, MAX_TENTATIVAS_QUESTIONARIO } = await import("../src/utils/questionario");
   const { janelaDoCheckin } = await import("../src/utils/checkin");
+  const { REGEX_CODIGO_SALA } = await import("../src/utils/salas");
   const contas = await import("../prisma/contas-demonstracao");
   const dados = await import("./carga-demonstracao-dados");
 
@@ -213,7 +215,7 @@ async function main() {
     const equipeQueAprova = () => (chance(0.65) ? idSecretaria : idAdmin);
 
     // ------------------------------------------------------------ salas e palestrantes
-    const salas = dados.SALAS.map((s) => ({ id: randomUUID(), nome: s.nome, capacidade: s.capacidade }));
+    const salas = dados.SALAS.map((s) => ({ id: randomUUID(), nome: s.nome, tipo: s.tipo, capacidade: s.capacidade }));
     const palestrantes: { id: string; nome: string; email: string; situacao: "APROVADO" }[] = [];
     const emailsPalestrantes = new Set<string>();
     while (palestrantes.length < 40) {
@@ -286,14 +288,15 @@ async function main() {
 
     // ------------------------------------------------------------ titulos e questionarios
     const areas = Object.keys(dados.TEMAS) as (keyof typeof dados.TEMAS)[];
-    // titulo unico ("Formato: assunto"); o mesmo assunto aparece no maximo 3 vezes, sempre em formato diferente
+    // titulo unico ("Formato: assunto"); o mesmo assunto aparece no maximo 3 vezes, sempre em formato diferente. O
+    // formato segue o tipo da sala: workshop e minicurso no laboratorio; palestra, mesa-redonda e seminario nas outras
     const titulosUsados = new Set<string>();
     const vezesDoAssunto = new Map<string, number>();
-    function assuntoNovo() {
+    function assuntoNovo(tipoDaSala: keyof typeof dados.FORMATOS_POR_TIPO) {
       for (;;) {
         const area = sortear(areas);
         const topico = sortear(dados.TEMAS[area]);
-        const titulo = `${sortear(dados.FORMATOS)}: ${topico.assunto}`;
+        const titulo = `${sortear(dados.FORMATOS_POR_TIPO[tipoDaSala])}: ${topico.assunto}`;
         if (titulosUsados.has(titulo) || (vezesDoAssunto.get(topico.assunto) ?? 0) >= 3) continue;
         titulosUsados.add(titulo);
         vezesDoAssunto.set(topico.assunto, (vezesDoAssunto.get(topico.assunto) ?? 0) + 1);
@@ -360,7 +363,7 @@ async function main() {
       agenda: { horario: Date; carga: number; sala: (typeof salas)[number] },
       opcoes: { passado: boolean; apresentacao?: boolean; criadoEmFixo?: Date } = { passado: false },
     ) {
-      const { area, titulo, tema } = assuntoNovo();
+      const { area, titulo, tema } = assuntoNovo(agenda.sala.tipo);
       const limiteCriacao = minData(new Date(agenda.horario.getTime() - 2 * DIA), new Date(agora.getTime() - 2 * HORA));
       const criadoEm =
         opcoes.criadoEmFixo ??
@@ -464,6 +467,11 @@ async function main() {
     const alunoDoParticipante = new Map(alunos.map((a) => [a.participanteId, a]));
     const rgmDoParticipante = new Map(participantes.map((p) => [p.id, p.rgm]));
     const nomeDoPalestrante = new Map(palestrantes.map((p) => [p.id, p.nome]));
+    // mesma regra da API (inscricoes.service.ts: garantirSemConflitoDeHorario): o aluno nao fica inscrito em dois
+    // eventos que se cruzam no horario; [inicio, fim) — encostar nao e conflito
+    const agendaDoAluno = new Map<string, [number, number][]>();
+    const alunoLivre = (participanteId: string, inicio: number, fim: number) =>
+      (agendaDoAluno.get(participanteId) ?? []).every(([a, b]) => !(inicio < b && fim > a));
 
     // respostas com "acertos" questoes certas (as demais numa alternativa errada)
     function respostasCom(questionario: EventoGerado["questionario"], acertos: number) {
@@ -485,7 +493,11 @@ async function main() {
       const quemDecide = () => (evento.criadoPorId && chance(0.7) ? evento.criadoPorId : equipeQueAprova());
       const percentualPresentes = entre(0.7, 0.85);
       const percentualRecusados = entre(0.02, 0.06);
-      const escolhidos = embaralhar(participantes).slice(0, quantidade);
+      const inicioDoEvento = evento.horario.getTime();
+      const escolhidos = embaralhar(participantes)
+        .filter((p) => alunoLivre(p.id, inicioDoEvento, fim.getTime()))
+        .slice(0, quantidade);
+      for (const p of escolhidos) agendaDoAluno.set(p.id, [...(agendaDoAluno.get(p.id) ?? []), [inicioDoEvento, fim.getTime()]]);
       const limiteInscricao = minData(new Date(evento.horario.getTime() - HORA), new Date(agora.getTime() - 5 * MIN));
 
       escolhidos.forEach((participante, posicao) => {
@@ -627,6 +639,22 @@ async function main() {
       if (hora < 8 || hora > 21) problemas.push("evento fora do horário de 8h a 21h");
     }
     if (new Set(inscricoes.map((i) => `${i.participanteId}:${i.eventoId}`)).size !== inscricoes.length) problemas.push("inscrição repetida");
+    // nenhum aluno com duas inscricoes em horarios que se cruzam (regra da API)
+    const eventoPorId = new Map(eventos.map((e) => [e.id, e]));
+    const porAluno = new Map<string, [number, number][]>();
+    for (const i of inscricoes) {
+      const e = eventoPorId.get(i.eventoId)!;
+      porAluno.set(i.participanteId, [...(porAluno.get(i.participanteId) ?? []), [e.horario.getTime(), e.horario.getTime() + e.cargaHoraria * HORA]]);
+    }
+    for (const intervalos of porAluno.values()) {
+      const ordenados = [...intervalos].sort((a, b) => a[0] - b[0]);
+      for (let k = 1; k < ordenados.length; k++) if (ordenados[k][0] < ordenados[k - 1][1]) problemas.push("aluno inscrito em dois eventos no mesmo horário");
+    }
+    // salas no padrao da UMC, sem codigo repetido, com 8 salas de aula, 2 laboratorios e 2 auditorios
+    if (salas.some((sala) => !REGEX_CODIGO_SALA.test(sala.nome))) problemas.push("sala com código fora do padrão da UMC");
+    if (new Set(salas.map((sala) => sala.nome)).size !== salas.length) problemas.push("código de sala repetido");
+    const porTipo = (tipo: string) => salas.filter((sala) => sala.tipo === tipo).length;
+    if (porTipo("SALA_DE_AULA") !== 8 || porTipo("LABORATORIO") !== 2 || porTipo("AUDITORIO") !== 2) problemas.push("tipos de sala fora do combinado");
     if (new Set(usuarios.map((u) => u.emailLogin)).size !== usuarios.length) problemas.push("e-mail repetido");
     if (new Set(participantes.map((p) => p.rgm)).size !== participantes.length) problemas.push("RGM repetido");
     const textos = JSON.stringify([salas, palestrantes, usuarios.map((u) => [u.nome, u.emailLogin]), eventos.map((e) => [e.titulo, e.tema, e.questionario, e.motivoRecusa]), feedbacks.map((f) => f.comentario)]);

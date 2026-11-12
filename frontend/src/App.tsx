@@ -19,7 +19,7 @@ import { MeusDadosPage } from "./pages/MeusDados/MeusDadosPage";
 import { MinhaContaPage } from "./pages/MinhaConta/MinhaContaPage";
 import { PalestrantesPage } from "./pages/Palestrantes/PalestrantesPage";
 import { PrimeiroAcessoPage } from "./pages/PrimeiroAcesso/PrimeiroAcessoPage";
-import { ProfessoresPage } from "./pages/Professores/ProfessoresPage";
+import { EquipePage } from "./pages/Equipe/EquipePage";
 import { ParticipantesPage } from "./pages/Participantes/ParticipantesPage";
 import { QuestionarioPage } from "./pages/Questionario/QuestionarioPage";
 import { SalasPage } from "./pages/Salas/SalasPage";
@@ -68,7 +68,9 @@ export function App() {
               <Route element={<ProtectedRoute perfis={["ADMINISTRADOR", "SECRETARIA"]} />}>
                 <Route path="/salas" element={<SalasPage />} />
                 <Route path="/participantes" element={<ParticipantesPage />} />
-                <Route path="/professores" element={<ProfessoresPage />} />
+                <Route path="/equipe" element={<EquipePage />} />
+                {/* a tela Professores virou Equipe (professor e secretaria): link antigo leva pra la */}
+                <Route path="/professores" element={<Navigate to="/equipe" replace />} />
                 <Route path="/auditoria" element={<AuditoriaPage />} />
               </Route>
             </Route>

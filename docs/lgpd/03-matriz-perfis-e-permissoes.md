@@ -86,10 +86,10 @@ id vindo da tela.
 | `/api/participantes`, `/:id` | GET | ✅ | ✅ | ❌ | ❌ | Lista com a situação da conta (ativa, 2FA, bloqueio), sem segredo nem hash |
 | `/api/participantes/:id` | PUT | ✅ | ✅ | ❌ | ❌ | Corrige nome e RGM (o e-mail não muda: `422`); inativar exige motivo, encerra as sessões e cancela as inscrições sem pedido de check-in em eventos futuros; reativar apaga o motivo |
 | `/api/participantes/:id` | DELETE | ✅ | ✅ | ❌ | ❌ | Só aluno já inativo e sem certificado (`409 PARTICIPANTE_COM_CERTIFICADO`) |
-| `/api/professores`, `/:id/reenviar-convite`, `/:id/eventos-em-aberto`, `/:id/inativar`, `/:id/reativar` | GET/POST | ✅ | ✅ | ❌ | ❌ | Inativar exige motivo e, havendo evento em aberto, para quem transferir (professor ativo ou equipe) |
+| `/api/equipe` (também em `/api/professores`), `/:id/reenviar-convite`, `/:id/eventos-em-aberto`, `/:id/inativar`, `/:id/reativar`, `/:id` (DELETE) | GET/POST/DELETE | ✅ professores e secretarias | só professores | ❌ | ❌ | Tela Equipe. Criar conta de secretaria: só ADMINISTRADOR (`403 SO_ADMINISTRADOR`). Ninguém mexe na própria conta (`403 PROPRIA_CONTA`); conta de administrador não aparece e não é criada, inativada nem excluída (`403`, ou `409 ULTIMO_ADMINISTRADOR` se for o único ativo). Inativar exige motivo e, havendo evento em aberto do professor, para quem transferir. Excluir: só conta inativa ou com convite pendente; com histórico, fica inativa |
 | `/api/inscricoes` | GET | ✅ | ✅ | só os dele | só o próprio | O `participanteId` da consulta é ignorado para o aluno |
 | `/api/inscricoes/gestao` | GET | ✅ | ✅ | só os dele | ❌ | Paginada e filtrada no servidor |
-| `/api/inscricoes` | POST | ✅ | ✅ | só os dele | ❌ | Inscrição manual; aluno inativo: `409` |
+| `/api/inscricoes` | POST | ✅ | ✅ | só os dele | ❌ | Inscrição manual; aluno inativo: `409`; aluno já inscrito noutro evento no mesmo horário: `409 CONFLITO_DE_HORARIO` |
 | `/api/inscricoes/:id` | DELETE | ✅ | ✅ | só os dele | ❌ | Mesma regra do cancelamento pelo aluno; o aluno é avisado por e-mail |
 | `/api/questionario-tentativas` | GET | ✅ | ✅ | só os dele | ❌ | Notas para a gestão; nunca vira ranking para aluno |
 | `/api/certificados` | GET | ✅ | ✅ | só os dele | só o próprio | — |
@@ -109,16 +109,24 @@ id vindo da tela.
 
 - **Negação por padrão:** toda rota fora das públicas acima tem `autenticar`
   explícito; a trilha de auditoria não tem nenhuma rota de escrita.
-- **Ninguém define o próprio perfil:** nenhuma rota aceita `perfil` no corpo.
-  Contas de administrador e secretaria não são criadas por tela.
+- **Ninguém define o próprio perfil:** o cadastro público só cria aluno e
+  nenhuma rota muda o perfil de uma conta. A tela Equipe cria só professor e
+  secretaria (esta, só pelo administrador); conta de administrador não é
+  criada por tela.
 - **2FA:** opcional para todos; cada pessoa ativa e desativa só o da própria
   conta. Só o ADMINISTRADOR reseta o 2FA de outra pessoa (aluno, pela tela
   Participantes); conta da equipe, pelo script `backend/scripts/resetar-2fa.ts`,
   que registra `MFA_RESETADO` com a origem "script de emergência".
-- **Inativação:** aluno, pela tela Participantes; professor, pela tela
-  Professores (com a transferência dos eventos em aberto). O professor
-  inativo recebe no login a mesma resposta do aluno inativo, as sessões dele
-  caem e ele deixa de ser destino de transferência.
+- **Inativação:** aluno, pela tela Participantes; professor e secretaria,
+  pela tela Equipe (professor com a transferência dos eventos em aberto; a
+  secretaria não é responsável por evento, então nada é transferido). A
+  conta inativa recebe no login a mesma resposta do aluno inativo, as
+  sessões caem e o professor inativo deixa de ser destino de transferência.
+- **Exclusão de conta da equipe:** só conta inativa ou com convite pendente.
+  Com histórico (eventos ou palestrantes criados, decisões de aprovação,
+  propostas, check-ins decididos, pedidos de titular atendidos), a conta
+  fica inativa com a mensagem "Esta conta tem histórico no sistema e fica
+  preservada como inativa." Os registros de auditoria nunca são apagados.
 - **Aluno e evento não aprovado:** evento pendente ou recusado não aparece
   para o aluno em lugar nenhum, e palestrante não aprovado também não.
 - **Contas fictícias da carga de demonstração:** o campo `usuarios.ficticio`

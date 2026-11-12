@@ -183,10 +183,651 @@ Erros:
 | 422 | `VALIDACAO` | código fora do formato (6 dígitos), no campo `codigo` |
 | 409 | `EMAIL_DUPLICADO` / `RGM_DUPLICADO` | outra pessoa concluiu um cadastro com o mesmo e-mail ou RGM nesse meio tempo (o pendente é apagado) |
 
-#### Primeiro acesso do professor (convite por link, desde 09/11/2026)
+#### Primeiro acesso da conta da equipe (convite por link, desde 09/11/2026; secretaria desde 11/11/2026)
 
-A equipe cria a conta (`POST /api/professores`) ou reenvia o convite
-(`POST /api/professores/{id}/reenviar-convite`); o professor recebe um link
+A equipe cria a conta de professor ou, só o administrador, a de secretaria
+(`POST /api/equipe`, ver "Tela Equipe") ou reenvia o convite
+(`POST /api/equipe/{id}/reenviar-convite`); a pessoa recebe um link
+`APP_URL/#/primeiro-acesso?convite=<chave>` (chave aleatória de 32 bytes,
+base64url; no banco, só o SHA-256). A resposta de criar/reenviar traz
+`emailEnviado` e, só fora de produção, `linkConviteDemo`. Sem `APP_URL`
+configurada: `503 APP_URL_NAO_CONFIGURADA` ("O endereço do sistema não está
+configurado; não é possível enviar o convite.").
+
+- `POST /api/auth/primeiro-acesso/convite` `{ "convite": "..." }` →
+  `200 { "email": "..." }`. Não gasta o convite.
+- `POST /api/auth/primeiro-acesso` `{ "convite", "novaSenha", "aceiteLgpd": true }`
+  → `200 {}`: grava a senha, o aceite e a versão dos Termos e apaga o
+  convite (uso único).
+- Chave inexistente, vencida (24 h) ou já usada, nas duas rotas: `422
+  CONVITE_INVALIDO` ("Convite inválido ou vencido."). Toda chave errada conta
+  no limite por IP (`429 MUITAS_TENTATIVAS`).
+
+#### `POST /api/auth/registro/reenviar-codigo`
+
+Request: `{ "emailInstitucional": "joao.lima@alunos.umc.br" }`. Gera um
+código novo (o anterior deixa de valer), zera as tentativas, soma 1 em
+`envios` e renova a validade para 15 minutos. Response `200` igual à do
+passo 1.
+
+Erros: `422 CODIGO_EXPIRADO` (sem pendente ou expirado); `429
+AGUARDE_REENVIO` se o último envio foi há menos de 60 segundos ("Aguarde N
+segundos para pedir um novo código."); `429 MUITAS_TENTATIVAS` (mesmo
+limite de envios do passo 1); `503 EMAIL_INDISPONIVEL` (só em produção).
+
+Os pendentes expirados também são apagados a cada login, sem rotina
+agendada. Uma falha nessa limpeza (por exemplo, a tabela ainda não existir
+no banco) nunca impede o login: só fica no log do servidor.
+
+### `POST /api/auth/login` (endpoint dedicado)
+
+Request:
+```json
+{ "emailLogin": "joao.lima@alunos.umc.br", "senha": "SenhaForte123" }
+```
+
+Response `200`:
+```json
+{
+  "token": "<jwt assinado pelo backend>",
+  "tokenType": "Bearer",
+  "expiresIn": 28800,
+  "usuario": {
+    "id": "5f2b6e6a-usuario-uuid",
+    "nome": "João Pedro Lima",
+    "emailLogin": "joao.lima@alunos.umc.br",
+    "perfil": "ALUNO",
+    "rgm": "20240100110",
+    "participanteId": "9c1a4d2e-participante-uuid"
+  }
+}
+```
+Pra administrador/secretaria, `rgm` e `participanteId` vêm `null`. O
+`usuario` também traz `mfaAtivo` e a resposta traz `precisaAceitarTermos`.
+
+Quando o login ainda não pode abrir sessão, a resposta `200` não tem
+`token` — só um token temporário que serve para a etapa seguinte:
+```json
+{ "mfa": "PENDENTE", "tokenEtapa": "<jwt temporário>", "expiresIn": 300 }
+```
+Isso só acontece quando a pessoa ativou o 2FA (`mfa: "PENDENTE"`): falta o
+código (`POST /api/auth/2fa/verificar`). O 2FA é opcional para todos os
+perfis, então não existe etapa de configuração obrigatória.
+
+Se o hash guardado for de custo menor que 12 (contas antigas, de custo 10),
+o login refaz o hash com custo 12 depois de conferir a senha, sem mudar
+nada para o usuário (`SENHA_HASH_ATUALIZADO` na auditoria).
+
+Erros: `401 CREDENCIAIS_INVALIDAS` (e-mail ou senha errados, mesma
+mensagem se a conta não existir); `403 CONTA_INATIVA` ("Sua conta está
+inativa. Procure a secretaria.", sem o motivo interno) quando o aluno foi
+inativado pela secretaria — só é informado depois de a senha estar certa;
+`429 MUITAS_TENTATIVAS` depois de 5 tentativas erradas da mesma conta ou do
+mesmo IP (15 min).
+
+### `POST /api/auth/recuperacao-senha` e `POST /api/auth/recuperacao-senha/confirmar` (endpoints dedicados)
+
+Fluxo de "esqueci minha senha", identificando o usuário só pelo e-mail
+cadastrado (sem opção de RGM — mantém a tela simples e evita ambiguidade
+com o RGM, que hoje é só numérico).
+
+`POST /api/auth/recuperacao-senha` — Request: `{ "email": "joao.lima@alunos.umc.br" }`.
+Gera um código, manda por e-mail (ou loga, se for ambiente de teste) e
+responde `200` com `{}` — o código em si nunca volta no corpo em produção
+(fora de produção, o backend devolve `codigoDemo` no corpo pra testar sem
+e-mail configurado). E-mail sem conta recebe a **mesma** resposta `200`
+`{}`: a tela diz "Se houver uma conta com o e-mail informado, enviamos um
+código", então ninguém descobre por aqui quem tem conta.
+
+`POST /api/auth/recuperacao-senha/confirmar` — Request:
+`{ "email": "...", "codigo": "123456", "novaSenha": "..." }`.
+`novaSenha` segue a regra da senha nova (ver "Cadastro de aluno"); fora da
+regra, `422 VALIDACAO` no campo `novaSenha`. `200` se der certo (as sessões
+abertas da conta são encerradas). `422 CODIGO_INVALIDO` se o código estiver
+errado, expirado, não existir nenhum pendente ou o e-mail não tiver conta
+(a mesma resposta nos quatro casos).
+
+O pedido de código também tem limite: 5 por conta e 20 por IP em 15
+minutos (`429`).
+
+### `POST /api/auth/alterar-senha` — troca de senha pela Minha Conta (desde 10/11/2026)
+
+Sessão de qualquer perfil; a conta é sempre a do token (nenhum id no
+pedido). Request:
+`{ "senhaAtual": "...", "novaSenha": "...", "confirmacaoSenha": "..." }`,
+com o 2FA ativo também `"codigo": "123456"` **ou**
+`"codigoRecuperacao": "ABCDE-FGH23"` (o código de recuperação aceito fica
+gasto).
+
+- `422 VALIDACAO` no campo `novaSenha` (fora da regra da senha nova ou
+  igual à atual), `confirmacaoSenha` (diferente da nova) ou `codigo` (2FA
+  ativo sem código). Erro de preenchimento não conta tentativa.
+- `422 SENHA_ATUAL_OU_CODIGO_INVALIDOS` ("Senha atual ou código
+  incorretos.") se a senha atual ou o código estiverem errados — a mesma
+  resposta nos dois casos. Conta no limite da conta: 5 erros, `429
+  MUITAS_TENTATIVAS` por 15 min (o "Desbloquear" do administrador também
+  libera).
+- `200` com o mesmo formato do login com sessão: grava só o novo hash,
+  encerra as outras sessões (`versaoToken`), invalida códigos de "Esqueci
+  minha senha" pendentes, registra `SENHA_ALTERADA` na auditoria e manda o
+  aviso "A senha da sua conta no SGEA foi alterada em ..." por e-mail (sem
+  a senha; conta fictícia não recebe; se o envio falhar, a troca continua
+  valendo e a falha vai para a auditoria).
+
+### Autenticação em dois fatores (TOTP)
+
+Opcional para todos os perfis (administrador, secretaria e aluno). Código de
+6 dígitos de aplicativo autenticador, passo de 30 s, tolerância de ±1
+passo. Erro de código: `422 CODIGO_MFA_INVALIDO`; 5 erros seguidos na
+mesma conta: `429 MUITAS_TENTATIVAS` por 15 min.
+
+- `POST /api/auth/2fa/verificar` — só com o token `PENDENTE`. Request
+  `{ "codigo": "123456" }` ou `{ "codigoRecuperacao": "ABCDE-FGH23" }`.
+  Responde como o login com sessão; com código de recuperação, vem também
+  `codigosRecuperacaoRestantes`.
+- `POST /api/auth/2fa/configuracao` — sessão de qualquer perfil. Responde `{ "qrCode": "data:image/png;base64,...",
+  "segredo": "BASE32..." }`. Enquanto não confirmar, chamar de novo devolve
+  o mesmo segredo. `409 MFA_JA_ATIVO` se já estiver ativo.
+- `POST /api/auth/2fa/configuracao/confirmar` — sessão. Request
+  `{ "codigo": "123456" }`. Responde `{ "codigosRecuperacao": [8 códigos] }`
+  (mostrados uma única vez).
+- `POST /api/auth/2fa/desativar` — sessão, qualquer perfil.
+  Request `{ "senha": "...", "codigo": "123456" }`. Encerra as outras
+  sessões e responde com uma sessão nova para quem desativou.
+
+O middleware `autenticar` recusa com `401` o token temporário em qualquer
+outra rota.
+
+### `GET /api/usuarios/me`
+
+Qualquer perfil autenticado. Mesmo formato do campo `usuario` do login.
+`401` se o token não for mais válido. Chamado pela página "Minha conta"
+pra mostrar a situação do 2FA.
+
+### Ações sobre a conta (só administrador)
+
+A tela Usuários saiu do sistema e, com ela, a listagem `GET /api/usuarios`
+(hoje responde `404`). A situação do 2FA e do bloqueio de cada aluno aparece
+na listagem de participantes (`GET /api/participantes`, campos `usuarioId`,
+`mfaAtivo` e `bloqueado`). As duas ações continuam aqui porque agem sobre a
+conta de acesso, de qualquer perfil:
+
+- `DELETE /api/usuarios/{id}/bloqueio` — `204`; remove o bloqueio por
+  tentativas da conta (login, recuperação e 2FA). O bloqueio por IP não é
+  removido: ele só expira sozinho (15 min).
+- `DELETE /api/usuarios/{id}/2fa` — `204`; reseta o 2FA (apaga segredo e
+  códigos, encerra as sessões da pessoa).
+
+Secretaria e aluno recebem `403` nas duas. A tela Participantes chama as duas
+com o `usuarioId` do aluno. Conta de administrador/secretaria não aparece em
+nenhuma tela: o reset do 2FA dela é pelo script
+`backend/scripts/resetar-2fa.ts` (ou por esta API, com o id da conta), e o
+bloqueio por tentativas expira sozinho em 15 minutos.
+
+### Tela Equipe: contas de professor e de secretaria (`/api/equipe`, desde 11/11/2026)
+
+Só ADMINISTRADOR e SECRETARIA (`403` para os outros). O mesmo roteador
+responde em `/api/professores`, nome antigo da tela.
+
+- `GET /api/equipe?perfil=PROFESSOR|SECRETARIA` — professores e
+  secretarias, **nunca** administradores: `{ id, nome, email, perfil,
+  situacao ("AGUARDANDO_PRIMEIRO_ACESSO" | "ATIVO" | "INATIVO"),
+  motivoInativacao, criadoEm, podeGerenciar }`. `podeGerenciar` é falso
+  na própria conta e, para a secretaria, nas contas de secretaria.
+- `POST /api/equipe` `{ nomeCompleto, email (@umc.br), perfil? }` —
+  `perfil` é `PROFESSOR` (padrão) ou `SECRETARIA`; outro valor: `422`.
+  Secretaria criando secretaria: `403 SO_ADMINISTRADOR`. `201 { conta,
+  emailEnviado, linkConviteDemo? }` e o convite por link (ver "Primeiro
+  acesso da conta da equipe").
+- `POST /:id/reenviar-convite`, `GET /:id/eventos-em-aberto` (secretaria:
+  lista vazia), `POST /:id/inativar` `{ motivo, transferirPara? }`
+  (`transferirPara` só para professor com evento em aberto),
+  `POST /:id/reativar`.
+- `DELETE /:id` — só conta inativa ou com convite pendente (senão
+  `409 CONTA_ATIVA`). Sem histórico: `200 { excluida: true }` (sai a conta,
+  o convite, os códigos de recuperação e os contadores de tentativa; os
+  registros de auditoria ficam, com `usuarioId` nulo e o `atorNome`). Com
+  histórico (eventos ou palestrantes criados, decisões de aprovação,
+  propostas, check-ins decididos, pedidos de titular atendidos): `200 {
+  excluida: false, mensagem: "Esta conta tem histórico no sistema e fica
+  preservada como inativa.", conta }`.
+- Regras em todas as rotas com `:id`: a própria conta → `403
+  PROPRIA_CONTA`; conta de administrador → `403 CONTA_ADMINISTRADOR` (ou
+  `409 ULTIMO_ADMINISTRADOR` se for o único administrador ativo); secretaria
+  agindo sobre conta de secretaria → `403 SO_ADMINISTRADOR`.
+- Auditoria: `PROFESSOR_*` como antes; `SECRETARIA_CRIADA`,
+  `SECRETARIA_CONVITE_REENVIADO`, `SECRETARIA_INATIVADA`,
+  `SECRETARIA_REATIVADA`, `CONTA_EQUIPE_EXCLUIDA` e
+  `CONTA_EQUIPE_PRESERVADA`, só com ids.
+
+## Auditoria
+
+Toda operação que grava, altera ou apaga dados gera uma linha em
+`LogAuditoria`, além de logins e acessos negados. O log só é gravado
+**depois** da operação dar certo (exceto as ações de falha, que são o
+próprio registro da falha). O campo `detalhe` nunca guarda dado pessoal ou
+sensível (nome, e-mail, RGM, senha, código de recuperação, token,
+comentário de feedback, motivo de inativação) — só o tipo da entidade + id
+e um motivo curto; em edições, só os *nomes* dos campos alterados. Uma
+falha ao gravar o log nunca derruba a operação de verdade (só loga o erro
+no console do servidor). Os logs são imutáveis: não existe rota pra editar
+ou apagar.
+
+| Ação (`acao`) | Quando |
+|---|---|
+| `LOGIN_SUCESSO`, `LOGIN_FALHA` | login (a falha nunca grava o e-mail digitado; conta inativa também gera `LOGIN_FALHA`) |
+| `SENHA_HASH_ATUALIZADO` | hash da senha refeito com custo 12 no login (detalhe: custo antigo → novo) |
+| `ACESSO_NEGADO` | usuário autenticado barrado por perfil/posse/check-in (detalhe: método + rota, sem query string) |
+| `CADASTRO_INICIADO` | passo 1 do cadastro: dados validados, código enviado (detalhe: só o id do cadastro pendente; sem responsável, a conta ainda não existe) |
+| `CADASTRO_CODIGO_REENVIADO` | novo código do cadastro (detalhe: id do pendente e número do envio) |
+| `CADASTRO_CONCLUIDO` | código confirmado e conta criada (responsável e detalhe: o id da conta criada) |
+| `USUARIO_REGISTRADO` | só em registros antigos: cadastro de aluno antes da confirmação do e-mail (06/11/2026) |
+| `CONSENTIMENTO_LGPD_ACEITO` | aceite dos termos; `criadoEm` é idêntico a `usuarios.consentimentoLgpdEm` |
+| `RECUPERACAO_SENHA_SOLICITADA`, `RECUPERACAO_SENHA_FALHA`, `SENHA_REDEFINIDA` | fluxo "esqueci a senha" (falha: e-mail não cadastrado, código incorreto/expirado, excesso de tentativas) |
+| `EMAIL_ENVIADO`, `EMAIL_FALHA` | envio de e-mail (código de confirmação do cadastro, recuperação de senha, confirmação de inscrição, aviso de cancelamento de inscrição pela equipe); nunca grava o endereço nem o código; marca "(simulado)" quando o SendGrid não está configurado |
+| `SALA_CRIADA` / `_ATUALIZADA` / `_REMOVIDA` | salas |
+| `PALESTRANTE_CRIADO` / `_ATUALIZADO` / `_REMOVIDO` | palestrantes |
+| `EVENTO_CRIADO` / `_ATUALIZADO` / `_REMOVIDO` | eventos (só evento sem inscrição é removido; registros antigos de remoção informam quantas inscrições/feedbacks/tentativas foram junto, da época da exclusão em cascata) |
+| `PARTICIPANTE_ATUALIZADO`, `_INATIVADO`, `_REATIVADO`, `_REMOVIDO` | participantes (a inativação informa quantas inscrições foram canceladas; a remoção informa o que foi junto) |
+| `INSCRICAO_CRIADA` | inscrição manual (secretaria/admin) ou autoinscrição do aluno — o detalhe diz qual |
+| `INSCRICAO_ATUALIZADA` | só em registros antigos (reversão de presença pra pendente, quando a equipe marcava a presença) |
+| `INSCRICAO_CANCELADA` | cancelamento de inscrição — o detalhe diz se foi o próprio aluno, a secretaria/o administrador ou a inativação do aluno (nesse caso, uma linha por inscrição pendente em evento futuro) |
+| `INSCRICAO_REMOVIDA` | só em registros antigos (o `DELETE /api/inscricoes/{id}` agora é um cancelamento e grava `INSCRICAO_CANCELADA`) |
+| `PRESENCA_CONFIRMADA`, `PRESENCA_MARCADA_AUSENTE` | só em registros antigos (check-in marcado direto pela equipe, até 09/11/2026) |
+| `CHECKIN_SOLICITADO`, `CHECKIN_APROVADO`, `CHECKIN_RECUSADO`, `CHECKIN_REVERTIDO` | check-in pedido pelo aluno e decidido pelo professor do evento ou pela equipe (só o id da inscrição; a reversão diz de/para) |
+| `CHECKIN_APROVADO_TODOS` | "Aprovar todos" de um evento, com a quantidade aprovada |
+| `CHECKIN_EXPIRADO` | janela do check-in fechada: quantos pedidos sem decisão viraram RECUSADO e quantas inscrições sem pedido viraram AUSENTE (uma linha por execução que mudou algo) |
+| `QUESTIONARIO_RESPONDIDO` | percentual de acertos e se atingiu os 60% que liberam o certificado |
+| `CERTIFICADO_EMITIDO` | emissão de certificado — o detalhe diz se foi a primeira emissão (registro gravado) ou uma nova via do mesmo certificado, e quem pediu (aluno, secretaria, administrador). Nunca grava nome, RGM nem o código de validação |
+| `FEEDBACK_CRIADO`, `FEEDBACK_EXCLUIDO` | feedbacks; a exclusão diz se foi o próprio aluno ou a equipe (e, nesse caso, o motivo). `FEEDBACK_ATUALIZADO`/`_REMOVIDO` só aparecem em registros antigos |
+| `MFA_ATIVADO`, `MFA_DESATIVADO`, `MFA_VERIFICADO`, `MFA_FALHA`, `MFA_BLOQUEADO`, `MFA_RESETADO`, `CODIGO_RECUPERACAO_USADO`, `BLOQUEIO_LOGIN_REMOVIDO` | 2FA e bloqueio por tentativas |
+| `TERMOS_REACEITOS` | aceite de uma versão nova dos termos |
+| `DADOS_EXPORTADOS` | só pode aparecer em registro antigo: a exportação em JSON pela página Meus dados existiu por poucas horas em 04/11/2026 e saiu do sistema (o detalhe traz só o id da `SolicitacaoTitular`). A tela de Auditoria não oferece mais esse filtro e mostra o código como está |
+| `CONVERSAO_DADOS_PESSOAIS` | execução do script que passou nome/e-mail/RGM do formato cifrado para texto (só contagens) |
+
+Todas as rotas abaixo são admin/secretaria only (`403` pra aluno).
+
+`GET /api/logs-auditoria` — lista paginada, mais novo primeiro. Query
+params (todos opcionais):
+
+| Param | Padrão | Descrição |
+|---|---|---|
+| `page` | `1` | página (≥ 1) |
+| `pageSize` | `50` | itens por página (1–200) |
+| `acao` | — | código exato da ação (ex.: `SALA_CRIADA`) |
+| `usuarioId` | — | id do responsável, ou `sem-responsavel` pra ações sem usuário (login falho, recuperação com e-mail inexistente) |
+| `de`, `ate` | — | período, instantes ISO 8601 com fuso (limites inclusivos); `de` não pode ser posterior a `ate` |
+
+Parâmetro inválido → `422` no formato padrão. Response `200`:
+
+```json
+{
+  "itens": [
+    {
+      "id": "…",
+      "acao": "SALA_CRIADA",
+      "detalhe": "sala 17bc33b0-…",
+      "criadoEm": "2026-09-26T02:25:48.684Z",
+      "usuarioId": "…",
+      "atorNome": "Ana Ribeiro",
+      "atorRemovido": false
+    }
+  ],
+  "total": 132,
+  "page": 1,
+  "pageSize": 50,
+  "totalPages": 3
+}
+```
+
+Cada log guarda uma cópia do nome de quem agiu (coluna `atorNome`, em texto,
+tirada na hora do log): se a conta for excluída depois, o log continua
+existindo com `usuarioId: null` (a FK é `ON DELETE SET NULL`; nada apaga log
+em cascata), `atorNome` vem dessa cópia e
+`atorRemovido` fica `true` (a tela mostra "(conta removida)"). `atorNome` só é
+`null` em ação pública sem responsável (login falho, recuperação de senha com
+e-mail inexistente) e nos logs criados antes da cópia existir cujo usuário foi
+excluído. A trilha é só leitura: nenhuma rota, service ou script apaga ou edita
+log (o TiDB não tem trigger, então essa proteção é da aplicação).
+
+`GET /api/logs-auditoria/responsaveis` — quem já aparece na trilha, pra
+montar o filtro: `[{ "id": "…", "nome": "Ana Ribeiro" }]`, ordenado por nome.
+
+## Eventos
+
+`Evento` e `Sessão` eram duas entidades separadas (um "Evento" guarda-chuva
+com várias "Sessões" dentro) numa versão anterior deste documento. Isso foi
+fundido numa entidade só: cada palestra/minicurso/workshop **é** um Evento,
+sem contêiner pai. Motivo: as duas telas de gestão eram praticamente
+idênticas (mesmas ações de CRUD) e o aluno tinha que navegar por dois
+níveis (lista de eventos → detalhe → lista de sessões) pra chegar em algo
+que, na prática, é um item só. Se o projeto precisar agrupar vários eventos
+sob um "evento guarda-chuva" no futuro (ex: uma semana acadêmica com várias
+palestras), isso volta como um campo opcional de agrupamento, não como a
+estrutura obrigatória de antes.
+
+```ts
+interface Evento {
+  id: string;
+  titulo: string;           // "Minicurso: Arquitetura de Microsserviços"
+  tema: string;              // "Arquitetura de Software" — assunto do evento
+  horario: string;           // ISO-8601 com offset: "2026-09-14T14:00:00-03:00"
+  salaId: string;
+  palestranteId: string;     // obrigatório
+  cargaHoraria: number;      // horas, aceita decimal — usado no certificado
+  questionario: PerguntaQuestionario[]; // sempre 10 perguntas
+  inscritos?: number;        // quantidade de inscrições, calculada pelo backend nas leituras
+  criadoEm: string;
+}
+
+interface PerguntaQuestionario {
+  id: string;
+  enunciado: string;
+  alternativas: { texto: string; correta: boolean }[]; // sempre 4, só 1 correta
+}
+```
+
+Detalhe pro frontend lembrar quando integrar de verdade: hoje o form de
+evento usa `<input type="datetime-local">`, que gera string sem timezone
+("2026-09-14T14:00"). Isso precisa ser serializado com offset antes de
+mandar pra API — não é conta do backend normalizar isso.
+
+`questionario` é cadastrado pelo admin/secretaria ao criar ou editar o
+evento. Para o aluno, as perguntas saem sem o campo `correta` (ver seção
+**Questionário**). `inscritos` é usado pela Agenda e pelo relatório de
+ocupação, sem precisar baixar todas as inscrições.
+
+- `GET /api/eventos` e `GET /api/eventos/{id}` — qualquer perfil
+  autenticado (404 se não existir). É a mesma rota usada pela tela de
+  gestão (admin/secretaria) e pela Agenda/listagem de eventos (aluno) — não
+  tem uma rota "enxuta" separada pro aluno, ele recebe o objeto `Evento`
+  completo (menos o que já é escondido em `Palestrante`, se o frontend um
+  dia parar de expandir isso client-side).
+- **Calendário (desde 09/11/2026), `GET /api/eventos?de=&ate=&situacao=`** —
+  equipe e professor. Só os eventos que **começam** em `[de, ate)` (datas
+  ISO; o intervalo pode ter até 62 dias, senão `422`), cada um com
+  `checkinsPendentes` (pedidos de check-in esperando aprovação). A resposta
+  vira `{ eventos, salasOcupadas }`: a equipe recebe todos os eventos
+  completos e `salasOcupadas` vazio; o professor recebe os dele completos e,
+  dos outros (de outro professor ou da equipe), só os que reservam a sala —
+  evento `APROVADO` ou `PENDENTE` e proposta de alteração `PENDENTE` — como
+  `{ salaId, salaNome, inicio, fim }`, **sem** título, palestrante, inscritos
+  nem id. Sem `de`/`ate`, a rota continua devolvendo a lista de sempre; o
+  aluno ignora o intervalo (a programação dele não muda).
+- **Busca do calendário, `GET /api/eventos/busca?q=&situacao=&limite=`** —
+  equipe e professor (só os dele); aluno `403`. Procura `q` no título, no
+  tema, no nome do palestrante e no nome da sala, de qualquer mês, e/ou
+  filtra pela situação (`PENDENTE` e `RECUSADO` incluem as propostas nessa
+  situação). Mais recentes primeiro, no máximo `limite` (padrão 20, máximo
+  50, senão `422`); sem `q` nem `situacao`, `422`. Resposta
+  `{ itens, limite, temMais }`.
+- `POST /api/eventos` — admin/secretaria, `201`, `422` se
+  `palestranteId`/`salaId` não existirem.
+- `PUT /api/eventos/{id}` — admin/secretaria, `200`.
+- `DELETE /api/eventos/{id}` — admin/secretaria, `204`. **Só evento sem
+  nenhuma inscrição** é excluído: com qualquer inscrição responde `409
+  EVENTO_COM_INSCRICOES` ("Cancele as inscrições antes de excluir o
+  evento.") e nada é apagado. A API não apaga mais inscrições, feedbacks nem
+  tentativas em cascata (RF009/RNF010). Como só inscrição pendente de evento
+  futuro pode ser cancelada, evento que já teve presença ou certificado fica
+  preservado.
+
+**Conflito de sala (RF024)** — no `POST` e no `PUT` (quando `salaId`,
+`horario` ou `cargaHoraria` vêm no corpo), o evento ocupa a sala no
+intervalo `[horario, horario + cargaHoraria horas)`. Se esse intervalo
+cruzar o de outro evento da mesma sala, a resposta é `409
+CONFLITO_DE_SALA` ("A sala já está ocupada pelo evento "<título>" nesse
+horário."). O intervalo é semiaberto: evento que termina exatamente quando
+o outro começa não é conflito. Na edição, o próprio evento é ignorado (os
+valores que não vieram no corpo são os já gravados).
+
+Aluno chamando POST/PUT/DELETE cai em `403 ACESSO_NEGADO`.
+
+## Palestrantes
+
+`nome`/`email` em texto puro no banco — não é dado sensível, a edição é
+restrita à equipe e o nome já é público na agenda do evento (decisão LGPD,
+ver `docs/lgpd/07-medidas-tecnicas-de-seguranca.md`). O campo `telefone`
+existiu numa versão anterior e foi removido (minimização — não era usado
+em nenhum fluxo automatizado).
+
+```ts
+interface Palestrante {
+  id: string;
+  nome: string;
+  email: string;
+}
+```
+
+`GET /api/palestrantes` e `GET /api/palestrantes/{id}` — qualquer perfil
+autenticado, resposta igual pra todo mundo (não há mais campo restrito por
+perfil). `POST /api/palestrantes`, `PUT /api/palestrantes/{id}` e
+`DELETE /api/palestrantes/{id}` — administrador/secretaria. A exclusão é
+bloqueada quando há eventos vinculados ao palestrante.
+
+## Salas
+
+```ts
+interface Sala {
+  id: string;
+  nome: string; // código no padrão da UMC, ex.: "1T-01"
+  tipo: "SALA_DE_AULA" | "LABORATORIO" | "AUDITORIO";
+  capacidade: number;
+}
+```
+
+- `GET /api/salas` e `GET /api/salas/{id}` — qualquer perfil autenticado.
+  O aluno não gerencia sala nenhuma, mas a tela Eventos e o detalhe do
+  evento mostram o nome da sala de cada sessão, então precisam poder ler a
+  lista.
+- Na listagem (`GET /api/salas`), **só a equipe** recebe também a ocupação
+  real de cada sala (RF021); o aluno continua recebendo só `id`, `nome` e
+  `capacidade`:
+  ```ts
+  interface SalaDaEquipe extends Sala {
+    eventosRealizados: number;     // eventos ENCERRADOS na sala (horário + carga horária já passou)
+    ocupacaoMedia: number | null;  // média, nesses eventos, de presentes (check-in PRESENTE) / capacidade × 100; null sem evento encerrado
+  }
+  ```
+  É a mesma conta do indicador "Ocupação média das salas" do Dashboard
+  (`backend/src/utils/ocupacao.ts`): evento futuro ou em andamento fica fora,
+  sala com capacidade 0 fica fora da média. Calculado com 2 consultas no
+  total (eventos já iniciados e presentes agrupados por evento). Só números,
+  nenhum dado de aluno.
+- `POST` / `PUT /api/salas/{id}` / `DELETE /api/salas/{id}` — admin/secretaria only, `403` pra aluno.
+- **Código no padrão da UMC (desde 11/11/2026):** `nome` é o código da sala,
+  prédio (1, 2 ou 3) + andar (`T` = térreo, 1, 2 ou 3) + hífen + número de
+  01 a 21, por exemplo `1T-01`, `22-07`, `33-21` (regex
+  `^[1-3][T1-3]-(0[1-9]|1[0-9]|2[01])# Contrato de API — Sistema de Gestão de Eventos Acadêmicos
+
+Referência de rotas, formatos e regras de autorização entre frontend e
+backend (Node.js + TypeScript + Express, implementado em `backend/` — ver
+[`../backend/README.md`](../backend/README.md) pra como rodar). Os dados
+ficam num cluster **TiDB Cloud** (compatível com MySQL), acessado via
+Prisma (`backend/prisma/schema.prisma`), isolado atrás de
+`backend/src/db/prisma.ts`. O frontend não guarda dado de negócio nenhum
+localmente — toda tela fala direto com essa API.
+
+Prefixo `/api` em tudo. JSON, `camelCase` igual aos tipos do frontend.
+
+**Como ler este documento**: a maior parte dos recursos (eventos, salas,
+palestrantes, participantes, inscrições, feedbacks) é CRUD REST
+simples — `GET /api/{recurso}`, `GET /api/{recurso}/{id}`, `POST`,
+`PUT /api/{recurso}/{id}`, `DELETE /api/{recurso}/{id}`. O frontend usa
+literalmente essas mesmas rotas tanto pras telas de gestão (admin/secretaria)
+quanto pras telas do aluno (evento, agenda, certificados) — não existem
+rotas separadas "versão aluno" desses recursos. A diferença por perfil entra
+como filtro/validação dentro do MESMO endpoint (esconder campo, restringir
+quais linhas voltam, ignorar valor enviado pelo cliente), nunca como rota
+duplicada. Só uns poucos fluxos (login/cadastro, autoinscrição e cancelamento
+pelo aluno, e-mail de confirmação, emissão e validação de certificado) têm
+rota dedicada de verdade — esses estão marcados como "endpoint dedicado"
+abaixo.
+
+## Perfis e permissões
+
+Três perfis: `ADMINISTRADOR`, `SECRETARIA` e `ALUNO`. Os dois primeiros têm
+acesso igual e total a tudo. Aluno é o perfil novo, com acesso restrito e
+auto-cadastro.
+
+| Recurso                                | ADMINISTRADOR | SECRETARIA | ALUNO |
+|-----------------------------------------|:---:|:---:|:---:|
+| Eventos — listar / detalhe               | ✅ | ✅ | ✅ |
+| Eventos — criar / editar / excluir       | ✅ | ✅ | ❌ |
+| Palestrantes — listar / detalhe          | ✅ | ✅ | ✅ (resposta igual pra todo mundo) |
+| Palestrantes — criar / editar / excluir  | ✅ | ✅ | ❌ |
+| Salas — listar / detalhe                 | ✅ | ✅ | ✅ (só nome/capacidade, pra Agenda e listagem de eventos) |
+| Salas — criar / editar / excluir         | ✅ | ✅ | ❌ |
+| Participantes — listar / detalhe         | ✅ | ✅ | ❌ |
+| Participantes — editar / inativar / reativar / excluir | ✅ | ✅ | ❌ (participante só nasce pelo cadastro público) |
+| Inscrições — listar                      | ✅ (todas) | ✅ (todas) | ✅ (só as próprias) |
+| Inscrições — criar manualmente / cancelar a de um aluno | ✅ | ✅ | ❌ |
+| Autoinscrição no evento / cancelar a própria inscrição | — | — | ✅ (só a própria) |
+| Check-in (confirmar presença/ausência)   | ✅ | ✅ | ❌ |
+| Certificados — emitir / listar           | ✅ (de qualquer participante que cumpra os requisitos) | ✅ | ✅ (só os próprios) |
+| Certificados — validar pelo código       | público, sem login | público | público |
+| Feedback                                 | ✅ (listar tudo, excluir com motivo; não edita) | ✅ | ✅ (enviar e excluir os próprios, só de palestra com certificado; não edita) |
+| Dashboard / estatísticas (`GET /api/dashboard`) | ✅ | ✅ | ❌ |
+| Participantes — ver situação do 2FA e do bloqueio | ✅ | ✅ | ❌ |
+| Participantes — resetar 2FA / desbloquear a conta do aluno | ✅ | ❌ | ❌ |
+| Auditoria (trilha de operações e acessos) | ✅ | ✅ | ❌ |
+| Meus dados — ver os próprios dados (`/api/meus-dados`, RF026) | ❌ | ❌ | ✅ (só os próprios) |
+| Trabalhos                                | removido do projeto | removido | removido |
+
+Feedback: as regras por perfil (ninguém edita; o aluno só vê e exclui o
+próprio e só avalia palestra em que recebeu o certificado; a equipe só
+exclui, com motivo) estão na seção **Feedback** e são aplicadas no backend;
+a tela já reflete isso.
+
+Trabalhos saiu do escopo do projeto. Não implementar
+`TrabalhoController`/`TrabalhoService`/tabela `trabalhos` — se algo já foi
+gerado a partir do diagrama antigo, pode jogar fora.
+
+## Autenticação
+
+Toda rota exceto login, registro, recuperação de senha e a validação
+pública de certificado (`GET /api/certificados/validar/{codigo}`) exige
+`Authorization: Bearer <token>`.
+
+O token é opaco pro frontend — o React não decodifica o JWT em nenhum
+momento. Nome, perfil, rgm etc. vêm no corpo da resposta de login/registro,
+não do token. O JWT existe só pro backend validar cada requisição.
+
+E isso é importante: a autorização por perfil tem que ser validada no
+servidor, endpoint por endpoint, nunca só escondendo botão/rota na UI. O
+frontend já esconde as telas certas por perfil, mas isso é cosmético — um
+aluno batendo direto em `/api/participantes` via curl precisa tomar 403
+mesmo que aquela tela nunca apareça pra ele.
+
+### Cadastro de aluno com confirmação do e-mail (endpoints dedicados)
+
+É o único perfil com cadastro público. Administrador e secretaria são
+provisionados de outro jeito (o frontend hoje nem tem tela pra isso, fica
+fora do escopo).
+
+O cadastro tem 2 passos. A conta só passa a existir depois que o aluno
+digita o código de 6 dígitos enviado ao e-mail institucional; até lá, os
+dados ficam na tabela `cadastros_pendentes` por até 15 minutos (senha e
+código só como hash bcrypt). Ao confirmar, o backend cria os dois registros
+vinculados: um `Usuario` (login) e um `Participante` (usado por
+inscrição/check-in/agenda, sempre referenciado por `participanteId`).
+
+#### Regra da senha nova
+
+Vale no cadastro e na nova senha da recuperação (`utils/validacao.ts` no
+backend e no frontend, mesma regra): de 8 a 64 caracteres, com pelo menos
+uma letra maiúscula (acentuada conta), um número e um caractere especial
+(qualquer caractere que não seja letra, número ou espaço). Mensagem do
+erro, no campo `senha`/`novaSenha`: "A senha deve ter de 8 a 64 caracteres,
+com pelo menos uma letra maiúscula, um número e um caractere especial." O
+login **não** confere a regra: quem já tem conta continua entrando com a
+senha que tem.
+
+#### `POST /api/auth/registro` — passo 1: dados e envio do código
+
+Request:
+```json
+{
+  "nomeCompleto": "João Pedro Lima",
+  "rgm": "20240100110",
+  "emailInstitucional": "joao.lima@alunos.umc.br",
+  "senha": "Senha@Forte123",
+  "aceiteLgpd": true
+}
+```
+`aceiteLgpd` precisa ser `true` — é o aceite dos Termos de Uso/Política de
+Privacidade (LGPD). Validado com `z.literal(true)`, então "esconder o
+checkbox no frontend" nunca é suficiente pra pular essa exigência.
+
+Valida tudo (formato, regra da senha, aceite, e-mail ou RGM já usados por
+uma conta) e **não cria conta**: apaga os cadastros pendentes expirados e
+qualquer pendente com o mesmo e-mail ou RGM (cadastro refeito), grava o
+pendente com validade de 15 minutos (`aceiteEm` = instante do aceite,
+`versaoTermos` = versão vigente) e manda o código pelo SendGrid.
+
+Response `202`:
+```json
+{
+  "emailInstitucional": "joao.lima@alunos.umc.br",
+  "expiraEm": "2026-11-06T15:15:00.000Z",
+  "codigoDemo": "123456"
+}
+```
+`codigoDemo` só vem fora de produção, pra testar sem e-mail configurado.
+
+Erros:
+| Status | code | Quando |
+|---|---|---|
+| 409 | `RGM_DUPLICADO` | já existe conta com esse RGM |
+| 409 | `EMAIL_DUPLICADO` | já existe conta com esse e-mail |
+| 422 | `VALIDACAO` | campo obrigatório faltando, e-mail fora do padrão institucional, senha fora da regra, `aceiteLgpd` ausente ou `false` |
+| 429 | `MUITAS_TENTATIVAS` | limite de envios de código: 5 por e-mail e 20 por IP em 15 min (cadastro e reenvio contam juntos) |
+| 503 | `EMAIL_INDISPONIVEL` | só em produção: o e-mail não saiu. O pendente fica guardado e o aluno usa "Reenviar código" |
+
+#### `POST /api/auth/registro/confirmar` — passo 2: código e criação da conta
+
+Request: `{ "emailInstitucional": "joao.lima@alunos.umc.br", "codigo": "123456" }`.
+
+Com o código certo, numa transação: confere de novo se o e-mail e o RGM
+continuam livres, cria o `Participante` e o `Usuario` (perfil `ALUNO`) com
+a senha do pendente, `consentimentoLgpdEm` = `aceiteEm` e
+`versaoTermosAceitos` = `versaoTermos` do pendente, e apaga o pendente.
+
+Response `201`:
+```json
+{
+  "id": "5f2b6e6a-usuario-uuid",
+  "nome": "João Pedro Lima",
+  "emailLogin": "joao.lima@alunos.umc.br",
+  "perfil": "ALUNO",
+  "rgm": "20240100110",
+  "participanteId": "9c1a4d2e-participante-uuid",
+  "consentimentoLgpdEm": "2026-11-06T15:00:00.000Z",
+  "versaoTermosAceitos": "3"
+}
+```
+Senha não volta no corpo em nenhum endpoint, nunca. No banco ela fica só
+como hash bcrypt (custo 12, salt aleatório por senha, embutido no próprio
+hash); nome, e-mail e RGM ficam em texto (ver
+`docs/lgpd/07-medidas-tecnicas-de-seguranca.md`).
+`consentimentoLgpdEm` é a data/hora exata do aceite, gravada no servidor no
+passo 1 (nunca confia em timestamp vindo do cliente) — `null` pras contas
+provisionadas antes desse controle existir (admin/secretaria). O frontend
+faz o login automático com o e-mail e a senha digitados.
+
+Erros:
+| Status | code | Quando |
+|---|---|---|
+| 422 | `CODIGO_EXPIRADO` | não há cadastro pendente pra esse e-mail, ou ele expirou ("O código expirou. Preencha o cadastro novamente."); o expirado é apagado na hora |
+| 422 | `CODIGO_INVALIDO` | código errado ("Código inválido.", soma 1 tentativa). No 5º erro o código deixa de valer, mesmo o certo, até o aluno pedir outro |
+| 422 | `VALIDACAO` | código fora do formato (6 dígitos), no campo `codigo` |
+| 409 | `EMAIL_DUPLICADO` / `RGM_DUPLICADO` | outra pessoa concluiu um cadastro com o mesmo e-mail ou RGM nesse meio tempo (o pendente é apagado) |
+
+#### Primeiro acesso da conta da equipe (convite por link, desde 09/11/2026; secretaria desde 11/11/2026)
+
+A equipe cria a conta de professor ou, só o administrador, a de secretaria
+(`POST /api/equipe`, ver "Tela Equipe") ou reenvia o convite
+(`POST /api/equipe/{id}/reenviar-convite`); a pessoa recebe um link
 `APP_URL/#/primeiro-acesso?convite=<chave>` (chave aleatória de 32 bytes,
 base64url; no banco, só o SHA-256). A resposta de criar/reenviar traz
 `emailEnviado` e, só fora de produção, `linkConviteDemo`. Sem `APP_URL`
@@ -596,7 +1237,14 @@ interface Sala {
   sala com capacidade 0 fica fora da média. Calculado com 2 consultas no
   total (eventos já iniciados e presentes agrupados por evento). Só números,
   nenhum dado de aluno.
-- `POST` / `PUT /api/salas/{id}` / `DELETE /api/salas/{id}` — admin/secretaria only, `403` pra aluno.
+, em `backend/src/utils/salas.ts`;
+  letra minúscula vira maiúscula). Fora do padrão: `422 VALIDACAO` no campo
+  `nome`. Código repetido: `409 SALA_DUPLICADA` ("Já existe uma sala
+  1T-01."); a coluna tem índice único. `tipo` é obrigatório no `POST`:
+  `SALA_DE_AULA`, `LABORATORIO` ou `AUDITORIO`. A lista vem em ordem de
+  prédio, andar (térreo antes do 1º) e número. Onde a sala aparece como texto
+  (`salaNome` no check-in, no dashboard e no calendário, e-mails e
+  mensagens), vai como "1T-01 · Laboratório".
 
 ## Participantes
 
@@ -839,6 +1487,7 @@ Erros:
 | 409 | `EVENTO_JA_INICIADO` | o evento já começou (`horario` no passado): "Não é possível se inscrever: o evento já começou." |
 | 409 | `JA_INSCRITO` | esse aluno já tá inscrito nesse evento |
 | 409 | `EVENTO_LOTADO` | capacidade da sala já bateu |
+| 409 | `CONFLITO_DE_HORARIO` | o aluno já está inscrito noutro evento que cruza com o horário deste ("Você já está inscrito em <título>, que acontece no mesmo horário (<data> às <hora>). Cancele aquela inscrição para se inscrever nesta."). Cada evento ocupa do início até início + carga horária; encostar não conta; inscrição cancelada não conta. Também na inscrição manual (`POST /api/inscricoes`), com "O aluno já está inscrito em…" |
 
 A tela Eventos do aluno mostra o botão desabilitado "Encerrado" nos eventos
 que já começaram. A inscrição manual da equipe (`POST /api/inscricoes`)

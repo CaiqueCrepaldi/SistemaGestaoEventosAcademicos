@@ -54,6 +54,8 @@ export function criarApp() {
   apiRouter.use("/logs-auditoria", auditoriaRouter);
   apiRouter.use("/dashboard", dashboardRouter);
   apiRouter.use("/meus-dados", titularRouter);
+  // tela Equipe (professor e secretaria); /professores continua respondendo o mesmo
+  apiRouter.use("/equipe", professoresRouter);
   apiRouter.use("/professores", professoresRouter);
   apiRouter.use("/aprovacoes", aprovacoesRouter);
   apiRouter.use("/checkin", checkinRouter);

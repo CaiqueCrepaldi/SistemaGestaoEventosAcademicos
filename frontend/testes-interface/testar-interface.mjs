@@ -96,6 +96,23 @@ try {
   const secretaria = contas.SECRETARIA;
   const admin = contas.ADMINISTRADOR;
   const tokenSecretaria = await tokenDe(secretaria.email, secretaria.senha);
+  // sala no padrao da UMC (predio + andar + "-" + numero, ex.: 1T-01) e unica: o teste usa codigos que nenhuma sala
+  // do banco usa, do predio 2 (o teste da API vai do 33-21 para tras)
+  const codigosDeSalaEmUso = new Set((await api("GET", "/salas", tokenSecretaria)).corpo.map((s) => s.nome));
+  function codigoDeSala() {
+    for (const predio of ["2", "1", "3"]) {
+      for (const andar of ["1", "2", "3", "T"]) {
+        for (let numero = 1; numero <= 21; numero++) {
+          const codigo = `${predio}${andar}-${String(numero).padStart(2, "0")}`;
+          if (!codigosDeSalaEmUso.has(codigo)) {
+            codigosDeSalaEmUso.add(codigo);
+            return codigo;
+          }
+        }
+      }
+    }
+    throw new Error("nenhum código de sala livre");
+  }
 
   // ---------------------------------------------------------------- E: login
   titulo("E / Login: campos obrigatórios");
@@ -151,17 +168,70 @@ try {
   titulo("E / Salas");
   await page.goto(`${APP}/salas`);
   await page.click("button:has-text('+ Nova sala')");
+  checar(
+    "o nome livre deu lugar a Prédio, Andar e Número (seleções), mais o Tipo",
+    (await page.locator(".modal select#predio").count()) === 1 &&
+      (await page.locator(".modal select#andar").count()) === 1 &&
+      (await page.locator(".modal select#numero").count()) === 1 &&
+      (await page.locator(".modal select#tipo").count()) === 1 &&
+      (await page.locator(".modal input#nome").count()) === 0,
+  );
+  checar(
+    "as opções seguem o padrão: prédios 1 a 3, andar T/1/2/3, números 01 a 21, três tipos",
+    (await page.locator("#predio option").count()) === 4 &&
+      (await page.locator("#andar option").count()) === 5 &&
+      (await page.locator("#numero option").count()) === 22 &&
+      (await page.locator("#tipo option").allInnerTexts()).join("|") === "Sala de aula|Laboratório|Auditório",
+  );
   await page.click(".modal button[type=submit]");
-  checar("enviar vazio: nome e capacidade inválidos", (await invalido(page, "#nome")) && (await invalido(page, "#capacidade")));
-  checar("mensagens do que falta", (await temTexto(page, "Informe o nome da sala.")) && (await temTexto(page, "Informe a capacidade.")));
-  checar("foco no primeiro campo inválido", (await idAtivo(page)) === "nome", await idAtivo(page));
-  await page.fill("#nome", `Sala UI ${sufixo}`);
+  checar(
+    "enviar vazio: prédio, andar, número e capacidade inválidos",
+    (await invalido(page, "#predio")) && (await invalido(page, "#andar")) && (await invalido(page, "#numero")) && (await invalido(page, "#capacidade")),
+  );
+  checar("mensagens do que falta", (await temTexto(page, "Escolha o prédio.")) && (await temTexto(page, "Informe a capacidade.")));
+  checar("foco no primeiro campo inválido", (await idAtivo(page)) === "predio", await idAtivo(page));
+  const codigoSalaUi = codigoDeSala();
+  await page.selectOption("#predio", codigoSalaUi[0]);
+  await page.selectOption("#andar", codigoSalaUi[1]);
+  await page.selectOption("#numero", codigoSalaUi.slice(3));
+  await page.selectOption("#tipo", "LABORATORIO");
+  checar("a tela mostra o código montado", await temTexto(page, `Código da sala: ${codigoSalaUi}`), codigoSalaUi);
   await page.fill("#capacidade", "0");
   await page.click(".modal button[type=submit]");
   checar("capacidade zero é recusada com mensagem", await temTexto(page, "maior que zero"));
   await page.fill("#capacidade", "40");
   await page.click(".modal button[type=submit]");
   checar("sala válida é salva", await esperarToast(page, "Sala cadastrada."));
+  const linhaSalaUi = page.locator("tr", { hasText: codigoSalaUi });
+  await linhaSalaUi.waitFor({ timeout: 8000 }).catch(() => {});
+  checar("a lista mostra o código e o tipo", (await linhaSalaUi.count()) === 1 && (await linhaSalaUi.innerText()).includes("Laboratório"));
+  await page.click("button:has-text('+ Nova sala')");
+  await page.selectOption("#predio", codigoSalaUi[0]);
+  await page.selectOption("#andar", codigoSalaUi[1]);
+  await page.selectOption("#numero", codigoSalaUi.slice(3));
+  await page.fill("#capacidade", "30");
+  await page.click(".modal button[type=submit]");
+  checar("código repetido: a API recusa e a tela avisa", await esperarToast(page, `Já existe uma sala ${codigoSalaUi}.`));
+  await page.click(".modal button:has-text('Cancelar')");
+  await page.selectOption("select[aria-label='Filtrar por tipo']", "LABORATORIO");
+  const tiposNaLista = await page.locator("table tbody tr td:nth-child(2)").allInnerTexts();
+  checar("filtro por tipo: só laboratórios", tiposNaLista.length > 0 && tiposNaLista.every((t) => t.trim() === "Laboratório"), tiposNaLista.join("|"));
+  await page.selectOption("select[aria-label='Filtrar por tipo']", "");
+  await page.selectOption("select[aria-label='Filtrar por prédio']", codigoSalaUi[0]);
+  const codigosNaLista = await page.locator("table tbody tr td:first-child").allInnerTexts();
+  checar(
+    "filtro por prédio, com as salas em ordem de prédio, andar e número",
+    codigosNaLista.length > 0 &&
+      codigosNaLista.every((c) => c.startsWith(codigoSalaUi[0])) &&
+      codigosNaLista.every((c, i) => {
+        const chave = (x) => `${x[1] === "T" ? "0" : x[1]}${x.slice(3)}`;
+        return i === 0 || chave(codigosNaLista[i - 1]) < chave(c);
+      }),
+    codigosNaLista.join("|"),
+  );
+  await page.selectOption("select[aria-label='Filtrar por prédio']", "");
+  const salaUiCriada = ((await api("GET", "/salas", tokenSecretaria)).corpo ?? []).find((x) => x.nome === codigoSalaUi);
+  if (salaUiCriada) await api("DELETE", `/salas/${salaUiCriada.id}`, tokenSecretaria);
 
   // ---------------------------------------------------------------- E: palestrantes + erro do backend no campo
   titulo("E / Palestrantes (erro do backend embaixo do campo certo)");
@@ -195,7 +265,7 @@ try {
   await page.click(".modal button:has-text('Cancelar')");
 
   // dados do fluxo do aluno: sala, palestrante e evento criados pela API
-  const sala = await api("POST", "/salas", tokenSecretaria, { nome: `Auditorio UI ${sufixo}`, capacidade: 40 });
+  const sala = await api("POST", "/salas", tokenSecretaria, { nome: codigoDeSala(), tipo: "AUDITORIO", capacidade: 40 });
   const palestrante = await api("POST", "/palestrantes", tokenSecretaria, { nome: "Palestrante Fluxo", email: `fluxo-${sufixo}@teste.invalido` });
   // comeca daqui a 30 min: ainda aceita inscricao e o check-in ja abriu (abre 1h antes do inicio)
   const emBreve = new Date(Date.now() + 30 * 60 * 1000).toISOString();
@@ -587,12 +657,16 @@ try {
   // evento em que a aluna fica abaixo de 60% nas duas tentativas (sala propria, sem conflito de horario):
   // sem terceira chance, o certificado desse evento nao sai mais
   const tokenAluna = await tokenDe(emailAluno, SENHA_ALUNA);
-  const salaReprovado = await api("POST", "/salas", tokenSecretaria, { nome: `Sala Reprovado UI ${sufixo}`, capacidade: 10 });
+  const salaReprovado = await api("POST", "/salas", tokenSecretaria, { nome: codigoDeSala(), tipo: "SALA_DE_AULA", capacidade: 10 });
   const tituloReprovado = `Evento Reprovado UI ${sufixo}`;
+  // 3 horas atras: o "Evento UI" da aluna comeca daqui a pouco e ela nao pode estar em dois eventos no mesmo horario.
+  // A secretaria faz a inscricao retroativa e o check-in continua aberto (vai ate 24 h depois do fim)
   const eventoReprovado = await api("POST", "/eventos", tokenSecretaria, {
-    titulo: tituloReprovado, horario: new Date(Date.now() + 30 * 60 * 1000).toISOString(), salaId: salaReprovado.corpo.id, palestranteId: palestrante.corpo.id, tema: "Tema", cargaHoraria: 1, questionario: questionario(),
+    titulo: tituloReprovado, horario: new Date(Date.now() - 3 * 3600 * 1000).toISOString(), salaId: salaReprovado.corpo.id, palestranteId: palestrante.corpo.id, tema: "Tema", cargaHoraria: 1, questionario: questionario(),
   });
-  const inscricaoReprovado = await api("POST", `/eventos/${eventoReprovado.corpo.id}/inscricoes`, tokenAluna);
+  const meDaAluna = await api("GET", "/usuarios/me", tokenAluna);
+  const inscricaoReprovado = await api("POST", "/inscricoes", tokenSecretaria, { participanteId: meDaAluna.corpo.participanteId, eventoId: eventoReprovado.corpo.id });
+  if (inscricaoReprovado.status !== 201) throw new Error(`inscrição no evento reprovado falhou: ${JSON.stringify(inscricaoReprovado.corpo)}`);
   // check-in pelo fluxo novo: a aluna pede e a secretaria aprova
   await api("POST", `/eventos/${eventoReprovado.corpo.id}/checkin`, tokenAluna);
   await api("POST", `/checkin/inscricoes/${inscricaoReprovado.corpo.id}/aprovar`, tokenSecretaria);
@@ -811,20 +885,20 @@ try {
   const emailProfessor = `ui-professor-${sufixo}@umc.br`;
   const nomeProfessor = `Professor Interface ${tag}`;
   const SENHA_PROFESSOR = "Senha@Prof123";
-  const professorCriado = await api("POST", "/professores", tokenSecretaria, { nomeCompleto: nomeProfessor, email: emailProfessor });
+  const professorCriado = await api("POST", "/equipe", tokenSecretaria, { nomeCompleto: nomeProfessor, email: emailProfessor });
 
   // o professor ativa a conta pelo link do convite (fora de producao, a API devolve o link: linkConviteDemo)
   await page.goto(`${APP}/primeiro-acesso`);
   await page.getByText("Use o link enviado para o seu e-mail.").waitFor({ timeout: 8000 }).catch(() => {});
   checar(
     "primeiro acesso sem convite: só a mensagem, sem formulário",
-    (await temTexto(page, "Use o link enviado para o seu e-mail. Se ele venceu, peça um novo convite à secretaria.")) &&
+    (await temTexto(page, "Use o link enviado para o seu e-mail. Se ele venceu, peça um novo convite a quem criou a sua conta.")) &&
       (await page.locator("form").count()) === 0 &&
       (await page.locator("input").count()) === 0,
   );
   await page.goto(`${APP}/primeiro-acesso?convite=chave-que-nao-existe`);
   await page.getByText("Use o link enviado para o seu e-mail.").waitFor({ timeout: 8000 }).catch(() => {});
-  checar("convite inválido: a mesma mensagem, sem formulário", (await temTexto(page, "Se ele venceu, peça um novo convite à secretaria.")) && (await page.locator("form").count()) === 0);
+  checar("convite inválido: a mesma mensagem, sem formulário", (await temTexto(page, "Se ele venceu, peça um novo convite a quem criou a sua conta.")) && (await page.locator("form").count()) === 0);
   const linkConvite = professorCriado.corpo.linkConviteDemo ?? "";
   checar("o link do convite leva a chave depois do #", /^http:\/\/localhost:5173\/#\/primeiro-acesso\?convite=[A-Za-z0-9_-]{43}$/.test(linkConvite), linkConvite);
   await page.goto(linkConvite);
@@ -850,7 +924,8 @@ try {
   await page.waitForFunction(() => location.hash.startsWith("#/login"), null, { timeout: 8000 }).catch(() => {});
   checar("depois de ativar, a tela é a do login", (await page.evaluate(() => location.hash)).startsWith("#/login"));
   const tokenProfessor = await tokenDe(emailProfessor, SENHA_PROFESSOR);
-  const salaProposta = await api("POST", "/salas", tokenSecretaria, { nome: `Sala Proposta UI ${sufixo}`, capacidade: 50 });
+  const codigoSalaProposta = codigoDeSala();
+  const salaProposta = await api("POST", "/salas", tokenSecretaria, { nome: codigoSalaProposta, tipo: "SALA_DE_AULA", capacidade: 50 });
   const daquiDezDias = new Date(Math.ceil((Date.now() + 10 * 24 * 3600 * 1000) / 3600000) * 3600000).toISOString();
   const tituloDoProfessor = `Evento do Professor UI ${sufixo}`;
   const eventoProfessor = await api("POST", "/eventos", tokenProfessor, {
@@ -868,7 +943,7 @@ try {
   checar(
     "\"Aguardando aprovação\" mostra a proposta do evento aprovado, com antes → depois",
     (await linhaProposta.locator(".badge", { hasText: "Alteração aguardando aprovação" }).count()) === 1 &&
-      (await linhaProposta.locator(".proposta-mudancas").innerText()).includes(`Sala Proposta UI ${sufixo}`),
+      (await linhaProposta.locator(".proposta-mudancas").innerText()).includes(`${codigoSalaProposta} · Sala de aula`),
   );
   await linhaProposta.locator("button", { hasText: "Aprovar alteração" }).click();
   const confirmaAprovacao = page.locator(".modal", { hasText: "Tem certeza que deseja aprovar a alteração" });
@@ -883,7 +958,7 @@ try {
   await linhaAprovada.locator(".proposta-resumo").waitFor({ state: "detached", timeout: 8000 }).catch(() => {});
   checar(
     "depois de aprovada, o evento aparece na sala nova e sem proposta",
-    (await linhaAprovada.innerText()).includes(`Sala Proposta UI ${sufixo}`) && (await linhaAprovada.locator(".proposta-resumo").count()) === 0,
+    (await linhaAprovada.innerText()).includes(`${codigoSalaProposta} · Sala de aula`) && (await linhaAprovada.locator(".proposta-resumo").count()) === 0,
   );
 
   // o "Evento UI" ja foi respondido pela aluna na secao do questionario
@@ -902,7 +977,16 @@ try {
   );
   await page.locator(".modal .modal-footer button", { hasText: "Cancelar" }).click();
 
+  // o endereco antigo da tela leva para a Equipe
   await page.goto(`${APP}/professores`);
+  await page.waitForFunction(() => location.hash === "#/equipe", null, { timeout: 8000 }).catch(() => {});
+  checar(
+    "a aba Professores virou Equipe (e /professores leva para lá)",
+    (await page.evaluate(() => location.hash)) === "#/equipe" &&
+      (await page.locator("a.nav-link", { hasText: "Equipe" }).count()) === 1 &&
+      (await page.locator("a.nav-link", { hasText: "Professores" }).count()) === 0,
+    await page.evaluate(() => location.hash),
+  );
   const linhaProfessor = page.locator("tr", { hasText: nomeProfessor });
   await linhaProfessor.waitFor();
   await linhaProfessor.locator("button", { hasText: "Inativar" }).click();
@@ -930,7 +1014,53 @@ try {
   checar("o professor inativo não entra (API: 403)", loginDoInativo.status === 403, loginDoInativo.status);
   await linhaProfessor.locator("button", { hasText: "Reativar" }).click();
   await page.locator(".modal", { hasText: "Reativar a conta" }).locator("button", { hasText: "Reativar" }).click();
-  checar("reativar devolve o acesso", await esperarToast(page, "Professor reativado"));
+  checar("reativar devolve o acesso", await esperarToast(page, "Conta reativada"));
+  await page.click("button:has-text('+ Nova conta')");
+  checar("para a secretaria, o modal não oferece o perfil Secretaria", (await page.locator(".modal select#perfil").count()) === 0);
+  await page.click(".modal button:has-text('Cancelar')");
+  const linhaSecretariaDemo = page.locator("tr", { hasText: "Secretaria" }).filter({ hasNotText: "Professor" });
+  checar(
+    "a secretaria vê as outras secretarias sem ações",
+    (await linhaSecretariaDemo.count()) === 0 || (await linhaSecretariaDemo.first().locator("button").count()) === 0,
+  );
+  await sair(page);
+
+  titulo("Equipe: o administrador cria uma secretaria por convite e exclui a conta pendente");
+  await entrar(page, admin.email, admin.senha);
+  await page.goto(`${APP}/equipe`);
+  await page.locator("table tbody tr").first().waitFor({ timeout: 8000 }).catch(() => {});
+  checar(
+    "a lista tem nome, e-mail, perfil, situação e o filtro por perfil",
+    (await page.locator("table thead th").allTextContents()).map((t) => t.trim()).slice(0, 4).join("|") === "Nome|E-mail|Perfil|Situação" &&
+      (await page.locator("select[aria-label='Filtrar por perfil']").count()) === 1,
+  );
+  await page.click("button:has-text('+ Nova conta')");
+  checar("para o administrador, o modal oferece Professor e Secretaria", (await page.locator(".modal select#perfil option").allInnerTexts()).join("|") === "Professor|Secretaria");
+  const nomeSecretariaUi = `Secretaria Interface ${tag}`;
+  await page.selectOption("#perfil", "SECRETARIA");
+  await page.fill("#nomeCompleto", nomeSecretariaUi);
+  await page.fill("#email", `ui-secretaria-${sufixo}@umc.br`);
+  await page.click(".modal button[type=submit]");
+  checar("conta de secretaria criada, com o convite por e-mail", await esperarToast(page, "Conta criada."));
+  const linhaSecretariaUi = page.locator("tr", { hasText: nomeSecretariaUi });
+  await linhaSecretariaUi.waitFor({ timeout: 8000 }).catch(() => {});
+  checar(
+    "a linha mostra Secretaria, Convite pendente e as ações (reenviar, inativar, excluir)",
+    (await linhaSecretariaUi.innerText()).includes("Secretaria") &&
+      (await linhaSecretariaUi.innerText()).includes("Convite pendente") &&
+      (await linhaSecretariaUi.locator("button", { hasText: "Reenviar convite" }).count()) === 1 &&
+      (await linhaSecretariaUi.locator("button", { hasText: "Excluir" }).count()) === 1,
+  );
+  await page.selectOption("select[aria-label='Filtrar por perfil']", "SECRETARIA");
+  const perfisNaLista = await page.locator("table tbody tr td:nth-child(3)").allInnerTexts();
+  checar("filtro por perfil: só secretarias", perfisNaLista.length > 0 && perfisNaLista.every((p) => p.trim() === "Secretaria"), perfisNaLista.join("|"));
+  checar("a própria conta do administrador não aparece na lista", !(await page.locator("table").innerText()).includes(admin.email));
+  await linhaSecretariaUi.locator("button", { hasText: "Excluir" }).click();
+  checar("excluir pede confirmação, explicando o convite pendente", await temTexto(page, "Ela ainda não foi ativada: a conta e o convite pendente são apagados"));
+  await page.locator(".modal button", { hasText: "Excluir" }).click();
+  checar("conta pendente excluída", await esperarToast(page, "Conta excluída."));
+  await linhaSecretariaUi.waitFor({ state: "detached", timeout: 8000 }).catch(() => {});
+  checar("a linha sai da lista", (await linhaSecretariaUi.count()) === 0);
   await sair(page);
 
   // ---------------------------------------------------------------- etapa 5
@@ -951,7 +1081,16 @@ try {
   const eventoCal = await api("POST", "/eventos", tokenSecretariaCal, {
     titulo: tituloCheckinCal, horario: new Date(Date.now() + 5 * 60 * 1000).toISOString(), salaId: salaProposta.corpo.id, palestranteId: palestrante.corpo.id, tema: "Tema", cargaHoraria: 1, questionario: questionario(),
   });
-  const tokenAlunaCal = await tokenDe(emailAluno, SENHA_ALUNA);
+  // o pedido vem de um aluno so desta secao: a aluna principal ja esta no "Evento UI", no mesmo horario, e a API nao
+  // deixa ninguem ficar inscrito em dois eventos que se cruzam
+  const NOME_ALUNO_CAL = `Aluno Calendario ${tag}`;
+  const emailAlunoCal = `ui.cal.${sufixo}@alunos.umc.br`;
+  const inicioCal = await api("POST", "/auth/registro", undefined, {
+    nomeCompleto: NOME_ALUNO_CAL, rgm: `7${String(Date.now()).slice(-10)}`, emailInstitucional: emailAlunoCal, senha: SENHA_ALUNO2, aceiteLgpd: true,
+  });
+  const cadastroCal = await api("POST", "/auth/registro/confirmar", undefined, { emailInstitucional: emailAlunoCal, codigo: inicioCal.corpo?.codigoDemo });
+  if (cadastroCal.status !== 201) throw new Error(`cadastro do aluno do calendário falhou: ${JSON.stringify(cadastroCal.corpo)}`);
+  const tokenAlunaCal = await tokenDe(emailAlunoCal, SENHA_ALUNO2);
   await api("POST", `/eventos/${eventoCal.corpo.id}/inscricoes`, tokenAlunaCal);
   await api("POST", `/eventos/${eventoCal.corpo.id}/checkin`, tokenAlunaCal);
   // evento da equipe daqui a 40 dias (outro mes, ou perto disso): pra busca e pro "Sala ocupada" do professor
@@ -995,8 +1134,8 @@ try {
   );
   await itemDoDia.locator("button", { hasText: "Check-ins" }).click();
   const modalCheckinsCal = page.locator(".modal", { hasText: `Check-ins de ${tituloCheckinCal}` });
-  await modalCheckinsCal.locator(".painel-checkins tr", { hasText: NOME_ALUNA }).waitFor({ timeout: 8000 }).catch(() => {});
-  checar("os Check-ins abrem pelo calendário, com o pedido da aluna", (await modalCheckinsCal.locator(".painel-checkins tr", { hasText: NOME_ALUNA }).count()) === 1);
+  await modalCheckinsCal.locator(".painel-checkins tr", { hasText: NOME_ALUNO_CAL }).waitFor({ timeout: 8000 }).catch(() => {});
+  checar("os Check-ins abrem pelo calendário, com o pedido do aluno", (await modalCheckinsCal.locator(".painel-checkins tr", { hasText: NOME_ALUNO_CAL }).count()) === 1);
   await modalCheckinsCal.locator("button[aria-label='Fechar']").click();
 
   await page.click("button[aria-label='Próximo mês']");
@@ -1074,7 +1213,7 @@ try {
   checar(
     "na lista do dia: sala, início e fim, sem título, palestrante nem ações",
     (await ocupadaNaLista.count()) === 1 &&
-      (await ocupadaNaLista.innerText()).includes(`Sala Proposta UI ${sufixo}`) &&
+      (await ocupadaNaLista.innerText()).includes(`${codigoSalaProposta} · Sala de aula`) &&
       (await ocupadaNaLista.innerText()).includes("10:00 às 12:00") &&
       !(await page.locator(".calendario-lista").innerText()).includes(tituloFuturoCal) &&
       !(await page.locator(".calendario-lista").innerText()).includes("Palestrante Fluxo") &&

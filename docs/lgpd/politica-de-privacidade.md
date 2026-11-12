@@ -32,11 +32,13 @@ dados tratados).
   a ele um código de 6 dígitos; até a confirmação, nome, e-mail, RGM e a
   senha (só como hash) ficam guardados provisoriamente por até 15 minutos.
   Sem a confirmação, esses dados são apagados e nenhuma conta é criada.
-- **Professor:** nome completo e e-mail institucional (`@umc.br`),
-  informados pela secretaria ou pela administração ao criar a conta. Nada
-  além disso. O professor recebe por e-mail um link de convite, válido por
-  24 horas e de uso único; a chave do link fica guardada só como hash. Ao
-  usar o convite, ele define a senha e aceita os Termos de Uso.
+- **Professor e secretaria:** nome completo e e-mail institucional
+  (`@umc.br`), informados ao criar a conta na tela Equipe: a conta de
+  professor é criada pela secretaria ou pela administração; a de secretaria,
+  só pela administração. Nada além disso. A pessoa recebe por e-mail um link
+  de convite, válido por 24 horas e de uso único; a chave do link fica
+  guardada só como hash. Ao usar o convite, ela define a senha e aceita os
+  Termos de Uso.
 - **Palestrante:** nome e e-mail, informados pela equipe ou pelo professor.
   O nome aparece na programação para quem está conectado, depois que o
   palestrante é aprovado pela equipe; o e-mail é visto só pela equipe e pelo
@@ -49,7 +51,10 @@ dados tratados).
 - **Inscrições e check-in:** inscrições em eventos, o pedido de check-in
   feito pelo aluno (com a hora do pedido) e a decisão (aprovado ou recusado,
   com quem decidiu e quando). Quem não pede o check-in até o fim do prazo
-  fica como ausente.
+  fica como ausente. Para recusar uma inscrição no mesmo horário de outra, o
+  sistema consulta as inscrições do próprio aluno e informa o título e o
+  horário do outro evento só a ele (ou a quem da equipe está fazendo a
+  inscrição).
 - **Questionário e certificado:** respostas ao questionário de cada evento
   e o resultado (acertos e percentual). Ao emitir um certificado, o sistema
   guarda uma cópia do que vai impresso nele (nome, RGM, evento, tema,
@@ -60,15 +65,16 @@ dados tratados).
   da equipe. O histórico guarda cada envio, aprovação, recusa e proposta de
   alteração, com a data, o nome de quem agiu, o motivo da recusa e a
   resposta do professor.
-- **Situação da conta:** se a equipe inativar uma conta (de aluno ou de
-  professor), fica registrado o motivo, visível só para a equipe.
+- **Situação da conta:** se a equipe inativar uma conta (de aluno, de
+  professor ou de secretaria), fica registrado o motivo, visível só para a
+  equipe.
 - **Registros de acesso e auditoria:** login (sucesso e falha), acesso
   negado, cadastro, check-in e alterações em registros críticos, para
   segurança e auditoria. Esses registros nunca guardam senha, código,
   e-mail, RGM nem textos livres como motivos e comentários.
 - **Endereço IP:** usado só para bloquear por alguns minutos o excesso de
   tentativas no login, na recuperação de senha, no envio do código do
-  cadastro, no link de convite do professor e na consulta pública de
+  cadastro, no link de convite da conta da equipe e na consulta pública de
   certificados.
 
 **O que o professor vê dos alunos:** só nos eventos que ele criou, o nome, o
@@ -86,7 +92,7 @@ Não coletamos CPF, endereço, data de nascimento, foto ou dados de saúde.
 |---|---|---|
 | Nome, RGM, e-mail, senha | Criar e autenticar a conta | Execução de contrato a pedido do titular (art. 7º, V da LGPD) |
 | Cadastro aguardando confirmação (nome, e-mail, RGM e hash da senha, por até 15 minutos) | Garantir que a conta e os certificados pertencem ao dono do e-mail | Procedimentos preliminares a pedido do titular (art. 7º, V) |
-| Nome e e-mail do professor, convite (hash da chave) | Criar a conta do professor e permitir que ele crie e organize os próprios eventos | Execução de contrato (art. 7º, V) |
+| Nome e e-mail do professor e da secretaria, convite (hash da chave) | Criar a conta da equipe: o professor cria e organiza os próprios eventos; a secretaria administra o sistema junto com a administração | Execução de contrato (art. 7º, V) |
 | Dados dos alunos vistos pelo professor (nome, RGM, check-in, notas e avaliações, só dos eventos dele) | Organizar o evento, decidir o check-in e acompanhar o resultado | Execução de contrato (art. 7º, V) |
 | Histórico da aprovação e propostas de alteração | Registrar as decisões da equipe sobre o que o professor cadastra | Legítimo interesse da instituição na organização dos eventos (art. 7º, IX) |
 | Inscrição e check-in (pedido, decisão, quem decidiu e quando) | Controlar as vagas, registrar a presença e liberar o questionário e o certificado | Execução de contrato (art. 7º, V) |
@@ -105,11 +111,12 @@ Não coletamos CPF, endereço, data de nascimento, foto ou dados de saúde.
 - **TiDB Cloud** (banco de dados): armazena os dados descritos acima.
 - **SendGrid** (Twilio, envio de e-mail): envia somente estes e-mails:
   - o código de confirmação do cadastro do aluno;
-  - o convite do professor (link para criar a senha);
+  - o convite da conta de professor ou de secretaria (link para criar a
+    senha);
   - o código de recuperação de senha;
   - o aviso de senha alterada pela página "Minha conta" (só a data e a hora
     da troca, nunca a senha);
-  - a confirmação de inscrição;
+  - a confirmação de inscrição (com a sala, no formato da UMC, e o tipo);
   - o aviso de inscrição cancelada pela equipe;
   - o aviso de mudança de sala, horário, carga horária ou palestrante num
     evento em que o aluno está inscrito.
@@ -145,9 +152,9 @@ ao sair ou quando a sessão expira.
   caractere especial.
 - Os códigos de confirmação do cadastro e de recuperação de senha ficam
   guardados só como hash, valem por 15 minutos e deixam de valer depois de 5
-  tentativas erradas. A chave do convite do professor também fica só como
-  hash, vale por 24 horas e só pode ser usada uma vez; um convite novo
-  invalida o anterior. O envio de códigos é limitado por e-mail e por IP.
+  tentativas erradas. A chave do convite da conta da equipe (professor ou
+  secretaria) também fica só como hash, vale por 24 horas e só pode ser usada
+  uma vez; um convite novo invalida o anterior. O envio de códigos é limitado por e-mail e por IP.
 - O e-mail de acesso não pode ser alterado: ele identifica a sua conta.
 - Nome, e-mail e RGM são dados pessoais comuns, guardados sem criptografia e
   protegidos por controle de acesso por perfil (cada perfil só vê o que
@@ -176,9 +183,22 @@ ao sair ou quando a sessão expira.
   dados passam para a conta) ou depois de expirar. Sem confirmação, o código
   deixa de valer em 15 minutos, e os dados são apagados na próxima vez que
   alguém entrar no sistema ou fizer um cadastro.
-- **Convite do professor:** apagado quando é usado; um convite novo
-  substitui o anterior.
-- **Conta:** permanece enquanto você usa o sistema. A secretaria pode
+- **Convite da conta da equipe:** apagado quando é usado ou quando a conta
+  que ainda esperava o convite é excluída; um convite novo substitui o
+  anterior.
+- **Conta de professor ou de secretaria:** permanece enquanto a pessoa faz
+  parte da equipe. Na tela Equipe, a administração gerencia professores e
+  secretarias, e a secretaria só professores; ninguém altera a própria conta
+  por essa tela, e o sistema sempre mantém pelo menos um administrador
+  ativo. Inativar encerra as sessões abertas (os eventos em aberto do
+  professor passam antes para outro professor ou para a equipe). Só é
+  possível excluir conta inativa ou que ainda não usou o convite (por
+  exemplo, criada com o e-mail errado). Quem tem histórico no sistema
+  (eventos ou palestrantes criados, decisões de aprovação, propostas,
+  check-ins decididos ou pedidos de titular atendidos) não é excluído: a
+  conta fica preservada como inativa. Os registros de auditoria ficam em
+  qualquer caso.
+- **Conta do aluno:** permanece enquanto você usa o sistema. A secretaria pode
   inativar a conta (o histórico de inscrições e certificados é preservado)
   e só pode excluí-la definitivamente depois de inativada. A exclusão apaga
   a conta e o histórico vinculado (inscrições, avaliações e tentativas de
@@ -220,7 +240,7 @@ e respondidos em até 15 dias:
 - Oposição ao tratamento, informação sobre com quem seus dados são
   compartilhados e qualquer outro pedido sobre seus dados.
 
-Professores e palestrantes fazem os pedidos pelo mesmo e-mail.
+Professores, secretarias e palestrantes fazem os pedidos pelo mesmo e-mail.
 
 ## 9. Incidentes de segurança
 

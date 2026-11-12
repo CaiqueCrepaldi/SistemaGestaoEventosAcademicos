@@ -62,6 +62,8 @@ interface DadosConfirmacaoInscricao {
   eventoTema: string;
   palestranteNome: string;
   eventoHorario: Date;
+  // "1T-01 · Laboratório" (utils/salas.ts: rotuloSala)
+  salaRotulo?: string;
 }
 
 // monta e envia o email de confirmacao depois que a inscricao eh criada
@@ -74,7 +76,7 @@ async function enviarConfirmacaoInscricao(destinatario: string, dados: DadosConf
     <p>
       <strong>Tema:</strong> ${dados.eventoTema}<br>
       <strong>Palestrante:</strong> ${dados.palestranteNome}<br>
-      <strong>Data/horário:</strong> ${dataFormatada}
+      <strong>Data/horário:</strong> ${dataFormatada}${dados.salaRotulo ? `<br>\n      <strong>Local:</strong> sala ${escaparHtml(dados.salaRotulo)}` : ""}
     </p>
     <p>Até lá!</p>
   `;
@@ -139,7 +141,7 @@ function escaparHtml(texto: string): string {
   return texto.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-// convite do professor (criacao da conta e reenvio): so o link, sem codigo. O link leva a chave depois do
+// convite da conta da equipe (professor ou secretaria; criacao da conta e reenvio): so o link, sem codigo. O link leva a chave depois do
 // "#" (APP_URL/#/primeiro-acesso?convite=...), parte do endereco que o navegador nunca manda ao servidor.
 // Separado do envio pra o teste conferir o conteudo sem enviar nada
 export function conteudoDoConvite(nome: string, link: string): { assunto: string; html: string } {
@@ -149,7 +151,7 @@ export function conteudoDoConvite(nome: string, link: string): { assunto: string
     html: `
     <p>Olá, ${escaparHtml(nome)}.</p>
     <p>A equipe da UMC criou sua conta no Sistema de Gestão de Eventos Acadêmicos. Clique no botão abaixo para criar
-    sua senha e aceitar os Termos de Uso. O link vale por 24 horas. Se ele vencer, peça um novo convite à secretaria.</p>
+    sua senha e aceitar os Termos de Uso. O link vale por 24 horas. Se ele vencer, peça um novo convite a quem criou a sua conta.</p>
     <p>
       <a href="${linkSeguro}" style="display: inline-block; padding: 12px 20px; background: #ffc400; color: #111;
         font-weight: bold; text-decoration: none; border-radius: 8px;">Criar minha senha</a>
@@ -159,7 +161,7 @@ export function conteudoDoConvite(nome: string, link: string): { assunto: string
   };
 }
 
-async function enviarConviteProfessor(destinatario: string, nome: string, link: string): Promise<ResultadoEnvio> {
+async function enviarConviteEquipe(destinatario: string, nome: string, link: string): Promise<ResultadoEnvio> {
   const { assunto, html } = conteudoDoConvite(nome, link);
   return enviar("convite-professor", destinatario, assunto, html);
 }
@@ -194,7 +196,7 @@ async function enviarAlteracaoEvento(destinatario: string, dados: DadosAlteracao
 
 export const emailService = {
   enviarAlteracaoEvento,
-  enviarConviteProfessor,
+  enviarConviteEquipe,
   enviarConfirmacaoInscricao,
   enviarCancelamentoInscricao,
   enviarCodigoRecuperacao,

@@ -1,3 +1,4 @@
+import { rotuloSala } from "../../utils/salas";
 import type { StatusPresenca } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
@@ -40,7 +41,7 @@ function garantirQuemDecide(ator: Ator, evento: { criadoPorId: string | null }) 
 async function eventoParaDecidirOuFalhar(ator: Ator, eventoId: string) {
   const evento = await prisma.evento.findUnique({
     where: { id: eventoId },
-    select: { id: true, titulo: true, horario: true, cargaHoraria: true, situacao: true, criadoPorId: true, sala: { select: { nome: true } } },
+    select: { id: true, titulo: true, horario: true, cargaHoraria: true, situacao: true, criadoPorId: true, sala: { select: { nome: true, tipo: true } } },
   });
   if (!evento || evento.situacao !== "APROVADO") throw AppError.naoEncontrado("EVENTO_NAO_ENCONTRADO", "Evento não encontrado.");
   garantirQuemDecide(ator, evento);
@@ -161,7 +162,7 @@ async function eventosComJanelaAberta(ator: Ator) {
       },
     },
     orderBy: { horario: "asc" },
-    select: { id: true, titulo: true, horario: true, cargaHoraria: true, sala: { select: { nome: true } } },
+    select: { id: true, titulo: true, horario: true, cargaHoraria: true, sala: { select: { nome: true, tipo: true } } },
   });
   const abertos = eventos.filter((evento) => situacaoDaJanela(evento, agora) === "ABERTA");
   const porStatus = abertos.length
@@ -184,7 +185,7 @@ async function eventosComJanelaAberta(ator: Ator) {
       titulo: evento.titulo,
       horario: evento.horario.toISOString(),
       cargaHoraria: evento.cargaHoraria,
-      salaNome: evento.sala.nome,
+      salaNome: rotuloSala(evento.sala),
       janela: janelaParaDTO(evento),
       inscritos: Object.values(contagem).reduce((a, b) => a + b, 0),
       solicitados: contagem.SOLICITADO,
@@ -238,7 +239,7 @@ async function painel(eventoId: string, ator: Ator) {
       titulo: evento.titulo,
       horario: evento.horario.toISOString(),
       cargaHoraria: evento.cargaHoraria,
-      salaNome: evento.sala.nome,
+      salaNome: rotuloSala(evento.sala),
     },
     janela: janelaParaDTO(evento),
     pedidos: inscricoes.filter((i) => i.statusPresenca === "SOLICITADO").map(item),

@@ -52,7 +52,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/salas", label: "Salas", perfis: EQUIPE, icon: SalaIcon },
   { to: "/palestrantes", label: "Palestrantes", perfis: TODOS_PERFIS, icon: PalestranteIcon, contador: "palestrantesPendentes" },
   { to: "/participantes", label: "Participantes", perfis: EQUIPE, icon: ParticipanteIcon },
-  { to: "/professores", label: "Professores", perfis: EQUIPE, icon: ParticipanteIcon },
+  { to: "/equipe", label: "Equipe", perfis: EQUIPE, icon: ParticipanteIcon },
   { to: "/inscricoes", label: "Inscrições", perfis: GESTAO, icon: InscricaoIcon },
   { to: "/checkin", label: "Check-in", perfis: GESTAO, icon: CheckinIcon },
   { to: "/auditoria", label: "Auditoria", perfis: EQUIPE, icon: AuditoriaIcon },

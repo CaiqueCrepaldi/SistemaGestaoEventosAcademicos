@@ -1,3 +1,4 @@
+import { rotuloSala } from "../../utils/salas";
 import type { StatusPresenca } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { eventosDoDashboard, type Ator } from "../../utils/escopo";
@@ -44,7 +45,7 @@ async function resumo(ator: Ator) {
     prisma.evento.findMany({
       where: escopo,
       orderBy: { horario: "asc" },
-      select: { id: true, titulo: true, horario: true, cargaHoraria: true, sala: { select: { nome: true, capacidade: true } } },
+      select: { id: true, titulo: true, horario: true, cargaHoraria: true, sala: { select: { nome: true, tipo: true, capacidade: true } } },
     }),
     prisma.inscricao.groupBy({ by: ["eventoId", "statusPresenca"], where: { evento: escopo }, _count: { _all: true } }),
     prisma.inscricao.findMany({ where: { statusPresenca: "PRESENTE", evento: escopo }, select: { participanteId: true, eventoId: true } }),
@@ -89,7 +90,7 @@ async function resumo(ator: Ator) {
       id: evento.id,
       titulo: evento.titulo,
       horario: evento.horario.toISOString(),
-      salaNome: evento.sala.nome,
+      salaNome: rotuloSala(evento.sala),
       capacidade: evento.sala.capacidade,
       inscritos: contagem.PENDENTE + contagem.SOLICITADO + contagem.PRESENTE + contagem.RECUSADO + contagem.AUSENTE,
       // check-in pedido pelo aluno: presente = aprovado; ausente = nao pediu a tempo ou teve o pedido

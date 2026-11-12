@@ -57,7 +57,12 @@ Três perfis de usuário:
 
 As telas de **Salas** (`/salas`) e **Palestrantes** (`/palestrantes`) têm
 cadastro completo (criar, editar, excluir) restrito a administrador/
-secretaria — sala com nome e capacidade, palestrante com nome e e-mail.
+secretaria — sala com código no padrão da UMC (prédio, andar e número, como
+`1T-01`), tipo (sala de aula, laboratório ou auditório) e capacidade;
+palestrante com nome e e-mail. As contas de professor e de secretaria ficam
+na tela **Equipe** (`/equipe`): o administrador cria as duas, a secretaria só
+professores, todas por convite enviado ao e-mail `@umc.br`. O aluno não se
+inscreve em dois eventos no mesmo horário.
 Aluno só enxerga as duas listas em modo leitura. Cada evento referencia uma sala e um palestrante já existentes,
 além de um questionário obrigatório
 de 10 perguntas (4 alternativas, 1 correta cada) definido por

@@ -3,11 +3,13 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { camposInformados, registrarAuditoria } from "../../utils/auditoria";
+import { compararSalas } from "../../utils/salas";
 import type { SalaInput, SalaUpdateInput } from "./salas.schemas";
 
-// lista salas ordenadas por nome
+// lista salas por predio, andar e numero (1T-01, 1T-02, ..., 11-01, ..., 33-21)
 async function listar() {
-  return prisma.sala.findMany({ orderBy: { nome: "asc" } });
+  const salas = await prisma.sala.findMany();
+  return salas.sort(compararSalas);
 }
 
 // busca uma sala pelo id, 404 se nao existir
@@ -17,9 +19,29 @@ async function buscarOuFalhar(id: string) {
   return sala;
 }
 
+function erroSalaDuplicada(codigo: string): AppError {
+  return AppError.conflito("SALA_DUPLICADA", `Já existe uma sala ${codigo}.`);
+}
+
+// codigo repetido -> 409 com mensagem clara. O indice unico em salas.nome barra do mesmo jeito (corrida rara)
+async function garantirCodigoLivre(codigo: string, ignorarId?: string) {
+  const existente = await prisma.sala.findUnique({ where: { nome: codigo }, select: { id: true } });
+  if (existente && existente.id !== ignorarId) throw erroSalaDuplicada(codigo);
+}
+
+async function gravar<T>(codigo: string | undefined, operacao: () => Promise<T>): Promise<T> {
+  try {
+    return await operacao();
+  } catch (erro) {
+    if (codigo && erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === "P2002") throw erroSalaDuplicada(codigo);
+    throw erro;
+  }
+}
+
 // cadastra uma sala nova
 async function criar(dados: SalaInput, atorId: string) {
-  const sala = await prisma.sala.create({ data: { id: randomUUID(), ...dados } });
+  await garantirCodigoLivre(dados.nome);
+  const sala = await gravar(dados.nome, () => prisma.sala.create({ data: { id: randomUUID(), ...dados } }));
   await registrarAuditoria(atorId, "SALA_CRIADA", `sala ${sala.id}`);
   return sala;
 }
@@ -27,11 +49,11 @@ async function criar(dados: SalaInput, atorId: string) {
 // edita uma sala existente
 async function atualizar(id: string, dados: SalaUpdateInput, atorId: string) {
   await buscarOuFalhar(id);
-  const sala = await prisma.sala.update({ where: { id }, data: dados });
+  if (dados.nome) await garantirCodigoLivre(dados.nome, id);
+  const sala = await gravar(dados.nome, () => prisma.sala.update({ where: { id }, data: dados }));
   await registrarAuditoria(atorId, "SALA_ATUALIZADA", `sala ${id} (campos: ${camposInformados(dados)})`);
   return sala;
 }
-
 // remove uma sala, bloqueia se tiver evento vinculado (o banco tambem tem essa trava, isso so da uma mensagem melhor)
 async function remover(id: string, atorId: string) {
   await buscarOuFalhar(id);

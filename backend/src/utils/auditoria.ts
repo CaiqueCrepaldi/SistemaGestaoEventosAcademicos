@@ -61,6 +61,14 @@ export type AcaoAuditoria =
   | "PROFESSOR_CONVITE_REENVIADO"
   | "PROFESSOR_INATIVADO"
   | "PROFESSOR_REATIVADO"
+  // conta de secretaria, criada pelo administrador na tela Equipe (mesmo convite por link do professor)
+  | "SECRETARIA_CRIADA"
+  | "SECRETARIA_CONVITE_REENVIADO"
+  | "SECRETARIA_INATIVADA"
+  | "SECRETARIA_REATIVADA"
+  // exclusao na tela Equipe: sem historico a conta sai (os logs ficam); com historico fica inativa
+  | "CONTA_EQUIPE_EXCLUIDA"
+  | "CONTA_EQUIPE_PRESERVADA"
   | "PRIMEIRO_ACESSO_CONCLUIDO"
   | "PRIMEIRO_ACESSO_FALHA"
   | "PARTICIPANTE_ATUALIZADO"

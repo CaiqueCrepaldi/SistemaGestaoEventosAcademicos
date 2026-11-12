@@ -51,6 +51,7 @@ export function salaParaDTO(sala: Sala) {
   return {
     id: sala.id,
     nome: sala.nome,
+    tipo: sala.tipo,
     capacidade: sala.capacidade,
   };
 }

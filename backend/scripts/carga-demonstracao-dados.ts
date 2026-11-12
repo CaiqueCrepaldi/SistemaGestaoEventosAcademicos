@@ -24,20 +24,21 @@ export const SOBRENOMES = [
   "Toledo", "Valente", "Xavier", "Brandão", "Coelho", "Domingues", "Esteves", "Figueiredo", "Garcia", "Henriques",
 ];
 
-// nome da sala e capacidade (30 a 120)
-export const SALAS: { nome: string; capacidade: number }[] = [
-  { nome: "Auditório Principal", capacidade: 120 },
-  { nome: "Auditório do Bloco C", capacidade: 100 },
-  { nome: "Anfiteatro de Ciências da Saúde", capacidade: 90 },
-  { nome: "Sala 101 - Bloco A", capacidade: 45 },
-  { nome: "Sala 204 - Bloco A", capacidade: 40 },
-  { nome: "Sala 310 - Bloco B", capacidade: 60 },
-  { nome: "Sala 112 - Bloco D", capacidade: 35 },
-  { nome: "Laboratório de Informática 3", capacidade: 30 },
-  { nome: "Laboratório de Informática 5", capacidade: 36 },
-  { nome: "Sala de Videoconferência", capacidade: 50 },
-  { nome: "Espaço Multiuso da Biblioteca", capacidade: 80 },
-  { nome: "Sala 402 - Bloco B", capacidade: 70 },
+// 12 salas no padrao da UMC (predio + andar + "-" + numero; T = terreo), nos 3 predios e em andares diferentes:
+// 8 salas de aula (30 a 60 lugares), 2 laboratorios (25 a 40) e 2 auditorios (100 a 150)
+export const SALAS: { nome: string; tipo: "SALA_DE_AULA" | "LABORATORIO" | "AUDITORIO"; capacidade: number }[] = [
+  { nome: "1T-04", tipo: "SALA_DE_AULA", capacidade: 40 },
+  { nome: "11-07", tipo: "SALA_DE_AULA", capacidade: 45 },
+  { nome: "12-12", tipo: "SALA_DE_AULA", capacidade: 50 },
+  { nome: "13-02", tipo: "LABORATORIO", capacidade: 30 },
+  { nome: "2T-01", tipo: "AUDITORIO", capacidade: 150 },
+  { nome: "21-03", tipo: "SALA_DE_AULA", capacidade: 35 },
+  { nome: "22-09", tipo: "SALA_DE_AULA", capacidade: 60 },
+  { nome: "23-15", tipo: "SALA_DE_AULA", capacidade: 30 },
+  { nome: "3T-01", tipo: "AUDITORIO", capacidade: 120 },
+  { nome: "31-06", tipo: "SALA_DE_AULA", capacidade: 55 },
+  { nome: "32-18", tipo: "SALA_DE_AULA", capacidade: 40 },
+  { nome: "33-10", tipo: "LABORATORIO", capacidade: 36 },
 ];
 
 // empresas e instituicoes inventadas (dominio do e-mail do palestrante: nome.sobrenome@dominio)
@@ -50,7 +51,13 @@ export const DOMINIOS_PALESTRANTES = [
 export type Area = "tecnologia" | "gestao" | "saude" | "direito" | "educacao" | "engenharia" | "sustentabilidade";
 
 // formatos do evento, combinados com o assunto pra formar o titulo ("Workshop: Computação em nuvem na prática")
-export const FORMATOS = ["Palestra", "Workshop", "Minicurso", "Mesa-redonda", "Seminário"];
+// formato do evento conforme o tipo da sala: os de pratica (workshop e minicurso) no laboratorio; palestra, mesa-redonda
+// e seminario na sala de aula e no auditorio (que, por ter mais lugares, recebe os eventos mais cheios)
+export const FORMATOS_POR_TIPO: Record<"SALA_DE_AULA" | "LABORATORIO" | "AUDITORIO", string[]> = {
+  SALA_DE_AULA: ["Palestra", "Mesa-redonda", "Seminário"],
+  LABORATORIO: ["Workshop", "Minicurso"],
+  AUDITORIO: ["Palestra", "Mesa-redonda", "Seminário"],
+};
 
 // assunto (vai no titulo) e tema (descricao curta que aparece na tela e no certificado)
 export const TEMAS: Record<Area, { assunto: string; tema: string }[]> = {

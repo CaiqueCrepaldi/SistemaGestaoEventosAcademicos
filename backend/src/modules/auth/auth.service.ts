@@ -1,3 +1,4 @@
+import { aguardaConvite } from "../professores/professores.service";
 import { randomInt, randomUUID } from "crypto";
 import { Prisma, type Usuario as UsuarioDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
@@ -334,10 +335,10 @@ async function login(dados: LoginInput, ip: string) {
   });
   // mensagem generica pra nao dar dica se foi email ou senha que errou
   const senhaOk = usuario ? await conferirSenha(dados.senha, usuario.senhaHash) : false;
-  // professor que ainda nao fez o primeiro acesso (sem senha propria e sem aceite dos Termos) nao entra.
-  // A conta nasce com senha inutilizavel, entao a senha ja nao confere; a checagem explicita e garantia extra,
-  // com a mesma resposta generica de senha errada
-  const primeiroAcessoPendente = usuario?.perfil === "PROFESSOR" && !usuario.consentimentoLgpdEm;
+  // conta da equipe (professor ou secretaria) que ainda nao fez o primeiro acesso pelo convite nao entra. A conta
+  // nasce com senha inutilizavel, entao a senha ja nao confere; a checagem explicita e garantia extra, com a mesma
+  // resposta generica de senha errada
+  const primeiroAcessoPendente = !!usuario && aguardaConvite(usuario);
   if (!usuario || !senhaOk || primeiroAcessoPendente) {
     // nunca grava o e-mail tentado (PII) no log — so se o usuario existe ou nao
     await registrarAuditoria(usuario?.id ?? null, "LOGIN_FALHA", usuario ? "senha incorreta" : "e-mail nao encontrado");
@@ -413,7 +414,7 @@ async function aceitarTermos(usuarioId: string) {
 // recuperacao de senha
 async function buscarUsuarioPorEmail(email: string) {
   const usuario = await prisma.usuario.findUnique({ where: { emailLogin: normalizarEmail(email) } });
-  if (usuario?.perfil === "PROFESSOR" && !usuario.consentimentoLgpdEm) return null;
+  if (usuario && aguardaConvite(usuario)) return null;
   return usuario;
 }
 

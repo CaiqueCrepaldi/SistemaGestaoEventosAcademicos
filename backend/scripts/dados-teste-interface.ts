@@ -55,7 +55,10 @@ async function main() {
 
     if (acao === "limpar") {
       const { sufixo } = JSON.parse(readFileSync(ARQUIVO, "utf8")) as { sufixo: string };
-      const eventos = await prisma.evento.findMany({ where: { titulo: { contains: sufixo } }, select: { id: true } });
+      const eventos = await prisma.evento.findMany({ where: { titulo: { contains: sufixo } }, select: { id: true, salaId: true } });
+      // as salas agora tem codigo no padrao da UMC (sem o sufixo no nome): saem as salas dos eventos do teste que
+      // ficarem sem nenhum evento (a sala criada pela tela Salas, sem evento, o proprio teste ja apaga)
+      const salasDosEventos = [...new Set(eventos.map((e) => e.salaId))];
       const usuarios = (await prisma.usuario.findMany({ select: { id: true, emailLogin: true, participanteId: true } })).filter((u) =>
         u.emailLogin.includes(sufixo),
       );
@@ -80,7 +83,7 @@ async function main() {
         await prisma.usuario.delete({ where: { id: u.id } });
         if (u.participanteId) await prisma.participante.deleteMany({ where: { id: u.participanteId } });
       }
-      await prisma.sala.deleteMany({ where: { nome: { contains: sufixo } } });
+      await prisma.sala.deleteMany({ where: { OR: [{ nome: { contains: sufixo } }, { id: { in: salasDosEventos }, eventos: { none: {} } }] } });
       await prisma.palestrante.deleteMany({ where: { email: { contains: sufixo } } });
       // cadastros que ficaram sem confirmar e o contador de envios do codigo dos e-mails do teste
       await prisma.cadastroPendente.deleteMany({ where: { emailLogin: { contains: sufixo } } });

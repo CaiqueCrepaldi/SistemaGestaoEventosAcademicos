@@ -1,3 +1,4 @@
+import { ordenarSalas, rotuloSala } from "../../utils/salas";
 import { useEffect, useState } from "react";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { PageHeader } from "../../components/ui/PageHeader";
@@ -55,6 +56,8 @@ export function EventosAluno() {
   const [filtros, setFiltros] = useState(FILTROS_VAZIOS);
   const [mostrarEncerrados, setMostrarEncerrados] = useState(false);
   const [avisoPorEvento, setAvisoPorEvento] = useState<Record<string, string>>({});
+  // recusa da inscricao (ex.: outro evento no mesmo horario): aparece em vermelho logo abaixo do botao
+  const [erroPorEvento, setErroPorEvento] = useState<Record<string, string>>({});
   // evento cuja inscricao o aluno esta cancelando (aguardando a confirmacao)
   const [cancelandoInscricao, setCancelandoInscricao] = useState<Evento | null>(null);
   // evento em que o aluno esta pedindo o check-in (aguardando a confirmacao "estou no local")
@@ -84,6 +87,7 @@ export function EventosAluno() {
       toast.error("Disponível apenas para contas de aluno.");
       return;
     }
+    setErroPorEvento((prev) => ({ ...prev, [evento.id]: "" }));
     try {
       const { emailConfirmacaoEnviado, ...nova } = await inscricaoAlunoService.inscrever(usuario.participanteId, evento.id);
       setInscricoes((prev) => [...prev, nova]);
@@ -95,7 +99,8 @@ export function EventosAluno() {
       toast.success(mensagem);
     } catch (e) {
       const mensagem = e instanceof ApiError ? e.message : "Não foi possível concluir a inscrição.";
-      setAvisoPorEvento((prev) => ({ ...prev, [evento.id]: mensagem }));
+      setAvisoPorEvento((prev) => ({ ...prev, [evento.id]: "" }));
+      setErroPorEvento((prev) => ({ ...prev, [evento.id]: mensagem }));
       toast.error(mensagem);
     }
   }
@@ -137,7 +142,7 @@ export function EventosAluno() {
 
   const agora = Date.now();
   const jaComecou = (evento: Evento) => new Date(evento.horario).getTime() <= agora;
-  const nomeDaSala = (evento: Evento) => salas.find((s) => s.id === evento.salaId)?.nome ?? "—";
+  const nomeDaSala = (evento: Evento) => rotuloSala(salas.find((s) => s.id === evento.salaId));
   const nomeDoPalestrante = (evento: Evento) => palestrantes.find((p) => p.id === evento.palestranteId)?.nome ?? "—";
 
   const filtrados = eventos.filter((evento) => {
@@ -204,6 +209,11 @@ export function EventosAluno() {
           >
             {jaInscrito ? "Inscrito" : comecou ? "Encerrado" : "Inscrever-se"}
           </button>
+          {!jaInscrito && erroPorEvento[evento.id] && (
+            <p className="form-error erro-inscricao" role="alert">
+              {erroPorEvento[evento.id]}
+            </p>
+          )}
           {podeFazerCheckin && (
             <button className="btn btn-primary" onClick={() => setPedindoCheckin(evento)}>
               Fazer check-in
@@ -250,9 +260,9 @@ export function EventosAluno() {
             <span>Sala</span>
             <select value={filtros.salaId} onChange={(e) => setFiltros({ ...filtros, salaId: e.target.value })}>
               <option value="">Todas as salas</option>
-              {salas.map((s) => (
+              {ordenarSalas(salas).map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.nome}
+                  {rotuloSala(s)}
                 </option>
               ))}
             </select>

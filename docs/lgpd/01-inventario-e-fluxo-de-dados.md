@@ -238,13 +238,16 @@ entra e circula no sistema.
 - **Compartilhado:** não. O PDF é montado no navegador (jsPDF) com os dados
   que a API devolve.
 
-## 13. Conta de professor (`usuarios` com perfil PROFESSOR e `primeiros_acessos`)
+## 13. Conta de professor e de secretaria (`usuarios` com perfil PROFESSOR ou SECRETARIA e `primeiros_acessos`)
 
 - **De quem é:** do professor, cuja conta a secretaria ou a administração
-  cria na tela Professores.
-- **Onde é coletado:** `POST /api/professores`: só o **nome completo** e o
-  **e-mail institucional** (`@umc.br`).
-- **Onde fica:** `usuarios` (`nome`, `emailLogin`, perfil `PROFESSOR`), com
+  cria na tela Equipe, ou da secretaria, cuja conta só a administração cria
+  na mesma tela.
+- **Onde é coletado:** `POST /api/equipe` (o mesmo que `/api/professores`):
+  só o **nome completo**, o **e-mail institucional** (`@umc.br`) e o perfil
+  (Professor ou Secretaria).
+- **Onde fica:** `usuarios` (`nome`, `emailLogin`, perfil `PROFESSOR` ou
+  `SECRETARIA`), com
   senha inutilizável e sem aceite dos Termos até usar o convite. O convite é
   um link mandado por e-mail (`APP_URL/#/primeiro-acesso?convite=...`) com
   uma chave aleatória de 32 bytes (`crypto.randomBytes`); em
@@ -254,10 +257,15 @@ entra e circula no sistema.
   endereço assim que a lê. Abrir o link não gasta o convite; ao enviar a
   senha e o aceite (`POST /api/auth/primeiro-acesso`), a conta grava a senha
   e o aceite dos Termos e a linha de `primeiros_acessos` é apagada. Um
-  convite novo (reenvio) substitui o anterior.
-- **Para que serve:** criar e organizar os próprios eventos e palestrantes,
-  decidir o check-in dos alunos inscritos neles e acompanhar notas,
-  certificados e avaliações.
+  convite novo (reenvio) substitui o anterior. A conta que ainda espera o
+  convite pode ser excluída na tela Equipe (por exemplo, criada com o e-mail
+  errado): o convite sai junto. A conta com histórico no sistema nunca é
+  excluída, só fica inativa; os registros de auditoria ficam em qualquer
+  caso (`logs_auditoria.usuarioId` vira nulo e o `atorNome` continua).
+- **Para que serve:** o professor cria e organiza os próprios eventos e
+  palestrantes, decide o check-in dos alunos inscritos neles e acompanha
+  notas, certificados e avaliações; a secretaria administra o sistema junto
+  com a administração (salas, alunos, aprovações, professores).
 - **O que o professor vê dos alunos:** só nos eventos que ele criou: nome,
   RGM, situação do check-in, notas do questionário e avaliações. Ele não
   acessa a tela Participantes nem a lista geral de alunos (a busca para

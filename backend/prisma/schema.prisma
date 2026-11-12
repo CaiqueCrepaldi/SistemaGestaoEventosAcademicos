@@ -119,9 +119,19 @@ model Participante {
   @@map("participantes")
 }
 
+// tipo da sala (padrao da UMC): sala de aula, laboratorio ou auditorio
+enum TipoSala {
+  SALA_DE_AULA
+  LABORATORIO
+  AUDITORIO
+}
+
 model Sala {
   id         String   @id
-  nome       String
+  // codigo no padrao da UMC: predio (1, 2 ou 3) + andar (T = terreo, 1, 2 ou 3) + "-" + numero de 01 a 21,
+  // ex.: 1T-01, 22-07, 33-21 (regra em utils/salas.ts). Unico
+  nome       String   @unique
+  tipo       TipoSala @default(SALA_DE_AULA)
   capacidade Int
   eventos    Evento[]
 

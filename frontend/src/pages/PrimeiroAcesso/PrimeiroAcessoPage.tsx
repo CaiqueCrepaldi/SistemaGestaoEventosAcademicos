@@ -8,7 +8,7 @@ import { useErrosFormulario, type ErrosFormulario } from "../../hooks/useErrosFo
 import { authService } from "../../services/authService";
 import { MENSAGEM_REGRA_SENHA, validarSenhaNova } from "../../utils/validacao";
 
-const MENSAGEM_SEM_CONVITE = "Use o link enviado para o seu e-mail. Se ele venceu, peça um novo convite à secretaria.";
+const MENSAGEM_SEM_CONVITE = "Use o link enviado para o seu e-mail. Se ele venceu, peça um novo convite a quem criou a sua conta.";
 
 // a chave do convite vem no endereco (#/primeiro-acesso?convite=...). Le uma vez, direto do hash
 function conviteDoEndereco(): string {
@@ -16,10 +16,10 @@ function conviteDoEndereco(): string {
   return new URLSearchParams(consulta).get("convite")?.trim() ?? "";
 }
 
-// tela publica do professor, aberta SO pelo link do convite que a equipe manda por e-mail (nenhuma tela tem
+// tela publica do primeiro acesso da equipe (professor ou secretaria), aberta SO pelo link do convite que a equipe manda por e-mail (nenhuma tela tem
 // link pra ca). A chave sai do endereco assim que e lida (history.replaceState: nao fica no historico nem na
-// URL copiada) e fica so na memoria da tela. Consultar a chave nao gasta o convite; ele so e usado quando o
-// professor envia a senha (mesma regra e mesma lista do cadastro do aluno) e o aceite dos Termos. Sem
+// URL copiada) e fica so na memoria da tela. Consultar a chave nao gasta o convite; ele so e usado quando
+// a pessoa envia a senha (mesma regra e mesma lista do cadastro do aluno) e o aceite dos Termos. Sem
 // convite, ou com convite invalido/vencido, so a mensagem — sem formulario
 export function PrimeiroAcessoPage() {
   const navigate = useNavigate();
@@ -94,7 +94,7 @@ export function PrimeiroAcessoPage() {
     <div className="login-screen">
       <div className="login-card">
         <div className="login-brand">
-          <p>Primeiro acesso do professor</p>
+          <p>Primeiro acesso à sua conta</p>
         </div>
 
         {situacao === "verificando" && <p className="form-hint">Conferindo o convite…</p>}
