@@ -51,6 +51,9 @@ UMC, com finalidade exclusivamente acadêmica, e não é um serviço comercial.
   ela só é ativada pelo link do convite.
 - A autenticação em dois fatores é opcional para todos os perfis; você pode
   ativá-la ou desativá-la na página "Minha conta".
+- Na página "Minha conta", a seção "Termos e privacidade" mostra a versão
+  destes Termos e da Política de Privacidade que você aceitou, com a data e
+  a hora do aceite, e abre os dois textos dentro do sistema.
 - A secretaria pode **inativar** a conta de um aluno em caso de uso
   indevido, dado incorreto ou a pedido dele, sempre informando um motivo
   (visível só para a equipe). Com a conta inativa, o aluno não entra no
@@ -103,10 +106,17 @@ emitido em nome de terceiros.
 
 ## 7. Avaliação das palestras
 
-A avaliação de uma palestra (nota e comentário) é opcional e só fica
-disponível depois que você tem direito ao certificado daquela palestra. Ela
-é vista pela equipe e pelo professor responsável pelo evento, para avaliar o
-evento, e não é publicada para outros alunos.
+A avaliação de uma palestra (nota e comentário) é opcional e fica
+disponível assim que a sua presença no evento é confirmada (check-in
+aprovado), mesmo antes de você responder o questionário. Ela é vista pela
+equipe e pelo professor responsável pelo evento, para avaliar o evento, e
+não é publicada para outros alunos.
+
+Enquanto você ainda não respondeu o questionário, quem aprovou o check-in
+pode desfazer a presença (dentro do prazo do check-in). Nesse caso, a sua
+avaliação daquele evento é apagada junto, e isso fica registrado na
+auditoria. Depois que você responde o questionário, a presença não muda
+mais.
 
 Depois de enviada, a avaliação não pode ser editada. Você pode excluir a sua
 a qualquer momento e enviar outra. A equipe só pode excluir uma avaliação
@@ -145,6 +155,8 @@ informando o motivo, e toda exclusão fica registrada na auditoria.
 
 ## 9. Contas da equipe
 
+- A trilha de auditoria (quem fez o quê no sistema) é consultada só pela
+  administração.
 - As contas de professor e de secretaria ficam na tela **Equipe**. A
   administração gerencia professores e secretarias; a secretaria gerencia só
   professores. Ninguém altera a própria conta por essa tela, e as contas de

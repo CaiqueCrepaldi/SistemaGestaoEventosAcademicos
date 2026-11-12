@@ -50,12 +50,12 @@ auto-cadastro.
 | Dashboard / estatísticas (`GET /api/dashboard`) | ✅ | ✅ | ❌ |
 | Participantes — ver situação do 2FA e do bloqueio | ✅ | ✅ | ❌ |
 | Participantes — resetar 2FA / desbloquear a conta do aluno | ✅ | ❌ | ❌ |
-| Auditoria (trilha de operações e acessos) | ✅ | ✅ | ❌ |
+| Auditoria (trilha de operações e acessos) — só o administrador desde 12/11/2026 | ✅ | ❌ | ❌ |
 | Meus dados — ver os próprios dados (`/api/meus-dados`, RF026) | ❌ | ❌ | ✅ (só os próprios) |
 | Trabalhos                                | removido do projeto | removido | removido |
 
 Feedback: as regras por perfil (ninguém edita; o aluno só vê e exclui o
-próprio e só avalia palestra em que recebeu o certificado; a equipe só
+próprio e só avalia evento em que a presença dele foi confirmada; a equipe só
 exclui, com motivo) estão na seção **Feedback** e são aplicadas no backend;
 a tela já reflete isso.
 
@@ -340,6 +340,11 @@ outra rota.
 
 ### `GET /api/usuarios/me`
 
+Também devolve `consentimentoLgpdEm` e `versaoTermosAceitos` da própria
+conta (só dela): a seção "Termos e privacidade" da Minha conta mostra a
+versão aceita e a data.
+
+
 Qualquer perfil autenticado. Mesmo formato do campo `usuario` do login.
 `401` se o token não for mais válido. Chamado pela página "Minha conta"
 pra mostrar a situação do 2FA.
@@ -403,7 +408,9 @@ responde em `/api/professores`, nome antigo da tela.
 ## Auditoria
 
 Toda operação que grava, altera ou apaga dados gera uma linha em
-`LogAuditoria`, além de logins e acessos negados. O log só é gravado
+`LogAuditoria`, além de logins e acessos negados. **Só o ADMINISTRADOR lê a
+trilha** (`GET /api/logs-auditoria` e `/responsaveis`; desde 12/11/2026 a
+SECRETARIA recebe `403`). O log só é gravado
 **depois** da operação dar certo (exceto as ações de falha, que são o
 próprio registro da falha). O campo `detalhe` nunca guarda dado pessoal ou
 sensível (nome, e-mail, RGM, senha, código de recuperação, token,
@@ -690,12 +697,12 @@ auto-cadastro.
 | Dashboard / estatísticas (`GET /api/dashboard`) | ✅ | ✅ | ❌ |
 | Participantes — ver situação do 2FA e do bloqueio | ✅ | ✅ | ❌ |
 | Participantes — resetar 2FA / desbloquear a conta do aluno | ✅ | ❌ | ❌ |
-| Auditoria (trilha de operações e acessos) | ✅ | ✅ | ❌ |
+| Auditoria (trilha de operações e acessos) — só o administrador desde 12/11/2026 | ✅ | ❌ | ❌ |
 | Meus dados — ver os próprios dados (`/api/meus-dados`, RF026) | ❌ | ❌ | ✅ (só os próprios) |
 | Trabalhos                                | removido do projeto | removido | removido |
 
 Feedback: as regras por perfil (ninguém edita; o aluno só vê e exclui o
-próprio e só avalia palestra em que recebeu o certificado; a equipe só
+próprio e só avalia evento em que a presença dele foi confirmada; a equipe só
 exclui, com motivo) estão na seção **Feedback** e são aplicadas no backend;
 a tela já reflete isso.
 
@@ -1695,6 +1702,15 @@ interface Feedback {
 Recurso flat — `GET/POST/DELETE /api/feedbacks`. Regras (todas validadas
 no backend, a tela só reflete o que a API liberou):
 
+- **Desde 12/11/2026: o aluno avalia o evento em que a presença dele foi
+  confirmada (`PRESENTE`)**, mesmo sem ter respondido o questionário; nos
+  outros casos (SOLICITADO, RECUSADO, AUSENTE, PENDENTE ou sem inscrição),
+  `403 PRESENCA_NAO_CONFIRMADA` ("Você só pode avaliar eventos em que sua
+  presença foi confirmada."). `GET /api/feedbacks/elegiveis` segue a mesma
+  regra. Desfazer a presença (`POST /api/checkin/inscricoes/{id}/recusar`
+  sobre uma PRESENTE, só antes do questionário) apaga a avaliação na mesma
+  transação; o painel do check-in traz `avaliou` em cada item. O texto
+  abaixo descreve a regra antiga:
 - **Aluno só avalia palestra em que já recebeu o certificado** — a mesma regra
   da tela de Certificados: presença confirmada (`PRESENTE`) **e** alguma
   tentativa do questionário com no mínimo 60% (`utils/certificado.ts`,
@@ -1720,7 +1736,7 @@ no backend, a tela só reflete o que a API liberou):
   próprio aluno ou a equipe, e o motivo).
 
 `GET /api/feedbacks/elegiveis` — só `ALUNO` (`403` pra equipe). Eventos que o
-aluno logado pode avaliar agora (recebeu o certificado e ainda não avaliou):
+aluno logado pode avaliar agora (presença confirmada e ainda não avaliou):
 `[{ "id": "…", "titulo": "…", "horario": "2026-09-27T14:00:00.000Z" }]`. É o
 que preenche o select do modal "Novo feedback"; lista vazia = botão
 desabilitado com o motivo.

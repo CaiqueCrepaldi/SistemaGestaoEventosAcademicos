@@ -165,7 +165,7 @@ Permitir que a secretaria bloqueie o uso do sistema por um aluno (uso indevido, 
 
 ### Fluxo do usuário
 
-- O aluno envia um feedback (nota de 1 a 5 e comentário) das palestras em que já recebeu o certificado.
+- O aluno envia um feedback (nota de 1 a 5 e comentário) dos eventos em que a presença dele foi confirmada (check-in aprovado), mesmo antes de responder o questionário. Se a presença for desfeita (só possível antes do questionário), a avaliação é apagada junto, com aviso na tela e registro na auditoria.
 - Depois de enviado, **ninguém edita** o feedback. O aluno pode excluir o dele (com confirmação) e enviar outro.
 - Administrador e secretaria veem todos os feedbacks e só podem excluir, escolhendo o motivo numa lista (conteúdo ofensivo, dado pessoal exposto, fora do tema, pedido do aluno).
 

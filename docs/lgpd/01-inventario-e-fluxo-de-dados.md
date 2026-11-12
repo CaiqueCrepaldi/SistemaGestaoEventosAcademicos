@@ -102,9 +102,11 @@ entra e circula no sistema.
 ## 5. Avaliação da palestra (feedback)
 
 - **De quem é:** do aluno que avalia.
-- **Onde é coletado:** tela de Feedback, liberada só para eventos em que o
-  aluno tem direito ao certificado (check-in aprovado + nota mínima). Só o
-  próprio aluno envia.
+- **Onde é coletado:** tela de Feedback, liberada só para eventos em que a
+  presença do aluno foi confirmada (check-in aprovado, `PRESENTE`), mesmo
+  sem ter respondido o questionário. Só o próprio aluno envia. Se a presença
+  for desfeita (só antes do questionário), a avaliação é apagada na mesma
+  transação, com registro `FEEDBACK_EXCLUIDO` só com ids.
 - **Obrigatório:** opcional.
 - **Onde fica:** tabela `feedbacks` (nota e comentário em texto livre, até
   1000 caracteres).

@@ -55,7 +55,8 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/equipe", label: "Equipe", perfis: EQUIPE, icon: ParticipanteIcon },
   { to: "/inscricoes", label: "Inscrições", perfis: GESTAO, icon: InscricaoIcon },
   { to: "/checkin", label: "Check-in", perfis: GESTAO, icon: CheckinIcon },
-  { to: "/auditoria", label: "Auditoria", perfis: EQUIPE, icon: AuditoriaIcon },
+  // trilha de auditoria: so o administrador (a API recusa a secretaria com 403)
+  { to: "/auditoria", label: "Auditoria", perfis: ["ADMINISTRADOR"], icon: AuditoriaIcon },
   { to: "/certificados", label: "Certificados", labelProfessor: "Certificados e notas", perfis: TODOS_PERFIS, icon: CertificadoIcon },
   { to: "/feedback", label: "Feedback", labelProfessor: "Avaliações", perfis: TODOS_PERFIS, icon: FeedbackIcon },
   { to: "/minha-conta", label: "Minha conta", perfis: TODOS_PERFIS, icon: ContaIcon },

@@ -88,8 +88,8 @@ feedbacksRouter.post(
     if (!participanteId) {
       throw AppError.acessoNegado("Esta conta não está vinculada a um participante.");
     }
-    // 403 se nao tem certificado nesse evento; se ja avaliou, o criar() abaixo responde 409
-    await feedbacksService.validarDireitoAoCertificado(req.body.eventoId, participanteId);
+    // 403 se a presenca nesse evento nao foi confirmada (check-in aprovado); se ja avaliou, o criar() abaixo responde 409
+    await feedbacksService.validarPresencaConfirmada(req.body.eventoId, participanteId);
 
     const feedback = await feedbacksService.criar(
       req.body.eventoId,

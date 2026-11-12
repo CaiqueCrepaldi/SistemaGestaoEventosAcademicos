@@ -126,6 +126,13 @@ try {
       (await page.locator("a[href*='primeiro-acesso']").count()) === 0,
     (await page.locator(".login-links a").allInnerTexts()).join("|"),
   );
+  await page.goto(`${APP}/termos-de-uso`);
+  await page.locator("a", { hasText: "Voltar para o cadastro" }).waitFor({ timeout: 8000 }).catch(() => {});
+  checar(
+    "sem login, a página dos Termos continua com \"Voltar para o cadastro\"",
+    (await page.locator("a", { hasText: "Voltar para o cadastro" }).count()) === 1 && (await page.locator("a", { hasText: "Voltar para Minha conta" }).count()) === 0,
+  );
+  await page.goto(`${APP}/login`);
   await page.click("button[type=submit]");
   checar("enviar vazio marca e-mail e senha como inválidos (borda vermelha)", (await invalido(page, "#emailLogin")) && (await invalido(page, "#senha")));
   checar("mensagem embaixo de cada campo", (await temTexto(page, "Informe o e-mail.")) && (await temTexto(page, "Informe a senha.")));
@@ -153,6 +160,10 @@ try {
   await page.reload();
   await page.waitForTimeout(1500);
   checar("F5 numa tela da equipe (Salas) mantém a secretaria na mesma página", (await page.evaluate(() => location.hash)) === "#/salas", await page.evaluate(() => location.hash));
+  checar("a secretaria não tem a aba Auditoria no menu", (await page.locator("a.nav-link", { hasText: "Auditoria" }).count()) === 0);
+  await page.goto(`${APP}/auditoria`);
+  await page.waitForFunction(() => location.hash !== "#/auditoria", null, { timeout: 8000 }).catch(() => {});
+  checar("o endereço da Auditoria não abre para a secretaria (volta para o início)", (await page.evaluate(() => location.hash)) === "#/", await page.evaluate(() => location.hash));
   await page.goto(`${APP}/`);
   checar(
     "menu chama a tela de \"Dashboard\" (não mais \"Principal\") e não tem mais \"Usuários\"",
@@ -401,36 +412,104 @@ try {
   await api("POST", "/eventos", tokenSecretaria, {
     titulo: `Evento Encerrado UI ${sufixo}`, horario: quatroDiasAtras, salaId: sala.corpo.id, palestranteId: palestrante.corpo.id, tema: "Tema", cargaHoraria: 1, questionario: questionario(),
   });
+  // evento futuro com 1 vaga, ja ocupada pelo segundo aluno: aparece em Abertas com "Sem vagas"
+  const salaUmaVagaUi = await api("POST", "/salas", tokenSecretaria, { nome: codigoDeSala(), tipo: "SALA_DE_AULA", capacidade: 1 });
+  const tituloLotadoUi = `Palestra Lotação UI ${sufixo}`;
+  const eventoLotadoUi = await api("POST", "/eventos", tokenSecretaria, {
+    titulo: tituloLotadoUi, horario: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString(), salaId: salaUmaVagaUi.corpo.id, palestranteId: palestrante.corpo.id, tema: "Tema", cargaHoraria: 1, questionario: questionario(),
+  });
+  const inscricaoLotadoUi = await api("POST", "/inscricoes", tokenSecretaria, { participanteId: cadastro2.corpo.participanteId, eventoId: eventoLotadoUi.corpo.id });
   await entrar(page, emailAluno, SENHA_ALUNA);
   await page.goto(`${APP}/eventos`);
-  await page.locator(".agenda-item", { hasText: `Evento UI ${sufixo}` }).locator("button:has-text('Inscrever-se')").click();
+  const cartao = (texto) => page.locator(".evento-cartao", { hasText: texto });
+  await cartao(`Evento UI ${sufixo}`).first().waitFor({ timeout: 10000 }).catch(() => {});
+  const rotulosOpcoes = (await page.locator(".eventos-aluno-opcao").allInnerTexts()).map((t) => t.trim());
+  checar(
+    "três opções com bolinha (Inscritas, Abertas, Todas), cada uma com a quantidade, e Abertas selecionada",
+    (await page.locator("input[type=radio][name=opcaoEventos]").count()) === 3 &&
+      /^Inscritas \(\d+\)$/.test(rotulosOpcoes[0]) &&
+      /^Abertas \(\d+\)$/.test(rotulosOpcoes[1]) &&
+      /^Todas \(\d+\)$/.test(rotulosOpcoes[2]) &&
+      (await page.locator("input[name=opcaoEventos][value=ABERTAS]").isChecked()),
+    rotulosOpcoes.join(" | "),
+  );
+  checar(
+    "os filtros antigos saíram (dia, horário, sala e \"mostrar encerrados\")",
+    (await page.locator("input[type=date]").count()) === 0 &&
+      (await page.locator("input[type=time]").count()) === 0 &&
+      (await page.locator("#mostrarEncerrados").count()) === 0 &&
+      !(await temTexto(page, "Todas as salas")),
+  );
+  const cartaoLotado = cartao(tituloLotadoUi);
+  checar(
+    "evento lotado continua em Abertas, com a etiqueta \"Sem vagas\" e o botão de inscrição desativado",
+    (await cartaoLotado.count()) === 1 &&
+      (await cartaoLotado.locator(".badge", { hasText: "Sem vagas" }).count()) === 1 &&
+      (await cartaoLotado.locator("button.btn-primary").isDisabled()),
+    `${await cartaoLotado.count()} cartão(ões): ${(await cartaoLotado.count()) ? await cartaoLotado.first().innerText() : JSON.stringify(inscricaoLotadoUi.corpo)}`,
+  );
+  const cartaoEventoUi = cartao(`Evento UI ${sufixo}`).first();
+  checar(
+    "o cartão mostra a data em destaque, início e fim, a sala com o tipo, o palestrante e as vagas restantes",
+    (await cartaoEventoUi.locator(".evento-cartao-dia").count()) === 1 &&
+      (await cartaoEventoUi.innerText()).includes("Auditório") &&
+      (await cartaoEventoUi.innerText()).includes("Palestrante Fluxo") &&
+      / das \d{2}:\d{2} às \d{2}:\d{2}/.test(await cartaoEventoUi.innerText()) &&
+      (await cartaoEventoUi.innerText()).includes("39 de 40 restantes"),
+    await cartaoEventoUi.innerText(),
+  );
+  await cartaoEventoUi.locator("button:has-text('Inscrever-se')").click();
   checar("aluno se inscreve pela tela", await esperarToast(page, "Inscrição confirmada"));
   checar(
     "o e-mail de confirmação sai junto com a inscrição (o aviso cita o e-mail do aluno)",
     await temTexto(page, `E-mail de confirmação enviado para ${emailAluno}`),
   );
-  const itemEncerrado = page.locator(".agenda-item", { hasText: `Evento Encerrado UI ${sufixo}` });
-  checar("eventos que já aconteceram ficam escondidos por padrão", (await itemEncerrado.count()) === 0);
-  await page.check("#mostrarEncerrados");
-  const botaoEncerrado = itemEncerrado.locator("button.btn-primary");
-  await botaoEncerrado.waitFor({ timeout: 8000 }).catch(() => {});
   checar(
-    "com \"mostrar encerrados\", o evento que já começou aparece como Encerrado, desabilitado (sem opção de se inscrever)",
-    (await botaoEncerrado.count()) === 1 && (await botaoEncerrado.innerText()) === "Encerrado" && (await botaoEncerrado.isDisabled()),
+    // o Evento UI comeca daqui a 30 min: o check-in ja esta aberto, entao a etiqueta e "Check-in aberto"
+    "depois de se inscrever: etiqueta Check-in aberto (começa em menos de 1 hora), vagas atualizadas e \"Inscritas (1)\"",
+    (await cartaoEventoUi.locator(".badge", { hasText: "Check-in aberto" }).count()) === 1 &&
+      (await cartaoEventoUi.innerText()).includes("38 de 40 restantes") &&
+      (await page.locator(".eventos-aluno-opcao").first().innerText()).trim() === "Inscritas (1)",
+    `${await cartaoEventoUi.innerText()} | ${await page.locator(".eventos-aluno-opcao").first().innerText()}`,
   );
+  checar("Abertas não mostra o evento que já aconteceu", (await cartao(`Evento Encerrado UI ${sufixo}`).count()) === 0);
+  await page.check("input[name=opcaoEventos][value=INSCRITAS]");
+  checar(
+    "Inscritas mostra só os eventos em que a aluna está inscrita",
+    (await page.locator(".evento-cartao").count()) === 1 && (await cartao(`Evento UI ${sufixo}`).count()) === 1,
+    await page.locator(".evento-cartao").count(),
+  );
+  await page.check("input[name=opcaoEventos][value=TODAS]");
+  const cartaoEncerrado = cartao(`Evento Encerrado UI ${sufixo}`);
+  await cartaoEncerrado.waitFor({ timeout: 8000 }).catch(() => {});
+  checar(
+    "Todas inclui o evento encerrado, com a etiqueta Encerrado e o botão desativado",
+    (await cartaoEncerrado.count()) === 1 &&
+      (await cartaoEncerrado.locator(".badge", { hasText: "Encerrado" }).count()) === 1 &&
+      (await cartaoEncerrado.locator("button.btn-primary").innerText()) === "Encerrado" &&
+      (await cartaoEncerrado.locator("button.btn-primary").isDisabled()),
+  );
+  await page.check("input[name=opcaoEventos][value=ABERTAS]");
+  await page.fill("input[aria-label='Buscar pelo nome da palestra']", "LOTACAO");
+  checar(
+    "a busca filtra enquanto digita, sem diferenciar maiúsculas nem acentos, junto com a opção",
+    (await page.locator(".evento-cartao").count()) === 1 && (await cartao(tituloLotadoUi).count()) === 1,
+    await page.locator(".evento-cartao").count(),
+  );
+  await page.fill("input[aria-label='Buscar pelo nome da palestra']", "nada-assim-existe");
+  checar("busca sem resultado: mensagem própria", await temTexto(page, 'Nenhum evento com "nada-assim-existe" no nome em "Abertas".'));
+  await page.fill("input[aria-label='Buscar pelo nome da palestra']", "");
+  // celular: cartoes em uma coluna, opcoes e busca sem rolagem lateral
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(300);
+  const larguraCelular = await page.evaluate(() => ({ rolagem: document.documentElement.scrollWidth, tela: document.documentElement.clientWidth }));
+  const posicoesX = await page.locator(".evento-cartao").evaluateAll((els) => [...new Set(els.slice(0, 4).map((el) => Math.round(el.getBoundingClientRect().left)))]);
+  checar("no celular: cartões em uma coluna e nada estoura a largura", larguraCelular.rolagem <= larguraCelular.tela && posicoesX.length === 1, JSON.stringify({ larguraCelular, posicoesX }));
+  await page.setViewportSize({ width: 1280, height: 900 });
   checar("menu do aluno não tem mais a Agenda (unida à tela Eventos)", (await page.locator("a.nav-link", { hasText: "Agenda" }).count()) === 0);
   await page.goto(`${APP}/agenda`);
   await page.waitForFunction(() => location.hash.startsWith("#/eventos"), null, { timeout: 8000 }).catch(() => {});
   checar("o link antigo da Agenda leva para Eventos", (await page.evaluate(() => location.hash)).startsWith("#/eventos"));
-  const linhaEvento = page.locator(".agenda-item", { hasText: `Evento UI ${sufixo}` }).first();
-  await linhaEvento.waitFor();
-  checar("Eventos do aluno mostra as vagas do evento (2/40), não só a própria inscrição", (await linhaEvento.innerText()).includes("2/40"), await linhaEvento.innerText());
-  await page.fill("input[placeholder='Título, tema ou palestrante']", "Palestrante Fluxo");
-  checar(
-    "busca da tela Eventos filtra por palestrante",
-    (await page.locator(".agenda-item", { hasText: `Evento UI ${sufixo}` }).count()) === 1 &&
-      (await page.locator(".agenda-item").filter({ hasNotText: "Palestrante Fluxo" }).count()) === 0,
-  );
   await page.goto(`${APP}/palestrantes`);
   const cardPalestrante = page.locator(".palestrante-card", { hasText: "Palestrante Fluxo" }).filter({ hasText: `Evento UI ${sufixo}` });
   await cardPalestrante.first().waitFor({ timeout: 8000 }).catch(() => {});
@@ -451,14 +530,15 @@ try {
   titulo("Check-in: o aluno pede, a equipe aprova");
   await entrar(page, emailAluno, SENHA_ALUNA);
   await page.goto(`${APP}/eventos`);
-  const itemAmanha = page.locator(".agenda-item", { hasText: `Evento Amanha UI ${sufixo}` });
+  await page.check("input[name=opcaoEventos][value=INSCRITAS]");
+  const itemAmanha = page.locator(".evento-cartao", { hasText: `Evento Amanha UI ${sufixo}` });
   await itemAmanha.waitFor();
   checar(
     "evento que começa daqui a mais de 1h: sem botão de check-in e com o aviso de quando abre",
     (await itemAmanha.locator("button", { hasText: "Fazer check-in" }).count()) === 0 && (await itemAmanha.innerText()).includes("O check-in abre em"),
     await itemAmanha.innerText(),
   );
-  const itemCheckinAluna = page.locator(".agenda-item", { hasText: `Evento UI ${sufixo}` }).first();
+  const itemCheckinAluna = page.locator(".evento-cartao", { hasText: `Evento UI ${sufixo}` }).first();
   await itemCheckinAluna.locator("button", { hasText: "Fazer check-in" }).click();
   const confirmaLocal = page.locator(".modal", { hasText: "Confirma que você está no local do evento?" });
   await confirmaLocal.waitFor({ timeout: 8000 }).catch(() => {});
@@ -502,7 +582,8 @@ try {
   await sair(page);
   await entrar(page, emailAluno, SENHA_ALUNA);
   await page.goto(`${APP}/eventos`);
-  const itemPresenca = page.locator(".agenda-item", { hasText: `Evento UI ${sufixo}` }).first();
+  await page.check("input[name=opcaoEventos][value=INSCRITAS]");
+  const itemPresenca = page.locator(".evento-cartao", { hasText: `Evento UI ${sufixo}` }).first();
   await itemPresenca.waitFor();
   checar("a aluna vê \"Presença confirmada\"", (await itemPresenca.innerText()).includes("Presença confirmada"), await itemPresenca.innerText());
 
@@ -570,6 +651,29 @@ try {
   await page.fill("#comentario", "Avaliação corrigida pela tela");
   await page.click(".modal button[type=submit]");
   checar("depois de excluir, envia um novo pro mesmo evento", await esperarToast(page, "Feedback enviado."));
+
+  titulo("Termos e privacidade na Minha conta (aluna)");
+  await page.goto(`${APP}/minha-conta`);
+  const secaoTermos = page.locator(".termos-conta");
+  await secaoTermos.waitFor({ timeout: 8000 }).catch(() => {});
+  checar(
+    "a Minha conta mostra a versão e a data do aceite, os links dos Termos e da Política e o Meus dados",
+    /Você aceitou a versão 1 dos Termos de Uso e da Política de Privacidade em \d{2}\/\d{2}\/\d{4} às \d{2}:\d{2}/.test(await secaoTermos.innerText()) &&
+      (await secaoTermos.locator("a", { hasText: "Termos de Uso" }).count()) === 1 &&
+      (await secaoTermos.locator("a", { hasText: "Política de Privacidade" }).count()) === 1 &&
+      (await secaoTermos.locator("a", { hasText: "Meus dados" }).count()) === 1,
+    await secaoTermos.innerText(),
+  );
+  await secaoTermos.locator("a", { hasText: "Termos de Uso" }).click();
+  await page.waitForFunction(() => location.hash === "#/termos-de-uso", null, { timeout: 8000 }).catch(() => {});
+  await page.locator(".login-links a").first().waitFor({ timeout: 8000 }).catch(() => {});
+  checar(
+    "logada, a página dos Termos mostra \"Voltar para Minha conta\" (e não \"Voltar para o cadastro\")",
+    (await page.locator("a", { hasText: "Voltar para Minha conta" }).count()) === 1 && (await page.locator("a", { hasText: "Voltar para o cadastro" }).count()) === 0,
+  );
+  await page.locator("a", { hasText: "Voltar para Minha conta" }).click();
+  await page.waitForFunction(() => location.hash === "#/minha-conta", null, { timeout: 8000 }).catch(() => {});
+  checar("o link volta para a Minha conta", (await page.evaluate(() => location.hash)) === "#/minha-conta");
 
   titulo("E / 2FA na Minha conta do aluno");
   await page.goto(`${APP}/minha-conta`);

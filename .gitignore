@@ -19,6 +19,7 @@ dist-ssr
 .env.*
 # copias de seguranca feitas pela carga de demonstracao (backend/scripts/carga-demonstracao.ts): dados reais
 backend/backups/
+backend/previas-email/
 !.env.example
 
 # Editor directories and files

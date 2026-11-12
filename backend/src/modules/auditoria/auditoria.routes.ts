@@ -9,7 +9,7 @@ import { prisma } from "../../db/prisma";
 export const auditoriaRouter = Router();
 
 // so leitura, de proposito: a trilha eh imutavel, nao existe rota pra editar ou apagar log
-auditoriaRouter.use(autenticar, autorizar("ADMINISTRADOR", "SECRETARIA"));
+auditoriaRouter.use(autenticar, autorizar("ADMINISTRADOR"));
 
 // valor especial do filtro "responsavel" pra pegar so as acoes sem usuario (login falho, recuperacao de senha com e-mail inexistente)
 const SEM_RESPONSAVEL = "sem-responsavel";

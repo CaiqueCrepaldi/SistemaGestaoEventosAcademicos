@@ -10,11 +10,11 @@ verificação de todos os requisitos funcionais está em
 
 ## Testes automatizados (banco de desenvolvimento `SGEA_dev`)
 
-| Teste | Comando | Resultado em 10/11/2026 |
+| Teste | Comando | Resultado em 12/11/2026 |
 |---|---|---|
-| Requisitos pela API | `cd backend && npx tsx scripts/testar-requisitos.ts` | **493/493** verificações |
+| Requisitos pela API | `cd backend && npx tsx scripts/testar-requisitos.ts` | **561/561** verificações |
 | 2FA pela API | `cd backend && npx tsx scripts/testar-2fa.ts` | **55/55** |
-| Interface com navegador de verdade | passo a passo no topo de `frontend/testes-interface/testar-interface.mjs` (rodado no Microsoft Edge, numa cópia com `channel: "msedge"`) | **169/169** |
+| Interface com navegador de verdade | passo a passo no topo de `frontend/testes-interface/testar-interface.mjs` (rodado no Microsoft Edge, numa cópia com `channel: "msedge"`) | **201/201** |
 | Demonstração do hash de senha | `cd backend && npx tsx scripts/demonstrar-hash-senha.ts` | ver `07`, "Formato do hash de senha" |
 | Carga de demonstração | `cd backend && npx tsx scripts/carga-demonstracao.ts --aplicar` | 46 s; conferência no banco abaixo |
 
@@ -38,6 +38,7 @@ Os scripts de teste se recusam a rodar se o `DATABASE_URL` não for o
 | Check-in pedido pelo aluno e decidido pelo professor do evento ou pela equipe | `modules/checkin/`, `utils/checkin.ts` | R12 e R43: fora da janela recusado; professor de outro evento → `403`; grava quem decidiu e quando; recusa impede novo pedido; reversão dentro do prazo; depois do questionário → `PRESENCA_TRAVADA`; expiração idempotente; dashboard pela regra nova | Confirmado |
 | Aprovação, propostas de alteração e questionário travado | `eventos.service.ts`, `palestrantes.service.ts` | R37 a R41 | Confirmado |
 | Tela Equipe: secretaria por convite, quem gerencia quem e exclusão | `professores.service.ts`, `professores.routes.ts`, `EquipePage.tsx` | R48: o administrador cria a secretaria por convite (só o hash da chave), ela não entra antes de usar o convite e entra depois como SECRETARIA; a secretaria não cria, não inativa nem exclui secretaria (`403`); ninguém mexe na própria conta; conta de administrador não é inativada nem excluída; inativar derruba a sessão; conta ativa não é excluída; secretaria inativa sem histórico é excluída e os logs dela ficam; convite pendente sai junto com a conta; professor com histórico fica inativo com a mensagem. Interface: aba Equipe, `/professores` leva a ela, modal com perfil só para o administrador, exclusão da conta pendente | Confirmado |
+| Avaliação pela presença, auditoria só do administrador, e-mails no modelo do site | `feedbacks.service.ts`, `checkin.service.ts`, `auditoria.routes.ts`, `conteudos-email.ts` | R49: a secretaria recebe `403` na auditoria e o administrador vê; PRESENTE avalia sem questionário; SOLICITADO, RECUSADO, AUSENTE, sem check-in e cancelada recusados; desfazer a presença de quem só avaliou apaga a avaliação (auditoria só com ids); com o questionário respondido, `PRESENCA_TRAVADA`; evento lotado recusa e a vaga volta depois do cancelamento; todo e-mail com HTML e texto; `<script>` escapado. Interface: secretaria sem a aba Auditoria; opções, busca e "Sem vagas" na tela do aluno; Termos na Minha conta | Confirmado |
 | Inscrição no mesmo horário recusada | `inscricoes.service.ts` (`garantirSemConflitoDeHorario`), `eventos.service.ts` (`autoinscrever`) | R47: o aluno e a equipe recebem `409 CONFLITO_DE_HORARIO` com o título e o horário do outro evento; evento que só encosta é aceito; inscrição cancelada não conta; mudar o horário de um evento não cancela inscrição | Confirmado |
 | Inativação de aluno e de professor | `participantes.service.ts`, `professores.service.ts` | R16: aluno inativo não entra, sessões caem, inscrições sem pedido canceladas. R42: professor inativo não entra; eventos em aberto transferidos, com histórico e auditoria | Confirmado |
 | Calendário: o professor vê os eventos dos outros só como "Sala ocupada" | `eventos.service.ts` (`calendario`) | R44: resposta ao professor sem título, palestrante, inscritos nem id dos outros. Interface: "Sala ocupada" sem título | Confirmado |

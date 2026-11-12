@@ -71,6 +71,9 @@ export function App() {
                 <Route path="/equipe" element={<EquipePage />} />
                 {/* a tela Professores virou Equipe (professor e secretaria): link antigo leva pra la */}
                 <Route path="/professores" element={<Navigate to="/equipe" replace />} />
+              </Route>
+              {/* trilha de auditoria: so o ADMINISTRADOR (a secretaria nao ve, e a API tambem recusa) */}
+              <Route element={<ProtectedRoute perfis={["ADMINISTRADOR"]} />}>
                 <Route path="/auditoria" element={<AuditoriaPage />} />
               </Route>
             </Route>

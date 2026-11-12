@@ -1,5 +1,5 @@
-import { ordenarSalas, rotuloSala } from "../../utils/salas";
 import { useEffect, useState } from "react";
+import { Badge } from "../../components/ui/Badge";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { toast } from "../../components/ui/Toast";
@@ -7,6 +7,7 @@ import { useAuth } from "../../context/AuthContext";
 import { ApiError, checkinService, eventoService, inscricaoAlunoService, inscricaoService, palestranteService, salaService } from "../../services";
 import type { Evento, Inscricao, Palestrante, Sala, StatusPresenca } from "../../types";
 import { dataHora, janelaDoCheckin, rotuloPresencaParaAluno, situacaoDaJanela } from "../../utils/presenca";
+import { rotuloSala } from "../../utils/salas";
 
 const COR_DO_CHECKIN: Partial<Record<StatusPresenca, string>> = {
   SOLICITADO: "checkin-aguardando",
@@ -15,46 +16,43 @@ const COR_DO_CHECKIN: Partial<Record<StatusPresenca, string>> = {
   AUSENTE: "checkin-recusado",
 };
 
-const FILTROS_VAZIOS = { dia: "", horaInicio: "", horaFim: "", salaId: "", busca: "" };
+// as tres visoes da tela (selecao unica): Abertas e a padrao
+type Opcao = "INSCRITAS" | "ABERTAS" | "TODAS";
+const OPCOES: { valor: Opcao; rotulo: string }[] = [
+  { valor: "INSCRITAS", rotulo: "Inscritas" },
+  { valor: "ABERTAS", rotulo: "Abertas" },
+  { valor: "TODAS", rotulo: "Todas" },
+];
+const LISTA_VAZIA: Record<Opcao, string> = {
+  INSCRITAS: "Você ainda não se inscreveu em nenhum evento. Veja os eventos com inscrição aberta em \"Abertas\".",
+  ABERTAS: "Nenhum evento com inscrição aberta no momento. Volte mais tarde ou veja todos os eventos em \"Todas\".",
+  TODAS: "Nenhum evento publicado ainda.",
+};
 
-// dia do evento no fuso do navegador ("2026-11-05"): fatiar a ISO (UTC) jogaria evento das 21h em diante pro dia seguinte
-function diaLocal(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const HORA_MS = 60 * 60 * 1000;
+
+// busca sem diferenciar maiusculas nem acentos ("Gestao" acha "Gestão")
+function normalizar(texto: string): string {
+  return texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 }
 
-// "14:00" no fuso do navegador, no mesmo formato do <input type="time">
-function horaLocal(iso: string): string {
-  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+function hora(data: Date): string {
+  return data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
-// agrupa por dia (local), mantendo a ordem em que os eventos chegam
-function agruparPorDia(eventos: Evento[]): [string, Evento[]][] {
-  const grupos = new Map<string, Evento[]>();
-  for (const evento of eventos) {
-    const dia = diaLocal(evento.horario);
-    grupos.set(dia, [...(grupos.get(dia) ?? []), evento]);
-  }
-  return [...grupos.entries()];
-}
-
-function tituloDoDia(dia: string): string {
-  return new Date(`${dia}T00:00`).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
-}
-
-// tela Eventos do aluno: a programacao (com filtros por dia, horario, sala e texto, e as vagas de
-// cada evento) e as acoes de inscrever/cancelar no mesmo lugar. Antes eram duas telas (Eventos e
-// Agenda) listando os mesmos eventos
+// tela Eventos do aluno: tres visoes (Inscritas, Abertas e Todas) com a busca pelo nome da palestra, e as acoes de
+// inscrever, cancelar e pedir o check-in em cada cartao. As regras (vagas, horario, janela do check-in) valem na API;
+// a tela so mostra a situacao
 export function EventosAluno() {
   const { usuario } = useAuth();
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [salas, setSalas] = useState<Sala[]>([]);
   const [palestrantes, setPalestrantes] = useState<Palestrante[]>([]);
   const [inscricoes, setInscricoes] = useState<Inscricao[]>([]);
-  // enquanto carrega, a tela diz "Carregando" (e nao "Nenhum evento cadastrado", que parece erro)
+  // enquanto carrega, a tela diz "Carregando" (e nao "Nenhum evento", que parece erro)
   const [carregando, setCarregando] = useState(true);
-  const [filtros, setFiltros] = useState(FILTROS_VAZIOS);
-  const [mostrarEncerrados, setMostrarEncerrados] = useState(false);
+  const [opcao, setOpcao] = useState<Opcao>("ABERTAS");
+  const [busca, setBusca] = useState("");
   const [avisoPorEvento, setAvisoPorEvento] = useState<Record<string, string>>({});
   // recusa da inscricao (ex.: outro evento no mesmo horario): aparece em vermelho logo abaixo do botao
   const [erroPorEvento, setErroPorEvento] = useState<Record<string, string>>({});
@@ -64,7 +62,7 @@ export function EventosAluno() {
   const [pedindoCheckin, setPedindoCheckin] = useState<Evento | null>(null);
 
   useEffect(() => {
-    // o backend ja devolve so as inscricoes do proprio aluno
+    // o backend ja devolve so os eventos aprovados e so as inscricoes do proprio aluno
     void Promise.all([eventoService.list(), salaService.list(), palestranteService.list(), inscricaoService.list()])
       .then(([e, s, p, i]) => {
         setEventos([...e].sort((a, b) => a.horario.localeCompare(b.horario)));
@@ -141,178 +139,171 @@ export function EventosAluno() {
   }
 
   const agora = Date.now();
-  const jaComecou = (evento: Evento) => new Date(evento.horario).getTime() <= agora;
-  const nomeDaSala = (evento: Evento) => rotuloSala(salas.find((s) => s.id === evento.salaId));
+  const inicioDe = (evento: Evento) => new Date(evento.horario).getTime();
+  const fimDe = (evento: Evento) => inicioDe(evento) + evento.cargaHoraria * HORA_MS;
+  const jaComecou = (evento: Evento) => inicioDe(evento) <= agora;
+  const jaTerminou = (evento: Evento) => fimDe(evento) <= agora;
+  const salaDe = (evento: Evento) => salas.find((s) => s.id === evento.salaId);
   const nomeDoPalestrante = (evento: Evento) => palestrantes.find((p) => p.id === evento.palestranteId)?.nome ?? "—";
-
-  const filtrados = eventos.filter((evento) => {
-    if (filtros.dia && diaLocal(evento.horario) !== filtros.dia) return false;
-    const hora = horaLocal(evento.horario);
-    if (filtros.horaInicio && hora < filtros.horaInicio) return false;
-    if (filtros.horaFim && hora > filtros.horaFim) return false;
-    if (filtros.salaId && evento.salaId !== filtros.salaId) return false;
-    const termo = filtros.busca.trim().toLowerCase();
-    if (termo) {
-      const texto = `${evento.titulo} ${evento.tema ?? ""} ${nomeDoPalestrante(evento)}`.toLowerCase();
-      if (!texto.includes(termo)) return false;
-    }
-    return true;
-  });
-  // evento ja comecado em que o aluno esta inscrito e o check-in ainda esta aberto continua nos proximos:
-  // e la que ele faz o check-in e acompanha a aprovacao
   const minhaInscricaoEm = (evento: Evento) =>
     inscricoes.find((i) => i.participanteId === usuario?.participanteId && i.eventoId === evento.id);
-  const emAndamentoComigo = (evento: Evento) =>
-    jaComecou(evento) && Boolean(minhaInscricaoEm(evento)) && situacaoDaJanela(evento, agora) === "ABERTA";
-  const proximos = filtrados.filter((e) => !jaComecou(e) || emAndamentoComigo(e));
-  // encerrados do mais recente pro mais antigo, e so quando o aluno pede
-  const encerrados = mostrarEncerrados ? filtrados.filter((e) => jaComecou(e) && !emAndamentoComigo(e)).reverse() : [];
-  const filtrosAtivos = Object.values(filtros).some(Boolean);
+  const vagasRestantes = (evento: Evento) => {
+    const capacidade = salaDe(evento)?.capacidade;
+    return capacidade === undefined ? null : Math.max(0, capacidade - (evento.inscritos ?? 0));
+  };
 
-  function itemDoEvento(evento: Evento) {
-    const sala = salas.find((s) => s.id === evento.salaId);
+  // os proximos primeiro (do mais cedo pro mais tarde) e depois os ja realizados (do mais recente pro mais antigo)
+  const proximosEDepoisRealizados = (lista: Evento[]) => [
+    ...lista.filter((e) => !jaTerminou(e)),
+    ...lista.filter(jaTerminou).reverse(),
+  ];
+  const porOpcao: Record<Opcao, Evento[]> = {
+    INSCRITAS: proximosEDepoisRealizados(eventos.filter((e) => Boolean(minhaInscricaoEm(e)))),
+    // inclusive os lotados (com a etiqueta "Sem vagas")
+    ABERTAS: eventos.filter((e) => !jaComecou(e)),
+    TODAS: proximosEDepoisRealizados(eventos),
+  };
+  const termo = normalizar(busca);
+  const visiveis = termo ? porOpcao[opcao].filter((e) => normalizar(e.titulo).includes(termo)) : porOpcao[opcao];
+  const rotuloDaOpcao = OPCOES.find((o) => o.valor === opcao)!.rotulo;
+
+  // etiqueta de situacao do cartao (Inscrito, Check-in aberto, Sem vagas ou Encerrado); evento aberto com vaga, sem
+  // inscricao do aluno, fica sem etiqueta
+  function situacaoDoEvento(evento: Evento, inscricao: Inscricao | undefined): { texto: string; tom: "green" | "orange" | "red" | "neutral" } | null {
+    if (inscricao) {
+      if (inscricao.statusPresenca === "PENDENTE" && situacaoDaJanela(evento, agora) === "ABERTA") return { texto: "Check-in aberto", tom: "orange" };
+      if (jaTerminou(evento) && inscricao.statusPresenca === "PENDENTE") return { texto: "Encerrado", tom: "neutral" };
+      return { texto: "Inscrito", tom: "green" };
+    }
+    if (jaComecou(evento)) return { texto: "Encerrado", tom: "neutral" };
+    if (vagasRestantes(evento) === 0) return { texto: "Sem vagas", tom: "red" };
+    return null;
+  }
+
+  function cartaoDoEvento(evento: Evento) {
+    const sala = salaDe(evento);
     const minhaInscricao = minhaInscricaoEm(evento);
     const jaInscrito = Boolean(minhaInscricao);
     const comecou = jaComecou(evento);
+    const restantes = vagasRestantes(evento);
+    const lotado = restantes === 0;
     // mesma regra do backend: depois que o evento comeca, o aluno nao se inscreve nem cancela
     const podeCancelar = minhaInscricao?.statusPresenca === "PENDENTE" && !comecou;
     // check-in: o botao so aparece com a janela aberta e a inscricao ainda sem pedido
     const janela = situacaoDaJanela(evento, agora);
     const podeFazerCheckin = minhaInscricao?.statusPresenca === "PENDENTE" && janela === "ABERTA";
     const situacaoCheckin = minhaInscricao && minhaInscricao.statusPresenca !== "PENDENTE" ? minhaInscricao.statusPresenca : null;
+    const situacao = situacaoDoEvento(evento, minhaInscricao);
+    const inicio = new Date(evento.horario);
+    const fim = new Date(fimDe(evento));
+    const rotuloBotao = jaInscrito ? "Inscrito" : comecou ? "Encerrado" : lotado ? "Sem vagas" : "Inscrever-se";
     return (
-      <li key={evento.id} className="agenda-item">
-        <div className="agenda-time" style={{ width: 60 }}>
-          {horaLocal(evento.horario)}
+      <li key={evento.id} className={"evento-cartao" + (jaTerminou(evento) ? " evento-cartao-passado" : "")}>
+        <div className="evento-cartao-data" aria-hidden="true">
+          <span className="evento-cartao-dia">{inicio.getDate()}</span>
+          <span className="evento-cartao-mes">{inicio.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "")}</span>
+          <span className="evento-cartao-semana">{inicio.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "")}</span>
         </div>
-        <div className="agenda-details" style={{ flex: 1 }}>
-          <div className="simple-list-title">{evento.titulo}</div>
-          <div className="simple-list-sub">Tema: {evento.tema || "—"}</div>
-          <div className="simple-list-sub">Palestrante: {nomeDoPalestrante(evento)}</div>
-          <div className="simple-list-sub">
-            Local: {nomeDaSala(evento)} · {evento.inscritos ?? 0}/{sala?.capacidade || "—"} inscritos
+        <div className="evento-cartao-corpo">
+          <div className="evento-cartao-topo">
+            <h3 className="evento-cartao-titulo">{evento.titulo}</h3>
+            {situacao && <Badge tone={situacao.tom}>{situacao.texto}</Badge>}
           </div>
+          {evento.tema && <p className="evento-cartao-tema">{evento.tema}</p>}
+          <dl className="evento-cartao-dados">
+            <div>
+              <dt>Quando</dt>
+              <dd>
+                {inicio.toLocaleDateString("pt-BR")}, das {hora(inicio)} às {hora(fim)}
+              </dd>
+            </div>
+            <div>
+              <dt>Sala</dt>
+              <dd>{rotuloSala(sala)}</dd>
+            </div>
+            <div>
+              <dt>Palestrante</dt>
+              <dd>{nomeDoPalestrante(evento)}</dd>
+            </div>
+            <div>
+              <dt>Vagas</dt>
+              <dd>{restantes === null ? "—" : lotado ? "Nenhuma vaga restante" : `${restantes} de ${sala?.capacidade} restantes`}</dd>
+            </div>
+          </dl>
           {situacaoCheckin && (
             <p className={"checkin-situacao " + (COR_DO_CHECKIN[situacaoCheckin] ?? "")}>{rotuloPresencaParaAluno(situacaoCheckin)}</p>
           )}
           {minhaInscricao?.statusPresenca === "PENDENTE" && janela === "ANTES" && (
-            <p className="form-hint">O check-in abre em {dataHora(janelaDoCheckin(evento).abre)} (1 hora antes do início).</p>
+            <p className="form-hint evento-cartao-aviso">O check-in abre em {dataHora(janelaDoCheckin(evento).abre)} (1 hora antes do início).</p>
           )}
-          {avisoPorEvento[evento.id] && <p className="form-hint">{avisoPorEvento[evento.id]}</p>}
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, alignSelf: "center" }}>
-          <button
-            className="btn btn-primary"
-            onClick={() => void inscreverSe(evento)}
-            disabled={jaInscrito || comecou}
-            title={!jaInscrito && comecou ? "O evento já começou: não aceita mais inscrições." : undefined}
-          >
-            {jaInscrito ? "Inscrito" : comecou ? "Encerrado" : "Inscrever-se"}
-          </button>
+          {avisoPorEvento[evento.id] && <p className="form-hint evento-cartao-aviso">{avisoPorEvento[evento.id]}</p>}
+          <div className="evento-cartao-acoes">
+            <button
+              className="btn btn-primary"
+              onClick={() => void inscreverSe(evento)}
+              disabled={jaInscrito || comecou || lotado}
+              title={!jaInscrito && comecou ? "O evento já começou: não aceita mais inscrições." : !jaInscrito && lotado ? "Todas as vagas estão ocupadas." : undefined}
+            >
+              {rotuloBotao}
+            </button>
+            {podeFazerCheckin && (
+              <button className="btn btn-primary" onClick={() => setPedindoCheckin(evento)}>
+                Fazer check-in
+              </button>
+            )}
+            {podeCancelar && (
+              <button className="btn btn-ghost btn-danger" onClick={() => setCancelandoInscricao(evento)}>
+                Cancelar inscrição
+              </button>
+            )}
+          </div>
           {!jaInscrito && erroPorEvento[evento.id] && (
             <p className="form-error erro-inscricao" role="alert">
               {erroPorEvento[evento.id]}
             </p>
-          )}
-          {podeFazerCheckin && (
-            <button className="btn btn-primary" onClick={() => setPedindoCheckin(evento)}>
-              Fazer check-in
-            </button>
-          )}
-          {podeCancelar && (
-            <button className="btn btn-ghost btn-danger" onClick={() => setCancelandoInscricao(evento)}>
-              Cancelar inscrição
-            </button>
           )}
         </div>
       </li>
     );
   }
 
-  function secaoPorDia(lista: Evento[]) {
-    return agruparPorDia(lista).map(([dia, itens]) => (
-      <div className="card" key={dia}>
-        <h3>{tituloDoDia(dia)}</h3>
-        <ul className="agenda-list">{itens.map(itemDoEvento)}</ul>
-      </div>
-    ));
-  }
-
   return (
     <div>
       <PageHeader title="Eventos" />
 
-      <div className="card">
-        <div className="field-row" style={{ flexWrap: "wrap" }}>
-          <label className="field" style={{ minWidth: 150 }}>
-            <span>Dia</span>
-            <input type="date" value={filtros.dia} onChange={(e) => setFiltros({ ...filtros, dia: e.target.value })} />
-          </label>
-          <label className="field" style={{ minWidth: 120 }}>
-            <span>Horário inicial</span>
-            <input type="time" value={filtros.horaInicio} onChange={(e) => setFiltros({ ...filtros, horaInicio: e.target.value })} />
-          </label>
-          <label className="field" style={{ minWidth: 120 }}>
-            <span>Horário final</span>
-            <input type="time" value={filtros.horaFim} onChange={(e) => setFiltros({ ...filtros, horaFim: e.target.value })} />
-          </label>
-          <label className="field" style={{ minWidth: 160 }}>
-            <span>Sala</span>
-            <select value={filtros.salaId} onChange={(e) => setFiltros({ ...filtros, salaId: e.target.value })}>
-              <option value="">Todas as salas</option>
-              {ordenarSalas(salas).map((s) => (
-                <option key={s.id} value={s.id}>
-                  {rotuloSala(s)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field" style={{ minWidth: 220 }}>
-            <span>Buscar</span>
-            <input
-              value={filtros.busca}
-              onChange={(e) => setFiltros({ ...filtros, busca: e.target.value })}
-              placeholder="Título, tema ou palestrante"
-            />
-          </label>
-          <div className="field" style={{ justifyContent: "flex-end" }}>
-            <span>&nbsp;</span>
-            <button type="button" className="btn btn-ghost" onClick={() => setFiltros(FILTROS_VAZIOS)}>
-              Limpar filtros
-            </button>
-          </div>
+      <div className="card eventos-aluno-barra">
+        <div className="eventos-aluno-opcoes" role="radiogroup" aria-label="Quais eventos mostrar">
+          {OPCOES.map((o) => (
+            <label key={o.valor} className={"eventos-aluno-opcao" + (opcao === o.valor ? " selecionada" : "")}>
+              <input type="radio" name="opcaoEventos" value={o.valor} checked={opcao === o.valor} onChange={() => setOpcao(o.valor)} />
+              <span>
+                {o.rotulo} ({porOpcao[o.valor].length})
+              </span>
+            </label>
+          ))}
         </div>
-        <label className="lgpd-consent" style={{ marginTop: 8 }}>
-          <input
-            id="mostrarEncerrados"
-            type="checkbox"
-            checked={mostrarEncerrados}
-            onChange={(e) => setMostrarEncerrados(e.target.checked)}
-          />
-          <span>Mostrar também os eventos que já aconteceram</span>
-        </label>
+        <input
+          type="search"
+          className="search-input eventos-aluno-busca"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar pelo nome da palestra"
+          aria-label="Buscar pelo nome da palestra"
+        />
       </div>
 
-      {secaoPorDia(proximos)}
-
-      {eventos.length > 0 && proximos.length === 0 && (
+      {carregando ? (
+        <div className="card">
+          <p className="empty-cell">Carregando eventos…</p>
+        </div>
+      ) : visiveis.length === 0 ? (
         <div className="card">
           <p className="empty-cell">
-            {filtrosAtivos ? "Nenhum evento encontrado para os filtros aplicados." : "Nenhum evento programado no momento."}
+            {termo ? `Nenhum evento com "${busca.trim()}" no nome em "${rotuloDaOpcao}".` : LISTA_VAZIA[opcao]}
           </p>
         </div>
-      )}
-      {eventos.length === 0 && (
-        <div className="card">
-          <p className="empty-cell">{carregando ? "Carregando eventos…" : "Nenhum evento cadastrado."}</p>
-        </div>
-      )}
-
-      {encerrados.length > 0 && (
-        <>
-          <h2 style={{ margin: "24px 0 12px" }}>Eventos encerrados</h2>
-          {secaoPorDia(encerrados)}
-        </>
+      ) : (
+        <ul className="evento-cartoes">{visiveis.map(cartaoDoEvento)}</ul>
       )}
 
       {pedindoCheckin && (

@@ -206,7 +206,13 @@ export function PainelCheckins({ eventoId, onAlterado }: { eventoId: string; onA
       {confirmacao && confirmacao.tipo !== "todos" && (
         <ConfirmDialog
           title={`${confirmacao.reverter ? "Reverter: " : ""}${confirmacao.tipo === "aprovar" ? "aprovar" : "recusar"} o check-in de ${confirmacao.item.participanteNome || "aluno"}`}
-          message={confirmacao.tipo === "aprovar" ? "Tem certeza que deseja aprovar?" : "Tem certeza que deseja recusar?"}
+          message={
+            confirmacao.tipo === "aprovar"
+              ? "Tem certeza que deseja aprovar?"
+              : confirmacao.reverter && confirmacao.item.avaliou
+                ? "Este aluno já avaliou o evento. Ao desfazer a presença, a avaliação dele será apagada."
+                : "Tem certeza que deseja recusar?"
+          }
           confirmLabel={confirmacao.tipo === "aprovar" ? "Aprovar" : "Recusar"}
           tone={confirmacao.tipo === "recusar" ? "danger" : "default"}
           onConfirm={() => void confirmar()}

@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { VoltarDaPaginaLegal } from "../../components/legal/VoltarDaPaginaLegal";
 
 // pagina publica, sem autenticacao — descreve o tratamento de dados feito pelo SGEA hoje. Mesmo texto de
 // docs/lgpd/politica-de-privacidade.md. A versao vigente fica em VERSAO_TERMOS_ATUAL (backend/src/config/termos.ts).
@@ -73,8 +73,10 @@ export function PoliticaDePrivacidadePage() {
             evento, tema, palestrante, data e carga horária) e um código de validação.
           </li>
           <li>
-            <strong>Avaliações das palestras:</strong> nota e comentário, enviados de forma opcional por quem tem
-            direito ao certificado.
+            <strong>Avaliações das palestras:</strong> nota e comentário, enviados de forma opcional por quem teve a
+            presença confirmada no evento (check-in aprovado), mesmo antes de responder o questionário. Se a presença
+            for desfeita (o que só é possível enquanto o aluno não respondeu o questionário), a avaliação é apagada
+            junto.
           </li>
           <li>
             <strong>Aprovação e histórico:</strong> o que o professor cadastra passa pela aprovação da equipe. O
@@ -283,7 +285,11 @@ export function PoliticaDePrivacidadePage() {
           </li>
           <li>
             Login, falhas de acesso, acessos negados e alterações críticas ficam registrados numa trilha de auditoria
-            que não pode ser editada nem apagada pelo sistema.
+            que não pode ser editada nem apagada pelo sistema e que só a administração consulta.
+          </li>
+          <li>
+            Os e-mails do sistema seguem um modelo único, sem imagens nem conteúdo de fora, com a versão em texto puro
+            junto, e nunca levam senha.
           </li>
         </ul>
         <h2>7. Por quanto tempo guardamos os dados</h2>
@@ -319,7 +325,8 @@ export function PoliticaDePrivacidadePage() {
             a conta fica inativada, sem acesso ao sistema, e o registro do certificado é mantido.
           </li>
           <li>
-            <strong>Avaliação:</strong> você pode excluir a sua a qualquer momento e enviar outra.
+            <strong>Avaliação:</strong> você pode excluir a sua a qualquer momento e enviar outra. Se a sua presença no
+            evento for desfeita, a avaliação é apagada junto.
           </li>
           <li>
             <strong>Registros de auditoria:</strong> guardados por até 5 anos e nunca editados ou apagados pelas telas
@@ -331,6 +338,10 @@ export function PoliticaDePrivacidadePage() {
           </li>
         </ul>
         <h2>8. Seus direitos</h2>
+        <p>
+          Na página <strong>&ldquo;Minha conta&rdquo;</strong>, qualquer pessoa conectada vê a versão destes termos que
+          aceitou e quando, e abre os Termos de Uso e esta Política.
+        </p>
         <p>
           Na página <strong>&ldquo;Meus dados&rdquo;</strong>, no menu do sistema depois que você entra com a sua conta
           de aluno, você vê tudo o que o SGEA guarda sobre você: dados cadastrais, aceite dos termos, situação do 2FA,
@@ -374,7 +385,7 @@ export function PoliticaDePrivacidadePage() {
         </p>
 
         <div className="login-links">
-          <Link to="/cadastro">Voltar para o cadastro</Link>
+          <VoltarDaPaginaLegal />
         </div>
       </div>
     </div>

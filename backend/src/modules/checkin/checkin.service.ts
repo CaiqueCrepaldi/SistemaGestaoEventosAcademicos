@@ -105,10 +105,21 @@ async function decidir(inscricaoId: string, decisao: Decisao, ator: Ator) {
     throw AppError.conflito("PARTICIPANTE_INATIVO", "Aluno inativo: não é possível confirmar presença.");
   }
 
-  // so muda se ninguem decidiu no meio tempo (outra pessoa da equipe com o painel aberto)
-  const { count } = await prisma.inscricao.updateMany({
-    where: { id: inscricaoId, statusPresenca: origem },
-    data: { statusPresenca: destino, usuarioId: ator.id, dataCheckin: new Date() },
+  // so muda se ninguem decidiu no meio tempo (outra pessoa da equipe com o painel aberto). Desfazer a presenca
+  // (PRESENTE -> RECUSADO) apaga junto, na mesma transacao, a avaliacao que o aluno ja tinha feito do evento: ela so
+  // vale com a presenca confirmada. Se ele ja respondeu o questionario, nem chega aqui (PRESENCA_TRAVADA acima)
+  const { count, avaliacaoApagada } = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.inscricao.updateMany({
+      where: { id: inscricaoId, statusPresenca: origem },
+      data: { statusPresenca: destino, usuarioId: ator.id, dataCheckin: new Date() },
+    });
+    if (count === 0 || origem !== "PRESENTE") return { count, avaliacaoApagada: null };
+    const avaliacao = await tx.feedback.findUnique({
+      where: { participanteId_eventoId: { participanteId: inscricao.participanteId, eventoId: inscricao.eventoId } },
+      select: { id: true },
+    });
+    if (avaliacao) await tx.feedback.delete({ where: { id: avaliacao.id } });
+    return { count, avaliacaoApagada: avaliacao?.id ?? null };
   });
   if (count === 0) {
     throw AppError.conflito("CHECKIN_JA_DECIDIDO", "Este check-in acabou de ser decidido por outra pessoa. Atualize a lista.");
@@ -117,6 +128,13 @@ async function decidir(inscricaoId: string, decisao: Decisao, ator: Ator) {
     await registrarAuditoria(ator.id, decisao === "APROVAR" ? "CHECKIN_APROVADO" : "CHECKIN_RECUSADO", `inscrição ${inscricaoId}`);
   } else {
     await registrarAuditoria(ator.id, "CHECKIN_REVERTIDO", `inscrição ${inscricaoId}: de ${origem} para ${destino}`);
+  }
+  if (avaliacaoApagada) {
+    await registrarAuditoria(
+      ator.id,
+      "FEEDBACK_EXCLUIDO",
+      `feedback ${avaliacaoApagada} (evento ${inscricao.eventoId}, participante ${inscricao.participanteId}) apagado ao desfazer a presença (inscrição ${inscricaoId})`,
+    );
   }
   return paraDominio(await prisma.inscricao.findUniqueOrThrow({ where: { id: inscricaoId } }));
 }
@@ -216,6 +234,12 @@ async function painel(eventoId: string, ator: Ator) {
       })
     ).map((t) => t.participanteId),
   );
+  // quem ja avaliou o evento: ao desfazer a presenca dele, a avaliacao e apagada (a tela avisa antes)
+  const avaliaram = new Set(
+    (await prisma.feedback.findMany({ where: { eventoId, participanteId: { in: inscricoes.map((i) => i.participanteId) } }, select: { participanteId: true } })).map(
+      (f) => f.participanteId,
+    ),
+  );
   const [semPedido, ausentes] = await Promise.all([
     prisma.inscricao.count({ where: { eventoId, statusPresenca: "PENDENTE" } }),
     prisma.inscricao.count({ where: { eventoId, statusPresenca: "AUSENTE" } }),
@@ -231,6 +255,7 @@ async function painel(eventoId: string, ator: Ator) {
     decididoEm: i.dataCheckin ? i.dataCheckin.toISOString() : null,
     decididoPor: i.usuario?.nome ?? null,
     presencaTravada: comTentativa.has(i.participanteId),
+    avaliou: avaliaram.has(i.participanteId),
   });
 
   return {

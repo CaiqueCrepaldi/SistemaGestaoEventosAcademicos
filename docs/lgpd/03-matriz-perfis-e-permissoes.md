@@ -96,13 +96,13 @@ id vindo da tela.
 | `/api/certificados/situacao` | GET | ✅ | ✅ | só os dele | ❌ | — |
 | `/api/certificados/emitir/:inscricaoId` | POST | ✅ | ✅ | só os dele | só o próprio | Exige check-in aprovado e 60% no questionário |
 | `/api/feedbacks` | GET | ✅ | ✅ | só os dele | só o próprio | — |
-| `/api/feedbacks/elegiveis` | GET | ❌ | ❌ | ❌ | só o próprio | Eventos com direito ao certificado e ainda sem avaliação |
-| `/api/feedbacks` | POST | ❌ | ❌ | ❌ | só o próprio | Exige direito ao certificado; uma avaliação por evento |
+| `/api/feedbacks/elegiveis` | GET | ❌ | ❌ | ❌ | só o próprio | Eventos com presença confirmada (`PRESENTE`) e ainda sem avaliação |
+| `/api/feedbacks` | POST | ❌ | ❌ | ❌ | só o próprio | Exige presença confirmada (`PRESENTE`), com ou sem questionário (`403 PRESENCA_NAO_CONFIRMADA`); uma avaliação por evento |
 | `/api/feedbacks/:id` | PUT | ❌ | ❌ | ❌ | ❌ | Ninguém edita avaliação |
 | `/api/feedbacks/:id` | DELETE | ✅ (com motivo) | ✅ (com motivo) | ❌ | só o próprio | Equipe: motivo de lista fechada; auditoria `FEEDBACK_EXCLUIDO` |
 | `/api/dashboard` | GET | ✅ | ✅ | só os dele | ❌ | Só números agregados, título do evento e nome da sala |
 | `/api/aprovacoes/contadores` | GET | ✅ | ✅ | ✅ | ❌ | Equipe: pendentes; professor: os recusados dele |
-| `/api/logs-auditoria`, `/responsaveis` | GET | ✅ | ✅ | ❌ | ❌ | Só leitura, paginada |
+| `/api/logs-auditoria`, `/responsaveis` | GET | ✅ | ❌ | ❌ | ❌ | Só leitura, paginada. Só o administrador (desde 12/11/2026); a aba Auditoria nem aparece para a secretaria |
 | `/api/meus-dados` | GET | ❌ | ❌ | ❌ | só o próprio | Tudo o que o sistema guarda sobre o aluno, sem cache |
 
 ## Observações

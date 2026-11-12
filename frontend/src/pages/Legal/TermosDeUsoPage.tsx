@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { VoltarDaPaginaLegal } from "../../components/legal/VoltarDaPaginaLegal";
 
 // pagina publica, sem autenticacao — termos especificos do SGEA. Mesmo texto de docs/lgpd/termos-de-uso.md. A versao
 // vigente fica em VERSAO_TERMOS_ATUAL (backend/src/config/termos.ts).
@@ -64,6 +65,11 @@ export function TermosDeUsoPage() {
             &ldquo;Minha conta&rdquo;.
           </li>
           <li>
+            Na página &ldquo;Minha conta&rdquo;, a seção &ldquo;Termos e privacidade&rdquo; mostra a versão destes
+            Termos e da Política de Privacidade que você aceitou, com a data e a hora do aceite, e abre os dois textos
+            dentro do sistema.
+          </li>
+          <li>
             A secretaria pode <strong>inativar</strong> a conta de um aluno em caso de uso indevido, dado incorreto ou a
             pedido dele, sempre informando um motivo (visível só para a equipe). Com a conta inativa, o aluno não entra
             no sistema, não se inscreve, não pede check-in nem responde questionário; as inscrições sem pedido de
@@ -113,9 +119,14 @@ export function TermosDeUsoPage() {
         </p>
         <h2>7. Avaliação das palestras</h2>
         <p>
-          A avaliação de uma palestra (nota e comentário) é opcional e só fica disponível depois que você tem direito ao
-          certificado daquela palestra. Ela é vista pela equipe e pelo professor responsável pelo evento, para avaliar o
-          evento, e não é publicada para outros alunos.
+          A avaliação de uma palestra (nota e comentário) é opcional e fica disponível assim que a sua presença no
+          evento é confirmada (check-in aprovado), mesmo antes de você responder o questionário. Ela é vista pela equipe
+          e pelo professor responsável pelo evento, para avaliar o evento, e não é publicada para outros alunos.
+        </p>
+        <p>
+          Enquanto você ainda não respondeu o questionário, quem aprovou o check-in pode desfazer a presença (dentro do
+          prazo do check-in). Nesse caso, a sua avaliação daquele evento é apagada junto, e isso fica registrado na
+          auditoria. Depois que você responde o questionário, a presença não muda mais.
         </p>
         <p>
           Depois de enviada, a avaliação não pode ser editada. Você pode excluir a sua a qualquer momento e enviar
@@ -159,6 +170,7 @@ export function TermosDeUsoPage() {
         </ul>
         <h2>9. Contas da equipe</h2>
         <ul>
+          <li>A trilha de auditoria (quem fez o quê no sistema) é consultada só pela administração.</li>
           <li>
             As contas de professor e de secretaria ficam na tela <strong>Equipe</strong>. A administração gerencia
             professores e secretarias; a secretaria gerencia só professores. Ninguém altera a própria conta por essa
@@ -206,7 +218,7 @@ export function TermosDeUsoPage() {
         </p>
 
         <div className="login-links">
-          <Link to="/cadastro">Voltar para o cadastro</Link>
+          <VoltarDaPaginaLegal />
         </div>
       </div>
     </div>

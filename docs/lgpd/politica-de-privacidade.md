@@ -60,7 +60,10 @@ dados tratados).
   guarda uma cópia do que vai impresso nele (nome, RGM, evento, tema,
   palestrante, data e carga horária) e um código de validação.
 - **Avaliações das palestras:** nota e comentário, enviados de forma
-  opcional por quem tem direito ao certificado.
+  opcional por quem teve a presença confirmada no evento (check-in
+  aprovado), mesmo antes de responder o questionário. Se a presença for
+  desfeita (o que só é possível enquanto o aluno não respondeu o
+  questionário), a avaliação é apagada junto.
 - **Aprovação e histórico:** o que o professor cadastra passa pela aprovação
   da equipe. O histórico guarda cada envio, aprovação, recusa e proposta de
   alteração, com a data, o nome de quem agiu, o motivo da recusa e a
@@ -175,7 +178,9 @@ ao sair ou quando a sessão expira.
   abertas.
 - Login, falhas de acesso, acessos negados e alterações críticas ficam
   registrados numa trilha de auditoria que não pode ser editada nem apagada
-  pelo sistema.
+  pelo sistema e que só a administração consulta.
+- Os e-mails do sistema seguem um modelo único, sem imagens nem conteúdo de
+  fora, com a versão em texto puro junto, e nunca levam senha.
 
 ## 7. Por quanto tempo guardamos os dados
 
@@ -209,6 +214,7 @@ ao sair ou quando a sessão expira.
   fica inativada, sem acesso ao sistema, e o registro do certificado é
   mantido.
 - **Avaliação:** você pode excluir a sua a qualquer momento e enviar outra.
+  Se a sua presença no evento for desfeita, a avaliação é apagada junto.
 - **Registros de auditoria:** guardados por até 5 anos e nunca editados ou
   apagados pelas telas do sistema.
 - **Cópias de segurança:** o provedor do banco faz uma cópia por dia, que
@@ -216,6 +222,9 @@ ao sair ou quando a sessão expira.
   no máximo 24 horas.
 
 ## 8. Seus direitos
+
+Na página **"Minha conta"**, qualquer pessoa conectada vê a versão destes
+termos que aceitou e quando, e abre os Termos de Uso e esta Política.
 
 Na página **"Meus dados"**, no menu do sistema depois que você entra com a
 sua conta de aluno, você vê tudo o que o SGEA guarda sobre você: dados

@@ -1950,3 +1950,195 @@ h1, h2, h3 {
   margin: 0;
   line-height: 1.4;
 }
+
+/* ---------------------------------------------------------------- tela Eventos do aluno */
+/* barra do topo: as tres opcoes (radio) e a busca pelo nome da palestra */
+.eventos-aluno-barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+
+.eventos-aluno-opcoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.eventos-aluno-opcao {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--gray-300);
+  border-radius: 999px;
+  background: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-700);
+  cursor: pointer;
+}
+
+.eventos-aluno-opcao input {
+  margin: 0;
+  accent-color: var(--yellow-600);
+}
+
+.eventos-aluno-opcao.selecionada {
+  border-color: var(--yellow-600);
+  background: var(--yellow-50);
+  color: var(--gray-900);
+}
+
+.eventos-aluno-opcao:focus-within {
+  outline: 2px solid var(--yellow-600);
+  outline-offset: 2px;
+}
+
+.eventos-aluno-busca {
+  flex: 1 1 240px;
+  max-width: 420px;
+  margin-bottom: 0;
+}
+
+/* cartoes: duas colunas em tela larga, uma no celular */
+.evento-cartoes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr));
+  gap: 16px;
+}
+
+.evento-cartao {
+  display: flex;
+  background: #ffffff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.evento-cartao-passado .evento-cartao-data {
+  background: var(--gray-700);
+}
+
+.evento-cartao-data {
+  flex: 0 0 76px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 14px 6px;
+  background: var(--black-900);
+  color: #ffffff;
+  text-transform: uppercase;
+}
+
+.evento-cartao-dia {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--yellow-500);
+}
+
+.evento-cartao-mes {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.evento-cartao-semana {
+  font-size: 11px;
+  color: var(--gray-300);
+}
+
+.evento-cartao-corpo {
+  flex: 1;
+  min-width: 0;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.evento-cartao-topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.evento-cartao-titulo {
+  font-size: 16px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.evento-cartao-tema {
+  margin: -4px 0 0;
+  font-size: 13px;
+  color: var(--gray-500);
+}
+
+.evento-cartao-dados {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 14px;
+}
+
+.evento-cartao-dados dt {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--gray-500);
+}
+
+.evento-cartao-dados dd {
+  margin: 0;
+  font-size: 13px;
+  color: var(--gray-900);
+  overflow-wrap: anywhere;
+}
+
+.evento-cartao-aviso {
+  margin: 0;
+}
+
+.evento-cartao-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+@media (max-width: 520px) {
+  .eventos-aluno-busca {
+    max-width: none;
+  }
+
+  .evento-cartao-data {
+    flex-basis: 62px;
+  }
+
+  .evento-cartao-dados {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* "Termos e privacidade" da Minha conta */
+.termos-conta-links {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}

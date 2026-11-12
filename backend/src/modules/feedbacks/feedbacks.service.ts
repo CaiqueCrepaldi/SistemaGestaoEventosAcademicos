@@ -3,7 +3,6 @@ import { Prisma, type Feedback as FeedbackDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { registrarAuditoria } from "../../utils/auditoria";
-import { eventosComCertificado, temCertificado } from "../../utils/certificado";
 import type { Feedback } from "../../types/domain";
 import { COM_ALUNO_DA_INSCRICAO } from "../inscricoes/inscricoes.service";
 import { MOTIVOS_EXCLUSAO_FEEDBACK, type MotivoExclusaoFeedback } from "./feedbacks.schemas";
@@ -59,23 +58,29 @@ async function buscarOuFalhar(id: string) {
   return paraDominio(feedback);
 }
 
-// aluno so avalia palestra em que ja recebeu o certificado (mesma regra da tela de Certificados:
-// presenca confirmada + nota minima no questionario, ver utils/certificado.ts)
-async function validarDireitoAoCertificado(eventoId: string, participanteId: string) {
-  if (!(await temCertificado(participanteId, eventoId))) {
-    throw AppError.acessoNegado("Você só pode avaliar palestras em que recebeu o certificado.");
+export const MENSAGEM_SEM_PRESENCA = "Você só pode avaliar eventos em que sua presença foi confirmada.";
+
+// o aluno avalia o evento em que a presenca dele foi confirmada (check-in aprovado: PRESENTE), mesmo sem ter
+// respondido nem passado no questionario. SOLICITADO, RECUSADO, AUSENTE, PENDENTE ou inscricao cancelada: 403
+async function validarPresencaConfirmada(eventoId: string, participanteId: string) {
+  const inscricao = await prisma.inscricao.findUnique({
+    where: { participanteId_eventoId: { participanteId, eventoId } },
+    select: { statusPresenca: true },
+  });
+  if (inscricao?.statusPresenca !== "PRESENTE") {
+    throw new AppError(403, "PRESENCA_NAO_CONFIRMADA", MENSAGEM_SEM_PRESENCA);
   }
 }
 
-// eventos que o aluno pode avaliar agora: tem certificado e ainda nao mandou feedback (quem excluiu
-// o proprio feedback volta a ver o evento aqui — e assim que ele corrige uma avaliacao)
+// eventos que o aluno pode avaliar agora: presenca confirmada e ainda sem avaliacao (quem excluiu a propria
+// avaliacao volta a ver o evento aqui — e assim que ele corrige uma avaliacao)
 async function listarEventosElegiveis(participanteId: string) {
-  const [comCertificado, jaAvaliados] = await Promise.all([
-    eventosComCertificado(participanteId),
+  const [presencas, jaAvaliados] = await Promise.all([
+    prisma.inscricao.findMany({ where: { participanteId, statusPresenca: "PRESENTE" }, select: { eventoId: true } }),
     prisma.feedback.findMany({ where: { participanteId }, select: { eventoId: true } }),
   ]);
   const avaliados = new Set(jaAvaliados.map((feedback) => feedback.eventoId));
-  const elegiveis = comCertificado.filter((eventoId) => !avaliados.has(eventoId));
+  const elegiveis = presencas.map((p) => p.eventoId).filter((eventoId) => !avaliados.has(eventoId));
 
   const eventos = await prisma.evento.findMany({
     where: { id: { in: elegiveis } },
@@ -136,7 +141,7 @@ export const feedbacksService = {
   listarParaGestao,
   listar,
   buscarOuFalhar,
-  validarDireitoAoCertificado,
+  validarPresencaConfirmada,
   listarEventosElegiveis,
   criar,
   excluirPeloAluno,

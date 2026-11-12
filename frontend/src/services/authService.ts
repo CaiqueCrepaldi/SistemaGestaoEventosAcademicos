@@ -9,6 +9,9 @@ export interface UsuarioPerfil {
   rgm: string | null;
   participanteId: string | null;
   mfaAtivo: boolean;
+  // aceite dos Termos de Uso e da Politica de Privacidade da propria conta (Minha conta mostra); null = sem registro
+  consentimentoLgpdEm?: string | null;
+  versaoTermosAceitos?: string | null;
 }
 
 // o que fica salvo em localStorage["sgea:session"] depois do login

@@ -101,6 +101,7 @@ async function main() {
   const { expirarCheckins } = await import("../src/utils/checkin");
   const { env } = await import("../src/config/env");
   const { emailService, conteudoDoConvite, dataHoraDeBrasilia } = await import("../src/modules/email/email.service");
+  const conteudosEmail = await import("../src/modules/email/conteudos-email");
   const { VERSAO_TERMOS_ATUAL } = await import("../src/config/termos");
 
   // o limite de tentativas por IP (bloco 2) conta os logins errados de proposito deste teste, que
@@ -887,13 +888,14 @@ async function main() {
     // ------------------------------------------------------------------ feedback
     requisito("R14 Feedback");
     r = await chamar("GET", "/feedbacks/elegiveis", { token: aluno.token });
-    checar("evento com certificado aparece como elegível", r.status === 200 && r.corpo.some((e: { id: string }) => e.id === eventoId), r.corpo);
-    r = await chamar("POST", "/feedbacks", { token: aluno2.token, corpo: { eventoId, nota: 4, comentario: "Sem certificado" } });
-    checar("sem certificado não avalia -> 403", r.status === 403, r.corpo);
+    checar("evento com presença confirmada aparece como elegível", r.status === 200 && r.corpo.some((e: { id: string }) => e.id === eventoId), r.corpo);
+    // o aluno nao esta inscrito no "Evento Lotado": sem presenca confirmada, nao avalia
+    r = await chamar("POST", "/feedbacks", { token: aluno.token, corpo: { eventoId: eventoLotadoId, nota: 4, comentario: "Sem presença" } });
+    checar("sem presença confirmada no evento não avalia -> 403", r.status === 403 && r.corpo.code === "PRESENCA_NAO_CONFIRMADA", r.corpo);
     r = await chamar("POST", "/feedbacks", { token: aluno.token, corpo: { eventoId, nota: 6, comentario: "Nota inválida" } });
     checar("nota fora de 1 a 5 -> 422", r.status === 422, r.corpo);
     r = await chamar("POST", "/feedbacks", { token: aluno.token, corpo: { eventoId, participanteId: aluno2.participanteId, nota: 5, comentario: "Ótima palestra" } });
-    checar("aluno com certificado avalia -> 201 (participanteId do token)", r.status === 201 && r.corpo.participanteId === aluno.participanteId, r.corpo);
+    checar("aluno com presença confirmada avalia -> 201 (participanteId do token)", r.status === 201 && r.corpo.participanteId === aluno.participanteId, r.corpo);
     const feedbackId: string = r.corpo.id;
     r = await chamar("POST", "/feedbacks", { token: aluno.token, corpo: { eventoId, nota: 3, comentario: "De novo" } });
     checar("segundo feedback no mesmo evento -> 409", r.status === 409, r.corpo);
@@ -1222,9 +1224,9 @@ async function main() {
 
     // ------------------------------------------------------------------ auditoria
     requisito("R18 Trilha de auditoria");
-    r = await chamar("GET", `/logs-auditoria?acao=SALA_CRIADA&usuarioId=${admin.id}`, { token: secretaria.token });
+    r = await chamar("GET", `/logs-auditoria?acao=SALA_CRIADA&usuarioId=${admin.id}`, { token: admin.token });
     checar("filtro por ação e responsável", r.status === 200 && r.corpo.itens.some((l: { detalhe: string }) => l.detalhe.includes(salaId)), r.corpo);
-    r = await chamar("GET", "/logs-auditoria?pageSize=500", { token: secretaria.token });
+    r = await chamar("GET", "/logs-auditoria?pageSize=500", { token: admin.token });
     checar("parâmetro inválido -> 422", r.status === 422, r.status);
     r = await chamar("GET", "/logs-auditoria/responsaveis", { token: admin.token });
     checar("lista de responsáveis", r.status === 200 && r.corpo.some((u: { id: string }) => u.id === admin.id), r.status);
@@ -3038,6 +3040,210 @@ async function main() {
         !!(await prisma.logAuditoria.findFirst({ where: { acao: "CONTA_EQUIPE_PRESERVADA", detalhe: { contains: professorA.id } } })),
       );
       await chamar("POST", `/equipe/${professorA.id}/reativar`, { token: secretaria.token });
+    }
+
+    // ------------------------------------------------------------------ avaliacao pelo check-in, auditoria e e-mails
+    requisito("R49 Avaliação liberada pela presença, auditoria só do administrador, lotação e e-mails no modelo do site");
+    {
+      r = await chamar("GET", "/logs-auditoria", { token: secretaria.token });
+      checar("a secretaria não vê a auditoria -> 403", r.status === 403, r.status);
+      r = await chamar("GET", "/logs-auditoria/responsaveis", { token: secretaria.token });
+      checar("nem a lista de responsáveis -> 403", r.status === 403, r.status);
+      r = await chamar("GET", "/logs-auditoria", { token: admin.token });
+      checar("o administrador vê a auditoria -> 200", r.status === 200 && Array.isArray(r.corpo.itens), r.status);
+
+      // alunos so deste cenario (sem outras inscricoes), criados direto no banco
+      const novoAluno = async (letra: string): Promise<Conta> => {
+        const participanteId = randomUUID();
+        await prisma.participante.create({ data: { id: participanteId, rgm: rgmAleatorio() } });
+        const conta: Conta = { id: randomUUID(), email: `aval.${letra}.${sufixo}@alunos.umc.br`, senha: SENHA_ALUNO, perfil: "ALUNO", participanteId };
+        await prisma.usuario.create({
+          data: {
+            id: conta.id,
+            nome: `Aluno Avaliação ${letra.toUpperCase()}`,
+            emailLogin: conta.email,
+            senhaHash: await bcrypt.hash(SENHA_ALUNO, 4),
+            perfil: "ALUNO",
+            participanteId,
+            consentimentoLgpdEm: new Date(),
+            versaoTermosAceitos: VERSAO_TERMOS_ATUAL,
+          },
+        });
+        contas.push(conta);
+        conta.token = await entrar(conta);
+        return conta;
+      };
+      const [alunoP, alunoS, alunoR, alunoA, alunoN] = [await novoAluno("p"), await novoAluno("s"), await novoAluno("r"), await novoAluno("a"), await novoAluno("n")];
+      const salaAvaliacao = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: codigoDeSala(), tipo: "SALA_DE_AULA", capacidade: 10 } });
+      salas.push(salaAvaliacao.corpo.id);
+      r = await chamar("POST", "/eventos", {
+        token: secretaria.token,
+        corpo: {
+          titulo: `Evento Avaliação ${sufixo}`,
+          horario: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+          salaId: salaAvaliacao.corpo.id,
+          palestranteId,
+          tema: "Tema",
+          cargaHoraria: 1,
+          questionario: questionario(),
+        },
+      });
+      const eventoAval: string = r.corpo.id;
+      eventos.push(eventoAval);
+      const inscricaoAval: Record<string, string> = {};
+      for (const conta of [alunoP, alunoS, alunoR, alunoA, alunoN]) {
+        r = await chamar("POST", `/eventos/${eventoAval}/inscricoes`, { token: conta.token });
+        inscricaoAval[conta.id] = r.corpo.id;
+      }
+      // P: presenca confirmada; S: pediu e espera; R: recusado; A: ausente; N: sem pedido
+      for (const conta of [alunoP, alunoS, alunoR]) await chamar("POST", `/eventos/${eventoAval}/checkin`, { token: conta.token });
+      await chamar("POST", `/checkin/inscricoes/${inscricaoAval[alunoP.id]}/aprovar`, { token: secretaria.token });
+      await chamar("POST", `/checkin/inscricoes/${inscricaoAval[alunoR.id]}/recusar`, { token: secretaria.token });
+      await prisma.inscricao.update({ where: { id: inscricaoAval[alunoA.id] }, data: { statusPresenca: "AUSENTE" } });
+
+      r = await chamar("GET", "/feedbacks/elegiveis", { token: alunoP.token });
+      checar("o evento aparece para avaliar assim que a presença é confirmada", r.status === 200 && r.corpo.some((e: { id: string }) => e.id === eventoAval), r.corpo);
+      r = await chamar("POST", "/feedbacks", { token: alunoP.token, corpo: { eventoId: eventoAval, nota: 5, comentario: "Gostei muito" } });
+      checar(
+        "aluno com presença confirmada avalia sem ter respondido o questionário -> 201",
+        r.status === 201 && (await prisma.tentativaQuestionario.count({ where: { participanteId: alunoP.participanteId!, eventoId: eventoAval } })) === 0,
+        r.corpo,
+      );
+      for (const [conta, situacao] of [
+        [alunoS, "SOLICITADO"],
+        [alunoR, "RECUSADO"],
+        [alunoA, "AUSENTE"],
+        [alunoN, "sem check-in (PENDENTE)"],
+      ] as const) {
+        r = await chamar("POST", "/feedbacks", { token: conta.token, corpo: { eventoId: eventoAval, nota: 4, comentario: "Tentativa" } });
+        checar(
+          `aluno ${situacao} não avalia -> 403 com a mensagem`,
+          r.status === 403 && r.corpo.message === "Você só pode avaliar eventos em que sua presença foi confirmada.",
+          r.corpo,
+        );
+      }
+      r = await chamar("DELETE", `/eventos/${eventoAval}/inscricoes`, { token: alunoN.token });
+      r = await chamar("POST", "/feedbacks", { token: alunoN.token, corpo: { eventoId: eventoAval, nota: 4, comentario: "Tentativa" } });
+      checar("inscrição cancelada não avalia -> 403", r.status === 403 && r.corpo.code === "PRESENCA_NAO_CONFIRMADA", r.corpo);
+
+      // desfazer a presenca de quem so avaliou: a avaliacao sai junto
+      r = await chamar("GET", `/checkin/eventos/${eventoAval}`, { token: secretaria.token });
+      const decididoP = (r.corpo?.decididos ?? []).find((d: { inscricaoId: string }) => d.inscricaoId === inscricaoAval[alunoP.id]);
+      checar("o painel avisa que o aluno já avaliou o evento (avaliou = true)", decididoP?.avaliou === true, decididoP);
+      r = await chamar("POST", `/checkin/inscricoes/${inscricaoAval[alunoP.id]}/recusar`, { token: secretaria.token });
+      const avaliacaoDepois = await prisma.feedback.findFirst({ where: { participanteId: alunoP.participanteId!, eventoId: eventoAval } });
+      checar(
+        "desfazer a presença de quem só avaliou -> 200 RECUSADO e a avaliação é apagada",
+        r.status === 200 && r.corpo.statusPresenca === "RECUSADO" && !avaliacaoDepois,
+        { status: r.status, avaliacao: !!avaliacaoDepois },
+      );
+      const logApagada = await prisma.logAuditoria.findFirst({
+        where: { acao: "FEEDBACK_EXCLUIDO", detalhe: { contains: `apagado ao desfazer a presença (inscrição ${inscricaoAval[alunoP.id]})` } },
+      });
+      checar(
+        "a avaliação apagada vai para a auditoria, sem o comentário nem dado pessoal",
+        !!logApagada && !logApagada.detalhe!.includes("Gostei muito") && !logApagada.detalhe!.includes(alunoP.email),
+        logApagada?.detalhe,
+      );
+
+      // quem ja respondeu o questionario: a presenca fica travada
+      await chamar("POST", `/checkin/inscricoes/${inscricaoAval[alunoS.id]}/aprovar`, { token: secretaria.token });
+      await chamar("POST", `/eventos/${eventoAval}/questionario/respostas`, { token: alunoS.token, corpo: { respostas: Array(10).fill(0) } });
+      r = await chamar("POST", "/feedbacks", { token: alunoS.token, corpo: { eventoId: eventoAval, nota: 3, comentario: "Depois do questionário" } });
+      checar("depois do questionário o aluno também avalia -> 201", r.status === 201, r.corpo);
+      r = await chamar("POST", `/checkin/inscricoes/${inscricaoAval[alunoS.id]}/recusar`, { token: secretaria.token });
+      checar(
+        "desfazer a presença de quem já respondeu o questionário -> 409 PRESENCA_TRAVADA e a avaliação fica",
+        r.status === 409 &&
+          r.corpo.code === "PRESENCA_TRAVADA" &&
+          !!(await prisma.feedback.findFirst({ where: { participanteId: alunoS.participanteId!, eventoId: eventoAval } })),
+        r.corpo,
+      );
+
+      // lotacao: evento futuro com 1 vaga recusa a segunda inscricao; depois do cancelamento, aceita
+      const salaUmaVaga = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: codigoDeSala(), tipo: "LABORATORIO", capacidade: 1 } });
+      salas.push(salaUmaVaga.corpo.id);
+      r = await chamar("POST", "/eventos", {
+        token: secretaria.token,
+        corpo: {
+          titulo: `Evento Uma Vaga ${sufixo}`,
+          horario: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString(),
+          salaId: salaUmaVaga.corpo.id,
+          palestranteId,
+          tema: "Tema",
+          cargaHoraria: 1,
+          questionario: questionario(),
+        },
+      });
+      const eventoUmaVaga: string = r.corpo.id;
+      eventos.push(eventoUmaVaga);
+      r = await chamar("POST", `/eventos/${eventoUmaVaga}/inscricoes`, { token: alunoA.token });
+      checar("a única vaga é ocupada -> 201", r.status === 201, r.corpo);
+      r = await chamar("POST", `/eventos/${eventoUmaVaga}/inscricoes`, { token: alunoN.token });
+      checar("evento lotado e ainda não iniciado recusa nova inscrição -> 409 EVENTO_LOTADO", r.status === 409 && r.corpo.code === "EVENTO_LOTADO", r.corpo);
+      r = await chamar("GET", "/eventos", { token: alunoN.token });
+      const lotadoVisto = (r.corpo ?? []).find((e: { id: string }) => e.id === eventoUmaVaga);
+      checar("o evento lotado continua na programação do aluno, com 1 inscrito", lotadoVisto?.inscritos === 1, lotadoVisto);
+      await chamar("DELETE", `/eventos/${eventoUmaVaga}/inscricoes`, { token: alunoA.token });
+      r = await chamar("POST", `/eventos/${eventoUmaVaga}/inscricoes`, { token: alunoN.token });
+      checar("depois do cancelamento, a vaga volta e a inscrição é aceita -> 201", r.status === 201, r.corpo);
+
+      // e-mails: todos no modelo unico, com HTML e texto puro, e o dado de pessoa escapado
+      const agoraEmail = new Date();
+      const todosOsEmails = {
+        "código do cadastro": conteudosEmail.conteudoCodigoCadastro("135790"),
+        convite: conteudosEmail.conteudoDoConvite("Pessoa", "http://localhost:5173/#/primeiro-acesso?convite=abc"),
+        "recuperação de senha": conteudosEmail.conteudoCodigoRecuperacao("246801"),
+        "senha alterada": conteudosEmail.conteudoSenhaAlterada(agoraEmail),
+        "inscrição confirmada": conteudosEmail.conteudoConfirmacaoInscricao({
+          participanteNome: "Aluno",
+          eventoTitulo: "Evento",
+          eventoTema: "Tema",
+          palestranteNome: "Palestrante",
+          eventoHorario: agoraEmail,
+          salaRotulo: "1T-01 · Laboratório",
+        }),
+        "inscrição cancelada": conteudosEmail.conteudoCancelamentoInscricao({ participanteNome: "Aluno", eventoTitulo: "Evento", eventoHorario: agoraEmail }),
+        "evento alterado": conteudosEmail.conteudoAlteracaoEvento({
+          participanteNome: "Aluno",
+          eventoTitulo: "Evento",
+          mudancas: [{ rotulo: "Sala", antes: "1T-01 · Laboratório", depois: "2T-01 · Auditório" }],
+        }),
+      };
+      const semVersao = Object.entries(todosOsEmails).filter(
+        ([, email]) =>
+          !email.html.startsWith("<!DOCTYPE html>") ||
+          !email.html.includes("UMC</span> · Gestão de Eventos Acadêmicos") ||
+          !email.html.includes("Mensagem automática do SGEA, não responda.") ||
+          !email.html.includes("privacidade@sgeacademicos.com.br") ||
+          email.text.trim().length === 0 ||
+          email.text.includes("<") ||
+          !email.text.includes("Mensagem automática do SGEA, não responda."),
+      );
+      checar("cada e-mail tem a versão HTML (cabeçalho, rodapé) e a versão em texto puro", semVersao.length === 0, semVersao.map(([nome]) => nome));
+      checar(
+        "e-mail com código: o código aparece no HTML e no texto, com a validade",
+        todosOsEmails["código do cadastro"].html.includes("135790") &&
+          todosOsEmails["código do cadastro"].text.includes("Código: 135790") &&
+          todosOsEmails["código do cadastro"].html.includes("Esse código vale por 15 minutos."),
+      );
+      const comScript = conteudosEmail.conteudoConfirmacaoInscricao({
+        participanteNome: '<script>alert("x")</script>',
+        eventoTitulo: "<b>Evento</b>",
+        eventoTema: "Tema",
+        palestranteNome: "<img src=x onerror=alert(1)>",
+        eventoHorario: agoraEmail,
+      });
+      checar(
+        "nome com <script> (e título e palestrante com tag) sai escapado no HTML",
+        !comScript.html.includes("<script>") &&
+          comScript.html.includes("&lt;script&gt;") &&
+          !comScript.html.includes("<b>Evento</b>") &&
+          !comScript.html.includes("<img src=x"),
+      );
+      await prisma.inscricao.deleteMany({ where: { eventoId: { in: [eventoAval, eventoUmaVaga] } } });
+      await prisma.feedback.deleteMany({ where: { eventoId: eventoAval } });
+      await prisma.tentativaQuestionario.deleteMany({ where: { eventoId: eventoAval } });
     }
 
     // ------------------------------------------------------------------ RF009/RNF010: exclusao bloqueada

@@ -41,18 +41,21 @@ Três perfis de usuário:
   (indicadores de eventos, inscrições, presença, certificados e feedback,
   vagas preenchidas dos próximos eventos, ocupação real das salas — presentes
   ÷ capacidade nos eventos encerrados, também por sala na tela Salas — e
-  gráficos de presença e de aprendizagem por evento). A única
-  diferença: só o **Administrador** reseta o 2FA e remove o bloqueio por
-  tentativas de um aluno (botões na tela Participantes).
+  gráficos de presença e de aprendizagem por evento). As diferenças: só o
+  **Administrador** reseta o 2FA e remove o bloqueio por tentativas de um
+  aluno (botões na tela Participantes), cria e gerencia contas de secretaria
+  na tela Equipe e consulta a trilha de **Auditoria** (a secretaria não tem a
+  aba e a API a recusa com `403`).
 - **Aluno** — perfil com cadastro público (`/cadastro`, sem precisar de
   admin criar a conta, e-mail institucional obrigatório terminando em
-  `@alunos.umc.br`). Só lê eventos, agenda, salas e palestrantes; se
-  inscreve sozinho nos eventos que quiser (com
-  verificação de vaga e de inscrição duplicada); recebe e-mail de
+  `@alunos.umc.br`). Vê os eventos em três opções (Inscritas, Abertas e
+  Todas) com busca pelo nome; se inscreve sozinho nos eventos que quiser (com
+  verificação de vaga, de inscrição duplicada e de horário); recebe e-mail de
   confirmação; pede o próprio check-in na tela Eventos (de 1 hora antes do
   início até 24 horas depois do fim do evento) e responde ao questionário
-  depois que o professor do evento ou a equipe aprova o pedido; só emite o
-  próprio certificado se atingir 60% de acertos. Não acessa telas de gestão,
+  depois que o professor do evento ou a equipe aprova o pedido; avalia o
+  evento assim que a presença é confirmada; só emite o próprio certificado se
+  atingir 60% de acertos. Na Minha conta vê a versão dos Termos que aceitou. Não acessa telas de gestão,
   participantes nem a tela Check-in da equipe.
 
 As telas de **Salas** (`/salas`) e **Palestrantes** (`/palestrantes`) têm

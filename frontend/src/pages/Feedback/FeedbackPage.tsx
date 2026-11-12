@@ -12,10 +12,10 @@ import { ApiError, eventoService, feedbackService, MOTIVOS_EXCLUSAO_FEEDBACK } f
 import type { EventoParaAvaliar, MotivoExclusaoFeedback } from "../../services";
 import type { Evento, Feedback } from "../../types";
 
-const SEM_EVENTO_PARA_AVALIAR = "Você poderá avaliar uma palestra depois de receber o certificado dela.";
+const SEM_EVENTO_PARA_AVALIAR = "Você poderá avaliar um evento assim que sua presença nele for confirmada (check-in aprovado).";
 const ROTULOS_NOTA: Record<number, string> = { 1: "1 — Ruim", 2: "2 — Regular", 3: "3 — Boa", 4: "4 — Muito boa", 5: "5 — Excelente" };
 
-// feedback e do aluno: so ele envia (de palestra em que recebeu o certificado) e ninguem edita
+// feedback e do aluno: so ele envia (de evento em que a presenca dele foi confirmada) e ninguem edita
 // depois de enviado. O aluno corrige excluindo o proprio e enviando outro; a equipe nao altera o que
 // o aluno escreveu, so exclui — sempre com um motivo. As regras valem no backend; a tela so reflete
 export function FeedbackPage() {
