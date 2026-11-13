@@ -274,8 +274,16 @@ async function validarCapacidade(salaId: string, eventoId: string) {
   }
 }
 
+// nenhum perfil cria evento (nem muda o horario de um) para uma data e horario que ja passaram
+function garantirHorarioNoFuturo(horario: Date) {
+  if (horario.getTime() <= Date.now()) {
+    throw AppError.validacao("Dados inválidos.", [{ campo: "horario", mensagem: "A data e o horário do evento precisam ser no futuro." }]);
+  }
+}
+
 // cadastra um evento novo. Da equipe ja nasce APROVADO; do professor nasce PENDENTE (aguarda a equipe)
 async function criar(dados: EventoInput, ator: Ator) {
+  garantirHorarioNoFuturo(new Date(dados.horario));
   await validarReferencias(dados, ator);
   await validarConflitoDeSala(dados.salaId, new Date(dados.horario), dados.cargaHoraria);
   const doProfessor = ator.perfil === "PROFESSOR";
@@ -524,6 +532,7 @@ async function atualizar(id: string, dados: EventoUpdateInput, ator: Ator) {
     recusada = aberta;
     await validarProposta(atual, depois, ator);
   } else if (mudou.length > 0) {
+    if (mudou.includes("horario")) garantirHorarioNoFuturo(depois.horario);
     await validarReferencias(
       {
         salaId: mudou.includes("salaId") ? depois.salaId : undefined,

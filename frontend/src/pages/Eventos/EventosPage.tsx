@@ -53,11 +53,18 @@ const chaveEnunciado = (i: number) => `questionario.${i}.enunciado`;
 const chaveAlternativa = (i: number, j: number) => `questionario.${i}.alternativas.${j}.texto`;
 const chaveCorreta = (i: number) => `questionario.${i}.correta`;
 
-function validarEvento(form: FormEvento): ErrosFormulario {
+// horarioOriginal: na edicao, o horario que o evento ja tem (manter o mesmo e permitido, mesmo que ja tenha
+// passado, para editar o titulo de um evento em andamento). Horario novo precisa ser no futuro (a API confere igual)
+function validarEvento(form: FormEvento, horarioOriginal?: string): ErrosFormulario {
   const erros: ErrosFormulario = {};
   if (!form.titulo.trim()) erros.titulo = "Informe o título do evento.";
   if (!form.salaId) erros.salaId = "Selecione a sala.";
   if (!form.horario) erros.horario = "Informe a data e o horário.";
+  else {
+    const escolhido = new Date(inputLocalParaIso(form.horario)).getTime();
+    const mudou = !horarioOriginal || escolhido !== new Date(horarioOriginal).getTime();
+    if (mudou && escolhido <= Date.now()) erros.horario = "A data e o horário do evento precisam ser no futuro.";
+  }
   if (!form.palestranteId) erros.palestranteId = "Selecione o palestrante responsável.";
   if (!form.tema.trim()) erros.tema = "Informe o tema do evento.";
   const carga = Number(form.cargaHoraria);
@@ -316,7 +323,7 @@ function EventosEquipe() {
 
   // valida, e se for edicao pede confirmacao antes de gravar
   function pedirSalvar() {
-    if (mostrar(validarEvento(form))) return;
+    if (mostrar(validarEvento(form, editando?.horario))) return;
     if (editando) setConfirmandoSalvar(true);
     else void salvar();
   }
@@ -796,6 +803,7 @@ function EventosEquipe() {
               <Campo nome="horario" rotulo="Data/Horário" obrigatorio erro={erros.horario}>
                 <input
                   type="datetime-local"
+                  min={editando ? undefined : isoParaInputLocal(new Date().toISOString())}
                   value={form.horario}
                   onChange={(e) => setForm({ ...form, horario: e.target.value })}
                   disabled={travarAgenda}
