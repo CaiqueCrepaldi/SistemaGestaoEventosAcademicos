@@ -7,7 +7,7 @@ import { AppError } from "../../errors/AppError";
 import { dataHoraDeBrasilia, emailService, observacaoDoEnvio } from "../email/email.service";
 import { COM_CONTA_DO_ALUNO, paraDominio as participanteParaDominio } from "../participantes/participantes.service";
 import { registrarAuditoria } from "../../utils/auditoria";
-import { garantirEventoDoProfessor, type Ator } from "../../utils/escopo";
+import { garantirEventoDoProfessor, garantirEventoNaoCancelado, type Ator } from "../../utils/escopo";
 import type { Inscricao, Perfil, StatusPresenca } from "../../types/domain";
 import type { InscricaoInput } from "./inscricoes.schemas";
 
@@ -76,7 +76,7 @@ async function listarParaGestao(filtros: FiltrosGestao) {
       orderBy: [{ dataInscricao: "desc" }, { id: "desc" }],
       skip: (filtros.page - 1) * filtros.pageSize,
       take: filtros.pageSize,
-      include: { participante: { select: COM_ALUNO_DA_INSCRICAO }, evento: { select: { titulo: true, horario: true } } },
+      include: { participante: { select: COM_ALUNO_DA_INSCRICAO }, evento: { select: { titulo: true, horario: true, canceladoEm: true } } },
     }),
   ]);
   const itens = inscricoes.map(({ participante, evento, ...inscricao }) => ({
@@ -86,6 +86,8 @@ async function listarParaGestao(filtros: FiltrosGestao) {
     participanteAtivo: participante.ativo,
     eventoTitulo: evento.titulo,
     eventoHorario: evento.horario.toISOString(),
+    // evento cancelado: a tela mostra a etiqueta e nenhuma acao
+    eventoCancelado: evento.canceladoEm !== null,
   }));
   return montarPagina(itens, total, filtros.page, filtros.pageSize);
 }
@@ -126,7 +128,8 @@ export async function garantirSemConflitoDeHorario(
   const fim = new Date(inicio + evento.cargaHoraria * HORA_MS);
   // so as que comecam antes do fim desta podem cruzar; o fim de cada uma e conferido abaixo
   const candidatas = await prisma.inscricao.findMany({
-    where: { participanteId, eventoId: { not: evento.id }, evento: { horario: { lt: fim } } },
+    // inscricao em evento cancelado nao segura o horario: o aluno pode se inscrever noutro evento no lugar
+    where: { participanteId, eventoId: { not: evento.id }, evento: { horario: { lt: fim }, canceladoEm: null } },
     select: { evento: { select: { titulo: true, horario: true, cargaHoraria: true } } },
     orderBy: { evento: { horario: "asc" } },
   });
@@ -154,6 +157,7 @@ async function criarManual(dados: InscricaoInput, ator: Ator) {
   if (!evento) erros.push({ campo: "eventoId", mensagem: "Evento não encontrado." });
   if (erros.length > 0) throw AppError.validacao("Dados inválidos.", erros);
   garantirEventoDoProfessor(ator, evento!, "Você só pode inscrever alunos nos seus próprios eventos.");
+  garantirEventoNaoCancelado(evento!);
   if (evento!.situacao !== "APROVADO") {
     throw AppError.conflito("EVENTO_NAO_APROVADO", "Este evento ainda não foi aprovado e não aceita inscrições.");
   }
@@ -250,9 +254,11 @@ async function avisarCancelamentoPorEmail(
 async function cancelar(id: string, ator: QuemCancela) {
   const inscricao = await prisma.inscricao.findUnique({
     where: { id },
-    include: { evento: { select: { titulo: true, horario: true } } },
+    include: { evento: { select: { titulo: true, horario: true, canceladoEm: true } } },
   });
   if (!inscricao) throw AppError.naoEncontrado("INSCRICAO_NAO_ENCONTRADA", "Inscrição não encontrada.");
+  // a inscricao no evento cancelado fica como historico do aluno: nao se cancela mais
+  garantirEventoNaoCancelado(inscricao.evento);
 
   await garantirPresencaDestravada(inscricao.participanteId, inscricao.eventoId);
   // evento que ja comecou: nada a cancelar (vem antes da presenca: quando a janela do check-in fecha, a

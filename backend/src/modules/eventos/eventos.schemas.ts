@@ -31,6 +31,17 @@ export const eventoSchema = z.object({
 export type EventoInput = z.infer<typeof eventoSchema>;
 
 export const eventoUpdateSchema = eventoSchema.partial();
+
+// cancelamento pela equipe: motivo obrigatorio, de 10 a 500 caracteres (sem os espacos das pontas). Vai no e-mail
+// aos inscritos e na tela; nunca na auditoria
+export const cancelamentoEventoSchema = z.object({
+  motivo: z
+    .string({ required_error: "Informe o motivo do cancelamento.", invalid_type_error: "Informe o motivo do cancelamento." })
+    .trim()
+    .min(10, "O motivo precisa ter pelo menos 10 caracteres.")
+    .max(500, "O motivo pode ter no máximo 500 caracteres."),
+});
+export type CancelamentoEventoInput = z.infer<typeof cancelamentoEventoSchema>;
 export type EventoUpdateInput = z.infer<typeof eventoUpdateSchema>;
 
 // o professor corrige a proposta de alteracao (pendente) ou a reenvia depois de recusada, com uma resposta

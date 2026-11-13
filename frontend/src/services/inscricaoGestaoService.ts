@@ -9,6 +9,8 @@ export interface InscricaoGestao extends Inscricao {
   participanteAtivo: boolean;
   eventoTitulo: string;
   eventoHorario: string;
+  // evento cancelado pela equipe: a inscricao fica so como historico, sem acao
+  eventoCancelado?: boolean;
 }
 
 export interface FiltrosInscricoesGestao {

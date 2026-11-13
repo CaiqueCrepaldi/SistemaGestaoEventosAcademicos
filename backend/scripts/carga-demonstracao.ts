@@ -2,7 +2,7 @@
 // cenario realista para a apresentacao — 12 salas no padrao da UMC (8 de aula, 2 laboratorios e 2 auditorios),
 // 40 palestrantes (mais 3 aguardando aprovacao), 150 professores, 1 secretaria e 1.000 alunos ficticios, 200 eventos
 // (150 encerrados, 25 futuros aprovados e 25 em aprovacao: 15 aguardando, 5 recusados e 5 aprovados com proposta de
-// alteracao aguardando), com historico, inscricoes (nenhum aluno em dois eventos no mesmo horario), check-in,
+// alteracao aguardando) e mais 1 futuro cancelado pela secretaria, com inscritos, com historico, inscricoes (nenhum aluno em dois eventos no mesmo horario), check-in,
 // questionario, certificados e avaliacoes, e os cenarios para testar ao vivo (impressos no fim, no "roteiro") — alem
 // das tres contas de demonstracao (administrador, secretaria e professor, com as senhas das variaveis SEED_*_SENHA e o
 // e-mail do administrador em SEED_ADMIN_EMAIL). As contas ficticias (usuarios.ficticio) nunca recebem e-mail.
@@ -498,6 +498,8 @@ async function main() {
 
     // cenarios marcados nos eventos (pra montar as inscricoes e o roteiro da apresentacao)
     const cenarioDo = new Map<string, "LOTADO" | "UMA_VAGA" | "CONFLITO">();
+    // eventos cancelados pela equipe (fora da divisao 150/25/15/5/5): quando, por que e quem cancelou
+    const cancelamentos = new Map<string, { em: Date; motivo: string; porId: string }>();
 
     // evento da apresentacao (professor de demonstracao): horario fixo, sala de 40 lugares ou mais, livre
     const salaApresentacao = embaralhar(salas.filter((s) => s.capacidade >= 40)).find((s) => salaLivre(s.id, horarioApresentacao, 2));
@@ -527,6 +529,14 @@ async function main() {
       cenarioDo.set(criarEvento(null, "APROVADO", alocar(diasProximos.slice(1), minimoFuturo), { passado: false }).id, "LOTADO");
       cenarioDo.set(criarEvento(null, "APROVADO", alocar(diasProximos.slice(1), minimoFuturo), { passado: false }).id, "UMA_VAGA");
     }
+
+    // evento futuro cancelado pela secretaria, com inscritos (as inscricoes ficam no historico do aluno e a sala fica
+    // livre): mostra a etiqueta "Cancelado" e o motivo no calendario e na tela do aluno
+    cancelamentos.set(criarEvento(null, "APROVADO", alocar(diasDistantes, minimoFuturo), { passado: false }).id, {
+      em: new Date(agora.getTime() - HORA),
+      motivo: "O palestrante teve um imprevisto de saúde e não poderá comparecer.",
+      porId: idSecretaria,
+    });
 
     // os demais: 144 encerrados; 18 futuros aprovados (4 nos proximos dias); 14 aguardando aprovacao; 4 recusados; 4
     // aprovados com proposta de alteracao aguardando aprovacao
@@ -900,7 +910,7 @@ async function main() {
       if (cruza) problemas.push("proposta de alteração pendente reservando sala já ocupada");
     }
     // a divisao combinada dos 200 eventos
-    const futurosAprovados = eventos.filter((e) => !e.passado && e.situacao === "APROVADO");
+    const futurosAprovados = eventos.filter((e) => !e.passado && e.situacao === "APROVADO" && !cancelamentos.has(e.id));
     const comPropostaPendente = new Set(propostas.filter((p) => p.situacao === "PENDENTE").map((p) => p.eventoId));
     const divisao = {
       encerrados: eventos.filter((e) => e.passado).length,
@@ -915,9 +925,11 @@ async function main() {
     if (eventos.some((e) => e.situacao !== "APROVADO" && e.passado)) problemas.push("evento pendente ou recusado no passado");
     // cenarios: lotado cheio, um com 1 vaga, os dois do conflito no mesmo horario com vaga, aluno inativo fora do futuro
     const inscritosEm = (id: string) => inscricoes.filter((i) => i.eventoId === id).length;
+    for (const id of cancelamentos.keys()) if (inscritosEm(id) === 0) problemas.push("evento cancelado sem inscritos");
     for (const [id, cenario] of cenarioDo) {
       const e = eventoPorId.get(id)!;
       if (cenario === "LOTADO" && inscritosEm(id) !== e.capacidade) problemas.push("o evento lotado não ficou cheio");
+      if (cancelamentos.has(id)) problemas.push("evento cancelado usado como cenário");
       if (cenario === "UMA_VAGA" && inscritosEm(id) !== e.capacidade - 1) problemas.push("o evento de uma vaga não ficou com uma vaga");
       if (cenario === "CONFLITO" && inscritosEm(id) >= e.capacidade) problemas.push("evento do conflito sem vaga");
     }
@@ -977,6 +989,7 @@ async function main() {
       const situacao = e.situacao === "APROVADO" ? (proposta ? `aprovado, proposta ${proposta.situacao === "PENDENTE" ? "aguardando" : "recusada"}` : "aprovado") : e.situacao === "PENDENTE" ? "aguardando aprovação" : "recusado";
       roteiro.push(`professor de demonstração — ${situacao}: ${linhaEvento(e)}`);
     }
+    for (const [id, c] of cancelamentos) roteiro.push(`evento cancelado (${c.motivo}): ${linhaEvento(eventoPorId.get(id)!)} — ${inscritosEm(id)} inscritos (ficam no histórico deles)`);
     roteiro.push(`palestrantes aguardando aprovação: ${palestrantesPendentes.map((p) => p.nome).join(", ")}`);
     roteiro.push(`Equipe — convite pendente: ${professoresConvitePendente.map((p) => `${p.nome} (${p.emailLogin})`).join(", ")}`);
     roteiro.push(`Equipe — professores inativos: ${professoresInativos.map((p) => p.nome).join(", ")}`);
@@ -1077,6 +1090,9 @@ async function main() {
           situacao: e.situacao,
           motivoRecusa: e.motivoRecusa,
           criadoPorId: e.criadoPorId,
+          canceladoEm: cancelamentos.get(e.id)?.em ?? null,
+          motivoCancelamento: cancelamentos.get(e.id)?.motivo ?? null,
+          canceladoPorId: cancelamentos.get(e.id)?.porId ?? null,
         })),
       }),
     );

@@ -89,6 +89,14 @@ UMC, com finalidade exclusivamente acadêmica, e não é um serviço comercial.
   ela continua valendo.
 - O professor inscreve alunos, e cancela inscrições, só nos eventos que ele
   criou; a secretaria e a administração, em qualquer evento.
+- A secretaria e a administração podem **cancelar um evento aprovado** que
+  ainda não começou, sempre informando o motivo. O cancelamento não pode ser
+  desfeito. Cada inscrito e o professor responsável recebem um e-mail com o
+  motivo. A inscrição não é apagada: o evento continua na sua tela de
+  eventos (em "Inscritas" e "Todas", fora de "Abertas") com a etiqueta
+  "Cancelado" e o motivo, sem nenhuma ação, e você pode se inscrever noutro
+  evento no mesmo horário. O professor não cancela eventos pelo sistema:
+  combina com a equipe.
 - O **check-in é pedido pelo próprio aluno**, na tela Eventos, de 1 hora
   antes do início até 24 horas depois do fim do evento, confirmando que está
   no local. O professor responsável pelo evento, a secretaria ou a

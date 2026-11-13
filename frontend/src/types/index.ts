@@ -27,7 +27,8 @@ export interface PassoAprovacao {
     | "PROPOSTA_RECUSADA"
     | "PROPOSTA_REENVIADA"
     | "PROPOSTA_CANCELADA"
-    | "TRANSFERIDO";
+    | "TRANSFERIDO"
+    | "CANCELADO";
   mensagem: string | null;
   autorNome: string | null;
   criadoEm: string;
@@ -117,6 +118,12 @@ export interface Evento {
   checkinsPendentes?: number;
   // proposta de alteracao aberta (pendente ou recusada) de sala/horario/carga/palestrante
   proposta?: PropostaEvento | null;
+  // cancelamento pela equipe (null = nao cancelado): quando e o motivo (todos veem); quem cancelou (equipe e professor)
+  canceladoEm?: string | null;
+  motivoCancelamento?: string | null;
+  canceladoPorNome?: string | null;
+  // so na resposta do cancelamento: se o professor responsavel foi avisado por e-mail
+  professorAvisado?: boolean;
   // so na resposta da edicao/aprovacao: a mudanca do professor virou proposta; quantos inscritos foram avisados
   propostaEnviada?: boolean;
   avisoInscritos?: { inscritos: number; avisados: number } | null;

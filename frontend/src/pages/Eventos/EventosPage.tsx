@@ -29,6 +29,7 @@ import { chaveDoDia, dataDaChave, eventoEncerrado, horaLocal, inputLocalParaIso,
 import { situacaoDaJanela } from "../../utils/presenca";
 import { ALTERNATIVAS_POR_PERGUNTA, questionarioVazio } from "../../utils/questionario";
 import { agruparPorDia, diasDaGrade, fimDoEvento, GradeDoMes, textoDosCheckins } from "./CalendarioEventos";
+import { ModalCancelarEvento } from "./CancelarEvento";
 import { EventosAluno } from "./EventosAluno";
 import { ModalPropostaEvento, mudancasDoEvento } from "./PropostaEvento";
 
@@ -128,6 +129,8 @@ function EventosEquipe() {
   const [form, setForm] = useState<FormEvento>(formVazio());
   const [confirmandoSalvar, setConfirmandoSalvar] = useState(false);
   const [excluindo, setExcluindo] = useState<Evento | null>(null);
+  // cancelamento (so a equipe): evento aprovado e ainda nao iniciado
+  const [cancelandoEvento, setCancelandoEvento] = useState<Evento | null>(null);
   const { erros, formRef, mostrar, mostrarErroDaApi, limpar, limparAoEditar } = useErrosFormulario();
 
   // salas e palestrantes (pro formulario e pros nomes na lista)
@@ -412,8 +415,22 @@ function EventosEquipe() {
     }
   }
 
-  // situacao da aprovacao e a proposta de alteracao aberta (com o antes -> depois)
+  // situacao da aprovacao e a proposta de alteracao aberta (com o antes -> depois). Cancelado: a etiqueta e o
+  // motivo; para a equipe, tambem quem cancelou e quando
   function situacaoDoEvento(evento: Evento) {
+    if (evento.canceladoEm) {
+      return (
+        <div className="evento-cancelado-info">
+          <Badge tone="red">Cancelado</Badge>
+          <span className="form-hint">Motivo: {evento.motivoCancelamento}</span>
+          {ehEquipe && (
+            <span className="form-hint">
+              Cancelado {evento.canceladoPorNome ? `por ${evento.canceladoPorNome} ` : ""}em {dataHoraCurta(evento.canceladoEm)}
+            </span>
+          )}
+        </div>
+      );
+    }
     return (
       <>
         <SituacaoAprovacao situacao={evento.situacao} motivoRecusa={evento.motivoRecusa} />
@@ -432,6 +449,19 @@ function EventosEquipe() {
   // reenviar, Check-ins, historico, editar e excluir (evento encerrado nao tem os dois ultimos)
   function acoesDoEvento(evento: Evento) {
     const encerrado = eventoEncerrado(evento);
+    // cancelado fica so no historico: nenhuma acao (a API recusa todas), so o historico da aprovacao
+    if (evento.canceladoEm) {
+      return (
+        <>
+          {(evento.criadoPorId || evento.proposta) && (
+            <button className="btn btn-ghost" onClick={() => setAcaoAprovacao({ acao: "historico", evento })}>
+              Histórico
+            </button>
+          )}
+          <span className="form-hint">Cancelado</span>
+        </>
+      );
+    }
     return (
       <>
         {ehEquipe && evento.situacao === "PENDENTE" && (
@@ -485,6 +515,11 @@ function EventosEquipe() {
               Excluir
             </button>
           </>
+        )}
+        {ehEquipe && evento.situacao === "APROVADO" && new Date(evento.horario).getTime() > Date.now() && (
+          <button className="btn btn-ghost btn-danger" onClick={() => setCancelandoEvento(evento)}>
+            Cancelar evento
+          </button>
         )}
       </>
     );
@@ -627,7 +662,12 @@ function EventosEquipe() {
                         <div className="simple-list-sub">{item.ocupacao.salaNome}</div>
                       </li>
                     ) : (
-                      <li key={item.evento.id} className={"calendario-evento" + (eventoEncerrado(item.evento) ? " encerrado" : "")}>
+                      <li
+                        key={item.evento.id}
+                        className={
+                          "calendario-evento" + (eventoEncerrado(item.evento) ? " encerrado" : "") + (item.evento.canceladoEm ? " cancelado" : "")
+                        }
+                      >
                         <div className="calendario-evento-hora">
                           {horaLocal(item.evento.horario)} às {horaLocal(fimDoEvento(item.evento))}
                           {eventoEncerrado(item.evento) && <span className="form-hint"> · Encerrado</span>}
@@ -641,7 +681,7 @@ function EventosEquipe() {
                           Tema: {item.evento.tema || "—"} · {item.evento.cargaHoraria}h · {item.evento.inscritos ?? 0}/
                           {salas.find((sala) => sala.id === item.evento.salaId)?.capacidade ?? "—"} inscritos
                         </div>
-                        {(item.evento.checkinsPendentes ?? 0) > 0 && (
+                        {(item.evento.checkinsPendentes ?? 0) > 0 && !item.evento.canceladoEm && (
                           <Badge tone="orange">{`${textoDosCheckins(item.evento.checkinsPendentes ?? 0)} esperando aprovação`}</Badge>
                         )}
                         <div className="table-actions calendario-evento-acoes">{acoesDoEvento(item.evento)}</div>
@@ -658,6 +698,17 @@ function EventosEquipe() {
             )}
           </aside>
         </div>
+      )}
+
+      {cancelandoEvento && (
+        <ModalCancelarEvento
+          evento={cancelandoEvento}
+          onFechar={() => setCancelandoEvento(null)}
+          onCancelado={() => {
+            setCancelandoEvento(null);
+            void carregar();
+          }}
+        />
       )}
 
       {acaoAprovacao && (

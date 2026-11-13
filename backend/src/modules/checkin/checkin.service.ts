@@ -4,7 +4,7 @@ import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { registrarAuditoria } from "../../utils/auditoria";
 import { janelaDoCheckin, garantirJanelaAberta, PRAZO_CHECKIN_APOS_FIM_MS, ANTECEDENCIA_CHECKIN_MS, situacaoDaJanela } from "../../utils/checkin";
-import { ehEquipe, eventosVisiveis, type Ator } from "../../utils/escopo";
+import { ehEquipe, eventosVisiveis, garantirEventoNaoCancelado, type Ator } from "../../utils/escopo";
 import { garantirPresencaDestravada, paraDominio } from "../inscricoes/inscricoes.service";
 
 // CHECK-IN PEDIDO PELO ALUNO: o aluno inscrito pede (SOLICITADO) dentro da janela e quem cuida do evento
@@ -41,7 +41,16 @@ function garantirQuemDecide(ator: Ator, evento: { criadoPorId: string | null }) 
 async function eventoParaDecidirOuFalhar(ator: Ator, eventoId: string) {
   const evento = await prisma.evento.findUnique({
     where: { id: eventoId },
-    select: { id: true, titulo: true, horario: true, cargaHoraria: true, situacao: true, criadoPorId: true, sala: { select: { nome: true, tipo: true } } },
+    select: {
+      id: true,
+      titulo: true,
+      horario: true,
+      cargaHoraria: true,
+      situacao: true,
+      criadoPorId: true,
+      canceladoEm: true,
+      sala: { select: { nome: true, tipo: true } },
+    },
   });
   if (!evento || evento.situacao !== "APROVADO") throw AppError.naoEncontrado("EVENTO_NAO_ENCONTRADO", "Evento não encontrado.");
   garantirQuemDecide(ator, evento);
@@ -54,8 +63,12 @@ async function solicitar(eventoId: string, participanteId: string, atorId: strin
   if (!participante?.ativo) throw AppError.contaInativa();
 
   // evento pendente/recusado nao existe pro aluno
-  const evento = await prisma.evento.findFirst({ where: { id: eventoId, situacao: "APROVADO" }, select: { horario: true, cargaHoraria: true } });
+  const evento = await prisma.evento.findFirst({
+    where: { id: eventoId, situacao: "APROVADO" },
+    select: { horario: true, cargaHoraria: true, canceladoEm: true },
+  });
   if (!evento) throw AppError.naoEncontrado("EVENTO_NAO_ENCONTRADO", "Evento não encontrado.");
+  garantirEventoNaoCancelado(evento);
 
   const inscricao = await prisma.inscricao.findUnique({ where: { participanteId_eventoId: { participanteId, eventoId } } });
   if (!inscricao) throw AppError.naoEncontrado("INSCRICAO_NAO_ENCONTRADA", "Você não está inscrito neste evento.");
@@ -79,7 +92,7 @@ async function decidir(inscricaoId: string, decisao: Decisao, ator: Ator) {
   const inscricao = await prisma.inscricao.findUnique({
     where: { id: inscricaoId },
     include: {
-      evento: { select: { horario: true, cargaHoraria: true, situacao: true, criadoPorId: true } },
+      evento: { select: { horario: true, cargaHoraria: true, situacao: true, criadoPorId: true, canceladoEm: true } },
       participante: { select: { ativo: true } },
     },
   });
@@ -87,6 +100,7 @@ async function decidir(inscricaoId: string, decisao: Decisao, ator: Ator) {
     throw AppError.naoEncontrado("INSCRICAO_NAO_ENCONTRADA", "Inscrição não encontrada.");
   }
   garantirQuemDecide(ator, inscricao.evento);
+  garantirEventoNaoCancelado(inscricao.evento);
   garantirJanelaAberta(inscricao.evento);
   await garantirPresencaDestravada(inscricao.participanteId, inscricao.eventoId);
 
@@ -143,6 +157,7 @@ async function decidir(inscricaoId: string, decisao: Decisao, ator: Ator) {
 // com o pedido em aberto, como na aprovacao individual)
 async function aprovarTodos(eventoId: string, ator: Ator) {
   const evento = await eventoParaDecidirOuFalhar(ator, eventoId);
+  garantirEventoNaoCancelado(evento);
   garantirJanelaAberta(evento);
   const { count } = await prisma.inscricao.updateMany({
     where: { eventoId, statusPresenca: "SOLICITADO", participante: { ativo: true } },
@@ -174,6 +189,8 @@ async function eventosComJanelaAberta(ator: Ator) {
     where: {
       ...eventosVisiveis(ator),
       situacao: "APROVADO",
+      // evento cancelado nao tem check-in
+      canceladoEm: null,
       horario: {
         lte: new Date(agora.getTime() + ANTECEDENCIA_CHECKIN_MS),
         gt: new Date(agora.getTime() - PRAZO_CHECKIN_APOS_FIM_MS - maiorCargaMs),
@@ -271,6 +288,8 @@ async function painel(eventoId: string, ator: Ator) {
       horario: evento.horario.toISOString(),
       cargaHoraria: evento.cargaHoraria,
       salaNome: rotuloSala(evento.sala),
+      // cancelado: o painel so mostra o historico, sem acao (a API recusa qualquer decisao)
+      cancelado: evento.canceladoEm !== null,
     },
     janela: janelaParaDTO(evento),
     pedidos: inscricoes.filter((i) => i.statusPresenca === "SOLICITADO").map(item),

@@ -4,6 +4,7 @@ import { prisma } from "../../db/prisma";
 import { normalizarEmail } from "../../utils/validacao";
 import {
   conteudoAlteracaoEvento,
+  conteudoCancelamentoEvento,
   conteudoCancelamentoInscricao,
   conteudoCodigoCadastro,
   conteudoCodigoRecuperacao,
@@ -11,6 +12,7 @@ import {
   conteudoDoConvite,
   conteudoSenhaAlterada,
   type DadosAlteracaoEvento,
+  type DadosCancelamentoEvento,
   type DadosCancelamentoInscricao,
   type DadosConfirmacaoInscricao,
   type EmailMontado,
@@ -102,8 +104,14 @@ async function enviarAlteracaoEvento(destinatario: string, dados: DadosAlteracao
   return enviar("alteracao-evento", destinatario, conteudoAlteracaoEvento(dados));
 }
 
+// evento cancelado pela equipe (para cada inscrito e para o professor responsavel)
+async function enviarCancelamentoEvento(destinatario: string, dados: DadosCancelamentoEvento): Promise<ResultadoEnvio> {
+  return enviar("cancelamento-evento", destinatario, conteudoCancelamentoEvento(dados));
+}
+
 export const emailService = {
   enviarAlteracaoEvento,
+  enviarCancelamentoEvento,
   enviarConviteEquipe,
   enviarConfirmacaoInscricao,
   enviarCancelamentoInscricao,

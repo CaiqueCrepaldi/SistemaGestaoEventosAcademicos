@@ -3577,6 +3577,238 @@ async function main() {
       checar("palestrante pode ter o e-mail de uma conta (só é único entre palestrantes) -> 201", r.status === 201, r.corpo);
     }
 
+    // ------------------------------------------------------------------ cancelamento de evento pela equipe
+    requisito("R51 Cancelamento de evento pela equipe: motivo, e-mail aos inscritos, sala livre e evento travado");
+    {
+      // professor ja ativado (direto no banco) dono do evento que vai ser cancelado
+      const professorE: Conta = { id: randomUUID(), email: `req.prof.e.${sufixo}@umc.br`, senha: SENHA_PROFESSOR, perfil: "PROFESSOR", participanteId: null };
+      await prisma.usuario.create({
+        data: {
+          id: professorE.id,
+          nome: "Professor Cancelamento E",
+          emailLogin: professorE.email,
+          senhaHash: await bcrypt.hash(SENHA_PROFESSOR, 4),
+          perfil: "PROFESSOR",
+          consentimentoLgpdEm: new Date(),
+          versaoTermosAceitos: VERSAO_TERMOS_ATUAL,
+        },
+      });
+      contas.push(professorE);
+      professorE.token = await entrar(professorE);
+      const alunoR1 = await criarAlunoCheckin("R1");
+      const alunoR2 = await criarAlunoCheckin("R2");
+      const alunoR3 = await criarAlunoCheckin("R3");
+      // aluno de conta ficticia (como as da carga): inscrito, mas nunca recebe e-mail
+      const participanteFicticio = randomUUID();
+      await prisma.participante.create({ data: { id: participanteFicticio, rgm: rgmAleatorio() } });
+      const alunoFicticio: Conta = {
+        id: randomUUID(),
+        email: `req.ficticio.${sufixo}@alunos.umc.br`,
+        senha: SENHA_ALUNO,
+        perfil: "ALUNO",
+        participanteId: participanteFicticio,
+      };
+      await prisma.usuario.create({
+        data: {
+          id: alunoFicticio.id,
+          nome: "Aluno Ficticio Cancelamento",
+          emailLogin: alunoFicticio.email,
+          senhaHash: await bcrypt.hash(SENHA_ALUNO, 4),
+          perfil: "ALUNO",
+          participanteId: participanteFicticio,
+          ficticio: true,
+          consentimentoLgpdEm: new Date(),
+          versaoTermosAceitos: VERSAO_TERMOS_ATUAL,
+        },
+      });
+      contas.push(alunoFicticio);
+
+      const novaSala = async () => {
+        const s = await chamar("POST", "/salas", { token: secretaria.token, corpo: { nome: codigoDeSala(), tipo: "SALA_DE_AULA", capacidade: 10 } });
+        salas.push(s.corpo.id);
+        return s.corpo.id as string;
+      };
+      const [salaE, salaOutra, salaAdmin, salaPassado] = [await novaSala(), await novaSala(), await novaSala(), await novaSala()];
+      const inicioR51 = new Date(Math.ceil((Date.now() + 35 * 24 * 3600 * 1000) / 3600000) * 3600000);
+      const corpoEvento = (titulo: string, salaId: string, horario: Date) => ({
+        titulo: `${titulo} ${sufixo}`,
+        horario: horario.toISOString(),
+        salaId,
+        palestranteId,
+        tema: "Cancelamento",
+        cargaHoraria: 2,
+        questionario: questionario(),
+      });
+      const criarEvento = async (token: string, titulo: string, salaId: string, horario: Date) => {
+        const criado = await chamar("POST", "/eventos", { token, corpo: corpoEvento(titulo, salaId, horario) });
+        eventos.push(criado.corpo.id);
+        return criado.corpo.id as string;
+      };
+      const eventoE = await criarEvento(professorE.token!, "Evento a Cancelar", salaE, inicioR51);
+      await chamar("POST", `/eventos/${eventoE}/aprovar`, { token: secretaria.token });
+      // outro evento no MESMO horario, noutra sala: o aluno inscrito no cancelado vai poder ir para este
+      const eventoOutro = await criarEvento(secretaria.token!, "Evento no Mesmo Horario", salaOutra, inicioR51);
+      r = await chamar("POST", "/inscricoes", { token: professorE.token, corpo: { participanteId: alunoR1.participanteId, eventoId: eventoE } });
+      const inscricaoR1: string = r.corpo.id;
+      r = await chamar("POST", "/inscricoes", { token: secretaria.token, corpo: { participanteId: alunoR2.participanteId, eventoId: eventoE } });
+      const inscricaoR2: string = r.corpo.id;
+      await chamar("POST", "/inscricoes", { token: secretaria.token, corpo: { participanteId: participanteFicticio, eventoId: eventoE } });
+      checar("o evento a cancelar tem 3 inscritos (2 reais e 1 de conta fictícia)", (await prisma.inscricao.count({ where: { eventoId: eventoE } })) === 3);
+      r = await chamar("POST", `/eventos/${eventoOutro}/inscricoes`, { token: alunoR1.token });
+      checar("antes do cancelamento, o aluno não se inscreve noutro evento no mesmo horário -> 409", r.status === 409 && r.corpo.code === "CONFLITO_DE_HORARIO", r.corpo);
+      r = await chamar("POST", "/eventos", { token: secretaria.token, corpo: corpoEvento("Evento na Sala Ocupada", salaE, inicioR51) });
+      checar("antes do cancelamento, a sala está ocupada -> 409", r.status === 409 && r.corpo.code === "CONFLITO_DE_SALA", r.corpo);
+      r = await chamar("PUT", `/eventos/${eventoE}`, { token: professorE.token, corpo: { horario: new Date(inicioR51.getTime() + 3600000).toISOString() } });
+      checar("o professor deixa uma proposta de alteração aguardando", r.status === 200 && r.corpo.proposta?.situacao === "PENDENTE", r.corpo);
+
+      const MOTIVO = "Palestrante doente <script>alert(1)</script> sem previsão de retorno";
+      r = await chamar("POST", `/eventos/${eventoE}/cancelar`, { token: professorE.token, corpo: { motivo: MOTIVO } });
+      checar("o professor não cancela, nem o próprio evento -> 403", r.status === 403, r.status);
+      for (const [motivo, nome] of [
+        [undefined, "sem motivo"],
+        ["", "motivo vazio"],
+        ["curto", "motivo com menos de 10 caracteres"],
+        ["   nove car   ", "motivo com menos de 10 caracteres sem os espaços"],
+        ["x".repeat(501), "motivo com mais de 500 caracteres"],
+      ] as const) {
+        r = await chamar("POST", `/eventos/${eventoE}/cancelar`, { token: secretaria.token, corpo: motivo === undefined ? {} : { motivo } });
+        checar(`${nome} -> 422`, r.status === 422, r.corpo);
+      }
+      const eventoPendente = await criarEvento(professorE.token!, "Evento Pendente", salaAdmin, new Date(inicioR51.getTime() + 5 * 24 * 3600000));
+      r = await chamar("POST", `/eventos/${eventoPendente}/cancelar`, { token: secretaria.token, corpo: { motivo: "Motivo suficiente aqui" } });
+      checar(
+        "evento aguardando aprovação não é cancelado -> 409",
+        r.status === 409 && r.corpo.message === "Este evento ainda não foi aprovado; recuse-o pela tela de aprovações.",
+        r.corpo,
+      );
+      await chamar("POST", `/eventos/${eventoPendente}/recusar`, { token: secretaria.token, corpo: { motivo: "Falta a ementa do evento" } });
+      r = await chamar("POST", `/eventos/${eventoPendente}/cancelar`, { token: secretaria.token, corpo: { motivo: "Motivo suficiente aqui" } });
+      checar("evento recusado também não -> 409", r.status === 409 && r.corpo.code === "EVENTO_NAO_APROVADO", r.corpo);
+      const eventoIniciado = await criarEvento(admin.token!, "Evento Ja Iniciado", salaPassado, new Date(Date.now() - 3600000));
+      r = await chamar("POST", `/eventos/${eventoIniciado}/cancelar`, { token: secretaria.token, corpo: { motivo: "Motivo suficiente aqui" } });
+      checar("evento que já começou não é cancelado -> 409", r.status === 409 && r.corpo.message === "Não é possível cancelar um evento que já começou.", r.corpo);
+      const eventoDoAdmin = await criarEvento(secretaria.token!, "Evento Cancelado pelo Admin", salaAdmin, new Date(inicioR51.getTime() + 2 * 24 * 3600000));
+      r = await chamar("POST", `/eventos/${eventoDoAdmin}/cancelar`, { token: admin.token, corpo: { motivo: "  A sala vai entrar em reforma.  " } });
+      checar(
+        "o administrador cancela evento aprovado e futuro -> 200, motivo sem os espaços das pontas",
+        r.status === 200 && !!r.corpo.canceladoEm && r.corpo.motivoCancelamento === "A sala vai entrar em reforma.",
+        r.corpo,
+      );
+
+      // e-mails do cancelamento: guarda cada envio (o envio real continua simulado e suprime a conta ficticia)
+      const enviarCancelamentoOriginal = emailService.enviarCancelamentoEvento;
+      const enviados: { destinatario: string; tipo: string; resultado: string; html: string }[] = [];
+      emailService.enviarCancelamentoEvento = async (destinatario, dados) => {
+        const resultado = await enviarCancelamentoOriginal(destinatario, dados);
+        enviados.push({ destinatario, tipo: dados.destinatario, resultado, html: conteudosEmail.conteudoCancelamentoEvento(dados).html });
+        return resultado;
+      };
+      r = await chamar("POST", `/eventos/${eventoE}/cancelar`, { token: secretaria.token, corpo: { motivo: MOTIVO } });
+      emailService.enviarCancelamentoEvento = enviarCancelamentoOriginal;
+      const gravado = await prisma.evento.findUnique({ where: { id: eventoE } });
+      checar(
+        "a secretaria cancela -> 200; grava quando, o motivo e quem cancelou; 2 inscritos reais avisados e o professor",
+        r.status === 200 &&
+          r.corpo.avisoInscritos?.inscritos === 2 &&
+          r.corpo.avisoInscritos?.avisados === 2 &&
+          r.corpo.professorAvisado === true &&
+          !!gravado?.canceladoEm &&
+          gravado.motivoCancelamento === MOTIVO &&
+          gravado.canceladoPorId === secretaria.id &&
+          gravado.situacao === "APROVADO",
+        r.corpo,
+      );
+      checar("as inscrições não são apagadas", (await prisma.inscricao.count({ where: { eventoId: eventoE } })) === 3);
+      checar(
+        "o e-mail vai para os inscritos reais e para o professor (texto do professor), não para a conta fictícia",
+        enviados.some((e) => e.destinatario === alunoR1.email && e.tipo === "INSCRITO" && e.resultado !== "suprimido") &&
+          enviados.some((e) => e.destinatario === alunoR2.email && e.resultado !== "suprimido") &&
+          enviados.some((e) => e.destinatario === professorE.email && e.tipo === "PROFESSOR") &&
+          enviados.find((e) => e.destinatario === alunoFicticio.email)?.resultado === "suprimido",
+        enviados.map((e) => [e.tipo, e.resultado]),
+      );
+      checar(
+        "o motivo sai escapado no HTML do e-mail",
+        enviados.length > 0 && enviados.every((e) => e.html.includes("&lt;script&gt;alert(1)&lt;/script&gt;") && !e.html.includes("<script>alert(1)")),
+      );
+      const proposta = await prisma.propostaAlteracao.findFirst({ where: { eventoId: eventoE } });
+      checar("a proposta de alteração pendente vira recusada, com o motivo \"Evento cancelado\"", proposta?.situacao === "RECUSADO" && proposta.motivoRecusa === "Evento cancelado", proposta);
+      const logCancelamento = await prisma.logAuditoria.findFirst({ where: { acao: "EVENTO_CANCELADO", detalhe: { contains: eventoE } } });
+      checar(
+        "a auditoria registra o cancelamento com o id e os avisados, sem o texto do motivo",
+        !!logCancelamento?.detalhe && logCancelamento.detalhe.includes("2 de 2") && !logCancelamento.detalhe.includes("Palestrante doente"),
+        logCancelamento?.detalhe,
+      );
+      r = await chamar("POST", `/eventos/${eventoE}/cancelar`, { token: secretaria.token, corpo: { motivo: MOTIVO } });
+      checar("evento já cancelado não é cancelado de novo -> 409", r.status === 409 && r.corpo.code === "EVENTO_CANCELADO", r.corpo);
+
+      // depois do cancelamento, nada mais acontece no evento
+      const cancelado = (resposta: Resposta) => resposta.status === 409 && resposta.corpo?.message === "Este evento foi cancelado.";
+      r = await chamar("POST", "/inscricoes", { token: secretaria.token, corpo: { participanteId: alunoR3.participanteId, eventoId: eventoE } });
+      checar("inscrição manual no evento cancelado -> 409 \"Este evento foi cancelado.\"", cancelado(r), r.corpo);
+      r = await chamar("POST", `/eventos/${eventoE}/inscricoes`, { token: alunoR3.token });
+      checar("autoinscrição no evento cancelado -> 409", cancelado(r), r.corpo);
+      r = await chamar("DELETE", `/inscricoes/${inscricaoR2}`, { token: secretaria.token });
+      checar("cancelar inscrição do evento cancelado (equipe) -> 409", cancelado(r), r.corpo);
+      r = await chamar("DELETE", `/eventos/${eventoE}/inscricoes`, { token: alunoR1.token });
+      checar("cancelar inscrição do evento cancelado (aluno) -> 409", cancelado(r), r.corpo);
+      r = await chamar("POST", `/eventos/${eventoE}/checkin`, { token: alunoR1.token });
+      checar("pedido de check-in no evento cancelado -> 409", cancelado(r), r.corpo);
+      r = await chamar("POST", `/checkin/inscricoes/${inscricaoR1}/aprovar`, { token: secretaria.token });
+      checar("decisão de check-in no evento cancelado -> 409", cancelado(r), r.corpo);
+      r = await chamar("POST", `/eventos/${eventoE}/questionario/respostas`, { token: alunoR1.token, corpo: { respostas: Array(10).fill(0) } });
+      checar("questionário do evento cancelado -> 409", cancelado(r), r.corpo);
+      r = await chamar("POST", "/feedbacks", { token: alunoR1.token, corpo: { eventoId: eventoE, nota: 5, comentario: "Avaliação de evento cancelado" } });
+      checar("avaliação do evento cancelado -> 409", cancelado(r), r.corpo);
+      r = await chamar("POST", `/certificados/emitir/${inscricaoR1}`, { token: alunoR1.token });
+      checar("certificado do evento cancelado -> 409", cancelado(r), r.corpo);
+      r = await chamar("PUT", `/eventos/${eventoE}`, { token: secretaria.token, corpo: { titulo: "Mudou" } });
+      checar("edição do evento cancelado -> 409", cancelado(r), r.corpo);
+      r = await chamar("DELETE", `/eventos/${eventoE}`, { token: secretaria.token });
+      checar("exclusão do evento cancelado -> 409 (fica no histórico)", cancelado(r), r.corpo);
+
+      // a sala e o horario ficam livres
+      r = await chamar("POST", "/eventos", { token: secretaria.token, corpo: corpoEvento("Evento na Sala Liberada", salaE, inicioR51) });
+      if (r.corpo?.id) eventos.push(r.corpo.id);
+      checar("a sala fica livre: outro evento na mesma sala e no mesmo horário -> 201", r.status === 201, r.corpo);
+      r = await chamar("POST", `/eventos/${eventoOutro}/inscricoes`, { token: alunoR1.token });
+      checar("o aluno inscrito no cancelado se inscreve noutro evento no mesmo horário -> 201", r.status === 201, r.corpo);
+
+      // o que cada perfil ve
+      r = await chamar("GET", `/eventos/${eventoE}`, { token: alunoR1.token });
+      checar(
+        "o aluno vê o evento cancelado com o motivo, sem saber quem cancelou",
+        r.status === 200 && !!r.corpo.canceladoEm && r.corpo.motivoCancelamento === MOTIVO && !("canceladoPorNome" in r.corpo),
+        r.corpo,
+      );
+      r = await chamar("GET", `/eventos/${eventoE}`, { token: secretaria.token });
+      checar("a equipe vê quem cancelou", r.status === 200 && r.corpo.canceladoPorNome === "Teste Requisitos SECRETARIA", r.corpo?.canceladoPorNome);
+      const deCal = new Date(inicioR51.getTime() + 2 * 24 * 3600000 - 3600000).toISOString();
+      const ateCal = new Date(inicioR51.getTime() + 2 * 24 * 3600000 + 4 * 3600000).toISOString();
+      r = await chamar("GET", `/eventos?de=${encodeURIComponent(deCal)}&ate=${encodeURIComponent(ateCal)}`, { token: professorE.token });
+      checar(
+        "no calendário do professor, o evento cancelado de outro não aparece como \"Sala ocupada\"",
+        r.status === 200 && !(r.corpo.salasOcupadas ?? []).some((s: { salaId: string }) => s.salaId === salaAdmin),
+        r.corpo?.salasOcupadas,
+      );
+      r = await chamar("GET", "/dashboard", { token: secretaria.token });
+      checar(
+        "o dashboard não conta o evento cancelado e mostra quantos foram cancelados",
+        r.status === 200 && !r.corpo.eventos.some((e: { id: string }) => e.id === eventoE || e.id === eventoDoAdmin) && r.corpo.totais.eventosCancelados >= 2,
+        r.corpo?.totais?.eventosCancelados,
+      );
+      r = await chamar("GET", "/dashboard", { token: professorE.token });
+      checar(
+        "o dashboard do professor também não conta (0 eventos, 1 cancelado)",
+        r.status === 200 && r.corpo.totais.eventos === 0 && r.corpo.totais.inscricoes === 0 && r.corpo.totais.eventosCancelados === 1,
+        r.corpo?.totais,
+      );
+      r = await chamar("GET", "/checkin/eventos", { token: secretaria.token });
+      checar("o evento cancelado não aparece na tela Check-in", r.status === 200 && !r.corpo.some((e: { id: string }) => e.id === eventoE), r.status);
+      r = await chamar("GET", "/aprovacoes/contadores", { token: professorE.token });
+      checar("a proposta encerrada pelo cancelamento não entra no aviso de recusa do professor", r.status === 200 && r.corpo.eventosRecusados === 1, r.corpo);
+    }
+
     // ------------------------------------------------------------------ RF009/RNF010: exclusao bloqueada
     requisito("R19 Exclusão de evento bloqueada com inscrições (RF009/RNF010)");
     r = await chamar("DELETE", `/eventos/${eventoId}`, { token: admin.token });

@@ -74,6 +74,14 @@ export function PoliticaDePrivacidadePage() {
             está fazendo a inscrição).
           </li>
           <li>
+            <strong>Evento cancelado:</strong> se a equipe cancelar um evento aprovado antes do início, o sistema guarda
+            quando, o motivo e quem cancelou. As inscrições não são apagadas: ficam no seu histórico, ligadas ao evento
+            cancelado, que aparece para você com a etiqueta &ldquo;Cancelado&rdquo; e o motivo, sem nenhuma ação (não
+            recebe inscrição, check-in, questionário, certificado nem avaliação). Quem cancelou é visto só pela equipe e
+            pelo professor do evento. A inscrição no evento cancelado não impede você de se inscrever noutro evento no
+            mesmo horário.
+          </li>
+          <li>
             <strong>Questionário e certificado:</strong> respostas ao questionário de cada evento e o resultado (acertos
             e percentual). Ao emitir um certificado, o sistema guarda uma cópia do que vai impresso nele (nome, RGM,
             evento, tema, palestrante, data e carga horária) e um código de validação. Dentro do sistema, o certificado
@@ -175,7 +183,7 @@ export function PoliticaDePrivacidadePage() {
               <td>Execução de contrato (art. 7º, V)</td>
             </tr>
             <tr>
-              <td>Avisos por e-mail (inscrição, cancelamento e mudança no evento)</td>
+              <td>Avisos por e-mail (inscrição, cancelamento, mudança no evento e evento cancelado)</td>
               <td>Manter o aluno informado sobre os eventos em que está inscrito</td>
               <td>Execução de contrato (art. 7º, V)</td>
             </tr>
@@ -230,7 +238,11 @@ export function PoliticaDePrivacidadePage() {
               <li>o aviso de inscrição cancelada pela equipe;</li>
               <li>
                 o aviso de mudança de sala, horário, carga horária ou palestrante num evento em que o aluno está
-                inscrito.
+                inscrito;
+              </li>
+              <li>
+                o aviso de evento cancelado pela equipe (com o motivo informado), para cada inscrito e para o professor
+                responsável pelo evento.
               </li>
             </ul>
             <p>

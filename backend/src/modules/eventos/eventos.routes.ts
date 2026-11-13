@@ -13,7 +13,7 @@ import { recusaSchema, reenvioSchema } from "../aprovacoes/aprovacoes.schemas";
 import { eventosService } from "./eventos.service";
 import { lerConsulta } from "../../utils/paginacao";
 import { expirarCheckins } from "../../utils/checkin";
-import { buscaEventosSchema, eventoSchema, eventoUpdateSchema, intervaloEventosSchema, propostaEventoSchema } from "./eventos.schemas";
+import { buscaEventosSchema, cancelamentoEventoSchema, eventoSchema, eventoUpdateSchema, intervaloEventosSchema, propostaEventoSchema } from "./eventos.schemas";
 
 export const eventosRouter = Router();
 
@@ -165,6 +165,19 @@ eventosRouter.post(
   validarCorpo(recusaSchema),
   asyncHandler(async (req, res) => {
     res.json(eventoParaDTO(await eventosService.recusar(req.params.id, req.body.motivo, atorDe(req)), false));
+  }),
+);
+// cancelamento: so a equipe, so evento aprovado e ainda nao iniciado, com motivo (10 a 500 caracteres). Nao se
+// desfaz; os inscritos e o professor responsavel sao avisados por e-mail. O professor recebe 403 (combina com a
+// equipe por fora)
+eventosRouter.post(
+  "/:id/cancelar",
+  autenticar,
+  autorizar("ADMINISTRADOR", "SECRETARIA"),
+  validarCorpo(cancelamentoEventoSchema),
+  asyncHandler(async (req, res) => {
+    const { evento, avisoInscritos, professorAvisado } = await eventosService.cancelar(req.params.id, req.body.motivo, atorDe(req));
+    res.json({ ...eventoParaDTO(evento, false), avisoInscritos, professorAvisado });
   }),
 );
 // o professor reenvia o proprio evento recusado, com uma resposta opcional (volta para pendente). A equipe

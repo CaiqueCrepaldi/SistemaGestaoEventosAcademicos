@@ -46,7 +46,8 @@ export function InscricoesPage() {
   // eventos em que quem esta logado pode inscrever: so os aprovados e, para o professor, so os dele (a API recusa os
   // outros com 403)
   const eventosParaInscrever = eventos.filter(
-    (e) => (!e.situacao || e.situacao === "APROVADO") && (usuario?.perfil !== "PROFESSOR" || e.criadoPorId === usuario.id),
+    (e) =>
+      (!e.situacao || e.situacao === "APROVADO") && !e.canceladoEm && (usuario?.perfil !== "PROFESSOR" || e.criadoPorId === usuario.id),
   );
 
   // eventos (com a contagem de inscritos) e salas: pro filtro, pro modal e pra mostrar as vagas
@@ -255,7 +256,9 @@ export function InscricoesPage() {
                 <td>
                   {inscricao.participanteNome || "—"} {!inscricao.participanteAtivo && <Badge tone="red">Inativo</Badge>}
                 </td>
-                <td>{inscricao.eventoTitulo}</td>
+                <td>
+                  {inscricao.eventoTitulo} {inscricao.eventoCancelado && <Badge tone="red">Evento cancelado</Badge>}
+                </td>
                 <td>
                   <Badge tone={corPresenca(inscricao.statusPresenca)}>{rotuloPresenca(inscricao.statusPresenca)}</Badge>
                 </td>
@@ -266,9 +269,11 @@ export function InscricoesPage() {
                   )}
                 </td>
                 <td className="table-actions">
-                  <button className="btn btn-ghost btn-danger" onClick={() => setExcluindo(inscricao)}>
-                    Cancelar
-                  </button>
+                  {!inscricao.eventoCancelado && (
+                    <button className="btn btn-ghost btn-danger" onClick={() => setExcluindo(inscricao)}>
+                      Cancelar
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

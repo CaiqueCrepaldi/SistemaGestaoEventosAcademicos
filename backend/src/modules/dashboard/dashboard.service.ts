@@ -1,7 +1,7 @@
 import { rotuloSala } from "../../utils/salas";
 import type { StatusPresenca } from "@prisma/client";
 import { prisma } from "../../db/prisma";
-import { eventosDoDashboard, type Ator } from "../../utils/escopo";
+import { eventosDoDashboard, eventosVisiveis, type Ator } from "../../utils/escopo";
 import { resumoDeOcupacao } from "../../utils/ocupacao";
 import { MAX_TENTATIVAS_QUESTIONARIO, PERCENTUAL_APROVACAO } from "../../utils/questionario";
 
@@ -43,7 +43,7 @@ async function resumo(ator: Ator) {
   const escopo = eventosDoDashboard(ator);
   const professor = ator.perfil === "PROFESSOR";
 
-  const [eventos, porEventoEStatus, presencas, tentativasPorAluno, feedbacks] = await Promise.all([
+  const [eventos, porEventoEStatus, presencas, tentativasPorAluno, feedbacks, eventosCancelados] = await Promise.all([
     prisma.evento.findMany({
       where: escopo,
       orderBy: { horario: "asc" },
@@ -59,6 +59,8 @@ async function resumo(ator: Ator) {
       _count: { _all: true },
     }),
     professor ? Promise.resolve(null) : prisma.feedback.aggregate({ where: { evento: escopo }, _avg: { nota: true }, _count: { _all: true } }),
+    // cancelados ficam fora de todos os numeros; so a quantidade aparece, como dica no indicador de eventos
+    prisma.evento.count({ where: { ...eventosVisiveis(ator), situacao: "APROVADO", canceladoEm: { not: null } } }),
   ]);
 
   // situacao do check-in de cada evento
@@ -136,6 +138,7 @@ async function resumo(ator: Ator) {
   return {
     totais: {
       eventos: eventos.length,
+      eventosCancelados,
       eventosFuturos: futuros.length,
       inscricoes: totalPresentes + totalAusentes + totalAguardando,
       presentes: totalPresentes,

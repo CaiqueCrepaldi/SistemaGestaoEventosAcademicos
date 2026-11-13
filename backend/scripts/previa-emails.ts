@@ -7,6 +7,7 @@ import { mkdirSync, writeFileSync } from "fs";
 import { resolve } from "path";
 import {
   conteudoAlteracaoEvento,
+  conteudoCancelamentoEvento,
   conteudoCancelamentoInscricao,
   conteudoCodigoCadastro,
   conteudoCodigoRecuperacao,
@@ -53,6 +54,27 @@ const previas: Record<string, EmailMontado> = {
     palestranteNome: "<img src=x onerror=alert(1)>",
     eventoHorario: horarioDoEvento,
     salaRotulo: "1T-04 · Sala de aula",
+  }),
+  // evento cancelado pela equipe: o aviso ao inscrito e ao professor responsavel (o motivo com HTML sai escapado)
+  "9-evento-cancelado-inscrito": conteudoCancelamentoEvento({
+    nome: "João Pedro",
+    destinatario: "INSCRITO",
+    eventoTitulo: "Palestra: Gestão de projetos ágeis",
+    eventoHorario: horarioDoEvento,
+    salaRotulo: "2T-01 · Auditório",
+    palestranteNome: "Yasmin Carvalho",
+    motivo: "O palestrante teve um imprevisto de saúde e não poderá comparecer. <b>Pedimos desculpas</b>.",
+    linkEventos: "https://www.sgeacademicos.com.br/#/eventos",
+  }),
+  "10-evento-cancelado-professor": conteudoCancelamentoEvento({
+    nome: "Marina Albuquerque",
+    destinatario: "PROFESSOR",
+    eventoTitulo: "Palestra: Gestão de projetos ágeis",
+    eventoHorario: horarioDoEvento,
+    salaRotulo: "2T-01 · Auditório",
+    palestranteNome: "Yasmin Carvalho",
+    motivo: "O palestrante teve um imprevisto de saúde e não poderá comparecer.",
+    linkEventos: "https://www.sgeacademicos.com.br/#/eventos",
   }),
 };
 

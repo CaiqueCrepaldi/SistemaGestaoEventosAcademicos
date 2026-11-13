@@ -3,7 +3,14 @@ import { api } from "./api";
 import { createCrudService } from "./crud";
 
 // um servico CRUD pronto por entidade, importado direto nas paginas
-export const eventoService = createCrudService<Evento>("eventos");
+export const eventoService = {
+  ...createCrudService<Evento>("eventos"),
+  // so a equipe: evento aprovado e ainda nao iniciado, com motivo (10 a 500 caracteres). Nao se desfaz; a resposta
+  // traz quantos inscritos foram avisados por e-mail
+  cancelar(id: string, motivo: string): Promise<Evento> {
+    return api.post<Evento>(`/eventos/${id}/cancelar`, { motivo });
+  },
+};
 export const salaService = createCrudService<Sala>("salas");
 export const palestranteService = createCrudService<Palestrante>("palestrantes");
 export const participanteService = createCrudService<Participante>("participantes");

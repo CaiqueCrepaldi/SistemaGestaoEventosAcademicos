@@ -3,6 +3,7 @@ import { Prisma, type Feedback as FeedbackDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
 import { registrarAuditoria } from "../../utils/auditoria";
+import { garantirEventoNaoCancelado } from "../../utils/escopo";
 import type { Feedback } from "../../types/domain";
 import { COM_ALUNO_DA_INSCRICAO } from "../inscricoes/inscricoes.service";
 import { MOTIVOS_EXCLUSAO_FEEDBACK, type MotivoExclusaoFeedback } from "./feedbacks.schemas";
@@ -65,8 +66,10 @@ export const MENSAGEM_SEM_PRESENCA = "Você só pode avaliar eventos em que sua 
 async function validarPresencaConfirmada(eventoId: string, participanteId: string) {
   const inscricao = await prisma.inscricao.findUnique({
     where: { participanteId_eventoId: { participanteId, eventoId } },
-    select: { statusPresenca: true },
+    select: { statusPresenca: true, evento: { select: { canceladoEm: true } } },
   });
+  // evento cancelado nao recebe avaliacao (nem de quem ja estava com a presenca confirmada)
+  if (inscricao) garantirEventoNaoCancelado(inscricao.evento);
   if (inscricao?.statusPresenca !== "PRESENTE") {
     throw new AppError(403, "PRESENCA_NAO_CONFIRMADA", MENSAGEM_SEM_PRESENCA);
   }
@@ -83,7 +86,7 @@ async function listarEventosElegiveis(participanteId: string) {
   const elegiveis = presencas.map((p) => p.eventoId).filter((eventoId) => !avaliados.has(eventoId));
 
   const eventos = await prisma.evento.findMany({
-    where: { id: { in: elegiveis } },
+    where: { id: { in: elegiveis }, canceladoEm: null },
     orderBy: { horario: "desc" },
     select: { id: true, titulo: true, horario: true },
   });
@@ -94,6 +97,7 @@ async function listarEventosElegiveis(participanteId: string) {
 async function criar(eventoId: string, participanteId: string, nota: number, comentario: string, atorId: string) {
   const evento = await prisma.evento.findUnique({ where: { id: eventoId } });
   if (!evento) throw AppError.validacao("Dados inválidos.", [{ campo: "eventoId", mensagem: "Palestra não encontrada." }]);
+  garantirEventoNaoCancelado(evento);
 
   let feedback: FeedbackDb;
   try {

@@ -46,7 +46,8 @@ export interface PedidoCheckin {
 }
 
 export interface PainelCheckin {
-  evento: { id: string; titulo: string; horario: string; cargaHoraria: number; salaNome: string };
+  // cancelado: o painel so mostra o historico, sem acao (a API recusa qualquer decisao)
+  evento: { id: string; titulo: string; horario: string; cargaHoraria: number; salaNome: string; cancelado?: boolean };
   janela: JanelaCheckin;
   pedidos: PedidoCheckin[];
   decididos: PedidoCheckin[];

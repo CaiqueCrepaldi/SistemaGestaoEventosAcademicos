@@ -108,6 +108,9 @@ export function eventoParaDTO(evento: Evento, paraAluno: boolean) {
     tema: evento.tema,
     cargaHoraria: evento.cargaHoraria,
     inscritos: evento.inscritos,
+    // cancelamento: todos veem que foi cancelado e o motivo; quem cancelou, so a equipe e o professor
+    canceladoEm: evento.canceladoEm,
+    motivoCancelamento: evento.motivoCancelamento,
     // situacao da aprovacao, motivo da ultima recusa e quem criou: so pra equipe e professor (pro aluno
     // so chega evento aprovado)
     // A proposta de alteracao aberta e a trava do questionario tambem (o aluno ve o evento como esta valendo)
@@ -119,6 +122,7 @@ export function eventoParaDTO(evento: Evento, paraAluno: boolean) {
           criadoPorId: evento.criadoPorId,
           questionarioTravado: evento.questionarioTravado ?? false,
           proposta: evento.proposta ?? null,
+          canceladoPorNome: evento.canceladoPorNome ?? null,
           ...(evento.checkinsPendentes !== undefined ? { checkinsPendentes: evento.checkinsPendentes } : {}),
         }),
     questionario: paraAluno

@@ -132,6 +132,10 @@ export interface Evento {
   checkinsPendentes?: number;
   // proposta de alteracao aberta (pendente ou recusada) de sala/horario/carga/palestrante
   proposta?: PropostaEvento | null;
+  // cancelamento pela equipe (null = nao cancelado): quando, o motivo e o nome de quem cancelou
+  canceladoEm: string | null;
+  motivoCancelamento: string | null;
+  canceladoPorNome?: string | null;
 }
 
 export interface Inscricao {

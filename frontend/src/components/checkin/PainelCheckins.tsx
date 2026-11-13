@@ -66,23 +66,31 @@ export function PainelCheckins({ eventoId, onAlterado }: { eventoId: string; onA
   if (erro) return <p className="form-error">{erro}</p>;
   if (!painel) return <p className="form-hint">Carregando check-ins…</p>;
 
-  const aberta = painel.janela.situacao === "ABERTA";
+  // evento cancelado: nenhuma acao, so o historico
+  const cancelado = Boolean(painel.evento.cancelado);
+  const aberta = painel.janela.situacao === "ABERTA" && !cancelado;
   const aptosParaTodos = painel.pedidos.filter((p) => p.participanteAtivo).length;
 
   return (
     <div className="painel-checkins">
-      <p className="form-hint">{textoDaJanela(painel)}</p>
+      {cancelado ? (
+        <p className="form-error">Este evento foi cancelado: o check-in não recebe mais pedidos nem decisões.</p>
+      ) : (
+        <p className="form-hint">{textoDaJanela(painel)}</p>
+      )}
 
       <div className="painel-checkins-titulo">
         <h3>Pedidos aguardando aprovação ({painel.pedidos.length})</h3>
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={!aberta || aptosParaTodos === 0}
-          onClick={() => setConfirmacao({ tipo: "todos", quantidade: aptosParaTodos })}
-        >
-          Aprovar todos
-        </button>
+        {!cancelado && (
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!aberta || aptosParaTodos === 0}
+            onClick={() => setConfirmacao({ tipo: "todos", quantidade: aptosParaTodos })}
+          >
+            Aprovar todos
+          </button>
+        )}
       </div>
       <table className="table">
         <thead>
@@ -102,6 +110,8 @@ export function PainelCheckins({ eventoId, onAlterado }: { eventoId: string; onA
               <td>{item.participanteRgm}</td>
               <td>{item.checkinSolicitadoEm ? dataHora(item.checkinSolicitadoEm) : "—"}</td>
               <td className="table-actions">
+                {!cancelado && (
+                <>
                 <button
                   type="button"
                   className="btn btn-primary"
@@ -119,6 +129,8 @@ export function PainelCheckins({ eventoId, onAlterado }: { eventoId: string; onA
                 >
                   Recusar
                 </button>
+                </>
+                )}
               </td>
             </tr>
           ))}

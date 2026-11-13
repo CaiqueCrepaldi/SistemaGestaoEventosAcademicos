@@ -1,5 +1,5 @@
 // Modelo unico dos e-mails do SGEA e o conteudo de cada um (codigo do cadastro, convite, recuperacao de senha,
-// senha alterada, confirmacao e cancelamento de inscricao, mudanca no evento). Funcoes puras: nao acessam banco nem
+// senha alterada, confirmacao e cancelamento de inscricao, mudanca no evento, evento cancelado). Funcoes puras: nao acessam banco nem
 // configuracao, entao o teste e o script de previa (scripts/previa-emails.ts) usam exatamente o que o envio usa.
 //
 // Visual do site: cabecalho escuro com "UMC · Gestao de Eventos Academicos" (UMC em azul), botao amarelo, texto
@@ -30,6 +30,8 @@ interface ConteudoEmail {
   // cartao do evento: titulo e os dados (data e horario, sala, palestrante...)
   evento?: { titulo: string; linhas: Linha[] };
   codigo?: { valor: string; validade: string };
+  // paragrafos logo antes do botao (o texto que convida a clicar)
+  paragrafosDaAcao?: string[];
   acao?: { rotulo: string; url: string };
   paragrafosFinais?: string[];
 }
@@ -163,7 +165,16 @@ export function montarEmail(c: ConteudoEmail): EmailMontado {
               <h1 style="margin:0 0 14px;font-family:${FONTE};font-size:24px;line-height:1.3;color:${COR.texto};">${escaparHtml(c.titulo)}</h1>
               ${c.paragrafos.map(paragrafoHtml).join("\n              ")}
             </td>
-          </tr>${c.evento ? cartaoDoEvento(c.evento) : ""}${c.codigo ? caixaDoCodigo(c.codigo) : ""}${c.acao ? botaoDaAcao(c.acao) : ""}${
+          </tr>${c.evento ? cartaoDoEvento(c.evento) : ""}${c.codigo ? caixaDoCodigo(c.codigo) : ""}${
+            c.paragrafosDaAcao?.length
+              ? `
+          <tr>
+            <td style="padding:0 28px 6px;">
+              ${c.paragrafosDaAcao.map(paragrafoHtml).join("\n              ")}
+            </td>
+          </tr>`
+              : ""
+          }${c.acao ? botaoDaAcao(c.acao) : ""}${
             c.paragrafosFinais?.length
               ? `
           <tr>
@@ -186,6 +197,7 @@ export function montarEmail(c: ConteudoEmail): EmailMontado {
   const partes: string[] = ["UMC · Gestão de Eventos Acadêmicos", "", c.titulo.toUpperCase(), "", ...c.paragrafos.map(semMarcacao)];
   if (c.evento) partes.push("", c.evento.titulo, ...c.evento.linhas.map((l) => `${l.rotulo}: ${l.valor}`));
   if (c.codigo) partes.push("", `Código: ${c.codigo.valor}`, c.codigo.validade);
+  if (c.paragrafosDaAcao?.length) partes.push("", ...c.paragrafosDaAcao.map(semMarcacao));
   if (c.acao) partes.push("", `${c.acao.rotulo}: ${c.acao.url}`);
   if (c.paragrafosFinais?.length) partes.push("", ...c.paragrafosFinais.map(semMarcacao));
   partes.push("", "--", "Mensagem automática do SGEA, não responda.", `Dúvidas sobre os seus dados: ${CANAL_PRIVACIDADE}`);
@@ -324,5 +336,52 @@ export function conteudoAlteracaoEvento(dados: DadosAlteracaoEvento): EmailMonta
       linhas: dados.mudancas.map((m) => ({ rotulo: m.rotulo, valor: `${m.antes} → ${m.depois}` })),
     },
     paragrafosFinais: ["Sua inscrição continua valendo. Se não puder comparecer no novo horário, você pode cancelá-la pelo sistema."],
+  });
+}
+
+export interface DadosCancelamentoEvento {
+  nome: string;
+  // INSCRITO: aluno inscrito no evento; PROFESSOR: o professor responsavel (texto adaptado)
+  destinatario: "INSCRITO" | "PROFESSOR";
+  eventoTitulo: string;
+  eventoHorario: Date;
+  // "1T-01 · Laboratório" (utils/salas.ts: rotuloSala)
+  salaRotulo: string;
+  palestranteNome: string;
+  motivo: string;
+  // tela de eventos do sistema (APP_URL); sem ela o e-mail sai sem o botao
+  linkEventos: string | null;
+}
+
+// evento cancelado pela equipe: vai para cada inscrito e para o professor responsavel, com o motivo informado
+export function conteudoCancelamentoEvento(dados: DadosCancelamentoEvento): EmailMontado {
+  const professor = dados.destinatario === "PROFESSOR";
+  return montarEmail({
+    assunto: `Evento cancelado: ${dados.eventoTitulo}`,
+    preheader: professor
+      ? `Seu evento ${dados.eventoTitulo} foi cancelado pela equipe.`
+      : `O evento ${dados.eventoTitulo}, em que você estava inscrito, foi cancelado.`,
+    titulo: "Este evento foi cancelado",
+    paragrafos: [
+      `Olá, ${dados.nome}!`,
+      professor
+        ? `Seu evento **${dados.eventoTitulo}** foi cancelado pela equipe.`
+        : `O evento **${dados.eventoTitulo}**, em que você estava inscrito, foi cancelado.`,
+    ],
+    evento: {
+      titulo: dados.eventoTitulo,
+      linhas: [
+        { rotulo: "Data e horário", valor: `${dataHoraDeBrasilia(dados.eventoHorario)} (horário de Brasília)` },
+        { rotulo: "Sala", valor: dados.salaRotulo },
+        { rotulo: "Palestrante", valor: dados.palestranteNome },
+        { rotulo: "Motivo do cancelamento", valor: dados.motivo },
+      ],
+    },
+    paragrafosDaAcao: [
+      professor
+        ? "As inscrições dos alunos foram encerradas, e cada inscrito foi avisado por e-mail. Veja os seus eventos no sistema."
+        : "Sua inscrição foi encerrada. Veja outros eventos abertos no sistema.",
+    ],
+    ...(dados.linkEventos ? { acao: { rotulo: professor ? "Ver meus eventos" : "Ver eventos abertos", url: dados.linkEventos } } : {}),
   });
 }

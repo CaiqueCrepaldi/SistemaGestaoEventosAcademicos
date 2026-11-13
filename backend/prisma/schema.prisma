@@ -92,6 +92,7 @@ model Usuario {
   solicitacoesAtendidas SolicitacaoTitular[]
   codigosRecuperacaoMfa CodigoRecuperacaoMfa[]
   eventosCriados        Evento[]               @relation("EventoCriadoPor")
+  eventosCancelados     Evento[]               @relation("EventoCanceladoPor")
   palestrantesCriados   Palestrante[]          @relation("PalestranteCriadoPor")
   primeiroAcesso        PrimeiroAcesso?
   historicoAprovacoes   HistoricoAprovacao[]
@@ -176,6 +177,12 @@ model Evento {
   motivoRecusa  String?           @db.Text
   criadoPorId   String?
   criadoPor     Usuario?          @relation("EventoCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  // cancelamento pela equipe (so evento APROVADO e ainda nao iniciado; nao se desfaz). Cancelado = canceladoEm
+  // preenchido; a situacao de aprovacao nao muda. As inscricoes ficam (historico do aluno) e a sala fica livre
+  canceladoEm        DateTime?
+  motivoCancelamento String?   @db.VarChar(500)
+  canceladoPorId     String?
+  canceladoPor       Usuario?  @relation("EventoCanceladoPor", fields: [canceladoPorId], references: [id], onDelete: SetNull)
 
   inscricoes Inscricao[]
   feedbacks  Feedback[]

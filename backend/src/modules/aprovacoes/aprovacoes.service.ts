@@ -7,7 +7,8 @@ import { ehEquipe, type Ator } from "../../utils/escopo";
 // professor — texto livre que a auditoria nunca grava. A auditoria registra so que houve o passo
 export type TipoItemAprovacao = "EVENTO" | "PALESTRANTE";
 // os 4 primeiros sao do item (evento/palestrante criado por professor); os PROPOSTA_* sao da proposta de
-// alteracao de um item ja aprovado; TRANSFERIDO e o evento passado para outro dono na inativacao do professor
+// alteracao de um item ja aprovado; TRANSFERIDO e o evento passado para outro dono na inativacao do professor;
+// CANCELADO e o evento aprovado cancelado pela equipe (com o motivo)
 export type AcaoAprovacao =
   | "ENVIADO"
   | "APROVADO"
@@ -19,7 +20,8 @@ export type AcaoAprovacao =
   | "PROPOSTA_RECUSADA"
   | "PROPOSTA_REENVIADA"
   | "PROPOSTA_CANCELADA"
-  | "TRANSFERIDO";
+  | "TRANSFERIDO"
+  | "CANCELADO";
 
 export async function registrarHistorico(
   tipo: TipoItemAprovacao,
@@ -62,8 +64,9 @@ export async function contadores(ator: Ator) {
   if (ator.perfil === "PROFESSOR") {
     const [eventos, propostasEvento, palestrantes, propostasPalestrante] = await Promise.all([
       prisma.evento.findMany({ where: { situacao: "RECUSADO", criadoPorId: ator.id }, select: { id: true } }),
+      // proposta encerrada pelo cancelamento do evento nao e recusa para corrigir: fica fora do aviso
       prisma.propostaAlteracao.findMany({
-        where: { tipo: "EVENTO", situacao: "RECUSADO", evento: { criadoPorId: ator.id } },
+        where: { tipo: "EVENTO", situacao: "RECUSADO", evento: { criadoPorId: ator.id, canceladoEm: null } },
         select: { eventoId: true },
       }),
       prisma.palestrante.findMany({ where: { situacao: "RECUSADO", criadoPorId: ator.id }, select: { id: true } }),

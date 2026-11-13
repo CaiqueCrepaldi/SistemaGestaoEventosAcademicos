@@ -41,6 +41,7 @@ const ACAO_LABEL: Record<string, string> = {
   EVENTO_CRIADO: "Evento criado",
   EVENTO_ATUALIZADO: "Evento atualizado",
   EVENTO_REMOVIDO: "Evento removido",
+  EVENTO_CANCELADO: "Evento cancelado",
   EVENTO_ENVIADO_PARA_APROVACAO: "Evento enviado para aprovação",
   EVENTO_APROVADO: "Evento aprovado",
   EVENTO_RECUSADO: "Evento recusado",

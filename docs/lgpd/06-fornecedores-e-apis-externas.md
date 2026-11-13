@@ -41,7 +41,9 @@ completo revisado — backend, frontend e deploy). Os três são os
   5. confirmação de inscrição;
   6. aviso de inscrição cancelada pela equipe;
   7. aviso de mudança de sala, horário, carga horária ou palestrante num
-     evento em que o aluno está inscrito.
+     evento em que o aluno está inscrito;
+  8. aviso de evento cancelado pela equipe (com o motivo), para cada
+     inscrito e para o professor responsável.
 - **Dados enviados:** e-mail do destinatário e o conteúdo da mensagem (nos
   avisos, também o nome da pessoa e os dados do evento; nos e-mails de
   código, o próprio código; no convite, o link com a chave). Nunca a senha.

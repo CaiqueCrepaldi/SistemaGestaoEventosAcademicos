@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import type { Prisma, TentativaQuestionario as TentativaDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
+import { garantirEventoNaoCancelado } from "../../utils/escopo";
 import { registrarAuditoria } from "../../utils/auditoria";
 import { atingiuNotaMinima, MAX_TENTATIVAS_QUESTIONARIO, PERCENTUAL_APROVACAO } from "../../utils/questionario";
 import type { PerguntaQuestionario, TentativaQuestionario } from "../../types/domain";
@@ -29,6 +30,7 @@ async function buscarEventoOuFalhar(eventoId: string) {
 // certificado de quem participou). No maximo 2 tentativas; aprovou uma vez, nao pode mais refazer
 async function responder(eventoId: string, participanteId: string, dados: RespostasQuestionarioInput, atorId: string) {
   const evento = await buscarEventoOuFalhar(eventoId);
+  garantirEventoNaoCancelado(evento);
 
   const participante = await prisma.participante.findUnique({ where: { id: participanteId }, select: { ativo: true } });
   if (!participante?.ativo) throw AppError.contaInativa();

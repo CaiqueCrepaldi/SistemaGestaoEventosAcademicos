@@ -78,7 +78,10 @@ sistema todo (qualquer perfil, sem diferença de maiúsculas, e nem o de um
 cadastro em andamento) e é gravado em minúsculas; o do palestrante é único
 entre os palestrantes. A equipe só exclui um palestrante depois de aprová-lo
 ou recusá-lo (e de decidir a proposta de alteração que estiver aguardando), e
-nunca o ligado a um evento.
+nunca o ligado a um evento. A secretaria e o administrador podem **cancelar**
+um evento aprovado que ainda não começou, com motivo: o cancelamento não se
+desfaz, as inscrições ficam no histórico do aluno, a sala fica livre e cada
+inscrito e o professor responsável recebem um e-mail com o motivo.
 Aluno só enxerga as duas listas em modo leitura. Cada evento referencia uma sala e um palestrante já existentes,
 além de um questionário obrigatório
 de 10 perguntas (4 alternativas, 1 correta cada) definido por
@@ -128,7 +131,7 @@ segredos estão em
 [`backend/README.md` → Variáveis de ambiente](backend/README.md#variáveis-de-ambiente).
 
 Para ter o sistema cheio, como na apresentação (salas, palestrantes, 150
-professores e 1.000 alunos fictícios, 200 eventos com inscrições, check-in,
+professores e 1.000 alunos fictícios, 201 eventos (um deles cancelado) com inscrições, check-in,
 notas, certificados e avaliações), rode a carga de demonstração
 (`backend/scripts/carga-demonstracao.ts`, ver `backend/README.md`). Ela apaga
 todos os dados antes de carregar. As contas fictícias nunca recebem e-mail.

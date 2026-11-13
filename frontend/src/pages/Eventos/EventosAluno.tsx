@@ -159,8 +159,8 @@ export function EventosAluno() {
   ];
   const porOpcao: Record<Opcao, Evento[]> = {
     INSCRITAS: proximosEDepoisRealizados(eventos.filter((e) => Boolean(minhaInscricaoEm(e)))),
-    // inclusive os lotados (com a etiqueta "Sem vagas")
-    ABERTAS: eventos.filter((e) => !jaComecou(e)),
+    // inclusive os lotados (com a etiqueta "Sem vagas"); o cancelado nao esta aberto (fica em Inscritas e Todas)
+    ABERTAS: eventos.filter((e) => !jaComecou(e) && !e.canceladoEm),
     TODAS: proximosEDepoisRealizados(eventos),
   };
   const termo = normalizar(busca);
@@ -170,6 +170,7 @@ export function EventosAluno() {
   // etiqueta de situacao do cartao (Inscrito, Check-in aberto, Sem vagas ou Encerrado); evento aberto com vaga, sem
   // inscricao do aluno, fica sem etiqueta
   function situacaoDoEvento(evento: Evento, inscricao: Inscricao | undefined): { texto: string; tom: "green" | "orange" | "red" | "neutral" } | null {
+    if (evento.canceladoEm) return { texto: "Cancelado", tom: "red" };
     if (inscricao) {
       if (inscricao.statusPresenca === "PENDENTE" && situacaoDaJanela(evento, agora) === "ABERTA") return { texto: "Check-in aberto", tom: "orange" };
       if (jaTerminou(evento) && inscricao.statusPresenca === "PENDENTE") return { texto: "Encerrado", tom: "neutral" };
@@ -197,8 +198,13 @@ export function EventosAluno() {
     const inicio = new Date(evento.horario);
     const fim = new Date(fimDe(evento));
     const rotuloBotao = jaInscrito ? "Inscrito" : comecou ? "Encerrado" : lotado ? "Sem vagas" : "Inscrever-se";
+    // cancelado pela equipe: so a etiqueta e o motivo, sem nenhum botao de acao (a API recusa tudo)
+    const cancelado = Boolean(evento.canceladoEm);
     return (
-      <li key={evento.id} className={"evento-cartao" + (jaTerminou(evento) ? " evento-cartao-passado" : "")}>
+      <li
+        key={evento.id}
+        className={"evento-cartao" + (jaTerminou(evento) || cancelado ? " evento-cartao-passado" : "") + (cancelado ? " evento-cartao-cancelado" : "")}
+      >
         <div className="evento-cartao-data" aria-hidden="true">
           <span className="evento-cartao-dia">{inicio.getDate()}</span>
           <span className="evento-cartao-mes">{inicio.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "")}</span>
@@ -230,13 +236,20 @@ export function EventosAluno() {
               <dd>{restantes === null ? "—" : lotado ? "Nenhuma vaga restante" : `${restantes} de ${sala?.capacidade} restantes`}</dd>
             </div>
           </dl>
-          {situacaoCheckin && (
+          {cancelado && (
+            <p className="evento-cartao-aviso evento-cancelado-motivo">
+              Este evento foi cancelado. Motivo: {evento.motivoCancelamento}
+              {jaInscrito ? " Sua inscrição foi encerrada." : ""}
+            </p>
+          )}
+          {situacaoCheckin && !cancelado && (
             <p className={"checkin-situacao " + (COR_DO_CHECKIN[situacaoCheckin] ?? "")}>{rotuloPresencaParaAluno(situacaoCheckin)}</p>
           )}
-          {minhaInscricao?.statusPresenca === "PENDENTE" && janela === "ANTES" && (
+          {!cancelado && minhaInscricao?.statusPresenca === "PENDENTE" && janela === "ANTES" && (
             <p className="form-hint evento-cartao-aviso">O check-in abre em {dataHora(janelaDoCheckin(evento).abre)} (1 hora antes do início).</p>
           )}
           {avisoPorEvento[evento.id] && <p className="form-hint evento-cartao-aviso">{avisoPorEvento[evento.id]}</p>}
+          {!cancelado && (
           <div className="evento-cartao-acoes">
             <button
               className="btn btn-primary"
@@ -257,6 +270,7 @@ export function EventosAluno() {
               </button>
             )}
           </div>
+          )}
           {!jaInscrito && erroPorEvento[evento.id] && (
             <p className="form-error erro-inscricao" role="alert">
               {erroPorEvento[evento.id]}

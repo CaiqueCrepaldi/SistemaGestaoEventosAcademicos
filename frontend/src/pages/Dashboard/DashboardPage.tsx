@@ -95,7 +95,12 @@ export function DashboardPage() {
       {ehProfessor && <p className="card-subtitulo dashboard-subtitulo">Dados dos seus eventos</p>}
 
       <div className="stat-grid dashboard-stats">
-        <StatCard label="Eventos cadastrados" value={numero(totais.eventos)} tone="blue" />
+        <StatCard
+          label="Eventos cadastrados"
+          value={numero(totais.eventos)}
+          tone="blue"
+          hint={(totais.eventosCancelados ?? 0) > 0 ? `Sem contar ${numero(totais.eventosCancelados ?? 0)} cancelado(s)` : undefined}
+        />
         <StatCard
           label="Próximos eventos"
           value={numero(totais.eventosFuturos)}

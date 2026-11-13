@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from "crypto";
 import { Prisma, type Certificado as CertificadoDb } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { AppError } from "../../errors/AppError";
+import { garantirEventoNaoCancelado } from "../../utils/escopo";
 import { registrarAuditoria } from "../../utils/auditoria";
 import { temCertificado } from "../../utils/certificado";
 import { chaveIp, estaBloqueado, incrementarTentativa } from "../../utils/limiteAcesso";
@@ -96,6 +97,9 @@ async function emitir(inscricaoId: string, solicitante: Solicitante): Promise<{ 
   if (solicitante.perfil === "PROFESSOR" && inscricao.evento.criadoPorId !== solicitante.id) {
     throw AppError.naoEncontrado("INSCRICAO_NAO_ENCONTRADA", "Inscrição não encontrada.");
   }
+
+  // evento cancelado nao emite certificado (a validacao publica do que ja foi emitido nao muda)
+  garantirEventoNaoCancelado(inscricao.evento);
 
   const referencia = `inscrição ${inscricaoId}, evento ${inscricao.eventoId}, participante ${inscricao.participanteId}`;
   const quem = descreverSolicitante(solicitante.perfil);

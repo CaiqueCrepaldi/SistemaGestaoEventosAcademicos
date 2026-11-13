@@ -41,8 +41,8 @@ export function resumoDeOcupacao(eventos: EventoParaOcupacao[], agora: Date): Re
 // e a contagem de PRESENTE agrupada por evento no banco — nunca uma consulta por sala ou por evento
 export async function ocupacaoPorSala(agora = new Date()): Promise<Map<string, ResumoOcupacao>> {
   const eventos = await prisma.evento.findMany({
-    // so evento APROVADO: pendente/recusado nao tem inscricao e puxaria a media pra baixo
-    where: { horario: { lte: agora }, situacao: "APROVADO" },
+    // so evento APROVADO e nao cancelado: pendente, recusado e cancelado nao tem presenca e puxariam a media pra baixo
+    where: { horario: { lte: agora }, situacao: "APROVADO", canceladoEm: null },
     select: { id: true, horario: true, cargaHoraria: true, salaId: true, sala: { select: { capacidade: true } } },
   });
   const encerrados = eventos.filter((evento) => eventoEncerrado(evento, agora));

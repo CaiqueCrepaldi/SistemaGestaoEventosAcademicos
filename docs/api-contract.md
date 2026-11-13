@@ -611,6 +611,44 @@ valores que não vieram no corpo são os já gravados).
 
 Aluno chamando POST/PUT/DELETE cai em `403 ACESSO_NEGADO`.
 
+### `POST /api/eventos/{id}/cancelar` — cancelamento pela equipe (desde 13/11/2026)
+
+Só ADMINISTRADOR e SECRETARIA; o professor recebe `403`, mesmo no próprio
+evento (ele combina com a equipe por fora). Corpo `{ "motivo": string }`, de
+10 a 500 caracteres depois de tirar os espaços das pontas (`422` fora disso).
+Só evento `APROVADO`, ainda não iniciado e não cancelado:
+
+| Status | `code` | Quando |
+|---|---|---|
+| 409 | `EVENTO_JA_INICIADO` | "Não é possível cancelar um evento que já começou." |
+| 409 | `EVENTO_NAO_APROVADO` | pendente ou recusado: "Este evento ainda não foi aprovado; recuse-o pela tela de aprovações." |
+| 409 | `EVENTO_CANCELADO` | já cancelado ("Este evento já foi cancelado.") |
+
+O cancelamento não se desfaz. Na mesma transação grava `canceladoEm`,
+`motivoCancelamento` e `canceladoPorId` (a `situacao` continua `APROVADO`) e
+encerra como recusada, com o motivo "Evento cancelado", a proposta de
+alteração pendente. As inscrições **não** são apagadas (ficam no histórico do
+aluno). Depois da transação, cada inscrito e o professor responsável recebem
+o e-mail "Evento cancelado: <título>" com o motivo (contas fictícias não
+recebem; falha de envio fica na auditoria, sem endereço). Auditoria
+`EVENTO_CANCELADO` com o id do evento e quantos inscritos foram avisados,
+nunca o motivo. Resposta `200`: o `Evento` com `avisoInscritos: { inscritos,
+avisados }` e `professorAvisado`.
+
+Todo `Evento` passa a trazer `canceladoEm` (ISO ou `null`) e
+`motivoCancelamento`; equipe e professor recebem também `canceladoPorNome`.
+
+**Evento cancelado na API:** inscrição nova (aluno ou manual), cancelamento
+de inscrição, pedido e decisão de check-in, questionário, certificado,
+avaliação, edição e exclusão respondem `409 EVENTO_CANCELADO` ("Este evento
+foi cancelado."). A sala fica livre no horário (o conflito de sala ignora
+evento cancelado), a inscrição nele não conta no choque de horário do aluno,
+a expiração do check-in não mexe nas inscrições dele, e ele sai do
+Dashboard (`totais.eventosCancelados` diz quantos ficaram de fora), da tela
+Check-in, da ocupação das salas e, para o professor, da "Sala ocupada" no
+calendário. Na listagem da gestão de inscrições vem `eventoCancelado: true`.
+A validação pública de certificado não muda.
+
 ## Palestrantes
 
 `nome`/`email` em texto puro no banco — não é dado sensível, a edição é

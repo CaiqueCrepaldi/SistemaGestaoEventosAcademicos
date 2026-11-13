@@ -61,6 +61,14 @@ dados tratados).
   sistema consulta as inscrições do próprio aluno e informa o título e o
   horário do outro evento só a ele (ou a quem da equipe está fazendo a
   inscrição).
+- **Evento cancelado:** se a equipe cancelar um evento aprovado antes do
+  início, o sistema guarda quando, o motivo e quem cancelou. As inscrições
+  não são apagadas: ficam no seu histórico, ligadas ao evento cancelado,
+  que aparece para você com a etiqueta "Cancelado" e o motivo, sem nenhuma
+  ação (não recebe inscrição, check-in, questionário, certificado nem
+  avaliação). Quem cancelou é visto só pela equipe e pelo professor do
+  evento. A inscrição no evento cancelado não impede você de se inscrever
+  noutro evento no mesmo horário.
 - **Questionário e certificado:** respostas ao questionário de cada evento
   e o resultado (acertos e percentual). Ao emitir um certificado, o sistema
   guarda uma cópia do que vai impresso nele (nome, RGM, evento, tema,
@@ -111,7 +119,7 @@ Não coletamos CPF, endereço, data de nascimento, foto ou dados de saúde.
 | Inscrição e check-in (pedido, decisão, quem decidiu e quando) | Controlar as vagas, registrar a presença e liberar o questionário e o certificado | Execução de contrato (art. 7º, V) |
 | Respostas do questionário | Calcular o aproveitamento e liberar o certificado | Execução de contrato (art. 7º, V) |
 | Certificado emitido | Comprovar a participação: com o código, a consulta pública mostra só nome, evento, data e carga horária (nunca o RGM) | Execução de contrato (art. 7º, V) |
-| Avisos por e-mail (inscrição, cancelamento e mudança no evento) | Manter o aluno informado sobre os eventos em que está inscrito | Execução de contrato (art. 7º, V) |
+| Avisos por e-mail (inscrição, cancelamento, mudança no evento e evento cancelado) | Manter o aluno informado sobre os eventos em que está inscrito | Execução de contrato (art. 7º, V) |
 | Avaliação da palestra | Avaliação do evento pela organização (envio opcional; vista só pela equipe) | Consentimento (art. 7º, I) |
 | Motivo da inativação da conta | Registrar por que a conta foi inativada | Legítimo interesse da instituição na gestão dos eventos (art. 7º, IX) |
 | Registros de acesso e auditoria | Detectar acesso indevido e investigar incidentes | Legítimo interesse em segurança (art. 7º, IX) e exercício regular de direitos (art. 7º, VI) |
@@ -132,7 +140,9 @@ Não coletamos CPF, endereço, data de nascimento, foto ou dados de saúde.
   - a confirmação de inscrição (com a sala, no formato da UMC, e o tipo);
   - o aviso de inscrição cancelada pela equipe;
   - o aviso de mudança de sala, horário, carga horária ou palestrante num
-    evento em que o aluno está inscrito.
+    evento em que o aluno está inscrito;
+  - o aviso de evento cancelado pela equipe (com o motivo informado), para
+    cada inscrito e para o professor responsável pelo evento.
 
   Recebe o e-mail do destinatário e o conteúdo da mensagem (nos avisos,
   também o nome da pessoa e os dados do evento), só o necessário para

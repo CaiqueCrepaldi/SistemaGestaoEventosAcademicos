@@ -1405,6 +1405,105 @@ try {
     await sair(page);
   }
 
+  titulo("Cancelamento de evento pela equipe");
+  {
+    const tokenSecretariaCanc = await tokenDe(secretaria.email, secretaria.senha);
+    const salaCanc = await api("POST", "/salas", tokenSecretariaCanc, { nome: codigoDeSala(), tipo: "SALA_DE_AULA", capacidade: 30 });
+    const diaCanc = new Date(Date.now() + 25 * 24 * 3600 * 1000);
+    diaCanc.setHours(10, 0, 0, 0);
+    const tituloCanc = `Evento Cancelavel UI ${sufixo}`;
+    const eventoCanc = await api("POST", "/eventos", tokenSecretariaCanc, {
+      titulo: tituloCanc, horario: diaCanc.toISOString(), salaId: salaCanc.corpo.id, palestranteId: palestrante.corpo.id, tema: "Tema", cargaHoraria: 2, questionario: questionario(),
+    });
+    await api("POST", `/eventos/${eventoCanc.corpo.id}/inscricoes`, await tokenDe(emailAluno, SENHA_ALUNA));
+    // evento do professor no mesmo dia: ele nao tem o botao de cancelar, nem no proprio evento
+    const tokenProfessorCanc = await tokenDe(emailProfessor, SENHA_PROFESSOR);
+    const tituloProfCanc = `Evento do Professor Sem Cancelar ${sufixo}`;
+    const horarioProfCanc = new Date(diaCanc);
+    horarioProfCanc.setHours(14, 0, 0, 0);
+    const eventoProfCanc = await api("POST", "/eventos", tokenProfessorCanc, {
+      titulo: tituloProfCanc, horario: horarioProfCanc.toISOString(), salaId: salaCanc.corpo.id, palestranteId: palestrante.corpo.id, tema: "Tema", cargaHoraria: 2, questionario: questionario(),
+    });
+    await api("POST", `/eventos/${eventoProfCanc.corpo.id}/aprovar`, tokenSecretariaCanc);
+    const MOTIVO_UI = "O palestrante teve um imprevisto de saúde.";
+
+    await entrar(page, secretaria.email, secretaria.senha);
+    await page.goto(`${APP}/eventos`);
+    await page.locator(".calendario-titulo").waitFor();
+    await irAoMes(diaCanc);
+    await page.locator(`.calendario-dia[data-dia="${chaveDia(diaCanc)}"]`).click();
+    const itemCanc = page.locator(".calendario-lista .calendario-evento", { hasText: tituloCanc });
+    await itemCanc.waitFor({ timeout: 8000 }).catch(() => {});
+    await itemCanc.locator("button", { hasText: "Cancelar evento" }).click();
+    const modalCanc = page.locator(".modal", { hasText: "Motivo do cancelamento" });
+    await modalCanc.waitFor({ timeout: 8000 }).catch(() => {});
+    const botaoCanc = modalCanc.locator("button[type=submit]", { hasText: "Cancelar evento" });
+    checar(
+      "o modal mostra o título, a data e quantos inscritos serão avisados, com o botão desativado sem motivo",
+      (await modalCanc.innerText()).includes(tituloCanc) && (await modalCanc.innerText()).includes("1 inscrito será avisado") && (await botaoCanc.isDisabled()),
+      await modalCanc.innerText().catch(() => ""),
+    );
+    await modalCanc.locator("textarea").fill("Curto");
+    checar("com menos de 10 caracteres o botão continua desativado e o contador mostra 5/500", (await botaoCanc.isDisabled()) && (await modalCanc.innerText()).includes("5/500"));
+    await modalCanc.locator("textarea").fill(MOTIVO_UI);
+    checar("com o motivo completo o botão fica ativo", await botaoCanc.isEnabled());
+    await botaoCanc.click();
+    checar("pede confirmação antes de cancelar", await temTexto(page, "Esta ação não pode ser desfeita e todos os inscritos serão avisados por e-mail."));
+    await page.locator(".modal button", { hasText: "Cancelar evento" }).click();
+    checar("cancelar avisa quantos inscritos foram avisados por e-mail", await esperarToast(page, "Evento cancelado"));
+    await itemCanc.locator(".badge", { hasText: "Cancelado" }).waitFor({ timeout: 8000 }).catch(() => {});
+    checar(
+      "no calendário: etiqueta Cancelado, título riscado, o motivo e quem cancelou, sem Editar, Excluir nem Cancelar",
+      (await itemCanc.locator(".badge", { hasText: "Cancelado" }).count()) === 1 &&
+        (await itemCanc.evaluate((el) => el.classList.contains("cancelado"))) &&
+        (await itemCanc.innerText()).includes(MOTIVO_UI) &&
+        (await itemCanc.innerText()).includes("Cancelado por") &&
+        (await itemCanc.locator("button", { hasText: /Editar|Excluir|Cancelar evento/ }).count()) === 0,
+      await itemCanc.innerText().catch(() => ""),
+    );
+    checar(
+      "no dia do calendário o evento cancelado aparece com a marca de cancelado",
+      (await page.locator(`.calendario-dia[data-dia="${chaveDia(diaCanc)}"] .cal-chip.cancelado`).count()) === 1,
+    );
+    await sair(page);
+
+    await entrar(page, emailAluno, SENHA_ALUNA);
+    await page.goto(`${APP}/eventos`);
+    await page.locator(".evento-cartao").first().waitFor({ timeout: 10000 }).catch(() => {});
+    checar("aluno: Abertas não mostra o evento cancelado", (await cartao(tituloCanc).count()) === 0);
+    await page.check("input[name=opcaoEventos][value=INSCRITAS]");
+    const cartaoCanc = cartao(tituloCanc).first();
+    await cartaoCanc.waitFor({ timeout: 8000 }).catch(() => {});
+    checar(
+      "aluno: em Inscritas, a etiqueta Cancelado e o motivo, sem nenhum botão",
+      (await cartaoCanc.locator(".badge", { hasText: "Cancelado" }).count()) === 1 &&
+        (await cartaoCanc.innerText()).includes(MOTIVO_UI) &&
+        (await cartaoCanc.locator("button").count()) === 0,
+      await cartaoCanc.innerText().catch(() => ""),
+    );
+    await page.check("input[name=opcaoEventos][value=TODAS]");
+    await cartao(tituloCanc).first().waitFor({ timeout: 8000 }).catch(() => {});
+    checar("aluno: em Todas também aparece com a etiqueta Cancelado", (await cartao(tituloCanc).first().locator(".badge", { hasText: "Cancelado" }).count()) === 1);
+    await sair(page);
+
+    await entrar(page, emailProfessor, SENHA_PROFESSOR);
+    await page.goto(`${APP}/eventos`);
+    await page.locator(".calendario-titulo").waitFor();
+    await irAoMes(diaCanc);
+    await page.locator(`.calendario-dia[data-dia="${chaveDia(diaCanc)}"]`).click();
+    const itemProfCanc = page.locator(".calendario-lista .calendario-evento", { hasText: tituloProfCanc });
+    await itemProfCanc.waitFor({ timeout: 8000 }).catch(() => {});
+    checar(
+      "o professor não tem o botão Cancelar evento, nem no próprio evento aprovado",
+      (await itemProfCanc.count()) === 1 && (await itemProfCanc.locator("button", { hasText: "Cancelar evento" }).count()) === 0,
+    );
+    checar(
+      "o evento cancelado de outro não aparece para ele como Sala ocupada",
+      (await page.locator(".calendario-lista .calendario-evento.ocupada", { hasText: salaCanc.corpo.nome }).count()) === 0,
+    );
+    await sair(page);
+  }
+
   titulo("E / Esqueci a senha");
   await page.goto(`${APP}/esqueci-senha`);
   await page.click("button[type=submit]");

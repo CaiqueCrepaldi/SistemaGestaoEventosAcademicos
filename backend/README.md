@@ -306,6 +306,36 @@ ela aplicada. Siga a ordem:
    eventos e o check-in falham, porque o código novo lê a coluna `tipo`.
    Basta rodar o passo 2; não precisa de novo deploy.
 
+## Implantação em produção: cancelamento de evento (migration de 13/11/2026)
+
+A migration `20261113120000_cancelamento_de_evento` é **só aditiva**:
+acrescenta em `eventos` as colunas `canceladoEm`, `motivoCancelamento` (até
+500 caracteres) e `canceladoPorId` (chave estrangeira para `usuarios`, que
+vira nulo se a conta sair), todas opcionais. Os eventos que já existem ficam
+com as três nulas, ou seja, não cancelados. Nada é apagado nem renomeado, e o
+código que está no ar continua funcionando com ela aplicada. Siga a ordem:
+
+1. **Aplicar a migration no banco de produção, ANTES do push.** No
+   PowerShell, de dentro de `backend/`, com a URL de produção:
+   ```powershell
+   $env:DATABASE_URL = "mysql://...SGEA?sslaccept=strict"
+   npx prisma migrate status    # deve listar só 20261113120000_cancelamento_de_evento como pendente
+   npx prisma migrate deploy
+   Remove-Item Env:DATABASE_URL
+   ```
+   Se o `migrate status` listar qualquer outra migration pendente, pare e
+   confira antes de aplicar.
+2. **Push na `main`** e esperar a Vercel mostrar o deploy como Ready.
+3. **Testar em produção** com um evento futuro criado só para isso: na
+   tela Eventos, como secretaria ou administrador, abrir o dia, "Cancelar
+   evento", conferir o botão desativado até 10 caracteres, cancelar e ver a
+   etiqueta "Cancelado" com o motivo; como aluno inscrito, ver o evento em
+   "Inscritas" com a etiqueta e sem botões; como professor, conferir que não
+   há o botão.
+4. **Se a migration for esquecida:** toda leitura de evento falha, porque o
+   código novo lê as colunas novas. Basta rodar o passo 1; não precisa de
+   novo deploy.
+
 ## Scripts disponíveis
 
 | Comando | O que faz |
@@ -349,7 +379,8 @@ carrega um cenário realista para a apresentação: 12 salas no padrão da UMC
 (8 de aula, 2 laboratórios e 2 auditórios), 40 palestrantes (mais 3
 aguardando aprovação), 150 professores, 1 secretaria e 1.000 alunos fictícios,
 200 eventos (150 encerrados, 25 futuros aprovados e 25 em aprovação: 15
-aguardando, 5 recusados e 5 aprovados com proposta de alteração aguardando),
+aguardando, 5 recusados e 5 aprovados com proposta de alteração aguardando)
+e mais 1 evento futuro cancelado pela secretaria, com inscritos,
 com histórico, inscrições (nenhum aluno em dois eventos no mesmo horário),
 check-in, questionário, certificados e avaliações, além das três contas de
 demonstração (senhas das `SEED_*_SENHA`; o e-mail do administrador em

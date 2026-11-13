@@ -8,19 +8,25 @@ import { COM_CONTA_DO_ALUNO, paraDominio as participanteParaDominio } from "../p
 import { listarHistorico, registrarHistorico } from "../aprovacoes/aprovacoes.service";
 import { camposInformados, registrarAuditoria } from "../../utils/auditoria";
 import { rotuloSala } from "../../utils/salas";
-import { ehEquipe, eventoDoAtorOuFalhar, eventoEncerrado, eventosVisiveis, palestrantesVisiveis, type Ator } from "../../utils/escopo";
+import { env } from "../../config/env";
+import { ehEquipe, eventoDoAtorOuFalhar, eventoEncerrado, eventosVisiveis, garantirEventoNaoCancelado, palestrantesVisiveis, type Ator } from "../../utils/escopo";
 import type { Evento, PerguntaQuestionario, PropostaEvento } from "../../types/domain";
 import type { BuscaEventos, EventoInput, EventoUpdateInput, IntervaloEventos, PropostaEventoInput } from "./eventos.schemas";
 
 // o que acompanha o evento nas leituras: contagem de inscricoes (numero agregado, nao identifica ninguem: a
 // tela Eventos do aluno precisa dela), contagem de tentativas do questionario (trava o questionario) e a
-// proposta de alteracao aberta (pendente ou recusada), se houver
+// proposta de alteracao aberta (pendente ou recusada), se houver, e o nome de quem cancelou
 const COM_EXTRAS = Prisma.validator<Prisma.EventoInclude>()({
   _count: { select: { inscricoes: true, tentativas: true } },
   propostas: { where: { situacao: { in: ["PENDENTE", "RECUSADO"] } }, orderBy: { criadoEm: "desc" }, take: 1 },
+  canceladoPor: { select: { nome: true } },
 });
 
-type EventoComExtras = EventoDb & { _count?: { inscricoes: number; tentativas?: number }; propostas?: PropostaDb[] };
+type EventoComExtras = EventoDb & {
+  _count?: { inscricoes: number; tentativas?: number };
+  propostas?: PropostaDb[];
+  canceladoPor?: { nome: string } | null;
+};
 
 function propostaParaDominio(proposta: PropostaDb): PropostaEvento {
   return {
@@ -54,6 +60,9 @@ function paraDominio(evento: EventoComExtras): Evento {
     criadoEm: evento.criadoEm.toISOString(),
     questionarioTravado: (evento._count?.tentativas ?? 0) > 0,
     proposta: proposta ? propostaParaDominio(proposta) : null,
+    canceladoEm: evento.canceladoEm?.toISOString() ?? null,
+    motivoCancelamento: evento.motivoCancelamento,
+    canceladoPorNome: evento.canceladoPor?.nome ?? null,
   };
 }
 
@@ -110,8 +119,8 @@ function ocupacao(salaId: string, salaNome: string, inicio: Date, cargaHoraria: 
 
 // CALENDARIO (equipe e professor): os eventos visiveis que comecam em [de, ate), com o filtro de situacao
 // opcional. A equipe ve todos completos. O professor ve os dele completos e, dos outros (de outro
-// professor ou da equipe), so a sala e o horario — os que reservam a sala: evento APROVADO ou PENDENTE e
-// proposta de alteracao PENDENTE —, sem titulo, palestrante, inscritos nem id. A regra fica aqui, na API:
+// professor ou da equipe), so a sala e o horario — os que reservam a sala: evento APROVADO ou PENDENTE e nao
+// cancelado (o cancelado libera a sala) e proposta de alteracao PENDENTE —, sem titulo, palestrante, inscritos nem id. A regra fica aqui, na API:
 // a tela nunca recebe os detalhes do evento de outro
 async function calendario(ator: Ator, intervalo: IntervaloEventos) {
   const noIntervalo = { gte: intervalo.de, lt: intervalo.ate };
@@ -127,7 +136,7 @@ async function calendario(ator: Ator, intervalo: IntervaloEventos) {
   const deOutros: Prisma.EventoWhereInput = { OR: [{ criadoPorId: null }, { criadoPorId: { not: ator.id } }] };
   const [outros, propostas] = await Promise.all([
     prisma.evento.findMany({
-      where: { AND: [deOutros, { situacao: { in: ["APROVADO", "PENDENTE"] }, horario: noIntervalo }] },
+      where: { AND: [deOutros, { situacao: { in: ["APROVADO", "PENDENTE"] }, canceladoEm: null, horario: noIntervalo }] },
       select: { horario: true, cargaHoraria: true, sala: { select: { id: true, nome: true, tipo: true } } },
     }),
     prisma.propostaAlteracao.findMany({
@@ -208,7 +217,7 @@ const HORA_MS = 60 * 60 * 1000;
 
 // RF024: um evento ocupa a sala no intervalo [horario, horario + cargaHoraria horas). Intervalo
 // semiaberto: evento que termina exatamente quando o outro comeca NAO e conflito. Evento PENDENTE ja
-// reserva a sala; RECUSADO nao (recusar libera a sala na hora). A proposta de alteracao PENDENTE tambem
+// reserva a sala; RECUSADO e CANCELADO nao (recusar ou cancelar libera a sala na hora). A proposta de alteracao PENDENTE tambem
 // reserva a sala/horario propostos (o evento continua segurando a sala atual ate a aprovacao).
 // "ignorarEventoId" tira o proprio evento e a proposta dele
 async function validarConflitoDeSala(salaId: string, inicio: Date, cargaHoraria: number, ignorarEventoId?: string) {
@@ -220,6 +229,7 @@ async function validarConflitoDeSala(salaId: string, inicio: Date, cargaHoraria:
         salaId,
         horario: { lt: fim },
         situacao: { in: ["PENDENTE", "APROVADO"] },
+        canceladoEm: null,
         ...(ignorarEventoId ? { id: { not: ignorarEventoId } } : {}),
       },
       select: { titulo: true, horario: true, cargaHoraria: true },
@@ -231,6 +241,7 @@ async function validarConflitoDeSala(salaId: string, inicio: Date, cargaHoraria:
         situacao: "PENDENTE",
         novaSalaId: salaId,
         novoHorario: { lt: fim },
+        evento: { canceladoEm: null },
         ...(ignorarEventoId ? { eventoId: { not: ignorarEventoId } } : {}),
       },
       select: { novoHorario: true, novaCargaHoraria: true, evento: { select: { titulo: true } } },
@@ -492,6 +503,7 @@ async function enviarProposta(evento: EventoDb, depois: Agenda, recusada: Propos
 // avisados por e-mail quando a agenda muda
 async function atualizar(id: string, dados: EventoUpdateInput, ator: Ator) {
   const atual = await eventoDoAtorOuFalhar(ator, id);
+  garantirEventoNaoCancelado(atual);
   if (eventoEncerrado(atual)) throw erroEncerrado();
   await garantirQuestionarioLiberado(atual, dados.questionario);
 
@@ -570,6 +582,7 @@ async function propostaAbertaOuFalhar(eventoId: string) {
 // o professor corrige a proposta que ainda aguarda aprovacao, ou reenvia a recusada (com resposta opcional)
 async function editarProposta(id: string, dados: PropostaEventoInput, ator: Ator) {
   const evento = await eventoDoAtorOuFalhar(ator, id);
+  garantirEventoNaoCancelado(evento);
   if (eventoEncerrado(evento)) throw erroEncerrado();
   const proposta = await propostaAbertaOuFalhar(id);
   const depois = agendaCom(agendaDaProposta(proposta), dados);
@@ -597,6 +610,7 @@ async function editarProposta(id: string, dados: PropostaEventoInput, ator: Ator
 async function cancelarProposta(id: string, ator: Ator) {
   const evento = await eventoDoAtorOuFalhar(ator, id);
   garantirDonoDoEvento(evento, ator);
+  garantirEventoNaoCancelado(evento);
   const proposta = await propostaAbertaOuFalhar(id);
   await prisma.propostaAlteracao.delete({ where: { id: proposta.id } });
   await registrarHistorico("EVENTO", id, "PROPOSTA_CANCELADA", ator.id);
@@ -667,6 +681,8 @@ async function recusarProposta(id: string, motivo: string, ator: Ator) {
 // Evento encerrado tambem nao (para todos os perfis). A proposta de alteracao sai junto com o evento
 async function remover(id: string, ator: Ator) {
   const evento = await eventoDoAtorOuFalhar(ator, id);
+  // o cancelado fica no historico (as inscricoes continuam ligadas a ele)
+  garantirEventoNaoCancelado(evento);
   if (eventoEncerrado(evento)) throw erroEncerrado();
   const inscricoes = await prisma.inscricao.count({ where: { eventoId: id } });
   if (inscricoes > 0) {
@@ -743,6 +759,7 @@ async function historico(id: string, ator: Ator) {
 async function autoinscrever(eventoId: string, participanteId: string, atorId: string) {
   const evento = await prisma.evento.findFirst({ where: { id: eventoId, situacao: "APROVADO" }, include: { sala: true } });
   if (!evento) throw AppError.naoEncontrado("EVENTO_NAO_ENCONTRADO", "Evento não encontrado.");
+  garantirEventoNaoCancelado(evento);
 
   // o aluno inativado ja nao tem sessao (a inativacao derruba as sessoes), isto e so a segunda barreira
   const participante = await prisma.participante.findUnique({ where: { id: participanteId }, select: { ativo: true } });
@@ -780,7 +797,101 @@ async function autoinscrever(eventoId: string, participanteId: string, atorId: s
   return { inscricao: paraDominioInscricao(inscricao), emailConfirmacaoEnviado };
 }
 
+// ---------------------------------------------------------------- cancelamento (so a equipe; nao se desfaz)
+// so evento APROVADO, ainda nao iniciado e nao cancelado. Na mesma transacao: grava quando, por que e quem
+// cancelou e encerra como recusada a proposta de alteracao pendente. As inscricoes ficam (historico do aluno) e a
+// sala fica livre (validarConflitoDeSala ignora cancelado). Depois, avisa por e-mail cada inscrito e o professor
+// responsavel; falha de envio nao desfaz o cancelamento e vai para a auditoria sem endereco de e-mail
+const MOTIVO_PROPOSTA_DO_CANCELADO = "Evento cancelado";
+
+async function cancelar(id: string, motivo: string, ator: Ator) {
+  const evento = await prisma.evento.findUnique({
+    where: { id },
+    include: {
+      sala: { select: { nome: true, tipo: true } },
+      palestrante: { select: { nome: true } },
+      criadoPor: { select: { nome: true, emailLogin: true } },
+    },
+  });
+  if (!evento) throw AppError.naoEncontrado("EVENTO_NAO_ENCONTRADO", "Evento não encontrado.");
+  if (evento.canceladoEm) throw AppError.conflito("EVENTO_CANCELADO", "Este evento já foi cancelado.");
+  if (evento.situacao !== "APROVADO") {
+    throw AppError.conflito("EVENTO_NAO_APROVADO", "Este evento ainda não foi aprovado; recuse-o pela tela de aprovações.");
+  }
+  if (evento.horario.getTime() <= Date.now()) {
+    throw AppError.conflito("EVENTO_JA_INICIADO", "Não é possível cancelar um evento que já começou.");
+  }
+
+  const canceladoEm = new Date();
+  const propostasPendentes = await prisma.propostaAlteracao.findMany({ where: { eventoId: id, situacao: "PENDENTE" }, select: { id: true } });
+  await prisma.$transaction([
+    prisma.evento.update({ where: { id }, data: { canceladoEm, motivoCancelamento: motivo, canceladoPorId: ator.id } }),
+    prisma.propostaAlteracao.updateMany({
+      where: { eventoId: id, situacao: "PENDENTE" },
+      data: { situacao: "RECUSADO", motivoRecusa: MOTIVO_PROPOSTA_DO_CANCELADO, decididoEm: canceladoEm },
+    }),
+  ]);
+  // historico da aprovacao (visivel so para a equipe e para o professor dono): o motivo pode ficar aqui
+  for (const _ of propostasPendentes) await registrarHistorico("EVENTO", id, "PROPOSTA_RECUSADA", ator.id, MOTIVO_PROPOSTA_DO_CANCELADO);
+  if (evento.criadoPorId) await registrarHistorico("EVENTO", id, "CANCELADO", ator.id, motivo);
+
+  // ---- e-mails (depois da transacao)
+  const dados = {
+    eventoTitulo: evento.titulo,
+    eventoHorario: evento.horario,
+    salaRotulo: rotuloSala(evento.sala),
+    palestranteNome: evento.palestrante.nome,
+    motivo,
+    linkEventos: env.appUrl ? `${env.appUrl}/#/eventos` : null,
+  };
+  const inscricoes = await prisma.inscricao.findMany({ where: { eventoId: id }, select: { id: true, participante: { include: COM_CONTA_DO_ALUNO } } });
+  let avisados = 0;
+  let suprimidos = 0;
+  let simulado = false;
+  for (const inscricao of inscricoes) {
+    const participante = participanteParaDominio(inscricao.participante);
+    if (!participante.email) continue;
+    try {
+      const resultado = await emailService.enviarCancelamentoEvento(participante.email, { ...dados, nome: participante.nome, destinatario: "INSCRITO" });
+      if (resultado === "suprimido") {
+        suprimidos++;
+        continue;
+      }
+      avisados++;
+      if (resultado === "simulado") simulado = true;
+    } catch {
+      // email.service.ts ja loga o detalhe sanitizado da falha
+      await registrarAuditoria(ator.id, "EMAIL_FALHA", `aviso de cancelamento do evento ${id}, inscrição ${inscricao.id}: falha no envio`);
+    }
+  }
+  let professorAvisado = false;
+  if (evento.criadoPor) {
+    try {
+      const resultado = await emailService.enviarCancelamentoEvento(evento.criadoPor.emailLogin, {
+        ...dados,
+        nome: evento.criadoPor.nome,
+        destinatario: "PROFESSOR",
+      });
+      professorAvisado = resultado !== "suprimido";
+      if (resultado === "simulado") simulado = true;
+    } catch {
+      await registrarAuditoria(ator.id, "EMAIL_FALHA", `aviso de cancelamento do evento ${id} ao professor responsável: falha no envio`);
+    }
+  }
+  const inscritosReais = inscricoes.length - suprimidos;
+  // o motivo e texto livre: fica so no evento (e no historico da aprovacao), nunca na auditoria
+  await registrarAuditoria(
+    ator.id,
+    "EVENTO_CANCELADO",
+    `evento ${id}: ${avisados} de ${inscritosReais} inscrito(s) avisado(s) por e-mail${professorAvisado ? ", e o professor responsável" : ""}` +
+      `${propostasPendentes.length > 0 ? `; ${propostasPendentes.length} proposta(s) de alteração encerrada(s)` : ""}` +
+      `${simulado ? " (simulado: SendGrid não configurado)" : ""}`,
+  );
+  return { evento: await recarregar(id), avisoInscritos: { inscritos: inscritosReais, avisados }, professorAvisado };
+}
+
 export const eventosService = {
+  cancelar,
   listar,
   calendario,
   buscar,

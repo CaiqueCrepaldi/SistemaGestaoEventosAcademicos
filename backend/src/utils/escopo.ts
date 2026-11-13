@@ -25,9 +25,10 @@ export function eventosVisiveis(ator: Ator): Prisma.EventoWhereInput {
   return {};
 }
 
-// o mesmo, para os numeros do Dashboard: so eventos APROVADOS entram na conta (o professor ve so os dele)
+// o mesmo, para os numeros do Dashboard: so eventos APROVADOS e nao cancelados entram na conta (o professor ve
+// so os dele)
 export function eventosDoDashboard(ator: Ator): Prisma.EventoWhereInput {
-  return { ...eventosVisiveis(ator), situacao: "APROVADO" };
+  return { ...eventosVisiveis(ator), situacao: "APROVADO", canceladoEm: null };
 }
 
 // palestrantes visiveis: equipe todos; aluno so os APROVADOS; professor os APROVADOS e os que ele criou
@@ -66,6 +67,12 @@ export async function garantirFiltroDeEventoDoProfessor(ator: Ator, eventoId: st
   if (ator.perfil !== "PROFESSOR" || !eventoId) return;
   const evento = await prisma.evento.findUnique({ where: { id: eventoId }, select: { criadoPorId: true } });
   if (evento) garantirEventoDoProfessor(ator, evento, "Você só pode ver as inscrições dos seus próprios eventos.");
+}
+
+// evento cancelado pela equipe: fica so no historico. Nada mais acontece nele (inscricao, cancelamento de
+// inscricao, check-in, questionario, certificado, avaliacao, edicao, exclusao): 409 com a mesma mensagem
+export function garantirEventoNaoCancelado(evento: { canceladoEm: Date | null }) {
+  if (evento.canceladoEm) throw AppError.conflito("EVENTO_CANCELADO", "Este evento foi cancelado.");
 }
 
 // encerrado = horario + carga horaria (em horas) ja passou

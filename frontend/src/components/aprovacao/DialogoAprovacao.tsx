@@ -35,11 +35,12 @@ const ROTULO_PASSO: Record<PassoAprovacao["acao"], string> = {
   PROPOSTA_REENVIADA: "Alteração reenviada depois da correção",
   PROPOSTA_CANCELADA: "Proposta de alteração cancelada",
   TRANSFERIDO: "Transferido",
+  CANCELADO: "Evento cancelado pela equipe",
 };
 
 // prefixo da mensagem no historico: motivo da recusa, resposta do reenvio; nas propostas a mensagem ja diz o que mudou
 function prefixoDaMensagem(acao: PassoAprovacao["acao"]): string {
-  if (acao === "RECUSADO" || acao === "PROPOSTA_RECUSADA") return "Motivo: ";
+  if (acao === "RECUSADO" || acao === "PROPOSTA_RECUSADA" || acao === "CANCELADO") return "Motivo: ";
   if (acao === "REENVIADO") return "Resposta: ";
   return "";
 }

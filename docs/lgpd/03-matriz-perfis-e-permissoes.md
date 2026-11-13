@@ -67,6 +67,7 @@ id vindo da tela.
 | `/api/eventos/:id` | PUT | ✅ | ✅ | só os dele | ❌ | Evento encerrado: `409`. Professor em evento aprovado: sala, horário, carga e palestrante viram proposta de alteração. Questionário com tentativa de aluno: `409 QUESTIONARIO_TRAVADO` |
 | `/api/eventos/:id` | DELETE | ✅ | ✅ | só os dele | ❌ | Só evento sem inscrição e não encerrado |
 | `/api/eventos/:id/aprovar`, `/recusar` | POST | ✅ | ✅ | ❌ | ❌ | Recusa exige motivo |
+| `/api/eventos/:id/cancelar` | POST | ✅ | ✅ | ❌ | ❌ | Desde 13/11/2026. Só evento APROVADO, ainda não iniciado e não cancelado; motivo de 10 a 500 caracteres (`422` fora disso). Já iniciado: `409 EVENTO_JA_INICIADO`; pendente ou recusado: `409 EVENTO_NAO_APROVADO`; já cancelado: `409 EVENTO_CANCELADO`. Não se desfaz. Encerra a proposta pendente como recusada, libera a sala, mantém as inscrições e avisa por e-mail os inscritos e o professor responsável; auditoria `EVENTO_CANCELADO` sem o motivo. O professor recebe `403`, mesmo no próprio evento |
 | `/api/eventos/:id/reenviar` | POST | ✅ | ✅ | só os dele | ❌ | Evento recusado volta a pendente |
 | `/api/eventos/:id/historico` | GET | ✅ | ✅ | só os dele | ❌ | Histórico da aprovação |
 | `/api/eventos/:id/proposta` | PUT | ❌ | ❌ | só os dele | ❌ | Corrige a proposta pendente ou reenvia a recusada |
@@ -135,6 +136,14 @@ id vindo da tela.
   propostas, check-ins decididos, pedidos de titular atendidos), a conta
   fica inativa com a mensagem "Esta conta tem histórico no sistema e fica
   preservada como inativa." Os registros de auditoria nunca são apagados.
+- **Evento cancelado:** fica no histórico e nada mais acontece nele, para
+  ninguém: inscrição (pelo aluno ou manual), cancelamento de inscrição,
+  pedido e decisão de check-in, questionário, certificado, avaliação, edição
+  e exclusão respondem `409 EVENTO_CANCELADO` ("Este evento foi
+  cancelado."). Não entra no Dashboard nem na tela Check-in, não segura a
+  sala nem o horário do aluno e, para o professor, não aparece como "Sala
+  ocupada". Todos os perfis que veem o evento veem que foi cancelado e o
+  motivo; quem cancelou, só a equipe e o professor.
 - **Aluno e evento não aprovado:** evento pendente ou recusado não aparece
   para o aluno em lugar nenhum, e palestrante não aprovado também não.
 - **E-mail único:** o e-mail de login identifica uma única conta em todo o

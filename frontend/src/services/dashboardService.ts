@@ -3,6 +3,8 @@ import { api } from "./api";
 // resposta de GET /api/dashboard (so equipe): numeros agregados, sem nenhum dado pessoal
 export interface TotaisDashboard {
   eventos: number;
+  // aprovados e cancelados: ficam fora de todos os numeros; so a dica no indicador de eventos
+  eventosCancelados?: number;
   eventosFuturos: number;
   inscricoes: number;
   presentes: number;

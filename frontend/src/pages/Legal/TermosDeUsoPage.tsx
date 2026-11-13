@@ -108,6 +108,14 @@ export function TermosDeUsoPage() {
             administração, em qualquer evento.
           </li>
           <li>
+            A secretaria e a administração podem <strong>cancelar um evento aprovado</strong> que ainda não começou,
+            sempre informando o motivo. O cancelamento não pode ser desfeito. Cada inscrito e o professor responsável
+            recebem um e-mail com o motivo. A inscrição não é apagada: o evento continua na sua tela de eventos (em
+            &ldquo;Inscritas&rdquo; e &ldquo;Todas&rdquo;, fora de &ldquo;Abertas&rdquo;) com a etiqueta
+            &ldquo;Cancelado&rdquo; e o motivo, sem nenhuma ação, e você pode se inscrever noutro evento no mesmo
+            horário. O professor não cancela eventos pelo sistema: combina com a equipe.
+          </li>
+          <li>
             O <strong>check-in é pedido pelo próprio aluno</strong>, na tela Eventos, de 1 hora antes do início até 24
             horas depois do fim do evento, confirmando que está no local. O professor responsável pelo evento, a
             secretaria ou a administração aprova ou recusa o pedido; o sistema guarda quem decidiu e quando. Enquanto o

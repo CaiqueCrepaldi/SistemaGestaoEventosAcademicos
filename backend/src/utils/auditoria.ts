@@ -29,6 +29,8 @@ export type AcaoAuditoria =
   | "EVENTO_CRIADO"
   | "EVENTO_ATUALIZADO"
   | "EVENTO_REMOVIDO"
+  // cancelamento pela equipe (o motivo fica so no evento, nunca na auditoria)
+  | "EVENTO_CANCELADO"
   // aprovacao de evento/palestrante criado por professor (o motivo e a resposta ficam so em historico_aprovacoes)
   | "EVENTO_ENVIADO_PARA_APROVACAO"
   | "EVENTO_APROVADO"

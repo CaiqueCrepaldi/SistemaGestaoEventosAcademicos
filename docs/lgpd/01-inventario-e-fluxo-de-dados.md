@@ -333,6 +333,7 @@ O sistema envia só estes e-mails (`backend/src/modules/email/email.service.ts`)
 | Confirmação de inscrição | O aluno inscrito | E-mail, nome e os dados do evento |
 | Inscrição cancelada pela equipe | O aluno | E-mail, nome e os dados do evento |
 | Mudança de sala, horário, carga ou palestrante | Os alunos inscritos no evento | E-mail, nome e o que mudou |
+| Evento cancelado pela equipe | Os inscritos e o professor responsável | E-mail, nome, os dados do evento e o motivo do cancelamento |
 
 As contas da carga de demonstração (`usuarios.ficticio`) nunca recebem
 e-mail: o envio é suprimido antes de chegar ao SendGrid. O palestrante não
@@ -382,7 +383,7 @@ flowchart TD
     Regras -.->|"só nome, evento, data e carga horária"| Publico
 
     Auth -->|"código do cadastro, convite, recuperação de senha"| SendGrid
-    Regras -->|"confirmação, cancelamento e mudança no evento"| SendGrid
+    Regras -->|"confirmação, cancelamento, mudança no evento e evento cancelado"| SendGrid
     Frontend -.->|"toda requisição passa por"| Vercel -.-> Backend
 ```
 

@@ -56,6 +56,8 @@ export async function expirarCheckins(atorId: string | null, agora = new Date())
   const candidatos = await prisma.evento.findMany({
     where: {
       horario: { lte: new Date(agora.getTime() - PRAZO_CHECKIN_APOS_FIM_MS) },
+      // evento cancelado nao expira: a inscricao fica como estava no cancelamento (historico do aluno)
+      canceladoEm: null,
       inscricoes: { some: { statusPresenca: { in: ["PENDENTE", "SOLICITADO"] } } },
     },
     select: { id: true, horario: true, cargaHoraria: true },

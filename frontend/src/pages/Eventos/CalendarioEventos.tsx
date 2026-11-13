@@ -54,6 +54,8 @@ export function fimDoEvento(evento: Evento): Date {
 // marcacoes de um evento: cor + simbolo com texto (title/aria-label), nunca so a cor
 export function marcacoesDoEvento(evento: Evento): { classe: string; simbolo: string; texto: string }[] {
   const marcas: { classe: string; simbolo: string; texto: string }[] = [];
+  // cancelado: so essa marca (o resto deixa de valer)
+  if (evento.canceladoEm) return [{ classe: "cancelado", simbolo: "⊘", texto: "Cancelado" }];
   if (evento.situacao === "PENDENTE") marcas.push({ classe: "pendente", simbolo: "◷", texto: "Aguardando aprovação" });
   if (evento.situacao === "RECUSADO") marcas.push({ classe: "recusado", simbolo: "✕", texto: "Recusado" });
   if (evento.proposta?.situacao === "PENDENTE") marcas.push({ classe: "pendente", simbolo: "✎", texto: "Alteração aguardando aprovação" });
@@ -79,7 +81,7 @@ function ChipDoItem({ item }: { item: ItemDoDia }) {
   }
   const { evento } = item;
   const marcas = marcacoesDoEvento(evento);
-  const checkins = evento.checkinsPendentes ?? 0;
+  const checkins = evento.canceladoEm ? 0 : (evento.checkinsPendentes ?? 0);
   const situacao = marcas.find((m) => m.classe !== "encerrado")?.classe ?? "aprovado";
   const descricao = [
     `${horaLocal(evento.horario)} ${evento.titulo}`,
